@@ -309,7 +309,6 @@ function ensureMacDmgLaunchable() {
 
   console.warn(`[package-desktop] mac DMG was missing Electron Framework; regenerating ${path.basename(dmgPath)}`)
   fs.rmSync(`${dmgPath}.blockmap`, { force: true })
-  fs.rmSync(path.join(path.dirname(dmgPath), 'latest-mac.yml'), { force: true })
   repairMacDmg(dmgPath, appPath, productName)
 }
 

@@ -102,8 +102,12 @@ function collectArtifacts(artifactRoot, explicitFiles = []) {
     if (seen.has(relative)) throw new Error(`Duplicate update artifact: ${relative}`)
     seen.add(relative)
     const stat = fs.statSync(filePath)
+    const inferredPlatform = inferPlatform(relative)
+    const siblingDmg = relative.toLowerCase().endsWith('.zip')
+      ? path.join(root, relative.slice(0, -4) + '.dmg')
+      : ''
     artifacts.push({
-      platform: inferPlatform(relative),
+      platform: inferredPlatform === 'portable' && siblingDmg && fs.existsSync(siblingDmg) ? 'macos' : inferredPlatform,
       arch: inferArch(relative),
       file: relative,
       size: stat.size,
@@ -116,20 +120,28 @@ function collectArtifacts(artifactRoot, explicitFiles = []) {
 function createUpdateManifest(options) {
   const artifacts = collectArtifacts(options.artifactRoot, options.artifacts || [])
   if (!artifacts.length) throw new Error(`No distributable update artifacts found under ${options.artifactRoot}`)
-  return {
+  const rolloutPercentage = options.rolloutPercentage === undefined ? 100 : Number(options.rolloutPercentage)
+  if (!Number.isFinite(rolloutPercentage) || rolloutPercentage < 0 || rolloutPercentage > 100) {
+    throw new Error('Update rollout percentage must be between 0 and 100')
+  }
+  const manifest = {
     schema: 1,
     product: options.product || 'Automnia',
     version: String(options.version || '').trim(),
     channel: String(options.channel || 'stable').trim() || 'stable',
     generatedAt: options.generatedAt || new Date().toISOString(),
     minimumVersion: String(options.minimumVersion || options.version || '').trim(),
+    rolloutPercentage,
     artifacts,
   }
+  if (options.releaseNotesUrl) manifest.releaseNotesUrl = String(options.releaseNotesUrl).trim()
+  if (options.mandatoryAfter) manifest.mandatoryAfter = String(options.mandatoryAfter).trim()
+  return manifest
 }
 
 function loadPrivateKey(options = {}) {
-  const pem = options.privateKeyPem || process.env.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM || process.env.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM
-  const filePath = options.privateKeyFile || process.env.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_FILE || process.env.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_FILE
+  const pem = options.privateKeyPem || process.env.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM
+  const filePath = options.privateKeyFile || process.env.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_FILE
   if (pem && filePath) throw new Error('Configure either update signing PEM or file, not both')
   if (filePath) return crypto.createPrivateKey(fs.readFileSync(path.resolve(filePath), 'utf8'))
   if (pem) return crypto.createPrivateKey(String(pem).replace(/\\n/g, '\n'))
@@ -153,7 +165,7 @@ function signManifest(manifest, options = {}) {
     summary: {
       schema: 1,
       algorithm: 'Ed25519',
-      keyId: options.keyId || process.env.AUTOMNIA_UPDATE_SIGNING_KEY_ID || process.env.AUTOMNIA_UPDATE_SIGNING_KEY_ID || sha256Bytes(publicKeyDer).slice(0, 16),
+      keyId: options.keyId || process.env.AUTOMNIA_UPDATE_SIGNING_KEY_ID || sha256Bytes(publicKeyDer).slice(0, 16),
       signedAt: new Date().toISOString(),
       manifestSha256: sha256Bytes(bytes),
       signatureSha256: sha256Bytes(signature),
@@ -186,6 +198,16 @@ function verifyManifestShape(manifest) {
   if (!isRecord(manifest) || manifest.schema !== 1) throw new Error('Update manifest schema must be 1')
   for (const key of ['product', 'version', 'channel', 'generatedAt', 'minimumVersion']) {
     if (typeof manifest[key] !== 'string' || !manifest[key].trim()) throw new Error(`Update manifest is missing ${key}`)
+  }
+  if (manifest.rolloutPercentage !== undefined && (!Number.isFinite(manifest.rolloutPercentage) || manifest.rolloutPercentage < 0 || manifest.rolloutPercentage > 100)) {
+    throw new Error('Update rollout percentage must be between 0 and 100')
+  }
+  if (manifest.releaseNotesUrl !== undefined) {
+    const releaseNotesUrl = new URL(String(manifest.releaseNotesUrl))
+    if (releaseNotesUrl.protocol !== 'https:' || releaseNotesUrl.username || releaseNotesUrl.password) throw new Error('Update release notes URL must use HTTPS')
+  }
+  if (manifest.mandatoryAfter !== undefined && !Number.isFinite(Date.parse(manifest.mandatoryAfter))) {
+    throw new Error('Update mandatoryAfter must be an ISO timestamp')
   }
   if (!Array.isArray(manifest.artifacts) || !manifest.artifacts.length) throw new Error('Update manifest must include artifacts')
 }

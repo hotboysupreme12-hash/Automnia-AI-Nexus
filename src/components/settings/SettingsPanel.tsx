@@ -60,6 +60,7 @@ import {
   type RegistrySortKey,
 } from './workspaceSettings'
 import { SettingsActivityLog } from './SettingsActivityLog'
+import { AppUpdateSettings } from './AppUpdateSettings'
 import { buildRuntimePolicyPatch, mixedRuntimeFields, type RuntimeDefaultsDraft } from './runtimePolicyDraft'
 import { MicrophoneSettings } from './MicrophoneSettings'
 import { lastPreferenceSaveResult, PREFERENCE_STORAGE_STATUS_EVENT } from './preferenceStorage'
@@ -82,7 +83,7 @@ import {
 } from './telegramSettings'
 
 type NoticeTone = 'neutral' | 'success' | 'warning' | 'error'
-export type SettingsSectionId = 'account' | 'appearance' | 'workspace' | 'voice' | 'missions' | 'agents' | 'telegram' | 'logs' | 'data'
+export type SettingsSectionId = 'account' | 'appearance' | 'workspace' | 'voice' | 'missions' | 'agents' | 'telegram' | 'updates' | 'logs' | 'data'
 type RuntimeTargetScope = 'party' | 'selection'
 type PendingConfirmation = 'reset-all' | 'reset-runtime' | 'clear-workspace' | null
 
@@ -99,6 +100,7 @@ const SETTINGS_SECTIONS: Array<{
   { id: 'missions', label: 'Missions', description: 'Deployment defaults', keywords: 'mission objective duration risk complexity collaboration evidence build test' },
   { id: 'agents', label: 'Agent runtime', description: 'Parallel chat and reasoning', keywords: 'agent runtime heartbeat timeout thinking fast parallel concurrency simultaneous chat commands sequential recovery continuous' },
   { id: 'telegram', label: 'Telegram', description: 'Bot commands and delivery', keywords: 'telegram bot commands agents pairing dm group topics streaming reactions polls media history actions settings' },
+  { id: 'updates', label: 'Updates', description: 'Version and delivery', keywords: 'update upgrade version release download installer restart automatic security' },
   { id: 'logs', label: 'Logs', description: 'Activity and history', keywords: 'logs activity agent runs gateway events tail automnia runtime response history channel telegram sms incoming sent retain trim memory' },
   { id: 'data', label: 'Data & reset', description: 'Backup and recovery', keywords: 'reset default backup export clear console responses simulation party data' },
 ]
@@ -153,6 +155,7 @@ function SettingsGlyph({ name }: { name: SettingsSectionId }) {
     missions: <><path d="m14.5 4.5 5 5-10 10-5-5 10-10Z" /><path d="m12.5 6.5 5 5M5 19l2 2" /></>,
     agents: <><circle cx="12" cy="8" r="4" /><path d="M4.5 21a7.5 7.5 0 0 1 15 0M19 4v4M17 6h4" /></>,
     telegram: <><path d="m4 11 16-7-5 16-3-6-8-3Z" /><path d="m12 14 3-7-7 3" /></>,
+    updates: <><path d="M20 12a8 8 0 1 1-2.34-5.66" /><path d="M20 4v6h-6M12 8v5l3 2" /></>,
     logs: <><path d="M5 5.5h14M5 12h14M5 18.5h9" /><circle cx="3.5" cy="5.5" r=".7" fill="currentColor" stroke="none" /><circle cx="3.5" cy="12" r=".7" fill="currentColor" stroke="none" /><circle cx="3.5" cy="18.5" r=".7" fill="currentColor" stroke="none" /></>,
     data: <><path d="M12 3v12M7 10l5 5 5-5" /><path d="M4 18v3h16v-3" /></>,
   }
@@ -891,6 +894,13 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     </div>
   )
 
+  const renderUpdates = () => (
+    <div className="dui-settings-section" id="settings-section-updates">
+      <SectionHeader section="updates" eyebrow="Stay current without interrupting your work" />
+      <AppUpdateSettings />
+    </div>
+  )
+
   const renderAccount = () => {
     const entitlement = resolveLicenseEntitlement(license)
     const hostedCredits = entitlement.isHosted
@@ -1260,6 +1270,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     if (section === 'missions') return renderMissions()
     if (section === 'agents') return renderAgents()
     if (section === 'telegram') return renderTelegram()
+    if (section === 'updates') return renderUpdates()
     if (section === 'logs') return <SettingsActivityLog />
     return renderData()
   }

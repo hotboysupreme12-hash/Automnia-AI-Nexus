@@ -1,17 +1,21 @@
 /** Keep Chromium focus in sync with native activation and renderer navigation. */
 function bindWindowFocus(win) {
+  // BrowserWindow.webContents throws once the native window has been destroyed.
+  // Retain the original EventEmitter so the closed handler never dereferences
+  // an already-destroyed BrowserWindow during update restarts or normal quits.
+  const contents = win.webContents
   const focusContents = () => {
-    if (win.isDestroyed() || !win.isVisible() || !win.isFocused() || win.webContents.isDestroyed()) return
-    win.webContents.focus()
-    win.webContents.invalidate?.()
+    if (win.isDestroyed() || !win.isVisible() || !win.isFocused() || contents.isDestroyed()) return
+    contents.focus()
+    contents.invalidate?.()
   }
   win.on('focus', focusContents)
-  win.webContents.on('dom-ready', focusContents)
-  win.webContents.on('did-finish-load', focusContents)
+  contents.on('dom-ready', focusContents)
+  contents.on('did-finish-load', focusContents)
   win.once('closed', () => {
     win.removeListener('focus', focusContents)
-    win.webContents.removeListener('dom-ready', focusContents)
-    win.webContents.removeListener('did-finish-load', focusContents)
+    contents.removeListener('dom-ready', focusContents)
+    contents.removeListener('did-finish-load', focusContents)
   })
 }
 

@@ -43,3 +43,26 @@ test('background navigation never steals focus and closed windows release listen
   assert.equal(f.contents.listenerCount('did-finish-load'), 0)
   assert.equal(f.win.listenerCount('focus'), 0)
 })
+
+test('closed-window cleanup never dereferences destroyed BrowserWindow contents', () => {
+  const win = new EventEmitter()
+  const contents = new EventEmitter()
+  let destroyed = false
+  Object.assign(contents, { isDestroyed: () => destroyed, focus() {} })
+  Object.assign(win, {
+    isDestroyed: () => destroyed,
+    isVisible: () => true,
+    isFocused: () => true,
+  })
+  Object.defineProperty(win, 'webContents', {
+    get() {
+      if (destroyed) throw new TypeError('Object has been destroyed')
+      return contents
+    },
+  })
+  bindWindowFocus(win)
+  destroyed = true
+  assert.doesNotThrow(() => win.emit('closed'))
+  assert.equal(contents.listenerCount('dom-ready'), 0)
+  assert.equal(contents.listenerCount('did-finish-load'), 0)
+})

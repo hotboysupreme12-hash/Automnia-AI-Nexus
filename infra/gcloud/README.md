@@ -28,6 +28,9 @@ included in the sanitized corpus by `npm run publish:knowledge`.
 
 Installer distribution is documented in
 [`../../docs/SHOPIFY_INSTALLER_DELIVERY.md`](../../docs/SHOPIFY_INSTALLER_DELIVERY.md).
+The signed in-app desktop update channel, Google Cloud bucket setup, staged rollout,
+and rollback procedure are documented in
+[`../../docs/DESKTOP_AUTO_UPDATES.md`](../../docs/DESKTOP_AUTO_UPDATES.md).
 The three-day Starter selling-plan trial is documented in
 [`../../docs/SHOPIFY_TRIAL_SETUP.md`](../../docs/SHOPIFY_TRIAL_SETUP.md).
 

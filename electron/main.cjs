@@ -4,6 +4,8 @@ const fs = require('node:fs')
 const https = require('node:https')
 const http = require('node:http')
 const { randomBytes } = require('node:crypto')
+const { autoUpdater } = require('electron-updater')
+const { createAppUpdater } = require('./app-updater.cjs')
 const { assertTrustedHttpsUrl, parseSha256Manifest, sha256File } = require('./runtime-download-security.cjs')
 const path = require('node:path')
 const { createMicrophonePermissions } = require('./microphone-permissions.cjs')
@@ -205,6 +207,7 @@ let controlCenterLaunchToken = ''
 let lastTrayMenuSnapshot = []
 let serverStartupOutputTail = ''
 let gpuRecoveryRelaunchRequested = false
+let desktopUpdater = null
 const SERVER_RESTART_BASE_DELAY_MS = 1000
 const SERVER_RESTART_MAX_DELAY_MS = 10_000
 const SERVER_STARTUP_OUTPUT_TAIL_MAX_CHARS = 12_000
@@ -474,6 +477,105 @@ ipcMain.handle('automnia:bootstrap-control-center-session', async (event) => {
     console.warn('[automnia] desktop session bootstrap failed:', error?.message || error)
     return null
   }
+})
+
+function readDesktopUpdateBuildConfig() {
+  const configPath = path.join(__dirname, 'update-config.json')
+  try {
+    const value = JSON.parse(fs.readFileSync(configPath, 'utf8'))
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+  } catch {
+    return {}
+  }
+}
+
+function publishDesktopUpdateState(nextState) {
+  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+    mainWindow.webContents.send('automnia:update-state', nextState)
+  }
+  updateTrayMenu()
+}
+
+function initializeDesktopUpdater() {
+  if (desktopUpdater) return desktopUpdater
+  const buildConfig = readDesktopUpdateBuildConfig()
+  const baseUrl = String(process.env.AUTOMNIA_UPDATE_BASE_URL || buildConfig.baseUrl || '').trim()
+  const channel = String(process.env.AUTOMNIA_UPDATE_CHANNEL || buildConfig.channel || 'stable').trim().toLowerCase()
+  const configuredKeyPath = String(process.env.AUTOMNIA_UPDATE_PUBLIC_KEY_FILE || '').trim()
+  const publicKeyPath = configuredKeyPath ? path.resolve(configuredKeyPath) : path.join(__dirname, 'update-public-key.pem')
+  desktopUpdater = createAppUpdater({
+    app,
+    autoUpdater,
+    fetch: globalThis.fetch.bind(globalThis),
+    baseUrl,
+    channel,
+    publicKeyPath,
+    userDataPath: app.getPath('userData'),
+    tempPath: app.getPath('temp'),
+    platform: process.platform,
+    arch: process.arch,
+    isAppImage: Boolean(process.env.APPIMAGE),
+    isPackaged: app.isPackaged,
+    allowDevelopment: process.env.AUTOMNIA_UPDATE_ALLOW_DEVELOPMENT === '1',
+    allowInsecureLocalhost: process.env.AUTOMNIA_UPDATE_ALLOW_INSECURE_LOCALHOST === '1',
+    initialDelayMs: Number(process.env.AUTOMNIA_UPDATE_INITIAL_DELAY_MS || 30_000),
+    checkIntervalMs: Number(process.env.AUTOMNIA_UPDATE_CHECK_INTERVAL_MS || 6 * 60 * 60 * 1000),
+    beforeInstall: performQuitCleanup,
+    openExternal: (target) => openAllowedExternalUrl(target),
+    onState: publishDesktopUpdateState,
+    onReady: () => {
+      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+        mainWindow.flashFrame(true)
+      }
+    },
+    logger: {
+      info: (message, details) => appendDesktopDiagnostic('updater-info', { message, ...details }),
+      warn: (message, details) => appendDesktopDiagnostic('updater-warning', { message, ...details }),
+      error: (message, details) => appendDesktopDiagnostic('updater-error', { message, ...details }),
+    },
+  })
+  desktopUpdater.start()
+  return desktopUpdater
+}
+
+ipcMain.handle('automnia:update-get-state', async (event) => {
+  if (!isTrustedRendererSender(event)) throw new Error('Untrusted renderer origin')
+  return initializeDesktopUpdater().getState()
+})
+
+ipcMain.handle('automnia:update-check', async (event) => {
+  if (!isTrustedRendererSender(event)) throw new Error('Untrusted renderer origin')
+  return initializeDesktopUpdater().check({ userInitiated: true })
+})
+
+ipcMain.handle('automnia:update-download', async (event) => {
+  if (!isTrustedRendererSender(event)) throw new Error('Untrusted renderer origin')
+  return initializeDesktopUpdater().download()
+})
+
+ipcMain.handle('automnia:update-install', async (event) => {
+  if (!isTrustedRendererSender(event)) throw new Error('Untrusted renderer origin')
+  return initializeDesktopUpdater().install()
+})
+
+ipcMain.handle('automnia:update-defer', async (event, hours) => {
+  if (!isTrustedRendererSender(event)) throw new Error('Untrusted renderer origin')
+  return initializeDesktopUpdater().defer(hours)
+})
+
+ipcMain.handle('automnia:update-set-preferences', async (event, input = {}) => {
+  if (!isTrustedRendererSender(event)) throw new Error('Untrusted renderer origin')
+  return initializeDesktopUpdater().setPreferences({ autoDownload: input?.autoDownload })
+})
+
+ipcMain.handle('automnia:update-open-release-notes', async (event) => {
+  if (!isTrustedRendererSender(event)) throw new Error('Untrusted renderer origin')
+  return initializeDesktopUpdater().openReleaseNotes()
+})
+
+ipcMain.handle('automnia:update-open-manual-download', async (event) => {
+  if (!isTrustedRendererSender(event)) throw new Error('Untrusted renderer origin')
+  return initializeDesktopUpdater().openManualDownload()
 })
 
 function resolveServerEntry() {
@@ -2108,6 +2210,7 @@ function createMainWindow() {
     if (!rendererRecoveryPageActive) {
       rendererLoadRetryCount = 0
       presentLoadedRenderer('did-finish-load')
+      desktopUpdater?.markHealthy()
     } else {
       presentLoadedRenderer('recovery-page')
     }
@@ -2320,6 +2423,14 @@ function updateTrayMenu() {
     {
       label: uiLabel,
       click: windowVisible ? hideFrontend : openFrontend,
+    },
+    {
+      label: 'Check for Updates',
+      enabled: !isQuitting,
+      click: () => {
+        openFrontend()
+        void initializeDesktopUpdater().check({ userInitiated: true })
+      },
     },
     { type: 'separator' },
     {
@@ -3084,6 +3195,7 @@ app.whenReady().then(async () => {
 
   try {
     createMainWindow()
+    initializeDesktopUpdater()
     if (ELECTRON_E2E_AUTO_QUIT_MS > 0) {
       const timer = setTimeout(() => {
         logE2e('auto-quit')

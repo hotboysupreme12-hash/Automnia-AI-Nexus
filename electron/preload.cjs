@@ -25,4 +25,22 @@ contextBridge.exposeInMainWorld('automniaDesktop', {
     startPath: typeof options.startPath === 'string' ? options.startPath : '',
   }),
   bootstrapControlCenterSession: () => ipcRenderer.invoke('automnia:bootstrap-control-center-session'),
+  updates: {
+    getState: () => ipcRenderer.invoke('automnia:update-get-state'),
+    check: () => ipcRenderer.invoke('automnia:update-check'),
+    download: () => ipcRenderer.invoke('automnia:update-download'),
+    install: () => ipcRenderer.invoke('automnia:update-install'),
+    defer: (hours = 24) => ipcRenderer.invoke('automnia:update-defer', hours),
+    setPreferences: (preferences = {}) => ipcRenderer.invoke('automnia:update-set-preferences', {
+      autoDownload: preferences.autoDownload === true,
+    }),
+    openReleaseNotes: () => ipcRenderer.invoke('automnia:update-open-release-notes'),
+    openManualDownload: () => ipcRenderer.invoke('automnia:update-open-manual-download'),
+    onState: (listener) => {
+      if (typeof listener !== 'function') return () => {}
+      const wrapped = (_event, state) => listener(state)
+      ipcRenderer.on('automnia:update-state', wrapped)
+      return () => ipcRenderer.removeListener('automnia:update-state', wrapped)
+    },
+  },
 })

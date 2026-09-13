@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
 
 concurrency:
   group: public-release-${{ github.ref }}
@@ -51,6 +50,13 @@ jobs:
       - name: Prepare vendored OpenClaw dependencies
         run: npm run prepare:openclaw-vendor
 
+      - name: Embed update verification configuration
+        env:
+          AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM: ${{ secrets.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM }}
+          AUTOMNIA_UPDATE_SIGNING_KEY_ID: ${{ vars.AUTOMNIA_UPDATE_SIGNING_KEY_ID }}
+          AUTOMNIA_UPDATE_BASE_URL: ${{ vars.AUTOMNIA_UPDATE_BASE_URL }}
+        run: npm run release:update-build-config
+
       - name: Verify release candidate source
         run: npm run verify:release-candidate
 
@@ -91,7 +97,7 @@ jobs:
         with:
           name: automnia-windows-public-release
           path: |
-            release/win-installer/*Setup*.exe
+            release/win-installer/**
             release/updates/**
             release/evidence/**
           if-no-files-found: error
@@ -131,6 +137,13 @@ jobs:
       - name: Prepare vendored OpenClaw dependencies
         run: npm run prepare:openclaw-vendor
 
+      - name: Embed update verification configuration
+        env:
+          AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM: ${{ secrets.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM }}
+          AUTOMNIA_UPDATE_SIGNING_KEY_ID: ${{ vars.AUTOMNIA_UPDATE_SIGNING_KEY_ID }}
+          AUTOMNIA_UPDATE_BASE_URL: ${{ vars.AUTOMNIA_UPDATE_BASE_URL }}
+        run: npm run release:update-build-config
+
       - name: Verify release candidate source
         run: npm run verify:release-candidate
 
@@ -156,7 +169,11 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: automnia-macos-public-release
-          path: release/*.dmg
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.blockmap
+            release/latest*.yml
           if-no-files-found: error
           retention-days: 90
 
@@ -180,6 +197,13 @@ jobs:
       - name: Prepare vendored OpenClaw dependencies
         run: npm run prepare:openclaw-vendor
 
+      - name: Embed update verification configuration
+        env:
+          AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM: ${{ secrets.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM }}
+          AUTOMNIA_UPDATE_SIGNING_KEY_ID: ${{ vars.AUTOMNIA_UPDATE_SIGNING_KEY_ID }}
+          AUTOMNIA_UPDATE_BASE_URL: ${{ vars.AUTOMNIA_UPDATE_BASE_URL }}
+        run: npm run release:update-build-config
+
       - name: Verify release candidate source under virtual display
         run: xvfb-run -a npm run verify:release-candidate
 
@@ -193,5 +217,112 @@ jobs:
           path: |
             release/*.AppImage
             release/*.deb
+            release/*.blockmap
+            release/latest*.yml
           if-no-files-found: error
           retention-days: 90
+
+  publish-updates:
+    name: Publish verified desktop update channel to Google Cloud
+    needs: [windows, macos, linux]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: desktop-update-stable-channel
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AUTOMNIA_UPDATE_REQUIRE_SIGNING: '1'
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install locked release tooling
+        run: npm ci
+
+      - name: Download Windows release
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: automnia-windows-public-release
+          path: release-downloads/windows
+
+      - name: Download macOS release
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: automnia-macos-public-release
+          path: release-downloads/macos
+
+      - name: Download Linux release
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: automnia-linux-public-release
+          path: release-downloads/linux
+
+      - name: Stage one coherent update channel
+        env:
+          AUTOMNIA_UPDATE_STAGE_INPUT: release-downloads
+          AUTOMNIA_UPDATE_STAGE_OUTPUT: release/update-channel
+          AUTOMNIA_RELEASE_VERSION: ${{ github.ref_name }}
+          AUTOMNIA_UPDATE_ROLLOUT_PERCENTAGE: ${{ vars.AUTOMNIA_UPDATE_ROLLOUT_PERCENTAGE || '100' }}
+        run: npm run release:update-stage
+
+      - name: Sign combined cross-platform update manifest
+        env:
+          AUTOMNIA_RELEASE_ARTIFACT_ROOT: release/update-channel
+          AUTOMNIA_UPDATE_OUTPUT_DIR: release/update-channel
+          AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM: ${{ secrets.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM }}
+          AUTOMNIA_UPDATE_SIGNING_KEY_ID: ${{ vars.AUTOMNIA_UPDATE_SIGNING_KEY_ID }}
+          AUTOMNIA_UPDATE_ROLLOUT_PERCENTAGE: ${{ vars.AUTOMNIA_UPDATE_ROLLOUT_PERCENTAGE || '100' }}
+          AUTOMNIA_UPDATE_MINIMUM_VERSION: ${{ vars.AUTOMNIA_UPDATE_MINIMUM_VERSION }}
+          AUTOMNIA_UPDATE_MANDATORY_AFTER: ${{ vars.AUTOMNIA_UPDATE_MANDATORY_AFTER }}
+          AUTOMNIA_UPDATE_RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md
+        run: npm run release:update-manifest
+
+      - name: Verify complete update channel before publication
+        env:
+          AUTOMNIA_RELEASE_ARTIFACT_ROOT: release/update-channel
+          AUTOMNIA_UPDATE_OUTPUT_DIR: release/update-channel
+        run: npm run release:update-verify
+
+      - name: Authenticate to Google Cloud without a service-account key
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: ${{ secrets.GCP_UPDATE_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_UPDATE_PUBLISHER_SERVICE_ACCOUNT }}
+
+      - name: Install Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+
+      - name: Publish immutable payloads, then channel metadata
+        shell: bash
+        env:
+          UPDATE_BUCKET: ${{ vars.AUTOMNIA_UPDATE_BUCKET }}
+        run: |
+          set -euo pipefail
+          test -n "$UPDATE_BUCKET" || { echo "AUTOMNIA_UPDATE_BUCKET is required" >&2; exit 1; }
+          gcloud storage buckets describe "gs://$UPDATE_BUCKET" >/dev/null
+          version="${GITHUB_REF_NAME#v}"
+          version_destination="gs://$UPDATE_BUCKET/releases/$version"
+          channel_destination="gs://$UPDATE_BUCKET/stable"
+          while IFS= read -r -d '' file; do
+            gcloud storage cp --if-generation-match=0 --cache-control="public,max-age=31536000,immutable" "$file" "$version_destination/"
+            gcloud storage cp --if-generation-match=0 --cache-control="public,max-age=31536000,immutable" "$file" "$channel_destination/"
+          done < <(find release/update-channel -maxdepth 1 -type f ! -name 'latest*.yml' ! -name 'update-manifest*' ! -name 'update-signing.json' -print0)
+          while IFS= read -r -d '' file; do
+            gcloud storage cp --if-generation-match=0 --cache-control="no-store,max-age=0" "$file" "$version_destination/"
+          done < <(find release/update-channel -maxdepth 1 -type f \( -name 'latest*.yml' -o -name 'update-manifest*' -o -name 'update-signing.json' \) -print0)
+          while IFS= read -r -d '' file; do
+            gcloud storage cp --cache-control="no-store,max-age=0" "$file" "$channel_destination/"
+          done < <(find release/update-channel -maxdepth 1 -type f -name 'latest*.yml' -print0)
+          for metadata in update-signing.json update-manifest-public-key.pem update-manifest.json.sig update-manifest.json; do
+            test -f "release/update-channel/$metadata" || { echo "Missing required metadata: $metadata" >&2; exit 1; }
+            gcloud storage cp --cache-control="no-store,max-age=0" "release/update-channel/$metadata" "$channel_destination/$metadata"
+          done

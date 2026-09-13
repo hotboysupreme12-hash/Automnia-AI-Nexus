@@ -77,6 +77,7 @@ test('artifact discovery classifies platforms and excludes unpacked or evidence 
   try {
     write(root, 'Automnia-Setup-1.2.3-arm64.exe')
     write(root, 'Automnia-1.2.3-x64.dmg')
+    write(root, 'Automnia-1.2.3-x64.zip')
     write(root, 'Automnia-1.2.3-amd64.AppImage')
     write(root, 'Automnia-portable.zip')
     write(root, 'win-unpacked/Automnia.exe')
@@ -89,6 +90,7 @@ test('artifact discovery classifies platforms and excludes unpacked or evidence 
     const artifacts = collectArtifacts(root)
     assert.deepEqual(artifacts.map((entry) => [entry.platform, entry.arch]), [
       ['linux', 'x64'],
+      ['macos', 'x64'],
       ['macos', 'x64'],
       ['portable', 'universal'],
       ['windows', 'arm64'],
