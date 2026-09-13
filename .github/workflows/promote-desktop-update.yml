@@ -1,0 +1,129 @@
+name: Promote Desktop Update Rollout
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: Existing immutable release version, without the v prefix
+        required: true
+        type: string
+      rollout_percentage:
+        description: Percentage of eligible installations that receive the release
+        required: true
+        default: '25'
+        type: choice
+        options:
+          - '0'
+          - '5'
+          - '25'
+          - '50'
+          - '100'
+      minimum_version:
+        description: Versions below this cannot defer the update
+        required: true
+        default: '0.0.0'
+        type: string
+      mandatory_after:
+        description: Optional ISO-8601 deadline after which deferral is disabled
+        required: false
+        type: string
+
+concurrency:
+  group: desktop-update-stable-channel
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  promote:
+    name: Re-sign rollout policy around immutable release files
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out trusted release tooling
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install locked release tooling
+        run: npm ci
+
+      - name: Validate requested release policy
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          MINIMUM_VERSION: ${{ inputs.minimum_version }}
+          MANDATORY_AFTER: ${{ inputs.mandatory_after }}
+        run: |
+          set -euo pipefail
+          semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$'
+          [[ "$RELEASE_VERSION" =~ $semver ]] || { echo "release_version must be SemVer without a v prefix" >&2; exit 1; }
+          [[ "$MINIMUM_VERSION" =~ $semver ]] || { echo "minimum_version must be SemVer" >&2; exit 1; }
+          node -e "const { compareVersions } = require('./electron/update-policy.cjs'); if (compareVersions(process.argv[1], process.argv[2]) > 0) process.exit(1)" "$MINIMUM_VERSION" "$RELEASE_VERSION" || { echo "minimum_version cannot be newer than release_version" >&2; exit 1; }
+          if [[ -n "$MANDATORY_AFTER" ]]; then node -e "if (!Number.isFinite(Date.parse(process.argv[1]))) process.exit(1)" "$MANDATORY_AFTER"; fi
+
+      - name: Authenticate to Google Cloud without a service-account key
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: ${{ secrets.GCP_UPDATE_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_UPDATE_PUBLISHER_SERVICE_ACCOUNT }}
+
+      - name: Install Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+
+      - name: Download existing immutable release
+        shell: bash
+        env:
+          UPDATE_BUCKET: ${{ vars.AUTOMNIA_UPDATE_BUCKET }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -euo pipefail
+          test -n "$UPDATE_BUCKET" || { echo "AUTOMNIA_UPDATE_BUCKET is required" >&2; exit 1; }
+          mkdir -p promotion-downloads
+          gcloud storage rsync --recursive "gs://$UPDATE_BUCKET/releases/$RELEASE_VERSION" promotion-downloads
+
+      - name: Validate and stage the existing cross-platform release
+        env:
+          AUTOMNIA_UPDATE_STAGE_INPUT: promotion-downloads
+          AUTOMNIA_UPDATE_STAGE_OUTPUT: release/update-channel
+          AUTOMNIA_RELEASE_VERSION: ${{ inputs.release_version }}
+          AUTOMNIA_UPDATE_ROLLOUT_PERCENTAGE: ${{ inputs.rollout_percentage }}
+        run: npm run release:update-stage
+
+      - name: Sign the promoted rollout policy
+        env:
+          AUTOMNIA_RELEASE_ARTIFACT_ROOT: release/update-channel
+          AUTOMNIA_UPDATE_OUTPUT_DIR: release/update-channel
+          AUTOMNIA_RELEASE_VERSION: ${{ inputs.release_version }}
+          AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM: ${{ secrets.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM }}
+          AUTOMNIA_UPDATE_SIGNING_KEY_ID: ${{ vars.AUTOMNIA_UPDATE_SIGNING_KEY_ID }}
+          AUTOMNIA_UPDATE_ROLLOUT_PERCENTAGE: ${{ inputs.rollout_percentage }}
+          AUTOMNIA_UPDATE_MINIMUM_VERSION: ${{ inputs.minimum_version }}
+          AUTOMNIA_UPDATE_MANDATORY_AFTER: ${{ inputs.mandatory_after }}
+          AUTOMNIA_UPDATE_RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/blob/v${{ inputs.release_version }}/CHANGELOG.md
+        run: npm run release:update-manifest
+
+      - name: Verify promoted manifest and every immutable payload
+        env:
+          AUTOMNIA_RELEASE_ARTIFACT_ROOT: release/update-channel
+          AUTOMNIA_UPDATE_OUTPUT_DIR: release/update-channel
+          AUTOMNIA_UPDATE_REQUIRE_SIGNING: '1'
+        run: npm run release:update-verify
+
+      - name: Publish policy metadata with manifest pointer last
+        shell: bash
+        env:
+          UPDATE_BUCKET: ${{ vars.AUTOMNIA_UPDATE_BUCKET }}
+        run: |
+          set -euo pipefail
+          destination="gs://$UPDATE_BUCKET/stable"
+          for metadata in update-signing.json update-manifest-public-key.pem update-manifest.json.sig update-manifest.json; do
+            test -f "release/update-channel/$metadata" || { echo "Missing required metadata: $metadata" >&2; exit 1; }
+            gcloud storage cp --cache-control="no-store,max-age=0" "release/update-channel/$metadata" "$destination/$metadata"
+          done

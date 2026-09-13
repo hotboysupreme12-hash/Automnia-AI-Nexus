@@ -30,6 +30,8 @@ tmp/
 memory/
 runtime-behavior-probe/
 infra/gcloud/.state/
+electron/update-config.json
+electron/update-public-key.pem
 
 # Python/virtual environments
 .venv/

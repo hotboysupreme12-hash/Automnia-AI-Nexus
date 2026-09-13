@@ -6,6 +6,7 @@ import { AuthProvider } from './context/AuthContext'
 import { LicenseProvider } from './context/LicenseContext'
 import { useAuth } from './context/useAuth'
 import { useLicense } from './context/useLicense'
+import { AppUpdateExperience } from './components/system/AppUpdateExperience'
 
 const StableNexusShell = memo(NexusShell)
 
@@ -25,6 +26,7 @@ function App() {
     <AuthProvider>
       <LicenseProvider>
         <AuthenticatedShell />
+        <AppUpdateExperience />
       </LicenseProvider>
     </AuthProvider>
   )

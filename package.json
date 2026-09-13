@@ -133,6 +133,8 @@
     "prepare:openclaw-vendor": "node scripts/prepare-openclaw-vendor.cjs",
     "release:update-manifest": "node scripts/generate-update-manifest.cjs",
     "release:update-verify": "node scripts/verify-update-manifest.cjs",
+    "release:update-build-config": "node scripts/write-update-build-config.cjs",
+    "release:update-stage": "node scripts/stage-update-channel.cjs",
     "release:lifecycle:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows-release-lifecycle.ps1",
     "release:evidence": "node scripts/generate-release-evidence.cjs",
     "release:sign": "node scripts/sign-release-evidence.cjs",
@@ -175,6 +177,13 @@
     "directories": {
       "output": "release"
     },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://updates.automnia.app/stable",
+        "channel": "latest"
+      }
+    ],
     "files": [
       "electron/**",
       "package.json",
@@ -230,7 +239,8 @@
     },
     "mac": {
       "target": [
-        "dmg"
+        "dmg",
+        "zip"
       ],
       "category": "public.app-category.developer-tools",
       "artifactName": "${productName}-${version}-${arch}.${ext}",
@@ -267,6 +277,7 @@
     "@fontsource-variable/geist-mono": "^5.2.8",
     "@fontsource-variable/sora": "^5.2.8",
     "cors": "^2.8.6",
+    "electron-updater": "6.8.9",
     "express": "^5.2.1",
     "framer-motion": "^12.34.2",
     "node-pty": "^1.2.0-beta.13",
@@ -294,6 +305,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.6",
     "globals": "^16.5.0",
+    "js-yaml": "^4.1.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.21.0",

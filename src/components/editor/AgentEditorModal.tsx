@@ -62,21 +62,11 @@ type AgentConfigDirtySection = 'profile'|'model'|'runtime'|'heartbeat'|'policy'
 type ApplyAgentConfigOptions = { skipDirty?: boolean }
 type PolicyDraft = { allow:string; deny:string }
 type EditorAutosavePhase = 'saved'|'saving'|'error'
-type DesktopDirectoryPickerPayload = { ok?:boolean; path?:string|null; cancelled?:boolean; error?:string; detail?:string }
 type FolderListPayload = { base?:string; folders?:string[] }
 type FolderPickerSessionPayload = { sessionId?:string; status?:'pending'|'selected'|'cancelled'|'error'; path?:string|null; cancelled?:boolean; detail?:string }
 type AgentResourceListPayload = { files?:string[] }
 type AgentResourceContentPayload = { content?:string; revision?:string }
 type AgentResourceSavePayload = { file?:string; resourcePath?:string; revision?:string }
-
-declare global {
-  interface Window {
-    automniaDesktop?: {
-      getPathForFile?: (file: File) => string | Promise<string>
-      pickDirectory?: (options?: { startPath?: string }) => Promise<DesktopDirectoryPickerPayload>
-    }
-  }
-}
 
 type TimedEditorCache<T> = { expiresAt:number; value:T }
 

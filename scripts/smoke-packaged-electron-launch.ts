@@ -186,7 +186,8 @@ try {
   const launcherStatus = await new Promise<number | null>((resolve, reject) => {
     const timeout = setTimeout(() => {
       terminatePackagedLauncher(launcher)
-      reject(new Error(`packaged launcher did not exit within ${launcherExitTimeoutMs / 1000}s`))
+      const diagnostics = existsSync(logPath) ? readFileSync(logPath, 'utf8').trim() : '(no launch log was created)'
+      reject(new Error(`packaged launcher did not exit within ${launcherExitTimeoutMs / 1000}s\n${diagnostics}`))
     }, launcherExitTimeoutMs)
     launcher.once('error', reject)
     launcher.once('exit', (code) => {
