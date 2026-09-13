@@ -120,6 +120,18 @@ test('hosted relay compacts history, tool output, and repeated inline images whi
   assert.ok(estimateRelayTokens(compacted.messages) > 0)
 })
 
+test('hosted relay matches the agent-side live tool-result budget', () => {
+  assert.equal(automniaRelayTokenOptimization.maxToolResultChars, 4_000)
+  const compacted = compactOpenAiMessages([
+    { role: 'user', content: 'Inspect the file.' },
+    { role: 'assistant', content: '', tool_calls: [{ id: 'read_1', type: 'function', function: { name: 'read', arguments: '{"path":"large.log"}' } }] },
+    { role: 'tool', tool_call_id: 'read_1', content: 'x'.repeat(20_000) },
+  ])
+  const toolResult = compacted.messages.find((message) => message.role === 'tool')
+  assert.ok(toolResult.content.length <= 4_000)
+  assert.match(toolResult.content, /tool output shortened/)
+})
+
 test('hosted relay keeps tool names and required schema fields but drops verbose schema metadata', () => {
   const compacted = compactOpenAiTools([{
     type: 'function',

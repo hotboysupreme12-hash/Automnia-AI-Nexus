@@ -97,6 +97,8 @@ assertIncludes(server, "midTurnPrecheck: { enabled: true }", 'Automnia should pr
 assertIncludes(server, "maxActiveTranscriptBytes: '8mb'", 'Automnia should rotate oversized active transcripts')
 assertIncludes(server, 'contextTokens: AUTOMNIA_OPENCLAW_CONTEXT_TOKENS', 'every model should inherit the bounded context budget')
 assertIncludes(server, 'applyTokenEfficientContextLimits(entry)', 'every agent entry should inherit bounded context limits')
+assertIncludes(server, 'AUTOMNIA_CONTEXT_PRUNING_MIN_TOOL_CHARS = 2000', 'old tool results should become hard-clearable before they dominate the context')
+assertIncludes(server, 'isPreviousAutomniaBaseline', 'existing generated pruning settings should migrate to the tighter tool-result threshold')
 assertNotIncludes(server, 'applyAutomniaCreditsCompactContextLimits(entry', 'context limits must not be restricted to Automnia hosted models')
 assertIncludes(server, 'const MAX_PROVIDER_CONVERSATION_MESSAGES = 8', 'direct provider histories should use the shared small message budget')
 assertIncludes(server, 'const MAX_PROVIDER_CONVERSATION_CHARS = 32_000', 'direct provider histories should use the shared small character budget')

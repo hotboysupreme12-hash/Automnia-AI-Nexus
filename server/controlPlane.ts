@@ -524,6 +524,7 @@ const AUTOMNIA_CREDITS_COMPACT_MEMORY_MAX_CHARS = 720
 const AUTOMNIA_CREDITS_COMPACT_TOOL_RESULT_MAX_CHARS = 4000
 const AUTOMNIA_CREDITS_COMPACT_MEMORY_GET_MAX_CHARS = 1000
 const AUTOMNIA_CREDITS_COMPACT_POST_COMPACTION_MAX_CHARS = 800
+const AUTOMNIA_CONTEXT_PRUNING_MIN_TOOL_CHARS = 2000
 const SHARED_AGENT_STATE_DIR = path.join('.openclaw', 'agents')
 const AGENT_LOCAL_CONFIG_FILE = 'config.json'
 const AGENT_MDS_FILE = 'MDS.json'
@@ -8357,7 +8358,7 @@ function defaultContextPruningConfig(): OpenClawContextPruningConfig {
     keepLastAssistants: 2,
     softTrimRatio: 0.25,
     hardClearRatio: 0.4,
-    minPrunableToolChars: 8000,
+    minPrunableToolChars: AUTOMNIA_CONTEXT_PRUNING_MIN_TOOL_CHARS,
     // Browser text can be pruned safely; image blocks are protected by
     // OpenClaw's image sanitizer. Keep canvas denied because it is primarily
     // visual state and is not a useful token-saving target.
@@ -8463,7 +8464,16 @@ function ensureContextPruningDefaults(defaults: NonNullable<NonNullable<OpenClaw
     && pruning.softTrim?.maxChars === 4000
     && pruning.softTrim?.headChars === 1500
     && pruning.softTrim?.tailChars === 1500
-  if (isLegacyAutomniaBaseline) {
+  const isPreviousAutomniaBaseline = pruning.ttl === '5m'
+    && pruning.keepLastAssistants === 2
+    && pruning.softTrimRatio === 0.25
+    && pruning.hardClearRatio === 0.4
+    && pruning.minPrunableToolChars === 8000
+    && JSON.stringify(pruning.tools?.deny || []) === JSON.stringify(['canvas'])
+    && pruning.softTrim?.maxChars === 2000
+    && pruning.softTrim?.headChars === 800
+    && pruning.softTrim?.tailChars === 800
+  if (isLegacyAutomniaBaseline || isPreviousAutomniaBaseline) {
     defaults.contextPruning = defaultContextPruningConfig()
     return
   }

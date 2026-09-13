@@ -1072,7 +1072,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
               )}
               {!checking && account && (account.hasPassword || account.googleLinked) && <>
                 <div className="dui-settings-account-password__form">
-                  {account.hasPassword && <label className="dui-settings-account-password__field">
+                  {account.hasPassword && <label className="dui-settings-account-password__field dui-settings-account-password__field--current">
                     <span>Current password</span>
                     <input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} placeholder="Enter your current password" autoComplete="current-password" maxLength={128} />
                   </label>}

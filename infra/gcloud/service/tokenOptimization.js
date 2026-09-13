@@ -7,7 +7,7 @@ const DEFAULT_TEXT_OUTPUT_TOKENS = 1_536;
 const DEFAULT_TOOL_OUTPUT_TOKENS = 2_048;
 const DEFAULT_MAX_SYSTEM_CHARS = 6_000;
 const DEFAULT_MAX_MESSAGE_CHARS = 12_000;
-const DEFAULT_MAX_TOOL_RESULT_CHARS = 6_000;
+const DEFAULT_MAX_TOOL_RESULT_CHARS = 4_000;
 const DEFAULT_MAX_HISTORY_MESSAGES = 8;
 const DEFAULT_MAX_INLINE_IMAGES = 1;
 const DEFAULT_MAX_INLINE_IMAGE_CHARS = 400_000;
@@ -31,7 +31,7 @@ function environmentInteger(name, fallback, minimum, maximum) {
   return boundedInteger(process.env[name], fallback, minimum, maximum);
 }
 
-export const AUTOMNIA_RELAY_TOKEN_OPTIMIZATION_VERSION = '2026-09-10.3';
+export const AUTOMNIA_RELAY_TOKEN_OPTIMIZATION_VERSION = '2026-09-13.1';
 
 export const automniaRelayTokenOptimization = Object.freeze({
   version: AUTOMNIA_RELAY_TOKEN_OPTIMIZATION_VERSION,
