@@ -173,9 +173,9 @@ function SectionHeader({ section, eyebrow }: { section: SettingsSectionId; eyebr
   )
 }
 
-function SettingsCard({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+function SettingsCard({ title, description, className, children }: { title: string; description?: string; className?: string; children: ReactNode }) {
   return (
-    <section className="dui-settings-card">
+    <section className={`dui-settings-card${className ? ` ${className}` : ''}`}>
       <div className="dui-settings-card__head">
         <div>
           <strong>{title}</strong>
@@ -1018,7 +1018,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     }
 
     return (
-      <div className="dui-settings-section" id="settings-section-account">
+      <div className="dui-settings-section dui-settings-account-section" id="settings-section-account">
         <SectionHeader section="account" eyebrow="Automnia AI Nexus Plan, Access & Billing" />
         <div className="dui-settings-account-hero">
           <div>
@@ -1032,130 +1032,134 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
             <small>{entitlement.tierLabel} · {entitlement.billingLabel}</small>
           </div>
         </div>
-        <SettingsCard title="Profile & security" description="Manage your account details and sign-in preferences.">
-          <Field label="Account Email" hint="Registered subscriber address.">
-            <input type="text" readOnly value={license?.email || 'Not reported'} style={{ fontWeight: 'bold', backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
-          </Field>
-          <div className="dui-settings-account-password" aria-labelledby="account-password-title">
-            <div className="dui-settings-account-password__intro">
-              <span>Account security</span>
-              <h4 id="account-password-title">
-                {!account ? 'Account password' : account.hasPassword ? 'Change account password' : account.googleLinked ? 'Create an account password' : 'Connect Google to create a password'}
-              </h4>
-              <p>
-                {checking || !account
-                  ? 'Loading whether this account already has a password…'
-                  : account.hasPassword
-                    ? account.googleLinked
-                      ? 'This account already has an Automnia password. Google sign-in remains available; enter the current password only if you want to change it.'
-                      : 'This account already has an Automnia password. Enter the current password below to choose a new one.'
-                    : account.googleLinked
-                      ? 'Google sign-in is connected. No current password is needed—create one below to enable email and password sign-in too.'
-                      : 'This account has no password yet, and Google is not connected on this device. Connect Google first; no password will be changed or removed.'}
-              </p>
-            </div>
-            {!checking && account && !account.googleLinked && !account.hasPassword && (
-              <button className="dui-settings-account-password__connect" type="button" onClick={() => void reconnectGoogleForPassword()} disabled={googleReconnectBusy}>
-                {googleReconnectBusy ? 'Connecting Google…' : 'Connect Google securely'}
-              </button>
-            )}
-            {!checking && account && (account.hasPassword || account.googleLinked) && <>
-              <div className="dui-settings-account-password__form">
-                {account.hasPassword && <label className="dui-settings-account-password__field">
-                  <span>Current password</span>
-                  <input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} placeholder="Enter your current password" autoComplete="current-password" maxLength={128} />
-                </label>}
-                <label className="dui-settings-account-password__field">
-                  <span>{account.hasPassword ? 'New password — 12 to 128 characters' : 'Create password — 12 to 128 characters'}</span>
-                  <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="Enter a new password" autoComplete="new-password" minLength={12} maxLength={128} />
-                </label>
-                <label className="dui-settings-account-password__field">
-                  <span>Confirm password</span>
-                  <input type="password" value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} placeholder="Re-enter your new password" autoComplete="new-password" minLength={12} maxLength={128} />
-                </label>
-                <button className="dui-settings-account-password__submit" type="button" onClick={() => void savePassword()} disabled={passwordChangeBusy || newPassword.length < 12 || newPassword.length > 128 || confirmNewPassword.length < 12 || confirmNewPassword.length > 128 || Boolean(account.hasPassword && currentPassword.length < 1)}>
-                  {passwordChangeBusy ? 'Saving password…' : account.hasPassword ? 'Change password' : 'Create password'}
+        <div className="dui-settings-account-overview">
+          <SettingsCard className="dui-settings-account-card dui-settings-account-profile" title="Profile & security" description="Manage your account details and sign-in preferences.">
+            <Field label="Account Email" hint="Registered subscriber address.">
+              <input type="text" readOnly value={license?.email || 'Not reported'} style={{ fontWeight: 'bold', backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
+            </Field>
+            <div className="dui-settings-account-password" aria-labelledby="account-password-title">
+              <div className="dui-settings-account-password__intro">
+                <span>Account security</span>
+                <h4 id="account-password-title">
+                  {!account ? 'Account password' : account.hasPassword ? 'Change account password' : account.googleLinked ? 'Create an account password' : 'Connect Google to create a password'}
+                </h4>
+                <p>
+                  {checking || !account
+                    ? 'Loading whether this account already has a password…'
+                    : account.hasPassword
+                      ? account.googleLinked
+                        ? 'This account already has an Automnia password. Google sign-in remains available; enter the current password only if you want to change it.'
+                        : 'This account already has an Automnia password. Enter the current password below to choose a new one.'
+                      : account.googleLinked
+                        ? 'Google sign-in is connected. No current password is needed—create one below to enable email and password sign-in too.'
+                        : 'This account has no password yet, and Google is not connected on this device. Connect Google first; no password will be changed or removed.'}
+                </p>
+              </div>
+              {!checking && account && !account.googleLinked && !account.hasPassword && (
+                <button className="dui-settings-account-password__connect" type="button" onClick={() => void reconnectGoogleForPassword()} disabled={googleReconnectBusy}>
+                  {googleReconnectBusy ? 'Connecting Google…' : 'Connect Google securely'}
                 </button>
-              </div>
-            </>}
-            {passwordChangeError && <p className="dui-settings-account-password__error" role="alert">{passwordChangeError}</p>}
+              )}
+              {!checking && account && (account.hasPassword || account.googleLinked) && <>
+                <div className="dui-settings-account-password__form">
+                  {account.hasPassword && <label className="dui-settings-account-password__field">
+                    <span>Current password</span>
+                    <input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} placeholder="Enter your current password" autoComplete="current-password" maxLength={128} />
+                  </label>}
+                  <label className="dui-settings-account-password__field">
+                    <span>{account.hasPassword ? 'New password — 12 to 128 characters' : 'Create password — 12 to 128 characters'}</span>
+                    <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="Enter a new password" autoComplete="new-password" minLength={12} maxLength={128} />
+                  </label>
+                  <label className="dui-settings-account-password__field">
+                    <span>Confirm password</span>
+                    <input type="password" value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} placeholder="Re-enter your new password" autoComplete="new-password" minLength={12} maxLength={128} />
+                  </label>
+                  <button className="dui-settings-account-password__submit" type="button" onClick={() => void savePassword()} disabled={passwordChangeBusy || newPassword.length < 12 || newPassword.length > 128 || confirmNewPassword.length < 12 || confirmNewPassword.length > 128 || Boolean(account.hasPassword && currentPassword.length < 1)}>
+                    {passwordChangeBusy ? 'Saving password…' : account.hasPassword ? 'Change password' : 'Create password'}
+                  </button>
+                </div>
+              </>}
+              {passwordChangeError && <p className="dui-settings-account-password__error" role="alert">{passwordChangeError}</p>}
+            </div>
+          </SettingsCard>
+          <SettingsCard className="dui-settings-account-card dui-settings-account-plans" title="Two plans. A clear path forward." description="Credits are the simple unit of value—no oversized token totals to decode.">
+            <section className="dui-plan-catalog" aria-label="Automnia plan comparison">
+              <article className={`dui-plan-card${isCurrentStarterPlan ? ' is-current' : ''}`}>
+                <div className="dui-plan-card__head">
+                  <div><span>STARTER</span><h4>Build your momentum</h4></div>
+                  {isCurrentStarterPlan && <b>Current plan</b>}
+                </div>
+                <strong className="dui-plan-card__credits">{formatAutomniaCreditsFromTokens(AUTOMNIA_STARTER_TOKENS, '')} <small>credits</small></strong>
+                <p>Everything you need to explore, build, and run core Automnia workflows.</p>
+                <ul>
+                  <li>Automnia hosted models</li>
+                  <li>Essential agents and workflows</li>
+                  <li>Secure cloud execution</li>
+                  <li>Credits-only, simple billing</li>
+                </ul>
+                {!isCurrentStarterPlan && <button type="button" onClick={() => void openCheckout()} disabled={checkoutBusy}>{checkoutBusy ? 'Opening checkout…' : 'Choose Starter'}</button>}
+              </article>
+              <article className={`dui-plan-card is-pro${isCurrentProPlan ? ' is-current' : ''}`}>
+                <div className="dui-plan-card__head">
+                  <div><span>MOST CAPABLE</span><h4>Pro</h4></div>
+                  {isCurrentProPlan ? <b>Current plan</b> : <b>Full access</b>}
+                </div>
+                <strong className="dui-plan-card__credits">{formatAutomniaCreditsFromTokens(AUTOMNIA_PRO_TOKENS, '')} <small>credits</small></strong>
+                <p>All of Automnia’s highest-level capabilities, consolidated into one decisive plan.</p>
+                <ul>
+                  <li>Everything in Starter</li>
+                  <li>All Automnia models and advanced workflows</li>
+                  <li>Bring your own provider + smart fallback routing</li>
+                  <li>Offline-capable provider access and priority controls</li>
+                </ul>
+                {!isCurrentProPlan && <button type="button" onClick={() => void openCheckout()} disabled={checkoutBusy}>{checkoutBusy ? 'Opening checkout…' : 'Upgrade to Pro'}</button>}
+              </article>
+            </section>
+            <p className="dui-plan-catalog__note">Pro includes every capability that was previously available in Enterprise. Legacy Enterprise access remains fully honored.</p>
+          </SettingsCard>
+        </div>
+        <SettingsCard className="dui-settings-account-billing" title="Plan, access & billing" description="Review your plan, credit balance, and billing preferences.">
+          <div className="dui-settings-account-fields">
+            <Field label="License Authorization" hint="The license key remains server-local and is never revealed in the app.">
+              <input type="text" readOnly value={license?.active ? 'Active — stored securely on this device' : 'No active license'} style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
+            </Field>
+            <Field label="Plan or Access Tier" hint="The exact entitlement activated for this account.">
+              <input type="text" readOnly value={entitlement.tierLabel} style={{ fontWeight: 'bold', backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
+            </Field>
+            <Field label="Access & Billing Mode" hint="Starter uses Automnia hosted credits. Pro adds the complete provider and priority-control toolkit.">
+              <input type="text" readOnly value={entitlement.billingLabel} style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
+            </Field>
+            <Field label="Usage Priority" hint={usagePriorityLocked ? 'Starter and credit-refill access stay on Automnia credits.' : hostedCredits || isByok ? 'Pro can choose Automnia credits or My provider + Automnia credits, including the route order.' : 'Activate Starter or Pro to choose a usage priority.'}>
+              <select
+                value={usagePriorityManaged ? (usagePriority === 'automnia_only' ? 'automnia_only' : 'provider_plus_automnia') : 'automnia_only'}
+                disabled={!usagePriorityManaged || usagePriorityBusy || usagePriorityLocked}
+                onChange={(event) => void saveUsagePriority(event.target.value === 'automnia_only' ? 'automnia_only' : 'provider_first')}
+              >
+                <option value="automnia_only">Automnia credits</option>
+                <option value="provider_plus_automnia" disabled={!byokAllowed}>My provider + Automnia credits{byokAllowed ? '' : ' — provider access not included'}</option>
+              </select>
+              {usagePriority !== 'automnia_only' && <div style={{ marginTop: '0.6rem' }}>
+                <label style={{ display: 'block', fontSize: '0.78rem', color: '#cbd5e1' }}>
+                  Fallback order
+                  <select
+                    value={usagePriority}
+                    disabled={usagePriorityBusy}
+                    onChange={(event) => void saveUsagePriority(event.target.value as 'provider_first' | 'automnia_first_with_provider_fallback')}
+                    style={{ display: 'block', width: '100%', marginTop: '0.3rem' }}
+                  >
+                    <option value="provider_first">My provider first, Automnia credits fallback</option>
+                    <option value="automnia_first_with_provider_fallback">Automnia credits first, my provider fallback</option>
+                  </select>
+                </label>
+              </div>}
+            </Field>
+            <Field label="Effective Agent Route" hint={hostedCredits || isByok ? 'This saved preference applies to normal messages, /runtime, /work, /openclaw, streamed turns, and buffered recovery.' : 'Activate a Cloud Subscription or BYOK license to enable agent messages.'}>
+              <input type="text" readOnly value={entitlement.defaultRouteLabel} style={{ fontWeight: 'bold', backgroundColor: hostedCredits ? 'rgba(16, 185, 129, 0.10)' : isByok ? 'rgba(56, 189, 248, 0.10)' : 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
+            </Field>
+            {(hostedCredits || (isByok && Number(license?.creditBalance) > 0)) && <Field label="Hosted token efficiency" hint="Automnia Cloud automatically bounds history, tool output, tool schemas, inline images and output budgets before the metered request. Vertex usage metadata remains the billing source of truth.">
+              <input type="text" readOnly value="Automatic · compact context · bounded output · safe request replay" style={{ fontWeight: 'bold', color: '#99f6e4', backgroundColor: 'rgba(16, 185, 129, 0.10)', cursor: 'not-allowed' }} />
+            </Field>}
           </div>
-        </SettingsCard>
-        <SettingsCard title="Two plans. A clear path forward." description="Credits are the simple unit of value—no oversized token totals to decode.">
-          <section className="dui-plan-catalog" aria-label="Automnia plan comparison">
-            <article className={`dui-plan-card${isCurrentStarterPlan ? ' is-current' : ''}`}>
-              <div className="dui-plan-card__head">
-                <div><span>STARTER</span><h4>Build your momentum</h4></div>
-                {isCurrentStarterPlan && <b>Current plan</b>}
-              </div>
-              <strong className="dui-plan-card__credits">{formatAutomniaCreditsFromTokens(AUTOMNIA_STARTER_TOKENS, '')} <small>credits</small></strong>
-              <p>Everything you need to explore, build, and run core Automnia workflows.</p>
-              <ul>
-                <li>Automnia hosted models</li>
-                <li>Essential agents and workflows</li>
-                <li>Secure cloud execution</li>
-                <li>Credits-only, simple billing</li>
-              </ul>
-              {!isCurrentStarterPlan && <button type="button" onClick={() => void openCheckout()} disabled={checkoutBusy}>{checkoutBusy ? 'Opening checkout…' : 'Choose Starter'}</button>}
-            </article>
-            <article className={`dui-plan-card is-pro${isCurrentProPlan ? ' is-current' : ''}`}>
-              <div className="dui-plan-card__head">
-                <div><span>MOST CAPABLE</span><h4>Pro</h4></div>
-                {isCurrentProPlan ? <b>Current plan</b> : <b>Full access</b>}
-              </div>
-              <strong className="dui-plan-card__credits">{formatAutomniaCreditsFromTokens(AUTOMNIA_PRO_TOKENS, '')} <small>credits</small></strong>
-              <p>All of Automnia’s highest-level capabilities, consolidated into one decisive plan.</p>
-              <ul>
-                <li>Everything in Starter</li>
-                <li>All Automnia models and advanced workflows</li>
-                <li>Bring your own provider + smart fallback routing</li>
-                <li>Offline-capable provider access and priority controls</li>
-              </ul>
-              {!isCurrentProPlan && <button type="button" onClick={() => void openCheckout()} disabled={checkoutBusy}>{checkoutBusy ? 'Opening checkout…' : 'Upgrade to Pro'}</button>}
-            </article>
-          </section>
-          <p className="dui-plan-catalog__note">Pro includes every capability that was previously available in Enterprise. Legacy Enterprise access remains fully honored.</p>
-        </SettingsCard>
-        <SettingsCard title="Plan, access & billing" description="Review your plan, credit balance, and billing preferences.">
-          <Field label="License Authorization" hint="The license key remains server-local and is never revealed in the app.">
-            <input type="text" readOnly value={license?.active ? 'Active — stored securely on this device' : 'No active license'} style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
-          </Field>
-          <Field label="Plan or Access Tier" hint="The exact entitlement activated for this account.">
-            <input type="text" readOnly value={entitlement.tierLabel} style={{ fontWeight: 'bold', backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
-          </Field>
-          <Field label="Access & Billing Mode" hint="Starter uses Automnia hosted credits. Pro adds the complete provider and priority-control toolkit.">
-            <input type="text" readOnly value={entitlement.billingLabel} style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
-          </Field>
-          <Field label="Usage Priority" hint={usagePriorityLocked ? 'Starter and credit-refill access stay on Automnia credits.' : hostedCredits || isByok ? 'Pro can choose Automnia credits or My provider + Automnia credits, including the route order.' : 'Activate Starter or Pro to choose a usage priority.'}>
-            <select
-              value={usagePriorityManaged ? (usagePriority === 'automnia_only' ? 'automnia_only' : 'provider_plus_automnia') : 'automnia_only'}
-              disabled={!usagePriorityManaged || usagePriorityBusy || usagePriorityLocked}
-              onChange={(event) => void saveUsagePriority(event.target.value === 'automnia_only' ? 'automnia_only' : 'provider_first')}
-            >
-              <option value="automnia_only">Automnia credits</option>
-              <option value="provider_plus_automnia" disabled={!byokAllowed}>My provider + Automnia credits{byokAllowed ? '' : ' — provider access not included'}</option>
-            </select>
-            {usagePriority !== 'automnia_only' && <div style={{ marginTop: '0.6rem' }}>
-              <label style={{ display: 'block', fontSize: '0.78rem', color: '#cbd5e1' }}>
-                Fallback order
-                <select
-                  value={usagePriority}
-                  disabled={usagePriorityBusy}
-                  onChange={(event) => void saveUsagePriority(event.target.value as 'provider_first' | 'automnia_first_with_provider_fallback')}
-                  style={{ display: 'block', width: '100%', marginTop: '0.3rem' }}
-                >
-                  <option value="provider_first">My provider first, Automnia credits fallback</option>
-                  <option value="automnia_first_with_provider_fallback">Automnia credits first, my provider fallback</option>
-                </select>
-              </label>
-            </div>}
-          </Field>
-          <Field label="Effective Agent Route" hint={hostedCredits || isByok ? 'This saved preference applies to normal messages, /runtime, /work, /openclaw, streamed turns, and buffered recovery.' : 'Activate a Cloud Subscription or BYOK license to enable agent messages.'}>
-            <input type="text" readOnly value={entitlement.defaultRouteLabel} style={{ fontWeight: 'bold', backgroundColor: hostedCredits ? 'rgba(16, 185, 129, 0.10)' : isByok ? 'rgba(56, 189, 248, 0.10)' : 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
-          </Field>
-          {(hostedCredits || (isByok && Number(license?.creditBalance) > 0)) && <Field label="Hosted token efficiency" hint="Automnia Cloud automatically bounds history, tool output, tool schemas, inline images and output budgets before the metered request. Vertex usage metadata remains the billing source of truth.">
-            <input type="text" readOnly value="Automatic · compact context · bounded output · safe request replay" style={{ fontWeight: 'bold', color: '#99f6e4', backgroundColor: 'rgba(16, 185, 129, 0.10)', cursor: 'not-allowed' }} />
-          </Field>}
           <section className="dui-settings-billing-summary" data-billing-mode={hostedCredits ? 'hosted' : isByok ? 'byok' : 'inactive'} aria-label="Subscription and credit summary">
             <div className="dui-settings-billing-summary__head">
               <div>
@@ -1239,8 +1243,6 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
               </button>
             </div>
           </section>
-          {hostedCredits && <p style={{ color: '#99f6e4', margin: '0.75rem 0 0', fontSize: '0.84rem' }}>Refills add Automnia credits automatically when Shopify checkout uses this account email ({license?.email || 'your Automnia email'}). A different checkout email intentionally creates a separate Automnia account.</p>}
-          {license?.active && <p style={{ color: '#93f6d2', margin: '0.75rem 0 0', fontSize: '0.84rem' }}>Your purchases are managed as one Automnia account. Higher-tier purchases upgrade this entitlement automatically, so you keep one account and one canonical license key.</p>}
           {isByok && <p style={{ color: '#93c5fd', margin: '0.75rem 0 0', fontSize: '0.84rem' }}>BYOK keeps your provider connection, and any pooled Automnia credits carried over from Starter remain available. Choose My provider + Automnia credits to select which route runs first.</p>}
           {accountRefreshError && <p role="alert" style={{ color: '#fb7185', margin: '0.75rem 0 0' }}>{accountRefreshError}</p>}
           {checkoutError && <p role="alert" style={{ color: '#fb7185', margin: '0.75rem 0 0' }}>{checkoutError}</p>}
