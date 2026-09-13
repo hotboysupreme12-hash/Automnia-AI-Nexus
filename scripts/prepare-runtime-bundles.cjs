@@ -17,6 +17,11 @@ const DEFAULT_BUNDLED_CODEX_VERSION = '2026.7.1-1'
 const DEFAULT_BUNDLED_CODEX_SPEC = `@openclaw/codex@${DEFAULT_BUNDLED_CODEX_VERSION}`
 const DEFAULT_BUNDLED_CODEX_INTEGRITY = 'sha512-fRQITjqjC4Q/M6WmkR9XPWPuL+7vcvyVUWIDztB08X2G/mhzSwCYwQp4hugxAtuKmO3yx/7ULMK3nyeKsg5zGw=='
 const DEFAULT_BUNDLED_CODEX_TARBALL = 'https://registry.npmjs.org/@openclaw/codex/-/codex-2026.7.1-1.tgz'
+const targetArch = String(process.env.AUTOMNIA_TARGET_ARCH || process.arch).trim().toLowerCase()
+
+if (!['x64', 'arm64'].includes(targetArch)) {
+  throw new Error(`AUTOMNIA_TARGET_ARCH must be x64 or arm64; received ${JSON.stringify(targetArch)}`)
+}
 
 function normalizeExactNodeVersion(value) {
   const raw = String(value || '').trim().replace(/^node-/, '')
@@ -52,7 +57,7 @@ if (!/^sha512-[A-Za-z0-9+/=]+$/.test(bundledCodexIntegrity)) {
 }
 
 function platformArchive() {
-  const arch = process.arch === 'arm64' ? 'arm64' : 'x64'
+  const arch = targetArch
   if (process.platform === 'win32') return { ext: 'zip', name: `node-${bundledNodeVersion}-win-${arch}` }
   if (process.platform === 'darwin') return { ext: 'tar.gz', name: `node-${bundledNodeVersion}-darwin-${arch}` }
   if (process.platform === 'linux') return { ext: 'tar.xz', name: `node-${bundledNodeVersion}-linux-${arch}` }
@@ -253,7 +258,7 @@ async function prepareNodeBundle() {
 }
 
 function codexNativePackageName() {
-  const arch = process.arch === 'arm64' ? 'arm64' : 'x64'
+  const arch = targetArch
   if (process.platform === 'win32') return `codex-win32-${arch}`
   if (process.platform === 'linux') return `codex-linux-${arch}`
   if (process.platform === 'darwin') return `codex-darwin-${arch}`
@@ -261,9 +266,9 @@ function codexNativePackageName() {
 }
 
 function codexTargetTriple() {
-  if (process.platform === 'win32') return process.arch === 'arm64' ? 'aarch64-pc-windows-msvc' : 'x86_64-pc-windows-msvc'
-  if (process.platform === 'linux') return process.arch === 'arm64' ? 'aarch64-unknown-linux-musl' : 'x86_64-unknown-linux-musl'
-  if (process.platform === 'darwin') return process.arch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin'
+  if (process.platform === 'win32') return targetArch === 'arm64' ? 'aarch64-pc-windows-msvc' : 'x86_64-pc-windows-msvc'
+  if (process.platform === 'linux') return targetArch === 'arm64' ? 'aarch64-unknown-linux-musl' : 'x86_64-unknown-linux-musl'
+  if (process.platform === 'darwin') return targetArch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin'
   return ''
 }
 
@@ -359,6 +364,10 @@ async function prepareCodexBundle() {
   console.log(`[runtime-bundles] installing ${bundledCodex.spec} for bundled Codex runtime`)
   runNpm(['install', '--prefix', workDir, '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', '--package-lock=true', '--save-exact', bundledCodex.spec], {
     stdio: 'inherit',
+    env: {
+      npm_config_arch: targetArch,
+      npm_config_platform: process.platform,
+    },
   })
 
   const source = path.join(workDir, 'node_modules', '@openclaw', 'codex')
@@ -388,7 +397,7 @@ async function prepareCodexBundle() {
   fs.copyFileSync(sourceDependencyLock, path.join(bundledCodexRoot, '.automnia-runtime-package-lock.json'))
 
   if (!validateCodexBundle(bundledCodexRoot)) {
-    throw new Error(`Prepared Codex plugin bundle is incomplete for ${process.platform}/${process.arch}: ${bundledCodexRoot}`)
+    throw new Error(`Prepared Codex plugin bundle is incomplete for ${process.platform}/${targetArch}: ${bundledCodexRoot}`)
   }
 
   const version = readJson(path.join(bundledCodexRoot, 'package.json')).version || 'unknown'
