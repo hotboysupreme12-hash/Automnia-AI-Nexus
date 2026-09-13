@@ -1,0 +1,345 @@
+/* Account & License density pass.
+ * Keep the complete account surface, but use the available width so it reads
+ * like one compact control center instead of four long vertical panels. */
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-section .dui-settings-section__head {
+  margin-bottom: 14px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-section .dui-settings-account-hero {
+  grid-template-columns: minmax(0, 1.35fr) minmax(220px, .65fr) !important;
+  gap: 8px !important;
+  margin-bottom: 14px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-section .dui-settings-account-hero > div {
+  min-height: 68px !important;
+  gap: 3px !important;
+  padding: 11px 13px !important;
+  border-radius: 9px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  align-items: stretch;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-overview .dui-settings-account-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-bottom: 0 !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-overview .dui-settings-card__head {
+  padding: 12px 14px 10px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-overview .dui-settings-card__body {
+  flex: 1;
+  padding: 0 14px 3px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-profile > .dui-settings-card__body > .dui-settings-field {
+  grid-template-columns: minmax(110px, .8fr) minmax(0, 1.2fr) !important;
+  min-height: 48px !important;
+  gap: 10px !important;
+  padding: 7px 0 !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-profile .dui-settings-account-password {
+  display: block !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 12px 0 13px !important;
+  border: 0 !important;
+  border-top: 1px solid rgb(159 194 209 / .075) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  text-align: left !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-profile .dui-settings-account-password__intro {
+  display: grid !important;
+  justify-items: start !important;
+  width: auto !important;
+  max-width: none !important;
+  margin: 0 !important;
+  text-align: left !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-profile .dui-settings-account-password__intro > span {
+  display: block !important;
+  margin-bottom: 4px !important;
+  font-size: 8px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-profile .dui-settings-account-password__intro h4 {
+  margin: 0 !important;
+  font-size: 13px !important;
+  line-height: 1.2 !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-profile .dui-settings-account-password__intro p {
+  margin: 6px 0 0 !important;
+  font-size: 10px !important;
+  line-height: 1.45 !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-profile .dui-settings-account-password__form {
+  display: grid !important;
+  width: 100% !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 10px 12px !important;
+  margin: 14px 0 0 !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-profile .dui-settings-account-password__field {
+  display: grid !important;
+  justify-items: stretch !important;
+  gap: 4px !important;
+  margin: 0 !important;
+  text-align: left !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-profile .dui-settings-account-password__field span {
+  color: #a9bec1 !important;
+  min-height: 21px;
+  font-size: 9px !important;
+  line-height: 1.3 !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-profile .dui-settings-account-password__field input {
+  min-width: 0 !important;
+  min-height: 38px !important;
+  padding: 8px 10px !important;
+  border-radius: 7px !important;
+  font-size: 10px !important;
+  text-align: left !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-profile .dui-settings-account-password__submit {
+  grid-column: 1 / -1 !important;
+  justify-self: start !important;
+  width: min(100%, 180px) !important;
+  min-height: 38px !important;
+  margin: 0 !important;
+  padding: 8px 12px !important;
+  border-radius: 7px !important;
+  font-size: 10px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-profile .dui-settings-account-password__connect {
+  justify-self: start !important;
+  width: auto !important;
+  min-height: 34px !important;
+  margin: 10px 0 0 !important;
+  padding: 7px 11px !important;
+  border-radius: 7px !important;
+  font-size: 9px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-profile .dui-settings-account-password__error {
+  grid-column: 1 / -1 !important;
+  margin: 0 !important;
+  font-size: 9px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-plans .dui-settings-card__body {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 6px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-plans .dui-plan-catalog {
+  flex: 1;
+  gap: 8px !important;
+  margin-top: 10px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-plans .dui-plan-card {
+  padding: 11px !important;
+  border-radius: 9px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-plans .dui-plan-card__head h4 {
+  font-size: 13px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-plans .dui-plan-card__credits {
+  margin-top: 10px !important;
+  font-size: 22px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-plans .dui-plan-card p {
+  min-height: 0 !important;
+  margin-top: 7px !important;
+  font-size: 9px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-plans .dui-plan-card ul {
+  gap: 4px !important;
+  margin: 9px 0 11px !important;
+  font-size: 9px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-plans .dui-plan-card button {
+  min-height: 31px !important;
+  padding: 7px 9px !important;
+  font-size: 9px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-plans .dui-plan-catalog__note {
+  margin-top: 12px !important;
+  font-size: 8px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-billing {
+  margin-bottom: 0 !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-billing .dui-settings-card__body {
+  padding: 0 14px 6px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 18px;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-fields .dui-settings-field {
+  min-width: 0;
+  min-height: 48px !important;
+  grid-template-columns: minmax(120px, .9fr) minmax(0, 1.1fr) !important;
+  gap: 10px !important;
+  padding: 7px 0 !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-fields .dui-settings-field > span strong {
+  font-size: 9px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-fields .dui-settings-field > span small {
+  font-size: 7px !important;
+  line-height: 1.35 !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-fields .dui-settings-control {
+  gap: 5px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-fields .dui-settings-control > :is(input, select, textarea) {
+  min-height: 33px !important;
+  padding: 6px 8px !important;
+  border-radius: 7px !important;
+  font-size: 9px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-billing .dui-settings-billing-summary {
+  margin-top: 10px !important;
+  padding: 11px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-billing .dui-settings-billing-summary__metrics {
+  gap: 6px !important;
+  margin-top: 9px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-billing .dui-settings-billing-summary__metrics > div {
+  padding: 8px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-billing .dui-settings-billing-summary__metrics dd {
+  margin-top: 4px !important;
+  font-size: 12px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-billing .dui-settings-account-actions {
+  margin-top: 11px !important;
+  padding: 10px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-billing .dui-settings-account-actions__head {
+  margin-bottom: 8px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-billing .dui-settings-account-actions__grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 7px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-billing .dui-settings-account-action {
+  min-height: 68px !important;
+  grid-template-columns: minmax(0, 1fr) 22px !important;
+  gap: 7px !important;
+  padding: 9px 9px 9px 10px !important;
+  border-radius: 8px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-billing .dui-settings-account-action.is-compact {
+  min-height: 54px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-billing .dui-settings-account-action > b {
+  width: 22px !important;
+  height: 22px !important;
+  border-radius: 6px !important;
+  font-size: 14px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-billing .dui-settings-account-action strong {
+  margin-top: 3px !important;
+  font-size: 9px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-billing .dui-settings-account-action em {
+  margin-top: 3px !important;
+  font-size: 7px !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-billing > .dui-settings-card__body > p {
+  margin: 7px 0 0 !important;
+  font-size: 9px !important;
+  line-height: 1.4 !important;
+}
+
+@media (max-width: 900px) {
+  html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-overview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-section .dui-settings-account-hero,
+  html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-fields {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-profile .dui-settings-account-password__form {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-fields .dui-settings-field {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 7px !important;
+  }
+
+  html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-billing .dui-settings-account-actions__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 520px) {
+  html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-billing .dui-settings-account-actions__grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-account-plans .dui-plan-catalog {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
