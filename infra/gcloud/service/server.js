@@ -2426,8 +2426,8 @@ async function resolveHostedRelayAccess(req, { allowZeroForReplay = false } = {}
     const usagePriority = effectiveUsagePriority(record);
     return {
       error: usagePriority === 'automnia_only'
-        ? 'Automnia credits are the only active route, but your confirmed balance is 0 credits. Refill your Automnia credits in Automnia Settings to continue.'
-        : 'Automnia credit balance exhausted. The provider-plus-Automnia route has no Automnia fallback credits available.',
+        ? 'Automnia credits are exhausted. Automnia Relay agent runtime is paused for the Automnia-only route. Refill Automnia credits in Settings → Account & License or switch to a configured provider fallback route.'
+        : 'Automnia credits are exhausted and are unavailable as a fallback. Continue with the configured provider route or refill Automnia credits in Settings → Account & License.',
       status: 402,
     };
   }
@@ -2772,10 +2772,10 @@ app.post('/api/ai/generate', requireWritesEnabled, async (req, res) => {
         mode,
         creditBalance: credits,
         error: usagePriority === 'automnia_only'
-          ? 'Automnia credits are the only active route, but your confirmed balance is 0 credits. Refill your Automnia credits in Automnia Settings to continue.'
+          ? 'Automnia credits are exhausted. Automnia Relay agent runtime is paused for the Automnia-only route. Refill Automnia credits in Settings → Account & License or switch to a configured provider fallback route.'
           : mode === 'byok'
-            ? 'Automnia credit balance exhausted. The provider-plus-Automnia route has no Automnia fallback credits available.'
-            : 'Credit balance exhausted. Top up your credits on Shopify to continue using Cloud AI.',
+            ? 'Automnia credits are exhausted and are unavailable as a fallback. Continue with the configured provider route or refill Automnia credits in Settings → Account & License.'
+            : 'Automnia credits are exhausted. Refill credits in Settings → Account & License to continue using Automnia Cloud.',
       });
     }
 

@@ -19,7 +19,7 @@ export type UsagePriorityModelSelection = {
 export type UsagePriorityModelOrderOptions = {
   /** The last confirmed pooled Automnia balance. */
   automniaCreditBalance?: number | null
-  /** Keep credits-only entitlements from gaining a provider route. */
+  /** @deprecated Kept for compatibility; Automnia-only never auto-falls back. */
   allowProviderFallbackWhenCreditsExhausted?: boolean
 }
 
@@ -91,12 +91,9 @@ export function applyUsagePriorityModelOrder(
   ).find((modelId) => !isAutomniaModel(modelId, automniaModelId))
 
   if (usagePriority === 'automnia_only' || usagePriority === 'automnia_first') {
-    if (options.allowProviderFallbackWhenCreditsExhausted !== false
-      && options.automniaCreditBalance === 0
-      && providerModel) {
-      return { primary: providerModel }
-    }
-
+    // Automnia-only is an explicit billing choice. A zero balance must not
+    // silently convert it into provider usage; provider fallback is opt-in
+    // through the combined Automnia-first route below.
     return {
       primary: selectedAutomniaModel(selection, automniaModelId),
       fallbacks: automniaHostedFallbacks(automniaModelId, selectedAutomniaModel(selection, automniaModelId)),

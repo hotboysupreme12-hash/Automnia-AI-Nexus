@@ -421,19 +421,11 @@ app.use('/api', (req, res, next) => {
   }
   const gate = licenseService.getTrafficGate()
   const isMutatingRequest = !['GET', 'HEAD', 'OPTIONS'].includes(req.method)
-  const isLicenseRecoveryRequest = requestPath === '/api/license/activate'
-    || requestPath === '/api/license/checkout'
-    || requestPath === '/api/license/deactivate'
-    || requestPath === '/api/license/refresh'
-  if (gate.blocked && isMutatingRequest && !isLicenseRecoveryRequest) {
-    return apiFailure(
-      res,
-      402,
-      'credits_exhausted',
-      gate.blockMessage || 'Automnia credits are unavailable. Restore your credit balance before sending traffic.',
-      { gate: { creditState: gate.creditState, tier: gate.tier, mode: gate.mode } },
-    )
-  }
+  // Credit exhaustion is a route-level runtime condition, not an
+  // application-wide lock. Agent-turn handlers surface the affected billing
+  // route and recovery options in the agent conversation, while account,
+  // settings, help, recruitment, and other control-plane APIs remain usable.
+  // Do not turn the traffic gate into a blanket mutating-request firewall.
   // The generic OpenClaw command endpoint is intentionally unavailable to
   // credits-only accounts. Otherwise a user could write a provider/model
   // directly through the CLI bridge and bypass the model/config route guards.
@@ -9915,7 +9907,6 @@ function applyAutomniaBillingModelOrder(
     ...providerCandidates,
   ], AUTOMNIA_OPENCLAW_MODEL, {
     automniaCreditBalance,
-    allowProviderFallbackWhenCreditsExhausted: !licenseService.isUsagePriorityLocked(),
   })
 }
 
@@ -9971,9 +9962,6 @@ function effectiveHostedUsagePriority() {
   const priority = status.usagePriority
   if (priority === 'automnia_first') return 'automnia_only' as const
   if (priority === 'byok_only') return 'provider_first' as const
-  if (priority === 'automnia_only' && status.creditBalance === 0 && !licenseService.isUsagePriorityLocked()) {
-    return 'provider_first' as const
-  }
   return priority
 }
 
@@ -18947,8 +18935,15 @@ registerAgentTurnRoutes(app, {
   },
   hostedCreditsOnlyBlocker: () => {
     const status = licenseService.getStatus()
-    if (!status.active || status.usagePriority !== 'automnia_only' || status.creditBalance !== 0 || !licenseService.isUsagePriorityLocked()) return null
-    return 'Automnia credits are unavailable because the confirmed balance is 0. Refill your Automnia credits in Settings → Account & License to continue.'
+    if (!status.active || effectiveHostedUsagePriority() !== 'automnia_only') return null
+    if (status.creditBalance === null) {
+      return 'Automnia could not verify an available credit balance. Refresh Settings → Account & License, then retry the agent.'
+    }
+    if (status.creditBalance > 0) return null
+    if (licenseService.isUsagePriorityLocked()) {
+      return 'Automnia credits are exhausted. Automnia Relay agent runtime is paused. Open Settings → Account & License to refill your Automnia credits, then retry.'
+    }
+    return 'Automnia credits are exhausted for the selected Automnia-only route. Automnia Relay agent runtime is paused. Open Settings → Account & License to refill credits, or switch Usage Priority to a provider route with fallback enabled.'
   },
   awaitBillingRouteReady: () => billingRouteSyncPromise,
   billingRoutePresentation: () => {

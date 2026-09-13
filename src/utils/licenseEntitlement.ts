@@ -109,17 +109,6 @@ function tierAllowsByok(value: string | null | undefined) {
   return Boolean(tier) && !REFILL_ONLY_TIER_KEYS.has(tier) && !tier.includes('starter')
 }
 
-function usesProviderWhenAutomniaCreditsAreExhausted(
-  license: LicenseInfo | null | undefined,
-  usagePriorityLocked: boolean,
-  byokAllowed: boolean,
-) {
-  return !usagePriorityLocked
-    && byokAllowed
-    && license?.creditBalance === 0
-    && (license.usagePriority === 'automnia_only' || license.usagePriority === 'automnia_first')
-}
-
 function effectiveMode(license: LicenseInfo | null | undefined): LicenseEntitlement['mode'] {
   if (license?.active !== true) return null
   if (license.mode === 'hosted_credits' || license.mode === 'byok') return license.mode
@@ -154,7 +143,6 @@ export function resolveLicenseEntitlement(license: LicenseInfo | null | undefine
   if (isByok) {
     const providerFirst = license?.usagePriority === 'provider_first' || license?.usagePriority === 'byok_only'
     const automniaFirstWithFallback = license?.usagePriority === 'automnia_first_with_provider_fallback'
-    const exhaustedProviderFallback = usesProviderWhenAutomniaCreditsAreExhausted(license, false, true)
     const providerOnly = false
     return {
       active,
@@ -173,15 +161,15 @@ export function resolveLicenseEntitlement(license: LicenseInfo | null | undefine
       defaultRouteLabel: providerOnly
         ? 'Legacy provider-only route — choose My provider + Automnia credits'
         : providerFirst
-        ? 'Your connected provider → Automnia credits fallback'
+        ? license?.creditBalance === 0
+          ? 'Your connected provider — Automnia credits exhausted'
+          : 'Your connected provider → Automnia credits fallback'
         : automniaFirstWithFallback
           ? 'Automnia credits → your connected provider fallback'
-            : exhaustedProviderFallback
-              ? 'Your connected provider — Automnia credits exhausted'
             : 'Automnia credits only',
       statusLabel: providerOnly
         ? 'Legacy route — update Usage Priority'
-        : providerFirst || automniaFirstWithFallback || exhaustedProviderFallback
+        : providerFirst || automniaFirstWithFallback
           ? 'Provider + Automnia active'
           : 'Automnia credits active',
     }
@@ -196,7 +184,6 @@ export function resolveLicenseEntitlement(license: LicenseInfo | null | undefine
       : 'Cloud Subscription')
     const providerFirst = !usagePriorityLocked && (license?.usagePriority === 'provider_first' || license?.usagePriority === 'byok_only')
     const automniaFirstWithFallback = !usagePriorityLocked && license?.usagePriority === 'automnia_first_with_provider_fallback'
-    const exhaustedProviderFallback = usesProviderWhenAutomniaCreditsAreExhausted(license, usagePriorityLocked, byokAllowed)
     const providerOnly = false
     return {
       active,
@@ -215,15 +202,15 @@ export function resolveLicenseEntitlement(license: LicenseInfo | null | undefine
         ? 'Hosted Credits — Automnia Refill Balance'
         : permanentAccess ? 'Permanent Automnia access — Credits' : 'Cloud Subscription — Automnia Credits',
       defaultRouteLabel: providerFirst
-        ? 'My connected provider → Automnia credits fallback'
+        ? license?.creditBalance === 0
+          ? 'My connected provider — Automnia credits exhausted'
+          : 'My connected provider → Automnia credits fallback'
         : automniaFirstWithFallback
           ? 'Automnia credits → My connected provider fallback'
-          : exhaustedProviderFallback
-            ? 'My connected provider — Automnia credits exhausted'
           : providerOnly
             ? 'Legacy provider-only route — choose My provider + Automnia credits'
             : 'Automnia credits only',
-      statusLabel: providerFirst || automniaFirstWithFallback || exhaustedProviderFallback
+      statusLabel: providerFirst || automniaFirstWithFallback
         ? 'Provider + Automnia active'
         : providerOnly
           ? 'Legacy route — update Usage Priority'
@@ -259,15 +246,15 @@ export function resolveAgentRoutePresentation(license: LicenseInfo | null | unde
   const entitlement = resolveLicenseEntitlement(license)
   const selectedProviderFirst = (entitlement.isHosted || entitlement.isByok) && !entitlement.usagePriorityLocked && (license?.usagePriority === 'provider_first' || license?.usagePriority === 'byok_only')
   const selectedAutomniaFirstWithFallback = (entitlement.isHosted || entitlement.isByok) && !entitlement.usagePriorityLocked && license?.usagePriority === 'automnia_first_with_provider_fallback'
-  const exhaustedProviderFallback = usesProviderWhenAutomniaCreditsAreExhausted(license, entitlement.usagePriorityLocked, entitlement.byokAllowed)
-  const providerFirst = selectedProviderFirst || exhaustedProviderFallback
+  const automniaCreditsExhausted = license?.creditBalance === 0
+  const providerFirst = selectedProviderFirst
   const providerOnly = false
 
   if (entitlement.isHosted || entitlement.isByok) {
     return {
       routeLabel: providerOnly
         ? 'Legacy provider-only'
-        : exhaustedProviderFallback
+        : providerFirst && automniaCreditsExhausted
           ? 'My Provider — credits exhausted'
           : providerFirst
             ? 'My Provider → Automnia'
@@ -276,8 +263,8 @@ export function resolveAgentRoutePresentation(license: LicenseInfo | null | unde
               : 'Automnia credits',
       modelLabel: providerFirst || providerOnly ? 'Primary Provider Model' : 'Automnia',
       modelDescription: providerFirst
-        ? exhaustedProviderFallback
-          ? 'Your confirmed Automnia balance is zero, so your connected provider runs for this request.'
+        ? automniaCreditsExhausted
+          ? 'Your connected provider runs for this request. Automnia credits are currently exhausted.'
           : 'Your connected provider runs first. Automnia credits remain available as the same-account fallback.'
         : providerOnly
           ? 'Your connected provider bills this agent directly. Subscription credits are bypassed.'
@@ -287,8 +274,8 @@ export function resolveAgentRoutePresentation(license: LicenseInfo | null | unde
               ? 'This agent uses Automnia credits only until you choose My provider + Automnia credits.'
               : 'This agent uses Automnia credits only.',
       managedRouteDescription: providerFirst
-        ? exhaustedProviderFallback
-          ? 'The connected provider is used until Automnia credits are restored.'
+        ? automniaCreditsExhausted
+          ? 'The connected provider is used while Automnia credits are exhausted.'
           : 'Automnia credits are available when your connected provider cannot complete the request.'
         : providerOnly
           ? 'Automnia subscription credits are bypassed while provider-only mode is active.'

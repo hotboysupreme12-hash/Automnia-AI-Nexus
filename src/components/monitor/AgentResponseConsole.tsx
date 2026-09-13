@@ -481,7 +481,7 @@ function latestRunStatus(entry?: AgentResponse) {
 type ResponseCta = {
   label: string
   detail?: string
-  action?: 'restart-gateway' | 'cancel-queued'
+  action?: 'restart-gateway' | 'cancel-queued' | 'open-settings'
 }
 
 function responseCta(entry: AgentResponse): ResponseCta | null {
@@ -499,6 +499,13 @@ function responseCta(entry: AgentResponse): ResponseCta | null {
   if (entry.streaming) return null
 
   switch (entry.failureKind) {
+    case 'insufficient_credits':
+    case 'credits_exhausted':
+      return {
+        label: 'Manage credits or routing',
+        detail: 'Open Account & License to refill Automnia credits or choose a provider fallback route.',
+        action: 'open-settings',
+      }
     case 'auth_missing':
     case 'auth_expired':
       return { label: 'Connect provider', detail: 'Refresh credentials, then retry this turn.' }
@@ -808,6 +815,16 @@ const ResponseMessage = memo(function ResponseMessage({
               loading={actionBusy}
             >
               {actionBusy ? 'Canceling' : 'Cancel'}
+            </Button>
+          )}
+          {cta.action === 'open-settings' && (
+            <Button
+              onClick={() => window.dispatchEvent(new CustomEvent('automnia:navigate', { detail: 'settings-account' }))}
+              title="Open Settings at Account & License"
+              size="compact"
+              variant="secondary"
+            >
+              Open Account &amp; License
             </Button>
           )}
         </div>

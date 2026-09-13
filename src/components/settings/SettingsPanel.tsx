@@ -1175,7 +1175,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
               <div>
                 <span>Automnia billing</span>
                 <strong>{hostedCredits ? entitlement.tierLabel : isByok ? 'BYOK access' : 'Plan status'}</strong>
-                <small>{hostedCredits || isByok ? usagePriority === 'provider_first' ? 'Your connected provider is used first; Automnia credits are the fallback.' : usagePriority === 'automnia_first_with_provider_fallback' ? 'Automnia credits are used first; your connected provider is the fallback.' : usagePriorityLocked ? 'Automnia credits are the available route for this account.' : 'Automnia credits are used first; your provider is used if credits are exhausted.' : 'Activate a license to receive your current entitlement.'}</small>
+                <small>{hostedCredits || isByok ? usagePriority === 'provider_first' ? license?.creditBalance === 0 ? 'Your connected provider is used first; Automnia credits are currently exhausted.' : 'Your connected provider is used first; Automnia credits are the fallback.' : usagePriority === 'automnia_first_with_provider_fallback' ? 'Automnia credits are used first; your connected provider is the fallback.' : 'Automnia credits are the only active route. Provider fallback is disabled.' : 'Activate a license to receive your current entitlement.'}</small>
               </div>
               <b>{entitlement.statusLabel}</b>
             </div>
@@ -1194,8 +1194,8 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
               </div>
             </dl>
           </section>
-          {(hostedCredits || isByok) && usagePriorityLocked && usagePriority === 'automnia_only' && license?.creditBalance === 0 && <p role="alert" style={{ margin: '0.8rem 0 0', color: '#fda4af' }}>
-            Automnia credits are unavailable because the confirmed balance is 0. Refill your credits to continue.
+          {(hostedCredits || isByok) && usagePriority === 'automnia_only' && license?.creditBalance === 0 && <p role="alert" style={{ margin: '0.8rem 0 0', color: '#fda4af' }}>
+            Automnia Relay agent runtime is paused because Automnia credits are exhausted. Refill your credits, or switch to a provider route with fallback enabled if your plan supports provider access.
           </p>}
           <section className="dui-settings-account-actions" aria-labelledby="settings-account-actions-title">
             <div className="dui-settings-account-actions__head">

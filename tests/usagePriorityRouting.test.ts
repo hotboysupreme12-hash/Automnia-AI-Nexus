@@ -33,7 +33,7 @@ test('Telegram channel defaults mirror the selected billing route without replac
   assert.deepEqual(automniaOnly?.fallbacks, [...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS])
 })
 
-test('Automnia credits falls back to the provider when the confirmed balance is zero', () => {
+test('Automnia-only does not silently switch to a provider when credits reach zero', () => {
   const selection = applyUsagePriorityModelOrder(
     { primary: 'google/gemini-2.5-pro', fallbacks: [AUTOMNIA, 'openai/gpt-5', 'google/gemini-2.0-flash'] },
     'automnia_only',
@@ -42,7 +42,7 @@ test('Automnia credits falls back to the provider when the confirmed balance is 
     { automniaCreditBalance: 0 },
   )
 
-  assert.deepEqual(selection, { primary: 'google/gemini-2.5-pro' })
+  assert.deepEqual(selection, { primary: AUTOMNIA, fallbacks: [...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS] })
 })
 
 test('Automnia remains primary while credits are available', () => {

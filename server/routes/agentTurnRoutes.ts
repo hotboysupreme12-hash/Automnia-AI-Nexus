@@ -358,6 +358,24 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
     }
 
     try {
+      // Preflight is non-generative and must remain callable when the hosted
+      // route is unavailable. Returning a warning lets the following turn
+      // render the route-specific credit message instead of replacing it
+      // with a generic "preflight failed" error.
+      const creditBlocker = hostedCreditsOnlyBlocker?.()
+      if (creditBlocker) {
+        return apiSuccess(res, {
+          agent,
+          checks: [{
+            ok: false,
+            severity: 'warning',
+            id: 'billing',
+            label: 'Automnia Relay credits',
+            message: creditBlocker,
+          }],
+          billingBlocked: true,
+        })
+      }
       await ensureOpenclawAgentRunConfigDefaults()
       const config = await readOpenclawConfig()
       const healthChecks = await ensureAgentRuntimeHealthPreflight(agent, config)

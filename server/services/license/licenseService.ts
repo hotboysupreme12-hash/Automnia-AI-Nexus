@@ -266,9 +266,9 @@ export function resolveLicenseTrafficGate(status: LicenseStatus): LicenseTraffic
     ? creditState === 'exhausted' ? 'credits_exhausted' : 'credit_balance_unverified'
     : null
   const blockMessage = blockCode === 'credits_exhausted'
-    ? 'Automnia credits are exhausted. Messages, Gateway traffic, channels, local AI, and cron runs are paused until your credit balance is restored.'
+    ? 'Automnia credits are exhausted. Automnia Relay agent runtime is paused until your credit balance is restored. The rest of the app remains available, including Assistant, agent setup, Settings, and account management.'
     : blockCode === 'credit_balance_unverified'
-      ? 'Automnia could not verify an available credit balance. Messages, Gateway traffic, channels, local AI, and cron runs are paused until Account & License is refreshed.'
+      ? 'Automnia could not verify an available credit balance. Automnia Relay agent runtime is paused until Account & License is refreshed. The rest of the app remains available.'
       : null
 
   return {

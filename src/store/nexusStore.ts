@@ -1252,6 +1252,7 @@ export const useNexusStore = create<NexusState>()(
         const value = text.toLowerCase()
         if (timedOut || /\b(timeout|timed out|deadline exceeded|aborterror)\b/.test(value)) return 'timeout'
         if (/\b(aborted|cancelled|canceled)\b/.test(value)) return 'aborted'
+        if (/\bcredit(?:s)?\b.*\b(?:exhausted|unavailable|depleted)\b/.test(value)) return 'insufficient_credits'
         if (/\b(rate limit|too many requests|quota|429)\b/.test(value)) return 'rate_limit'
         if (/\b(oauth|token expired|refresh token|invalid_grant)\b/.test(value)) return 'auth_expired'
         if (/\b(missing auth|no usable|unauthorized|forbidden|api key|credential)\b/.test(value)) return 'auth_missing'
@@ -2132,7 +2133,11 @@ export const useNexusStore = create<NexusState>()(
             }
             if (event === 'error') {
               captureStreamMeta(data)
-              const displayMessage = 'Try request again.'
+              const displayMessage = typeof data.message === 'string' && data.message.trim()
+                ? data.message.trim()
+                : typeof data.error === 'string' && data.error.trim()
+                  ? data.error.trim()
+                  : 'Try request again.'
               lastStreamError = displayMessage
               ensureLiveStarted(displayMessage)
               addLiveProgressLine(redactActivityText(displayMessage, 160) || 'Runtime reported a blocker.', {
@@ -2373,7 +2378,11 @@ export const useNexusStore = create<NexusState>()(
             payload = turn.payload
           }
           const ok = !!payload.ok && turn.responseOk
-          const outputBase = ok ? extractOutput(payload) : 'Try request again.'
+          // Preserve the server's actionable runtime message on failures.
+          // In particular, an exhausted Automnia balance must be visible in
+          // the agent conversation instead of being replaced with the
+          // generic "Try request again." placeholder.
+          const outputBase = extractOutput(payload) || (ok ? 'No response.' : 'Try request again.')
           const output = outputBase
           if (turn.streamed) {
             liveResponseModelId = modelIdFromTurnPayload(payload) || liveResponseModelId
