@@ -44,11 +44,11 @@ assert.equal(mappings.length, 12, 'the production catalog contains credit refill
 assert.equal(mappings.every((entry) => Number.isSafeInteger(entry.initialTokens) && entry.initialTokens >= 0), true, 'Shopify grants must be declared in raw tokens')
 assert.deepEqual(
   Object.fromEntries(mappings.filter((entry) => entry.kind === 'subscription' && entry.tier === 'starter').map((entry) => [entry.tier, entry.initialTokens])),
-  { starter: 200000 },
+  { starter: 22000000 },
 )
 assert.deepEqual(
   Object.fromEntries(mappings.filter((entry) => entry.tier === 'pro').map((entry) => [entry.tier, entry.initialTokens])),
-  { pro: 400000 },
+  { pro: 55000000 },
 )
 assert.deepEqual([...new Set(mappings.filter((entry) => entry.kind !== 'topup').map((entry) => entry.tier))].sort(), ['pro', 'starter'], 'Starter and Pro are the only sellable plans')
 const configuredVariantIds = mappings.flatMap((entry) => entry.variantIds).filter(Boolean)

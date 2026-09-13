@@ -87,7 +87,7 @@
     "kind": "subscription",
     "planPriceCents": 1999,
     "trialDays": 3,
-    "initialTokens": 200000,
+    "initialTokens": 22000000,
     "productIds": ["9017938215081"],
     "variantIds": ["47340005851305"],
     "sellingPlanIds": ["19818938537"],
@@ -98,7 +98,7 @@
     "mode": "hosted_credits",
     "kind": "subscription",
     "planPriceCents": 0,
-    "initialTokens": 200000,
+    "initialTokens": 22000000,
     "productIds": ["9020824486057"],
     "variantIds": [],
     "skus": ["AUTO-SUB-STARTER-QA-FREE"]
@@ -109,7 +109,7 @@
     "kind": "license",
     "planPriceCents": 2999,
     "permanentAccess": true,
-    "initialTokens": 400000,
+    "initialTokens": 55000000,
     "productIds": ["9017938182313"],
     "variantIds": ["47340005818537"],
     "skus": ["AUTO-SUB-PRO-MONTHLY"]

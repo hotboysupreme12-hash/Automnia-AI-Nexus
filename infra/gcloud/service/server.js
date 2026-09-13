@@ -697,10 +697,10 @@ function legacyTierConfiguration(tierName, itemTitles = '') {
     return { tier: 'credit_pack_topup', mode: 'hosted_credits', initialTokens: 1_000_000, kind: 'topup' };
   }
   if (normalizedTier.includes('cloud') || normalizedTitles.includes('cloud') || normalizedTitles.includes('hosting')) {
-    return { tier: 'cloud_starter_subscription', mode: 'hosted_credits', planPriceCents: 1_999, initialTokens: 200_000, kind: 'subscription' };
+    return { tier: 'cloud_starter_subscription', mode: 'hosted_credits', planPriceCents: 1_999, initialTokens: 22_000_000, kind: 'subscription' };
   }
   if (normalizedTier.includes('pro') || normalizedTitles.includes('pro')) {
-    return { tier: 'pro_tier', mode: 'hosted_credits', initialTokens: 400_000, kind: 'subscription', permanentAccess: true };
+    return { tier: 'pro_tier', mode: 'hosted_credits', initialTokens: 55_000_000, kind: 'subscription', permanentAccess: true };
   }
   return { tier: 'founding_beta_byok', mode: 'byok', initialTokens: 0, kind: 'license' };
 }

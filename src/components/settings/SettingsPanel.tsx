@@ -17,7 +17,12 @@ import {
 import { clearAllCommandConsoleDrafts } from '../../store/commandConsoleState'
 import { useNexusStore } from '../../store/nexusStore'
 import { resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
-import { formatAutomniaCredits } from '../../utils/creditDisplay'
+import {
+  AUTOMNIA_PRO_TOKENS,
+  AUTOMNIA_STARTER_TOKENS,
+  formatAutomniaCredits,
+  formatAutomniaCreditsFromTokens,
+} from '../../utils/creditDisplay'
 import { restartPluginGateway, runOpenClawPluginCommand } from '../../api/plugins'
 import type {
   CapabilityKey,
@@ -1083,7 +1088,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
                 <div><span>STARTER</span><h4>Build your momentum</h4></div>
                 {isCurrentStarterPlan && <b>Current plan</b>}
               </div>
-              <strong className="dui-plan-card__credits">200 <small>credits</small></strong>
+              <strong className="dui-plan-card__credits">{formatAutomniaCreditsFromTokens(AUTOMNIA_STARTER_TOKENS, '')} <small>credits</small></strong>
               <p>Everything you need to explore, build, and run core Automnia workflows.</p>
               <ul>
                 <li>Automnia hosted models</li>
@@ -1098,7 +1103,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
                 <div><span>MOST CAPABLE</span><h4>Pro</h4></div>
                 {isCurrentProPlan ? <b>Current plan</b> : <b>Full access</b>}
               </div>
-              <strong className="dui-plan-card__credits">400 <small>credits</small></strong>
+              <strong className="dui-plan-card__credits">{formatAutomniaCreditsFromTokens(AUTOMNIA_PRO_TOKENS, '')} <small>credits</small></strong>
               <p>All of Automnia’s highest-level capabilities, consolidated into one decisive plan.</p>
               <ul>
                 <li>Everything in Starter</li>
