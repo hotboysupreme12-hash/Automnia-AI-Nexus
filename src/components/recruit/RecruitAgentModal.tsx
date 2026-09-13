@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react'
-import { useDialogFocus } from '../ui/Dialog'
+import { Dialog, useDialogFocus } from '../ui/Dialog'
 import { navigateTabList } from '../ui/tabNavigation'
 import type { CSSProperties, FormEvent, KeyboardEvent, ReactNode } from 'react'
 import { apiErrorMessage, apiRequest } from '../../api/client'
@@ -1094,33 +1094,10 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
   const highlightedMarkdownLines = markdownHighlightEnabled ? activeMarkdownLines : []
   const editorClassName = [
     'dui-recruit-code-editor',
-    editorExpanded ? 'is-expanded' : '',
     markdownHighlightEnabled ? '' : 'is-plain-text',
   ].filter(Boolean).join(' ')
   const activeMarkdownTone = markdownFileTone(activeFile)
   const activeWizardStep = RECRUIT_WIZARD_STEPS[currentStep - 1]
-
-  const syncRecruitColumnHeights = useCallback(() => {
-    const form = recruitFormRef.current
-    const side = recruitSideRef.current
-    const files = recruitFilesRef.current
-    if (!form || !side || !files || typeof window === 'undefined') return
-
-    const twoColumn = window.matchMedia('(min-width: 1041px)').matches
-    side.style.removeProperty('height')
-    side.style.removeProperty('min-height')
-    files.style.removeProperty('height')
-    files.style.removeProperty('min-height')
-
-    if (!twoColumn) return
-
-    const formHeight = Math.ceil(Math.max(form.scrollHeight, form.getBoundingClientRect().height))
-    const nextHeight = `${formHeight}px`
-    side.style.setProperty('height', nextHeight, 'important')
-    side.style.setProperty('min-height', nextHeight, 'important')
-    files.style.setProperty('height', nextHeight, 'important')
-    files.style.setProperty('min-height', nextHeight, 'important')
-  }, [])
 
   const readTextDrafts = useCallback(() => ({ name, agentId, avatar, role, newFileName }), [agentId, avatar, name, newFileName, role])
 
@@ -1343,39 +1320,6 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
     window.addEventListener('keydown', handleEscape)
     return () => window.removeEventListener('keydown', handleEscape)
   }, [editorExpanded, isOpen])
-
-  useEffect(() => {
-    if (!isOpen) return
-
-    let frame = 0
-    const scheduleSync = () => {
-      if (frame) window.cancelAnimationFrame(frame)
-      frame = window.requestAnimationFrame(syncRecruitColumnHeights)
-    }
-
-    scheduleSync()
-
-    const form = recruitFormRef.current
-    const sideForCleanup = recruitSideRef.current
-    const filesForCleanup = recruitFilesRef.current
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(scheduleSync)
-    if (form) observer?.observe(form)
-    window.addEventListener('resize', scheduleSync)
-
-    return () => {
-      if (frame) window.cancelAnimationFrame(frame)
-      observer?.disconnect()
-      window.removeEventListener('resize', scheduleSync)
-      if (sideForCleanup) {
-        sideForCleanup.style.removeProperty('height')
-        sideForCleanup.style.removeProperty('min-height')
-      }
-      if (filesForCleanup) {
-        filesForCleanup.style.removeProperty('height')
-        filesForCleanup.style.removeProperty('min-height')
-      }
-    }
-  }, [isOpen, syncRecruitColumnHeights])
 
   const applyRecruitTemplate = useCallback((template: RecruitAgentTemplate) => {
     const defaults = template.defaults
@@ -1736,6 +1680,71 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
 
   useDialogFocus({ open: isOpen, rootRef: dialogRootRef, panelRef: dialogPanelRef, onClose: () => { if (editorExpanded) setEditorExpanded(false); else onClose() }, preventClose: submitting || autoForging })
 
+  const renderMarkdownEditor = (expanded = false) => (
+    <div
+      data-recruit-markdown-editor="true"
+      id={`${dialogId}-markdown-panel`}
+      role="tabpanel"
+      aria-labelledby={`${dialogId}-file-${encodeURIComponent(activeFile)}`}
+      className={`${editorClassName}${expanded ? ' is-expanded' : ''}`}
+      data-md-tone={activeMarkdownTone}
+      onClick={() => editorTextRef.current?.focus()}
+    >
+      <div className="dui-recruit-code-scroll">
+        <div ref={editorGutterRef} className="dui-recruit-code-gutter" aria-hidden="true">
+          {highlightedMarkdownLines.map((_, index) => <span key={`${activeFile}-line-${index}`}>{index + 1}</span>)}
+        </div>
+        <pre ref={editorPreviewRef} className="dui-recruit-code-preview" aria-hidden="true">
+          {highlightedMarkdownLines.map((line, index) => <span key={`${activeFile}-preview-${index}`} className="dui-recruit-code-line">{renderMarkdownLine(line)}</span>)}
+        </pre>
+        <textarea
+          ref={editorTextRef}
+          className="dui-recruit-code-input"
+          value={activeMarkdownContent}
+          onChange={(event) => {
+            setFilesTouched(true)
+            setResourceFiles((current) => ({ ...current, [activeFile]: event.target.value }))
+            updateEditorCursor(event.currentTarget)
+          }}
+          onClick={(event) => updateEditorCursor(event.currentTarget)}
+          onFocus={(event) => updateEditorCursor(event.currentTarget)}
+          onKeyDown={handleEditorKeyDown}
+          onKeyUp={(event) => updateEditorCursor(event.currentTarget)}
+          onSelect={(event) => updateEditorCursor(event.currentTarget)}
+          onScroll={syncEditorScroll}
+          spellCheck
+          aria-label={`Edit ${activeFile}`}
+        />
+      </div>
+      <div className="dui-recruit-code-status">
+        <span className="dui-recruit-code-mode"><span aria-hidden="true">MD</span>{activeFile}</span>
+        <span>Ln {cursorStatus.line}, Col {cursorStatus.column}</span>
+        <span>{activeMarkdownLineCount} lines</span>
+        <span>{activeMarkdownCharCount} chars</span>
+        {!markdownHighlightEnabled ? <span>Plain text</span> : null}
+        {cursorStatus.selectionLength ? <span>{cursorStatus.selectionLength} selected</span> : null}
+        <span>Spaces: 2</span>
+        <button
+          type="button"
+          className="dui-recruit-code-expand"
+          aria-label={expanded ? 'Collapse markdown editor' : 'Expand markdown editor'}
+          aria-pressed={expanded}
+          title={expanded ? 'Return to recruit setup' : 'Open focused editor'}
+          onClick={(event) => {
+            event.stopPropagation()
+            setEditorExpanded(!expanded)
+            window.setTimeout(() => {
+              editorTextRef.current?.focus()
+              syncEditorScroll()
+            }, 0)
+          }}
+        >
+          <RecruitIcon type="expand" />
+        </button>
+      </div>
+    </div>
+  )
+
   return (
     <>
       {isOpen && (
@@ -1763,9 +1772,9 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
             <form onSubmit={handleSubmit} onKeyDown={handleRecruitFormKeyDown} className="dui-recruit-form-shell flex max-h-[88dvh] flex-col">
               <div className="dui-recruit-header">
                 <div className="dui-recruit-title-block">
-                  <span className="dui-recruit-header-eyebrow">Automnia · Agent intake</span>
-                  <h2 id="recruit-agent-title">{activeWizardStep.title}</h2>
-                  <p className="dui-recruit-copy">{activeWizardStep.copy}</p>
+                  <span className="dui-recruit-header-eyebrow">Automnia</span>
+                  <h2 id="recruit-agent-title">Recruit agent</h2>
+                  <p className="dui-recruit-copy">Build a focused operator in four clear steps.</p>
                 </div>
                 <div className="dui-recruit-step-rail" aria-label="Recruit setup progress">
                   {RECRUIT_WIZARD_STEPS.map((step) => (
@@ -1947,7 +1956,28 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                     {currentStep === 4 && (
                       <div className="dui-recruit-step-content dui-recruit-files-step">
                         <div className="dui-recruit-review-strip"><div className="dui-recruit-review-avatar">{canPreviewAvatar ? <img src={avatarPreviewSrc} alt="" onError={() => setAvatarPreviewFailed(true)} /> : <span>{trimmedName.charAt(0).toUpperCase() || 'A'}</span>}</div><div className="dui-recruit-review-main"><span>Recruit preview</span><strong>{trimmedName || 'Unnamed agent'}</strong><small>{className} · {selectedBehavior.label} · Level {level}</small></div><div className="dui-recruit-review-facts"><span><small>Runtime</small><strong>{primaryModel ? autoForgeModelLabel : 'System default'}</strong></span><span><small>Access</small><strong>{enabledCapabilities.length} capabilities</strong></span><span><small>Party</small><strong>{addToParty ? 'Join active party' : 'Roster only'}</strong></span></div></div>
-                        <div ref={recruitSideRef} className="dui-recruit-side"><section ref={recruitFilesRef} className="dui-recruit-files" data-markdown-tone={activeMarkdownTone} aria-label="Agent markdown bootstrap files"><SectionTitle icon="markdown" label="Operating files" meta={`${fileOrder.length} authored`} /><p className="dui-recruit-files__intro">These documents become part of the agent’s durable operating context. Edit the identity, memory, instructions, and tools they carry into every mission.</p><div className="dui-recruit-file-toolbar"><div className="dui-recruit-file-tabs" role="tablist" aria-label="Markdown files">{fileOrder.map((file) => <button key={file} type="button" role="tab" id={`${dialogId}-file-${encodeURIComponent(file)}`} tabIndex={activeFile === file ? 0 : -1} onKeyDown={(event) => navigateTabList(event, fileOrder, file, setActiveFile)} aria-selected={activeFile === file} aria-controls={`${dialogId}-markdown-panel`} data-md-tone={markdownFileTone(file)} data-file-extension="md" className={activeFile === file ? 'is-active' : ''} onClick={() => setActiveFile(file)} title={`Edit ${file}`}><span className="dui-recruit-file-tab__icon" aria-hidden="true"><RecruitIcon type="markdown" /></span><span className="dui-recruit-file-tab__name">{file}</span><span className="dui-recruit-file-tab__type" aria-hidden="true">MD</span></button>)}</div><div className="dui-recruit-file-add"><input aria-label="New markdown file name" value={newFileName} onChange={(event) => setNewFileName(event.target.value)} placeholder="EXTRA.md" /><button type="button" onClick={addMarkdownFile} title="Add a markdown bootstrap file">Add <RecruitIcon type="add" /></button></div></div>{editorExpanded ? <button type="button" className="dui-recruit-editor-scrim" onClick={() => setEditorExpanded(false)} aria-label="Close expanded markdown editor" /> : null}<div data-recruit-markdown-editor="true" id={`${dialogId}-markdown-panel`} role="tabpanel" aria-labelledby={`${dialogId}-file-${encodeURIComponent(activeFile)}`} className={editorClassName} data-md-tone={activeMarkdownTone} onClick={() => editorTextRef.current?.focus()}><div className="dui-recruit-code-scroll"><div ref={editorGutterRef} className="dui-recruit-code-gutter" aria-hidden="true">{highlightedMarkdownLines.map((_, index) => <span key={`${activeFile}-line-${index}`}>{index + 1}</span>)}</div><pre ref={editorPreviewRef} className="dui-recruit-code-preview" aria-hidden="true">{highlightedMarkdownLines.map((line, index) => <span key={`${activeFile}-preview-${index}`} className="dui-recruit-code-line">{renderMarkdownLine(line)}</span>)}</pre><textarea ref={editorTextRef} className="dui-recruit-code-input" value={activeMarkdownContent} onChange={(event) => { setFilesTouched(true); setResourceFiles((current) => ({ ...current, [activeFile]: event.target.value })); updateEditorCursor(event.currentTarget) }} onClick={(event) => updateEditorCursor(event.currentTarget)} onFocus={(event) => updateEditorCursor(event.currentTarget)} onKeyDown={handleEditorKeyDown} onKeyUp={(event) => updateEditorCursor(event.currentTarget)} onSelect={(event) => updateEditorCursor(event.currentTarget)} onScroll={syncEditorScroll} spellCheck aria-label={`Edit ${activeFile}`} /></div><div className="dui-recruit-code-status"><span className="dui-recruit-code-mode"><span aria-hidden="true">MD</span>{activeFile}</span><span>Ln {cursorStatus.line}, Col {cursorStatus.column}</span><span>{activeMarkdownLineCount} lines</span><span>{activeMarkdownCharCount} chars</span>{!markdownHighlightEnabled ? <span>Plain text</span> : null}{cursorStatus.selectionLength ? <span>{cursorStatus.selectionLength} selected</span> : null}<span>Spaces: 2</span><button type="button" className="dui-recruit-code-expand" aria-label={editorExpanded ? 'Collapse markdown editor' : 'Expand markdown editor'} aria-pressed={editorExpanded} title={editorExpanded ? 'Collapse markdown editor' : 'Expand markdown editor'} onClick={(event) => { event.stopPropagation(); setEditorExpanded((current) => !current); window.setTimeout(() => { editorTextRef.current?.focus(); syncEditorScroll() }, 0) }}><RecruitIcon type="expand" /></button></div></div></section></div>
+                        <div ref={recruitSideRef} className="dui-recruit-side">
+                          <section ref={recruitFilesRef} className="dui-recruit-files" data-markdown-tone={activeMarkdownTone} aria-label="Agent markdown bootstrap files">
+                            <SectionTitle icon="markdown" label="Operating files" meta={`${fileOrder.length} files`} />
+                            <p className="dui-recruit-files__intro">The durable instructions this agent carries into every mission. Select a file to review or edit its markdown.</p>
+                            <div className="dui-recruit-file-toolbar">
+                              <div className="dui-recruit-file-tabs" role="tablist" aria-label="Markdown files">
+                                {fileOrder.map((file) => (
+                                  <button key={file} type="button" role="tab" id={`${dialogId}-file-${encodeURIComponent(file)}`} tabIndex={activeFile === file ? 0 : -1} onKeyDown={(event) => navigateTabList(event, fileOrder, file, setActiveFile)} aria-selected={activeFile === file} aria-controls={`${dialogId}-markdown-panel`} data-md-tone={markdownFileTone(file)} data-file-extension="md" className={activeFile === file ? 'is-active' : ''} onClick={() => setActiveFile(file)} title={`Edit ${file}`}>
+                                    <span className="dui-recruit-file-tab__icon" aria-hidden="true"><RecruitIcon type="markdown" /></span>
+                                    <span className="dui-recruit-file-tab__name">{file}</span>
+                                    <span className="dui-recruit-file-tab__type" aria-hidden="true">MD</span>
+                                  </button>
+                                ))}
+                              </div>
+                              <div className="dui-recruit-file-add">
+                                <input aria-label="New markdown file name" value={newFileName} onChange={(event) => setNewFileName(event.target.value)} placeholder="NEW-FILE.md" />
+                                <button type="button" onClick={addMarkdownFile} title="Add a markdown bootstrap file"><RecruitIcon type="add" /> Add file</button>
+                              </div>
+                            </div>
+                            {!editorExpanded ? renderMarkdownEditor() : null}
+                          </section>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -2027,6 +2057,15 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
           }}
         />
       )}
+      <Dialog
+        open={isOpen && editorExpanded}
+        onClose={() => setEditorExpanded(false)}
+        title={<span className="dui-recruit-editor-dialog-title"><small>Operating file</small>{activeFile}</span>}
+        description="Focused markdown editor · Changes are saved with this recruit"
+        className="dui-recruit-editor-dialog"
+      >
+        {renderMarkdownEditor(true)}
+      </Dialog>
     </>
   )
 }
