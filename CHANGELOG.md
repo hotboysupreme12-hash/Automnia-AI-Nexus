@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.7 - 2026-09-16
+
+### Renderer recovery timing
+
+- Reloaded immediately from Electron's `unresponsive` event before the bounded load retry, allowing Linux Chromium runners to recover the renderer after the intentional crash probe.
+
 ## 1.0.6 - 2026-09-16
 
 ### Cross-platform renderer recovery

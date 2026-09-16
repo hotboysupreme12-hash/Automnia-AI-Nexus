@@ -2178,6 +2178,12 @@ function createMainWindow() {
     e2eRendererUnresponsive = true
     logE2e('renderer-unresponsive')
     if (!isQuitting && !win.isDestroyed()) {
+      try {
+        win.webContents.reload()
+        logE2e('renderer-unresponsive-reload-requested')
+      } catch (error) {
+        logE2e(`renderer-unresponsive-reload-failed:${error?.message || error}`)
+      }
       scheduleRendererLoad('renderer became unresponsive')
     }
   })
