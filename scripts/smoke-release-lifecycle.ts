@@ -4,7 +4,10 @@ import path from 'node:path'
 
 const root = process.cwd()
 const read = (relativePath: string) => readFileSync(path.join(root, relativePath), 'utf8')
-const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
+const packageJson = JSON.parse(read('package.json')) as {
+  scripts?: Record<string, string>
+  build?: { nsis?: { runAfterFinish?: boolean } }
+}
 const scripts = packageJson.scripts || {}
 const lifecycle = read('scripts/windows-release-lifecycle.ps1')
 const updateLibrary = read('scripts/lib/update-manifest.cjs')
@@ -30,6 +33,21 @@ assert.match(lifecycle, /rollback-existing-version/, 'corrupted update rejection
 assert.match(lifecycle, /distribution-signing\.json/, 'Windows lifecycle validation must support release-consumable signing evidence when platform signing is enabled')
 assert.match(lifecycle, /ExpectedAppExeName/, 'Windows lifecycle validation must derive the installed executable name from package metadata')
 assert.doesNotMatch(lifecycle, /Filter 'Automnia\\.exe'/, 'Windows lifecycle validation must not hardcode a stale executable name')
+assert.equal(packageJson.build?.nsis?.runAfterFinish, false, 'silent NSIS lifecycle installs must not launch the app before the test harness starts it')
+assert.match(lifecycle, /AUTOMNIA_WINDOWS_INSTALLER_TIMEOUT_SECONDS/, 'Windows lifecycle validation must allow a bounded installer timeout for the full packaged runtime')
+assert.match(lifecycle, /-TimeoutSeconds \$InstallerTimeoutSeconds/, 'Windows lifecycle validation must apply the bounded installer timeout to each install')
+assert.match(lifecycle, /if \(\$ArgumentList -and \$ArgumentList\.Count -gt 0\)/, 'Windows lifecycle validation must omit empty Start-Process argument lists')
+assert.match(lifecycle, /function Wait-ForE2eLog/, 'Windows lifecycle validation must wait for the branded launcher child process')
+assert.match(lifecycle, /quit-cleanup-complete/, 'Windows lifecycle validation must require packaged child-process completion evidence')
+assert.match(lifecycle, /resources\\dist\\index\.html/, 'Windows lifecycle validation must wait for the packaged UI payload')
+assert.match(lifecycle, /resources\\dist-server\\index\.cjs/, 'Windows lifecycle validation must wait for the packaged API payload')
+assert.match(lifecycle, /Set-Content -LiteralPath \$LogPath -Value ''/, 'Windows lifecycle validation must clear stale packaged-launch evidence')
+assert.match(lifecycle, /same-version uninstall before clean reinstall/, 'Windows lifecycle validation must avoid hanging same-version NSIS repair')
+assert.match(lifecycle, /\$UpgradeMode = 'clean-reinstall'/, 'Windows lifecycle validation must retain a deterministic fallback when no prior installer is configured')
+assert.match(lifecycle, /Join-Path \$InstallRoot \$ExpectedAppExeName/, 'Windows lifecycle validation must use the NSIS install-root executable path without recursively scanning bundled dependencies')
+assert.match(lifecycle, /-and \(\$RequiredPayload \| Where-Object/, 'Windows lifecycle validation must wait only while packaged payload files are missing')
+assert.match(lifecycle, /\$ErrorActionPreference = 'Continue'/, 'Windows lifecycle validation must capture expected integrity-test stderr instead of aborting on it')
+assert.match(lifecycle, /\$ExitCode = \$LASTEXITCODE/, 'Windows lifecycle validation must assert the expected integrity-test exit code')
 
 assert.match(backupLibrary, /backup-manifest\.json/, 'state backups must carry a verification manifest')
 assert.match(backupLibrary, /symbolic_link_not_followed/, 'state backups must skip symlink traversal without following targets')

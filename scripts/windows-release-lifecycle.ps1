@@ -38,6 +38,14 @@ New-Item -ItemType Directory -Force -Path $LifecycleDir | Out-Null
 $TempRoot = Join-Path ([IO.Path]::GetTempPath()) ("automnia-release-lifecycle-{0}-{1}" -f $PID, [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())
 $InstallRoot = Join-Path $TempRoot 'installed'
 $CorruptRoot = Join-Path $TempRoot 'corrupted-release'
+$InstallerTimeoutSeconds = 900
+if ($env:AUTOMNIA_WINDOWS_INSTALLER_TIMEOUT_SECONDS) {
+  $ParsedInstallerTimeoutSeconds = 0
+  if (-not [int]::TryParse($env:AUTOMNIA_WINDOWS_INSTALLER_TIMEOUT_SECONDS, [ref]$ParsedInstallerTimeoutSeconds) -or $ParsedInstallerTimeoutSeconds -lt 1) {
+    throw 'AUTOMNIA_WINDOWS_INSTALLER_TIMEOUT_SECONDS must be a positive integer.'
+  }
+  $InstallerTimeoutSeconds = $ParsedInstallerTimeoutSeconds
+}
 New-Item -ItemType Directory -Force -Path $TempRoot | Out-Null
 
 function Write-LifecycleLog {
@@ -61,7 +69,15 @@ function Invoke-CheckedProcess {
     [string]$Label,
     [int]$TimeoutSeconds = 300
   )
-  $Process = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -PassThru -WindowStyle Hidden
+  $StartParameters = @{
+    FilePath = $FilePath
+    PassThru = $true
+    WindowStyle = 'Hidden'
+  }
+  if ($ArgumentList -and $ArgumentList.Count -gt 0) {
+    $StartParameters.ArgumentList = $ArgumentList
+  }
+  $Process = Start-Process @StartParameters
   if (-not $Process.WaitForExit($TimeoutSeconds * 1000)) {
     try { $Process.Kill($true) } catch {}
     throw "$Label timed out after $TimeoutSeconds seconds."
@@ -73,15 +89,49 @@ function Invoke-CheckedProcess {
 function Install-Automnia {
   param([string]$Path, [string]$Label)
   New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
-  Invoke-CheckedProcess -FilePath $Path -ArgumentList @('/S', "/D=$InstallRoot") -Label $Label -TimeoutSeconds 300 | Out-Null
-  $AppExe = Get-ChildItem -LiteralPath $InstallRoot -Filter $ExpectedAppExeName -File -Recurse | Select-Object -First 1 -ExpandProperty FullName
-  if (-not $AppExe) { throw "$Label did not install $ExpectedAppExeName under $InstallRoot." }
+  Invoke-CheckedProcess -FilePath $Path -ArgumentList @('/S', "/D=$InstallRoot") -Label $Label -TimeoutSeconds $InstallerTimeoutSeconds | Out-Null
+  $PayloadDeadline = [DateTime]::UtcNow.AddSeconds(120)
+  $RequiredPayload = @(
+    (Join-Path $InstallRoot $ExpectedAppExeName),
+    (Join-Path $InstallRoot 'resources\app.asar'),
+    (Join-Path $InstallRoot 'resources\dist\index.html'),
+    (Join-Path $InstallRoot 'resources\dist-server\index.cjs')
+  )
+  while ([DateTime]::UtcNow -lt $PayloadDeadline -and ($RequiredPayload | Where-Object { -not (Test-Path -LiteralPath $_ -PathType Leaf) })) {
+    Start-Sleep -Milliseconds 250
+  }
+  $MissingPayload = $RequiredPayload | Where-Object { -not (Test-Path -LiteralPath $_ -PathType Leaf) }
+  if ($MissingPayload) { throw "$Label did not expose the complete packaged payload: $($MissingPayload -join ', ')" }
+  $AppExe = Join-Path $InstallRoot $ExpectedAppExeName
+  if (-not (Test-Path -LiteralPath $AppExe -PathType Leaf)) { throw "$Label did not install $ExpectedAppExeName at $AppExe." }
   return $AppExe
+}
+
+function Wait-ForE2eLog {
+  param(
+    [string]$Path,
+    [string]$Label,
+    [int]$TimeoutSeconds = 120
+  )
+  $Deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+  while ([DateTime]::UtcNow -lt $Deadline) {
+    if (Test-Path -LiteralPath $Path -PathType Leaf) {
+      try {
+        $Log = Get-Content -LiteralPath $Path -Raw
+        if ($Log -match 'quit-cleanup-complete') { return $Log }
+      } catch {
+        # The packaged child may still be appending its first log lines.
+      }
+    }
+    Start-Sleep -Milliseconds 250
+  }
+  throw "$Label did not record quit-cleanup-complete within $TimeoutSeconds seconds."
 }
 
 function Invoke-InstalledSmoke {
   param([string]$AppExe, [string]$Label)
   $LogPath = Join-Path $LifecycleDir ("{0}.e2e.log" -f $Label)
+  Set-Content -LiteralPath $LogPath -Value '' -Encoding UTF8
   $Old = @{}
   foreach ($Name in @(
     'CONTROL_CENTER_PORT', 'CONTROL_CENTER_FRONTEND_PORT', 'OPENCLAW_GATEWAY_PORT', 'OPENCLAW_BROWSER_RELAY_PORT',
@@ -107,7 +157,7 @@ function Invoke-InstalledSmoke {
     $env:OPENCLAW_HOME = $env:OPENCLAW_STATE_DIR
     $env:CONTROL_CENTER_WORKSPACE_ROOT = Join-Path $TempRoot ("workspace-$Label")
     Invoke-CheckedProcess -FilePath $AppExe -ArgumentList @() -Label "$Label packaged launch" -TimeoutSeconds 120 | Out-Null
-    $Log = Get-Content -LiteralPath $LogPath -Raw
+    $Log = Wait-ForE2eLog -Path $LogPath -Label "$Label packaged launch" -TimeoutSeconds 120
     foreach ($Marker in @('server-ready', 'navigation-policy-ok', 'quit-cleanup-complete')) {
       if ($Log -notmatch [Regex]::Escape($Marker)) { throw "$Label packaged launch did not record $Marker." }
     }
@@ -173,9 +223,16 @@ function Test-CorruptedUpdateRejection {
     $env:AUTOMNIA_UPDATE_SIGNATURE_PATH = Join-Path $CorruptRoot 'updates\update-manifest.json.sig'
     $env:AUTOMNIA_UPDATE_PUBLIC_KEY_PATH = Join-Path $CorruptRoot 'updates\update-manifest-public-key.pem'
     $env:AUTOMNIA_UPDATE_REQUIRE_SIGNING = '1'
-    $Output = & node (Join-Path $Root 'scripts\verify-update-manifest.cjs') *>&1
+    $OldErrorActionPreference = $ErrorActionPreference
+    try {
+      $ErrorActionPreference = 'Continue'
+      $Output = @(& node (Join-Path $Root 'scripts\verify-update-manifest.cjs') *>&1)
+      $ExitCode = $LASTEXITCODE
+    } finally {
+      $ErrorActionPreference = $OldErrorActionPreference
+    }
     $Output | Set-Content -LiteralPath (Join-Path $LifecycleDir 'corrupted-update.log') -Encoding UTF8
-    if ($LASTEXITCODE -eq 0) { throw 'Corrupted update artifact was incorrectly accepted.' }
+    if ($ExitCode -eq 0) { throw 'Corrupted update artifact was incorrectly accepted.' }
     if (($Output -join "`n") -notmatch 'size mismatch|checksum mismatch') { throw 'Corrupted update rejection did not report an integrity failure.' }
   } finally {
     $env:AUTOMNIA_RELEASE_ARTIFACT_ROOT = $OldRoot
@@ -218,7 +275,13 @@ try {
     Install-Automnia -Path (Resolve-Path -LiteralPath $PreviousInstallerPath).Path -Label 'previous-version install' | Out-Null
     $UpgradeMode = 'previous-version'
   } else {
-    $UpgradeMode = 'same-version-repair'
+    $ExistingUninstaller = Get-ChildItem -LiteralPath $InstallRoot -Filter 'Uninstall*.exe' -File -Recurse | Select-Object -First 1 -ExpandProperty FullName
+    if (-not $ExistingUninstaller) { throw 'same-version reinstall could not find the existing NSIS uninstaller.' }
+    Invoke-CheckedProcess -FilePath $ExistingUninstaller -ArgumentList @('/S') -Label 'same-version uninstall before clean reinstall' -TimeoutSeconds 180 | Out-Null
+    $UninstallDeadline = [DateTime]::UtcNow.AddSeconds(30)
+    while ((Test-Path -LiteralPath $InstallRoot) -and [DateTime]::UtcNow -lt $UninstallDeadline) { Start-Sleep -Milliseconds 250 }
+    if (Test-Path -LiteralPath $InstallRoot) { Remove-Item -LiteralPath $InstallRoot -Recurse -Force }
+    $UpgradeMode = 'clean-reinstall'
   }
   $UpgradeExe = Install-Automnia -Path $InstallerPath -Label 'upgrade install'
   $UpgradeLog = Invoke-InstalledSmoke -AppExe $UpgradeExe -Label 'upgrade'

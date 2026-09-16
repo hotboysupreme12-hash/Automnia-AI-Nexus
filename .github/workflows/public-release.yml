@@ -74,6 +74,7 @@ jobs:
         env:
           AUTOMNIA_PREVIOUS_WINDOWS_INSTALLER_PATH: ${{ vars.AUTOMNIA_PREVIOUS_WINDOWS_INSTALLER_PATH }}
           AUTOMNIA_PLATFORM_SIGNING_REQUIRED: '0'
+          AUTOMNIA_WINDOWS_INSTALLER_TIMEOUT_SECONDS: '900'
         run: npm run release:lifecycle:windows
 
       - name: Generate release SBOM and checksums

@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.13 - 2026-09-16
+
+### Windows installer lifecycle
+
+- Prevents the silent NSIS installer from launching the application after installation, so automated fresh-install and upgrade checks can observe a deterministic installer exit before launching the packaged app under test.
+- Replaces the hanging same-version NSIS repair fallback with an explicit silent uninstall and clean reinstall.
+- Uses the deterministic NSIS install-root executable path instead of recursively scanning the bundled runtime after installation.
+- Waits only for missing packaged payload files instead of sleeping through the full readiness timeout when they are already present.
+- Captures the expected checksum-mismatch stderr during tamper testing so the lifecycle can verify rejection instead of treating it as an unhandled PowerShell error.
+- Handles zero-argument packaged launches without passing an invalid empty argument collection to PowerShell `Start-Process`.
+- Waits for the branded Windows launcher’s child Electron process to write its bounded E2E completion marker before validating packaged launch evidence.
+- Waits for the installed executable, UI, and bundled API server payload to be visible before starting the packaged-app smoke check.
+- Clears each packaged-launch evidence file before starting a new child process, preventing stale E2E markers from satisfying a later lifecycle attempt.
+
 ## 1.0.12 - 2026-09-16
 
 ### Electron shutdown ownership
