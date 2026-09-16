@@ -11,9 +11,10 @@
 
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
-const repositoryRoot = path.resolve(new URL('.', import.meta.url).pathname, '..')
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const helpPanel = readFileSync(path.join(repositoryRoot, 'src/components/help/HelpAssistantPanel.tsx'), 'utf8')
 const nexusShell = readFileSync(path.join(repositoryRoot, 'src/components/layout/NexusShell.tsx'), 'utf8')
 const capabilityPlaybook = readFileSync(path.join(repositoryRoot, 'docs/AGENT_CAPABILITY_PLAYBOOK.md'), 'utf8')
@@ -35,8 +36,12 @@ const requiredAliases = [
   'Settings',
   'UI settings',
   'Appearance',
+  'Account',
+  'Account & Plan',
   'Account & License',
+  'Backup & Reset',
   'Data & reset',
+  'Agent Behavior',
 ]
 
 for (const alias of requiredAliases) {

@@ -19,5 +19,5 @@ test('small displays and corrupt preferences cannot strand the window', () => {
   assert.equal(result.minWidth, 640); assert.equal(result.minHeight, 480)
   assert.equal(result.x, 100); assert.equal(result.y, 100)
   assert.equal(restoreZoom(NaN), 1); assert.equal(restoreZoom(99), 1)
-  assert.equal(restoreZoom(1.25), 1.25); assert.equal(restoreZoom(undefined, 0.8), 0.8)
+  assert.equal(restoreZoom(1.25), 1.25); assert.equal(restoreZoom(undefined, 0.6), 0.6)
 })

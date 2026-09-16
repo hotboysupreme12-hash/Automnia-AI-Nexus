@@ -160,7 +160,7 @@ npm test
 npm run build:standalone
 ```
 
-For release evidence and signing validation:
+For release evidence and optional signing validation:
 
 ```bash
 npm run release:evidence
@@ -168,9 +168,9 @@ npm run release:sign
 npm run release:validate
 ```
 
-Set `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE` or `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM` before signing. Set `AUTOMNIA_RELEASE_REQUIRE_SIGNING=1` for mandatory public-release validation.
+Set `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE` or `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM` before optional checksum-evidence signing. The early public workflow permits unsigned Windows/macOS packages, but it still requires `AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM` for the cryptographically signed GCS update channel. Set `AUTOMNIA_RELEASE_REQUIRE_SIGNING=1` later when platform and release signing are enabled.
 
-Public release evidence also needs `distribution-signing.json` so reviewers can verify consumer signing, update-channel signing, install, upgrade, rollback, and uninstall evidence.
+Signed public-release evidence also needs `distribution-signing.json` so reviewers can verify consumer signing, update-channel signing, install, upgrade, rollback, and uninstall evidence. The early unsigned workflow retains the lifecycle logs and signed update-channel evidence without requiring platform-signing evidence.
 
 For complete setup, read the [User Guide](docs/USER_GUIDE.md). For recovery and feedback details, read the [Support Guide](docs/BETA_SUPPORT.md).
 
@@ -186,6 +186,7 @@ Automnia AI is stable for Windows, macOS, and Linux.
 | Get help or send feedback | [Support Guide](docs/BETA_SUPPORT.md) |
 | Review release notes | [Release Notes](docs/BETA_RELEASE_NOTES.md) |
 | Review hosted CI proof | [CI Evidence](docs/CI_EVIDENCE.md) |
+| Check exact provider model support and compatibility | [Provider model compatibility](docs/PROVIDER_MODEL_COMPATIBILITY.md) |
 | Understand data boundaries | [Data Handling](DATA_HANDLING.md) |
 | Report security issues | [Security](SECURITY.md) |
 | Review release rules | [Release Governance](docs/RELEASE_GOVERNANCE.md) |

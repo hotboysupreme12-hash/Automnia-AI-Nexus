@@ -105,6 +105,7 @@ export type ModelCatalogServiceOptions = {
 // still determined by `openclaw models list`; this set only prevents fallback
 // mode from inventing or surfacing unverified Anthropic IDs.
 export const OPENCLAW_VERIFIED_ANTHROPIC_MODEL_IDS = new Set([
+  'claude-fable-5-1',
   'claude-fable-5',
   'claude-mythos-5',
   'claude-opus-5',
@@ -118,7 +119,8 @@ export const OPENCLAW_VERIFIED_ANTHROPIC_MODEL_IDS = new Set([
 
 export const FALLBACK_MODELS: Array<{ id: string; alias?: string }> = [
   // Keep the local picker useful while OpenClaw is starting or the catalog is
-  // temporarily unavailable. These are the current GPT-5.6 and Claude 5 IDs.
+  // temporarily unavailable. These are individually verified current model IDs.
+  { id: 'openai/gpt-6-astra', alias: 'GPT-6 Astra (flagship)' },
   { id: 'openai/gpt-5.6-sol', alias: 'GPT-5.6 Sol (flagship)' },
   { id: 'openai/gpt-5.6-terra', alias: 'GPT-5.6 Terra (balanced)' },
   { id: 'openai/gpt-5.6-luna', alias: 'GPT-5.6 Luna (high-volume)' },
@@ -149,6 +151,7 @@ export const FALLBACK_MODELS: Array<{ id: string; alias?: string }> = [
   { id: AUTOMNIA_RELAY_MODEL_IDS[1], alias: AUTOMNIA_RELAY_MODEL_LABELS[AUTOMNIA_RELAY_MODEL_IDS[1]] },
   { id: AUTOMNIA_RELAY_MODEL_IDS[2], alias: AUTOMNIA_RELAY_MODEL_LABELS[AUTOMNIA_RELAY_MODEL_IDS[2]] },
   { id: AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS[1], alias: 'Automnia Classic' },
+  { id: 'anthropic/claude-fable-5-1', alias: 'Claude Fable 5.1 (flagship)' },
   { id: 'anthropic/claude-fable-5', alias: 'Claude Fable 5 (flagship)' },
   { id: 'anthropic/claude-sonnet-5', alias: 'Claude Sonnet 5' },
   { id: 'anthropic/claude-opus-5', alias: 'Claude Opus 5' },
@@ -163,6 +166,7 @@ export const FALLBACK_MODELS: Array<{ id: string; alias?: string }> = [
   { id: 'google/gemini-3.7-flash', alias: 'Gemini 3.7 Flash (GA)' },
   { id: 'google/gemini-3.6-flash', alias: 'Gemini 3.6 Flash (GA)' },
   { id: 'google/gemini-3.5-flash', alias: 'gemini-3.5-flash' },
+  { id: 'google/gemini-3.5-flash-lite', alias: 'Gemini 3.5 Flash-Lite (GA)' },
   { id: 'google/gemini-3-flash-preview', alias: 'gemini-3-flash' },
   { id: 'google/gemini-3.1-flash-lite', alias: 'gemini-3.1-flash-lite' },
   { id: 'google/gemini-3.1-flash-lite-preview', alias: 'gemini-3.1-flash-lite-preview' },
@@ -177,6 +181,7 @@ export const FALLBACK_MODELS: Array<{ id: string; alias?: string }> = [
   { id: 'google-vertex/gemini-3.7-flash', alias: 'Vertex Gemini 3.7 Flash (GA)' },
   { id: 'google-vertex/gemini-3.6-flash', alias: 'Vertex Gemini 3.6 Flash (GA)' },
   { id: 'google-vertex/gemini-3.5-flash', alias: 'vertex-gemini-3.5-flash' },
+  { id: 'google-vertex/gemini-3.5-flash-lite', alias: 'Vertex Gemini 3.5 Flash-Lite (GA)' },
   { id: 'google-vertex/gemini-3.1-pro-preview', alias: 'vertex-gemini-3.1-pro' },
   { id: 'google-vertex/gemini-3-flash-preview', alias: 'vertex-gemini-3-flash' },
   { id: 'google-vertex/gemini-3.1-flash-lite', alias: 'vertex-gemini-3.1-flash-lite' },

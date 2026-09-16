@@ -92,7 +92,7 @@ export function MicrophoneSettings({ settings, onChange }: { settings: SpeechSet
   }
   const missing = Boolean(settings.microphoneDeviceId && !devices.some((device) => device.deviceId === settings.microphoneDeviceId))
   return <div className="space-y-3">
-    <label className="dui-settings-field"><span><strong>Input device</strong><small>Used for tests and future voice recordings.</small></span><div className="dui-settings-control">
+    <label className="dui-settings-field"><span><strong>Microphone</strong><small>Used for dictation and microphone tests.</small></span><div className="dui-settings-control">
       <select value={settings.microphoneDeviceId || ''} disabled={running || requesting} onChange={(event) => onChange(event.target.value)}>
         <option value="">System default microphone</option>
         {missing && <option value={settings.microphoneDeviceId}>Saved microphone · currently unavailable</option>}

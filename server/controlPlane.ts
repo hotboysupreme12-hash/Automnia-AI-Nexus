@@ -76,6 +76,7 @@ import {
 import { createMissionTeamSyncService } from './services/missions/missionTeamSyncService'
 import { createLoginAttemptLimiter } from './loginAttemptLimiter'
 import { createSessionTokenStore } from './sessionTokenStore'
+import { resolveAgencyAgentTemplateSourceRoot } from './services/recruit/agencyAgentTemplateService'
 import { createLicenseService } from './services/license/licenseService'
 import {
   applyUsagePriorityModelOrder,
@@ -125,6 +126,12 @@ import {
   googleGeminiModelDisallowsCustomSampling,
   googleGeminiThinkingForModel,
 } from './services/providers/googleGeminiModelPolicy'
+import {
+  isOpenAiAstraModel,
+  openAiChatCompletionsReasoningPatch,
+  openAiResponsesReasoningPatch,
+  openAiThinkingForRuntime,
+} from './services/providers/openAiModelPolicy'
 import {
   createProviderAuthService,
   isOAuthCredentialUsable,
@@ -320,20 +327,6 @@ function isBundledOpenClawPath(value: string | undefined) {
   return normalized.includes('/automnia-control-center/openclaw') || normalized.includes('/automnia-ai-nexus/openclaw')
 }
 
-function defaultAgencyAgentTemplateSourceRoot() {
-  const electronResourcesPath = getElectronResourcesPath()
-  const candidates = [
-    path.join(WORKSPACE_ROOT, 'templates', 'automnia-agents'),
-    path.resolve(process.cwd(), 'templates', 'automnia-agents'),
-    path.join(WORKSPACE_ROOT, 'vendor', 'agency-agents'),
-    path.resolve(process.cwd(), 'vendor', 'agency-agents'),
-    path.resolve(process.cwd(), 'resources', 'agency-agents'),
-    electronResourcesPath ? path.join(electronResourcesPath, 'automnia-agents') : '',
-    electronResourcesPath ? path.join(electronResourcesPath, 'agency-agents') : '',
-  ].filter(Boolean)
-  return candidates.find((candidate) => existsSync(candidate)) || path.join(WORKSPACE_ROOT, 'vendor', 'agency-agents')
-}
-
 const CONFIGURED_OPENCLAW_STATE_ROOT = process.env.OPENCLAW_STATE_DIR || process.env.OPENCLAW_HOME || ''
 const OPENCLAW_STATE_ROOT = path.resolve(
   CONFIGURED_OPENCLAW_STATE_ROOT && !isBundledOpenClawPath(CONFIGURED_OPENCLAW_STATE_ROOT)
@@ -360,9 +353,13 @@ const HEARTBEAT_DEFAULTS_PATH = path.join(OPENCLAW_STATE_ROOT, 'heartbeat-runtim
 const HEARTBEAT_AGENT_DEFAULTS_PATH = path.join(OPENCLAW_STATE_ROOT, 'heartbeat-runtime-per-agent.json')
 const RETIRED_AGENT_IDS_PATH = path.join(OPENCLAW_STATE_ROOT, 'retired-agents.json')
 const PARTY_PROFILE_PATH = path.join(WORKSPACE_ROOT, '.openclaw', 'party-profiles.json')
-const AGENCY_AGENT_TEMPLATE_SOURCE_ROOT = path.resolve(
-  process.env.AGENCY_AGENT_TEMPLATE_SOURCE_ROOT || defaultAgencyAgentTemplateSourceRoot(),
-)
+const AGENCY_AGENT_TEMPLATE_SOURCE_ROOT = resolveAgencyAgentTemplateSourceRoot({
+  workspaceRoot: WORKSPACE_ROOT,
+  processCwd: process.cwd(),
+  appRoot: process.env.CONTROL_CENTER_APP_ROOT,
+  electronResourcesPath: getElectronResourcesPath(),
+  configuredSourceRoot: process.env.AGENCY_AGENT_TEMPLATE_SOURCE_ROOT,
+})
 const AGENCY_AGENT_TEMPLATE_STATE_PATH = path.join(OPENCLAW_STATE_ROOT, 'agency-agent-template-catalog.json')
 const OPENCLAW_AGENTS_ROOT = path.join(OPENCLAW_STATE_ROOT, 'agents')
 const SHARED_SKILLS_ROOT = path.join(OPENCLAW_STATE_ROOT, 'skills')
@@ -1717,6 +1714,10 @@ const OPENCLAW_AGENT_TURN_TIMEOUT_FLOOR_SECONDS = 10 * 60
 const OPENCLAW_TIMEOUT_RECOVERY_SECONDS = 15 * 60
 const MODEL_RESILIENCE_FALLBACKS: Record<string, string[]> = {
   [AUTOMNIA_CREDITS_MODEL_ID]: [...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS],
+  'openai/gpt-6-astra': [
+    'openai/gpt-5.6-sol',
+    'openai/gpt-5.6-terra',
+  ],
   'openai/gpt-5.6-sol': [
     'openai/gpt-5.6-terra',
     'openai/gpt-5.6-luna',
@@ -1733,40 +1734,60 @@ const MODEL_RESILIENCE_FALLBACKS: Record<string, string[]> = {
     'google/gemini-3.7-flash',
     'google/gemini-3.6-flash',
     'google/gemini-3.5-flash',
+    'google/gemini-3.5-flash-lite',
     'google/gemini-3.1-flash-lite',
   ],
   'google/gemini-3.7-flash': [
     'google/gemini-3.6-flash',
     'google/gemini-3.5-flash',
+    'google/gemini-3.5-flash-lite',
     'google/gemini-3.1-flash-lite',
   ],
   'google/gemini-3.6-flash': [
     'google/gemini-3.5-flash',
+    'google/gemini-3.5-flash-lite',
     'google/gemini-3.1-flash-lite',
     'google/gemini-2.5-flash',
+    'google/gemini-2.5-flash-lite',
+  ],
+  'google/gemini-3.5-flash': [
+    'google/gemini-3.5-flash-lite',
+    'google/gemini-3.1-flash-lite',
+    'google/gemini-2.5-flash',
+    'google/gemini-2.5-flash-lite',
+  ],
+  'google/gemini-3.5-flash-lite': [
+    'google/gemini-3.1-flash-lite',
     'google/gemini-2.5-flash-lite',
   ],
   'google-vertex/gemini-3.8-flash': [
     'google-vertex/gemini-3.7-flash',
     'google-vertex/gemini-3.6-flash',
     'google-vertex/gemini-3.5-flash',
+    'google-vertex/gemini-3.5-flash-lite',
     'google-vertex/gemini-3.1-flash-lite',
   ],
   'google-vertex/gemini-3.7-flash': [
     'google-vertex/gemini-3.6-flash',
     'google-vertex/gemini-3.5-flash',
+    'google-vertex/gemini-3.5-flash-lite',
     'google-vertex/gemini-3.1-flash-lite',
   ],
   'google-vertex/gemini-3.6-flash': [
     'google-vertex/gemini-3.5-flash',
+    'google-vertex/gemini-3.5-flash-lite',
     'google-vertex/gemini-3.1-flash-lite',
     'google-vertex/gemini-2.5-flash',
     'google-vertex/gemini-2.5-flash-lite',
   ],
   'google-vertex/gemini-3.5-flash': [
-    'google-vertex/gemini-3-flash-preview',
+    'google-vertex/gemini-3.5-flash-lite',
     'google-vertex/gemini-3.1-flash-lite',
     'google-vertex/gemini-2.5-flash',
+    'google-vertex/gemini-2.5-flash-lite',
+  ],
+  'google-vertex/gemini-3.5-flash-lite': [
+    'google-vertex/gemini-3.1-flash-lite',
     'google-vertex/gemini-2.5-flash-lite',
   ],
   'google-vertex/gemini-3-flash-preview': [
@@ -1850,7 +1871,10 @@ const skillRootCache = new Map<string, TimedValueCache<AgentSkillEntry[]>>()
 
 function thinkingForOpenClawRuntimeModel(modelId: string, thinking: ThinkingLevel): ThinkingLevel {
   if (isOpenAiCodexSubscriptionModel(modelId)) return 'off'
-  return thinkingForAutomniaGeminiRuntimeModel(modelId, googleGeminiThinkingForModel(modelId, thinking))
+  return thinkingForAutomniaGeminiRuntimeModel(
+    modelId,
+    googleGeminiThinkingForModel(modelId, openAiThinkingForRuntime(modelId, thinking)),
+  )
 }
 
 function primaryModelForOpenClawConfig(modelId: string | undefined) {
@@ -6141,52 +6165,9 @@ function deepSeekThinkingPatch(thinking: ThinkingLevel) {
   return { thinking: { type: 'disabled' } }
 }
 
-function isOpenAiReasoningModel(model: string) {
-  const normalized = model.toLowerCase()
-  return /^(gpt-5|o[1-9]|gpt-oss)/.test(normalized)
-}
-
-function parsedOpenAiGpt5Minor(model: string): number | null {
-  const match = model.toLowerCase().match(/^gpt-5(?:\.(\d+))?/)
-  if (!match) return null
-  return match[1] ? Number(match[1]) : 0
-}
-
-function openAiSupportsReasoningNone(model: string) {
-  const minor = parsedOpenAiGpt5Minor(model)
-  return minor !== null && minor >= 1
-}
-
-function openAiSupportsMinimalReasoning(model: string) {
-  const minor = parsedOpenAiGpt5Minor(model)
-  return minor !== null && minor >= 2
-}
-
-function openAiReasoningPatch(model: string, thinking: ThinkingLevel) {
-  if (!isOpenAiReasoningModel(model)) return {}
-  if (thinking === 'off') {
-    return openAiSupportsReasoningNone(model) ? { reasoning_effort: 'none' } : {}
-  }
-  if (thinking === 'minimal') {
-    return { reasoning_effort: openAiSupportsMinimalReasoning(model) ? 'minimal' : 'low' }
-  }
-  return { reasoning_effort: thinking }
-}
-
-function openAiResponsesReasoningPatch(model: string, thinking: ThinkingLevel) {
-  if (!isOpenAiReasoningModel(model)) return {}
-  if (thinking === 'off') {
-    return openAiSupportsReasoningNone(model) ? { reasoning: { effort: 'none' } } : {}
-  }
-  if (thinking === 'minimal') {
-    return { reasoning: { effort: openAiSupportsMinimalReasoning(model) ? 'minimal' : 'low' } }
-  }
-  return { reasoning: { effort: thinking } }
-}
-
 function openAiCompatibleThinkingPatch(provider: string, model: string, thinking: ThinkingLevel) {
   if (provider === 'deepseek') return deepSeekThinkingPatch(thinking)
-  if (provider === 'openai') return openAiReasoningPatch(model, thinking)
+  if (provider === 'openai') return openAiChatCompletionsReasoningPatch(model, thinking)
   return {}
 }
 
@@ -7282,13 +7263,13 @@ function googleGeminiEmbeddedRuntimeReason(modelId: string, message: string, int
 }
 
 function openAiCodexEmbeddedRuntimeReason(modelId: string, message: string, intentMessage?: string): BufferedRuntimeReason | null {
-  if (!isOpenAiCodexSubscriptionModel(modelId)) return null
+  if (!isOpenAiCodexSubscriptionModel(modelId) && !isOpenAiAstraModel(modelId)) return null
   const text = intentMessage?.trim() || message || ''
   if (!text.trim()) return null
   if (!isLikelyCodeArtifactRequest(text) && !isLikelyOpenClawRuntimeToolRequest(text)) return null
   return {
     code: 'openai-codex-tools',
-    message: 'Agent is using tools for this GPT/Codex request.',
+    message: 'Agent is using tools for this OpenAI request.',
   }
 }
 

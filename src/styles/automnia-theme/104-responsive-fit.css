@@ -77,8 +77,8 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recr
 
 /*
   Between a small laptop and a tablet, collapse the rail but retain a real
-  two-column workspace. The 90% Electron zoom makes this breakpoint feel like
-  the reference desktop composition without shrinking text by hand.
+  two-column workspace. The reduced Electron zoom makes this breakpoint feel
+  like the reference desktop composition without shrinking text by hand.
 */
 @media (min-width: 901px) and (max-width: 1200px) {
   html.dui-pro-overhaul,

@@ -1,5 +1,13 @@
-import { promises as fs } from 'node:fs'
+import { existsSync, promises as fs } from 'node:fs'
 import path from 'node:path'
+
+export type AgencyAgentTemplateSourceRootOptions = {
+  workspaceRoot: string
+  processCwd?: string
+  appRoot?: string
+  electronResourcesPath?: string
+  configuredSourceRoot?: string
+}
 
 export type AgencyTemplateBehaviorProfile = 'executor' | 'architect' | 'auditor' | 'researcher' | 'hybrid'
 export type AgencyTemplateCapabilityKey = 'codeGeneration' | 'planning' | 'research' | 'orchestration' | 'memoryManagement'
@@ -109,6 +117,64 @@ const NON_TEMPLATE_DIRECTORIES = new Set([
   'scripts',
   'strategy',
 ])
+
+function expandWindowsEnvironmentVariables(value: string) {
+  return value.replace(/%([^%]+)%/g, (match, variableName: string) => {
+    const resolved = process.env[variableName]
+    return resolved === undefined ? match : resolved
+  })
+}
+
+function normalizeConfiguredSourceRoot(value: string | undefined) {
+  const trimmed = value?.trim()
+  if (!trimmed) return ''
+  const expanded = expandWindowsEnvironmentVariables(trimmed)
+  if (/%[^%]+%/.test(expanded)) return ''
+  return path.resolve(expanded)
+}
+
+function uniqueSourceRoots(candidates: Array<string | undefined>) {
+  return [...new Set(candidates.filter((candidate): candidate is string => Boolean(candidate)).map((candidate) => path.resolve(candidate)))]
+}
+
+/**
+ * Resolve the bundled Automnia roster before any legacy OpenClaw workspace
+ * override. The desktop app owns `templates/automnia-agents`; a stale
+ * `AGENCY_AGENT_TEMPLATE_SOURCE_ROOT` must never make Recruit fail when that
+ * bundled source is present.
+ */
+export function resolveAgencyAgentTemplateSourceRoot(options: AgencyAgentTemplateSourceRootOptions) {
+  const workspaceRoot = path.resolve(options.workspaceRoot)
+  const processCwd = path.resolve(options.processCwd || process.cwd())
+  const appRoot = options.appRoot ? path.resolve(options.appRoot) : ''
+  const electronResourcesPath = options.electronResourcesPath
+    ? path.resolve(options.electronResourcesPath)
+    : ''
+
+  const automniaCandidates = uniqueSourceRoots([
+    appRoot ? path.join(appRoot, 'templates', 'automnia-agents') : '',
+    path.join(workspaceRoot, 'templates', 'automnia-agents'),
+    path.join(processCwd, 'templates', 'automnia-agents'),
+    electronResourcesPath ? path.join(electronResourcesPath, 'automnia-agents') : '',
+    electronResourcesPath ? path.join(electronResourcesPath, 'templates', 'automnia-agents') : '',
+  ])
+  const bundledAutomniaRoot = automniaCandidates.find((candidate) => existsSync(candidate))
+  if (bundledAutomniaRoot) return bundledAutomniaRoot
+
+  const configuredRoot = normalizeConfiguredSourceRoot(options.configuredSourceRoot)
+  if (configuredRoot && existsSync(configuredRoot)) return configuredRoot
+
+  const fallbackCandidates = uniqueSourceRoots([
+    appRoot ? path.join(appRoot, 'vendor', 'agency-agents') : '',
+    path.join(workspaceRoot, 'vendor', 'agency-agents'),
+    path.join(processCwd, 'vendor', 'agency-agents'),
+    processCwd ? path.join(processCwd, 'resources', 'agency-agents') : '',
+    electronResourcesPath ? path.join(electronResourcesPath, 'agency-agents') : '',
+  ])
+  return fallbackCandidates.find((candidate) => existsSync(candidate))
+    || automniaCandidates[0]
+    || path.join(workspaceRoot, 'templates', 'automnia-agents')
+}
 
 function cleanString(value: unknown, fallback = '') {
   return typeof value === 'string' ? value.trim() : fallback

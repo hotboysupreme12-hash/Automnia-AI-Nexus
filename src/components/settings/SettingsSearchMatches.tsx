@@ -20,7 +20,7 @@ export function SettingsSearchMatches({ query, root }: { query: string; root: Re
   }, [query, root])
   if (!query.trim()) return null
   return <div className="my-3 flex flex-wrap gap-2" aria-label="Matching settings">
-    {!matches.length && <p className="text-sm text-slate-300">No controls match this phrase. Try “console width”, “contrast”, or “microphone”.</p>}
+    {!matches.length && <p className="text-sm text-slate-300">No settings match this phrase. Try “chat panel”, “contrast”, or “microphone”.</p>}
     {matches.map(({ label, field }, index) => <button type="button" key={`${label}-${index}`} className="rounded-lg border border-white/20 px-3 py-2 text-sm text-slate-200" onClick={() => {
       const control = field.querySelector<HTMLElement>('input:not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled)')
       control?.focus({ preventScroll: true })

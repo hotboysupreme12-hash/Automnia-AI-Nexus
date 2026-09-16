@@ -62,6 +62,61 @@ test('startup failures receive full quit cleanup; second instances do not touch 
   }
 })
 
+test('captured process identity rejects PID reuse before forced cleanup', () => {
+  const details = new Map<number, { pid: number; commandLine: string; startedAt: string }>([
+    [41, { pid: 41, commandLine: 'node.exe owned-worker.js', startedAt: '2026-09-16T12:00:00.000Z' }],
+    [42, { pid: 42, commandLine: 'node.exe replacement-worker.js', startedAt: '2026-09-16T12:01:00.000Z' }],
+  ])
+  const context = vm.createContext({
+    process: { pid: 10 },
+    normalizeForMatch: (value: unknown) => String(value || '').replace(/\\/g, '/').toLowerCase(),
+    listProcessDetails: (pids: number[]) => pids.map((pid) => details.get(pid)).filter(Boolean),
+    isProcessAlive: () => false,
+  })
+  vm.runInContext(section(main, 'function sameProcessInstance(', 'function captureAppOwnedDescendants('), context)
+  const captured = [
+    { pid: 41, commandLine: 'node.exe owned-worker.js', startedAt: '2026-09-16T12:00:00.000Z' },
+    { pid: 42, commandLine: 'node.exe old-worker.js', startedAt: '2026-09-16T11:59:00.000Z' },
+  ]
+  context.captured = captured
+  const matches = vm.runInContext('matchingCapturedProcesses(captured)', context) as Array<{ pid: number }>
+  assert.deepEqual(matches.map((entry) => entry.pid), [41])
+})
+
+test('quit cleanup stops captured generic Node descendants without targeting unrelated Node processes', async () => {
+  const stopped: number[] = []
+  let capturedStillRunning = true
+  const captured = [{ pid: 71, commandLine: 'node.exe arbitrary-background-task.js', startedAt: 'owned-start' }]
+  const context = vm.createContext({
+    process: { pid: 10 },
+    MANAGED_PORTS: [],
+    listManagedHelperProcesses: () => [
+      { pid: 72, commandLine: 'node.exe unrelated-project.js' },
+    ],
+    listListeningProcesses: () => [],
+    listProcessDetails: () => [],
+    listDescendantProcesses: () => [],
+    isAppOwnedCommand: () => false,
+    isManagedHelperCommand: () => false,
+    matchingCapturedProcesses: () => capturedStillRunning ? captured : [],
+    remainingCapturedProcesses: () => capturedStillRunning ? captured : [],
+    killProcessTree: (pid: number) => {
+      stopped.push(pid)
+      capturedStillRunning = false
+      return true
+    },
+    sleep: async () => undefined,
+    Map,
+  })
+  vm.runInContext(section(main, 'async function cleanupAppOwnedHelpers(', 'async function ensurePortAvailable('), context)
+  context.captured = captured
+  const result = await vm.runInContext("cleanupAppOwnedHelpers('quit cleanup', captured)", context)
+  assert.deepEqual(stopped, [71])
+  assert.equal(result.attempted, 1)
+  assert.equal(result.stopped, 1)
+  assert.deepEqual(result.remainingCaptured, [])
+})
+
 
 test('full cleanup kills a real worker that ignores SIGTERM after its parent exits', { skip: process.platform === 'win32', timeout: 10000 }, async () => {
   const workerSource = "process.on('SIGTERM', () => {}); console.log('ready'); setInterval(() => {}, 1000)"

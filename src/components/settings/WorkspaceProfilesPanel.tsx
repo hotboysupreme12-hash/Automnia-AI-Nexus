@@ -20,7 +20,7 @@ export function WorkspaceProfiles({ onApply }: { onApply: () => void }) {
   }
   return <section className="rounded-xl border border-white/15 p-4" aria-label="Named workspace profiles">
     <h4 className="font-semibold text-slate-100">Workspace profiles</h4>
-    <p className="mt-1 text-sm text-slate-300">Save appearance, registry view and console layout for different tasks. Draft retention stays as you set it.</p>
+    <p className="mt-1 text-sm text-slate-300">Save your appearance, agent list, and chat layout for different kinds of work.</p>
     <form className="my-3 flex flex-wrap gap-2" onSubmit={(event) => {
       event.preventDefault()
       try {

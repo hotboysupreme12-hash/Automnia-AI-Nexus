@@ -211,6 +211,9 @@ for (const [name, content] of [
 }
 assert(editor.includes("const CODEX_5_3_SPARK_MODEL_ID = 'openai/gpt-5.3-codex-spark'"), 'AgentEditorModal should seed the canonical Codex 5.3 Spark model id')
 assert(editor.includes("name: 'Codex 5.3 Spark'"), 'AgentEditorModal should label the seeded Codex model as 5.3 Spark')
+assert(editor.includes('const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: string[], creditsOnly = false)'), 'AgentEditorModal should distinguish normal provider catalogs from locked Automnia-credit catalogs')
+assert(editor.includes('return mergeSelectedModelOptions(routeModels, routeSelectedModelIds, true)'), 'AgentEditorModal should not inject Codex Spark into the Automnia-only catalog')
+assert(editor.includes('const normalizedPrimary=isAutomniaCreditsModelId(primary)?primary:AUTOMNIA_CREDITS_MODEL_ID'), 'AgentEditorModal should replace a stale non-Automnia selection on the Automnia-only route')
 assert(!editor.includes(staleCodexSparkId), 'AgentEditorModal should not expose the stale pre-5.3 Spark id')
 assert(modelCatalogService.includes("{ id: 'openai/gpt-5.3-codex-spark', alias: 'gpt-5.3-codex-spark' }"), 'Fallback model catalog should expose Codex 5.3 Spark for save/reload consistency')
 assert(modelSelector.includes("const CODEX_5_3_SPARK_MODEL_ID = 'openai/gpt-5.3-codex-spark'"), 'ModelSelectorModal should seed the canonical Codex 5.3 Spark model id')

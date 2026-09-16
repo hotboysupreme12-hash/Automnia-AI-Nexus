@@ -11,13 +11,13 @@ export function SettingsActivityLog() {
     <div className="dui-settings-section" id="settings-section-logs" role="tabpanel">
       <section className="dui-channel-activity-preferences" aria-labelledby="channel-activity-preferences-title">
         <div className="dui-channel-activity-preferences__copy">
-          <span>Channel traffic</span>
-          <strong id="channel-activity-preferences-title">Display settings</strong>
-          <p>Choose how many recent channel updates remain visible in Monitor.</p>
+          <span>Recent activity</span>
+          <strong id="channel-activity-preferences-title">Activity history</strong>
+          <p>Choose how many recent updates appear in Monitor.</p>
         </div>
         <div className="dui-channel-activity-preferences__controls">
           <label>
-            <span><strong>Visible updates</strong><small>Newest events shown in Channel Traffic</small></span>
+            <span><strong>Visible updates</strong><small>Number of recent items to show</small></span>
             <select
               value={channelActivitySettings.retentionLimit}
               onChange={(event) => saveChannelActivitySettings({
@@ -29,7 +29,7 @@ export function SettingsActivityLog() {
             </select>
           </label>
           <label className="dui-channel-activity-preferences__toggle">
-            <span><strong>Automatically trim older events</strong><small>Remove the oldest item when the limit is reached</small></span>
+            <span><strong>Remove older updates automatically</strong><small>Keeps the activity list within your chosen limit</small></span>
             <input
               type="checkbox"
               checked={channelActivitySettings.autoTrim}

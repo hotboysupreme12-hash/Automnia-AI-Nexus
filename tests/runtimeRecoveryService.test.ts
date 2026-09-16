@@ -218,7 +218,10 @@ test('processExitCleanup performs synchronous best-effort runtime cleanup', () =
   service.processExitCleanup('process exit shutdown')
 
   assert.equal(state.shutdownMarked, 1)
+  assert.equal(state.pausedGatewayRestart, 1)
   assert.equal(state.timersCleared, 1)
+  assert.deepEqual(state.gatewayClientStops, ['process exit shutdown'])
+  assert.deepEqual(state.pluginTerminalStops, ['process exit shutdown'])
   assert.deepEqual(state.oauthProcessExitReasons, ['process exit shutdown'])
   assert.deepEqual(state.terminatedProcessExitReasons, ['process exit shutdown'])
   assert.equal(state.gatewayHardStops, 1)

@@ -17,7 +17,7 @@ test('assistant operations manual covers the required operator surfaces', () => 
     'Agent files',
     'Retire an agent from Agent files',
     'Settings: every category and nuance',
-    'Account & License',
+    'Account',
     'Google Cloud and private Help operations',
     'Assistant response contract',
   ]) {

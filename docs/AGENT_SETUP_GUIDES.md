@@ -20,7 +20,7 @@ The fixed left navigation rail is the starting point for every workflow:
 | **Missions** | Dispatch structured, repeatable, multi-agent work. |
 | **Monitor** | See Gateway health, logs, sessions, channel activity, active work, and recovery controls. |
 | **Plugins** | Install, start, stop, configure, inspect, refresh, and update plugins. |
-| **Settings** (bottom utility navigation) | Account, provider route, UI, Command Console layout, agent defaults, voice, and recovery preferences. |
+| **Settings** (bottom utility navigation) | Account, AI service, appearance, agent chat layout, agent defaults, voice, and recovery preferences. |
 | **Help** (bottom utility navigation) | Ask Automnia Assistant for product guidance. |
 
 The top-right workspace chips summarize **Agents**, **In Party**, **Running**,
@@ -85,7 +85,7 @@ Open **Agents**. The Agent Registry is the large center/left area, and the
 **Command Console / Agent Chat** is the right-hand panel. If the Console is
 hidden, use **Show console** in the Active Party strip toolbar. Its visibility,
 width, and draft behavior can also be changed in **Settings > Workspace >
-Command console**.
+Agent chat panel**.
 
 1. In **Agent Registry**, click a card once to select an agent. The selected
    card becomes a Command Console recipient. A card’s **Deploy** button adds it
@@ -374,8 +374,8 @@ the draft text and a short approval checklist.
 ## 9. Google Cloud and always-on agents
 
 Automnia’s hosted-credit relay is operated by Automnia; customers do not need
-to deploy it to use hosted credits. Use **Settings > Account & License** to
-check the active route, credit balance, and BYOK eligibility.
+to deploy it to use hosted credits. Use **Settings > Account** to
+check the selected AI service, credit balance, and provider eligibility.
 
 Use a personal Google Cloud project when you need one of these separate goals:
 
@@ -445,7 +445,7 @@ install a community skill on a user’s behalf.
 
 | Symptom | First exact place to check |
 | --- | --- |
-| No model response | **Settings > Account & License**, then the agent’s **Edit > Model**, then **Monitor**. |
+| No model response | **Settings > Account**, then the agent’s **Edit > Model**, then **Monitor**. |
 | Plugin saved but does not work | **Plugins > Refresh > Manage > Inspect**, then **Monitor**. |
 | Agent cannot see a skill | **Agents > card > Edit > Skills**; check it is enabled and that its binary/auth requirements are actually ready. |
 | Telegram does not answer | **Plugins** runtime inspection, then **Monitor** channel activity and the pairing/allowlist state. |

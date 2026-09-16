@@ -750,6 +750,8 @@ async function inspectWorkspaceNavigation(window) {
     "    const progressBody = commandConsole ? commandConsole.querySelector('.dy-command-message-body[data-body-state=\"progress\"]') : null",
     "    const activityPanel = commandConsole ? commandConsole.querySelector('.dy-command-activity-panel') : null",
     "    const thinkingCta = commandConsole ? commandConsole.querySelector('.dy-command-response-cta[data-state=\"thinking\"]') : null",
+    "    const conversationSearchButton = commandConsole ? commandConsole.querySelector('button[aria-label=\"Search conversation\"]') : null",
+    "    const conversationSearchPanel = commandConsole ? commandConsole.querySelector('#agent-chat-history-search') : null",
     "    const visibleText = commandConsole ? commandConsole.innerText.replace(/\\s+/g, ' ').trim() : ''",
     "    const messages = commandConsole ? commandConsole.querySelector('.dy-command-messages') : null",
     "    const messagesRect = messages ? messages.getBoundingClientRect() : null",
@@ -763,6 +765,9 @@ async function inspectWorkspaceNavigation(window) {
     "      sendButtonPresent: Boolean(sendButton),",
     "      sendDisabledWhenEmpty: sendButton ? Boolean(sendButton.disabled) : false,",
     "      attachButtonPresent: Boolean(attachButton),",
+    "      conversationSearchButtonPresent: Boolean(conversationSearchButton),",
+    "      conversationSearchExpanded: conversationSearchButton ? conversationSearchButton.getAttribute('aria-expanded') || '' : '',",
+    "      conversationSearchPanelPresent: Boolean(conversationSearchPanel),",
     "      stopButtonPresent: Boolean(stopButton),",
     "      stopButtonAriaLabel: stopButton ? stopButton.getAttribute('aria-label') || '' : '',",
     "      stopButtonText: stopButton ? stopButton.textContent.replace(/\\s+/g, ' ').trim() : '',",
@@ -911,6 +916,16 @@ async function seedRunningCommandConsole(window) {
     "    if (agentsNavItem) {",
     "      agentsNavItem.click()",
     "      await wait(700)",
+    "    }",
+    "    const activeParty = document.querySelector('[data-dui-panel=\"active-party\"]')",
+    "    if (!activeParty?.querySelector('[data-slot-state=\"occupied\"]')) {",
+    "      const deployButton = await waitFor(() => Array.from(document.querySelectorAll('button[aria-label^=\"Deploy \"]')).find((button) => {",
+    "        const rect = button.getBoundingClientRect()",
+    "        return rect.width > 0 && rect.height > 0",
+    "      }), 3000)",
+    "      deployButton?.click()",
+    "      await waitFor(() => document.querySelector('[data-dui-panel=\"active-party\"] [data-slot-state=\"occupied\"]'), 3000)",
+    "      await wait(300)",
     "    }",
     "    const commandConsole = document.querySelector('[data-dui-panel=\"command-console\"]')",
     "    const textarea = commandConsole ? commandConsole.querySelector('textarea[aria-label=\"Command console message\"]') : null",
@@ -1343,6 +1358,9 @@ async function inspectViewport(viewport) {
     && agentsNavItem.commandConsole.sendButtonPresent
     && agentsNavItem.commandConsole.sendDisabledWhenEmpty
     && agentsNavItem.commandConsole.attachButtonPresent
+    && agentsNavItem.commandConsole.conversationSearchButtonPresent
+    && agentsNavItem.commandConsole.conversationSearchExpanded === 'false'
+    && !agentsNavItem.commandConsole.conversationSearchPanelPresent
     && agentsNavItem.commandConsole.stopButtonPresent
     && agentsNavItem.commandConsole.stopButtonAriaLabel.startsWith('Stop ')
     && agentsNavItem.commandConsole.stopButtonText === 'Stop'

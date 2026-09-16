@@ -359,6 +359,8 @@ test('agent config state owns roster and party persistence without mission keys'
   ])
   assert.equal('missionDraft' in state, false)
   assert.ok(state.agents.length > 0)
+  assert.deepEqual(state.activePartyIds, [])
+  assert.deepEqual(state.confirmedPartyIds, [])
   assert.ok(state.activePartyIds.length <= MAX_PARTY_SIZE)
   assert.equal(state.activePartyIds.every((id) => state.agents.some((agent) => agent.id === id)), true)
 
@@ -374,6 +376,14 @@ test('agent config state owns roster and party persistence without mission keys'
   assert.equal(Object.keys(persisted).includes('missionHistory'), false)
   assert.equal(persisted.agents[0]?.portrait.startsWith('data:'), false)
   assert.deepEqual(persisted.activePartyIds, [state.agents[0]!.id])
+
+  const restoredFreshState = mergeAgentConfigState(partializeAgentConfigState(state))
+  assert.deepEqual(restoredFreshState.activePartyIds, [])
+  assert.deepEqual(restoredFreshState.confirmedPartyIds, [])
+
+  const restoredConfiguredState = mergeAgentConfigState(persisted)
+  assert.deepEqual(restoredConfiguredState.activePartyIds, [state.agents[0]!.id])
+  assert.deepEqual(restoredConfiguredState.confirmedPartyIds, [state.agents[0]!.id])
 })
 
 test('agent config hydration repairs legacy default party without mission state', () => {

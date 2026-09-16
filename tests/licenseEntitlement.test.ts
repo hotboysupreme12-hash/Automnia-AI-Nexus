@@ -25,14 +25,14 @@ function license(overrides: Partial<LicenseInfo> = {}): LicenseInfo {
 test('presents permanent hosted tiers as their highest account access and Automnia credit route', () => {
   for (const [tier, expected] of [
     ['pro', 'Pro Access'],
-    ['enterprise', 'Pro Access (legacy)'],
+    ['enterprise', 'Pro Access'],
   ] as const) {
     const entitlement = resolveLicenseEntitlement(license({ tier }))
     assert.equal(entitlement.tierLabel, expected)
     assert.equal(entitlement.isHosted, true)
     assert.equal(entitlement.isByok, false)
     assert.equal(entitlement.billingLabel, 'Permanent Automnia access — Credits')
-    assert.equal(entitlement.statusLabel, 'Automnia credits active')
+    assert.equal(entitlement.statusLabel, 'Credits active')
     assert.equal(entitlement.defaultRouteLabel, 'Automnia credits only')
   }
 })
@@ -41,7 +41,7 @@ test('presents a hosted member provider-first preference without changing the en
   const entitlement = resolveLicenseEntitlement(license({ tier: 'pro', usagePriority: 'provider_first' }))
   assert.equal(entitlement.tierLabel, 'Pro Access')
   assert.equal(entitlement.isHosted, true)
-  assert.equal(entitlement.statusLabel, 'Provider + Automnia active')
+  assert.equal(entitlement.statusLabel, 'Provider enabled')
   assert.equal(entitlement.defaultRouteLabel, 'My connected provider → Automnia credits fallback')
 })
 
@@ -67,7 +67,7 @@ test('shows the connected provider when a BYOK-capable Automnia balance is exhau
   const exhausted = license({ tier: 'pro', creditBalance: 0, byokAllowed: true, permanentAccess: true, usagePriority: 'provider_first' })
   const entitlement = resolveLicenseEntitlement(exhausted)
   assert.equal(entitlement.defaultRouteLabel, 'My connected provider — Automnia credits exhausted')
-  assert.equal(entitlement.statusLabel, 'Provider + Automnia active')
+  assert.equal(entitlement.statusLabel, 'Provider enabled')
 
   const route = resolveAgentRoutePresentation(exhausted)
   assert.equal(route.routeLabel, 'My Provider — credits exhausted')
@@ -109,7 +109,7 @@ test('keeps the grandfathered BYOK entitlement permanent while exposing managed 
   assert.equal(entitlement.byokAllowed, true)
   assert.equal(entitlement.usagePriorityLocked, false)
   assert.equal(entitlement.defaultRouteLabel, 'Your connected provider → Automnia credits fallback')
-  assert.equal(entitlement.statusLabel, 'Provider + Automnia active')
+  assert.equal(entitlement.statusLabel, 'Provider enabled')
 })
 
 test('presents current and legacy BYOK tiers as permanent provider-billed access', () => {
@@ -118,7 +118,7 @@ test('presents current and legacy BYOK tiers as permanent provider-billed access
     assert.equal(entitlement.tierLabel, 'BYOK Access')
     assert.equal(entitlement.isHosted, false)
     assert.equal(entitlement.isByok, true)
-    assert.equal(entitlement.statusLabel, 'Automnia credits active')
+    assert.equal(entitlement.statusLabel, 'Credits active')
   }
 })
 

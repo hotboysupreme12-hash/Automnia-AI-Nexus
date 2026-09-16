@@ -121,7 +121,7 @@ workspace. **Recruit** is above the primary workspaces. **Settings** and
 | Missions | **Missions** | Configure and launch repeatable multi-agent work. |
 | Monitor | **Monitor** | Inspect Gateway health, scheduler, performance, logs, sessions, and recovery evidence. |
 | Plugins | **Plugins** | Install, configure, start, stop, inspect, restart, update, and remove runtime extensions. |
-| Settings | **Settings** | Account, appearance, workspace, voice, mission defaults, bulk agent runtime, and data/reset controls. |
+| Settings | **Settings** | Account, appearance, workspace, voice, mission defaults, agent behavior, and backup/reset controls. |
 | Help | **Help** | Opens the in-product Automnia Assistant. Assistant answers can link to recognized surfaces. |
 
 Header chips are projections, not proof of a specific operation:
@@ -368,30 +368,28 @@ already retired and is not recreated by roster synchronization.
 ## 6. Settings: every category and nuance
 
 Open **Settings** from the bottom of the left rail. The category search filters
-the seven sections. Preferences normally save and apply immediately; actions
+the ten sections. Preferences normally save and apply immediately; actions
 that affect multiple agents or delete temporary state ask for confirmation.
 
-### Account & License
+### Account
 
-**Account & License** displays:
+**Account** displays:
 
 - Read-only account email and whether Google sign-in or an Automnia password is
   linked.
-- **License Authorization** status. The license key remains server-local and
-  is never revealed in the UI.
-- **Plan or Access Tier**, **Access & Billing Mode**, **Usage Priority**, and
-  **Effective Agent Route**.
+- **Account access** status and a current-plan marker on the plan comparison.
+- **AI service**, **Automnia credits**, and, when available, the **Use first** preference.
 - Confirmed pooled Automnia credit balance and balance timestamp.
 - Secure checkout/plan controls, account refresh, legacy purchase linking, and
   **Log out of Automnia**.
 
 The usage choices are **Automnia credits** or **My provider + Automnia credits**
-when the entitlement allows it. The combined choice exposes a secondary order
-selector for **My provider first** or **Automnia first**. Starter and
+when the plan allows it. The combined choice exposes a secondary order
+selector for **My provider** or **Automnia credits** first. Starter and
 credit-refill access remain locked to Automnia credits; a confirmed zero balance
 must produce an explicit refill message. BYOK and higher tiers can use the
 connected provider when Automnia credits are selected first but the confirmed
-balance is zero. The exact entitlement shown by the account screen wins over
+balance is zero. The exact plan shown by the account screen wins over
 remembered pricing. A provider password/key is not the Automnia account
 password.
 
@@ -409,15 +407,13 @@ For password management:
 
 **Appearance** changes the shell live:
 
-- **Accent mode**: Reference cyan, No-blue graphite, Ember operations, or
-  Green terminal.
-- **Form chrome**: Graphite, Obsidian, or Warm black input/search/select
-  surfaces.
-- **Interface density**: Compact, Comfortable, or Spacious.
-- **Motion**: Standard or Reduced.
+- **Accent color**: Cyan, Graphite, Amber, or Green.
+- **Input style**: Graphite, Obsidian, or Warm black.
+- **Spacing**: Compact, Comfortable, or Spacious.
+- **Animation**: Standard or Reduced.
 - **High contrast** raises muted text, borders, placeholders, and focus rings.
 - **Reduced glow** removes nonessential bloom/halos.
-- **Control glow** highlights active controls; it is disabled when Reduced glow
+- **Selection glow** highlights active controls; it is disabled when Reduced glow
   is enabled.
 - **Neutral scrollbars** uses graphite scrollbar thumbs.
 - **Restore appearance defaults** changes only appearance preferences.
@@ -426,21 +422,21 @@ For password management:
 
 **Workspace** contains two groups:
 
-Agent registry:
+Agent list:
 
 - **Default view** controls showcase/grid/list density and page size.
 - **Use rarity colors** maps Legendary to Original, Epic to Purple, Rare to
   Blueprint, and Common to Graphite.
 - **Card background** chooses rarity or a shared overlay theme.
-- **Default sort**: Party first, Highest level, Name A–Z, or Rarity.
+- **Agent order**: Team first, Highest level, Name A–Z, or Rarity.
 - **Rarity filter**: All, Legendary, Epic, Rare, or Common.
 
-Command console:
+Agent chat panel:
 
-- **Show console in Agents** hides or restores the split console.
-- **Console width** is adjustable from 360px to 760px and is clamped on narrow
+- **Show the chat panel** hides or restores the chat area.
+- **Chat panel width** is adjustable from 360px to 760px and is clamped on narrow
   windows.
-- **Remember unfinished drafts** restores unsent text after reload. Turning it
+- **Remember unfinished messages** restores unsent text after reload. Turning it
   off clears stored drafts; it does not delete sent responses.
 - **Restore workspace defaults** resets registry and console preferences.
 - **Open Agents** navigates directly to the Agents workspace.
@@ -449,14 +445,14 @@ Command console:
 
 **Voice** controls dictation next to the Command Console Send button:
 
-- **Provider**: **Local** keeps speech on-device after the one-time model
+- **Dictation mode**: **Local** keeps speech on-device after the one-time model
   download; **Cloud** uses the configured OpenAI provider.
 - **Stop after a pause** enables automatic end-of-speech transcription.
 - **Pause sensitivity** ranges from 0.60s to 3.00s and is disabled when auto
   stop is off.
 - **Maximum recording** is 30 seconds, 1 minute, 2 minutes, or 5 minutes.
-- **Noise suppression**, **Echo cancellation**, and **Automatic gain** are
-  browser-level microphone processing options.
+- **Noise suppression**, **Echo cancellation**, and **Automatic gain** improve
+  sound quality.
 - **Restore voice defaults** resets only voice preferences.
 
 Cloud voice is an explicit data transfer choice. Local mode must not be
@@ -479,41 +475,41 @@ described as silently falling back to Cloud.
 These are defaults, not a launch. A mission still needs an active-party
 loadout, readiness, a usable route, and a concrete objective.
 
-### Agent runtime
+### Agent Behavior
 
-**Agent runtime** applies bulk policy only after an explicit target choice:
+**Agent Behavior** applies preferences only after an explicit agent choice:
 
-1. Choose **Party** or **Selected** in **Target agents**.
+1. Choose **Team** or **Selected** in **Choose agents**.
 2. Inspect the target count and the per-agent target buttons.
 3. Click agents to add/remove manual selection when using **Selected**.
-4. Use **Clear manual selection** when the selection should be emptied.
-5. Set **Heartbeat cadence** and **Idle timeout** in seconds (5–1800).
-6. Set **Continuous heartbeat** and **Automatic recovery**.
-7. Set **Work timeout** in minutes (1–120).
-8. Set **Thinking default**: Off, Minimal, Low, Medium, High, Extra high, or
+4. Use **Clear selection** when the selection should be emptied.
+5. Set **Check-in interval** and **Stop after inactivity** in seconds (5–1800).
+6. Set **Stay ready between tasks** and **Automatic recovery**.
+7. Set **Maximum task time** in minutes (1–120).
+8. Set **Reasoning effort**: Off, Minimal, Low, Medium, High, Extra high, or
    Maximum.
-9. Set **Fast mode**: Auto, On, or Off.
-10. Set **Parallel preferred** when independent subtasks may run together.
-11. Click **Apply to N agents**. If there are no targets, nothing is written.
-12. **Restore runtime defaults** requires confirmation and writes the defaults
+9. Set **Speed preference**: Automatic, Faster, or Standard.
+10. Set **Allow parallel work** when independent subtasks may run together.
+11. Click **Save for N agents**. If there are no targets, nothing is written.
+12. **Restore agent defaults** requires confirmation and writes the defaults
     to the current target set.
 
-Changing a draft slider does not write the full party until Apply is clicked.
+Changing a preference does not update the selected agents until Save is clicked.
 This is a safeguard against accidental bulk overwrites.
 
-### Data & reset
+### Backup & Reset
 
-**Data & reset** has deliberately separate scopes:
+**Backup & Reset** has deliberately separate scopes:
 
 - **Copy settings backup** copies non-secret UI preferences and the current
   mission draft to the clipboard. It excludes credentials.
-- **Clear command drafts** removes unsent console drafts.
-- **Clear console responses** removes stored response projection data.
-- **Reset runtime simulation** resets local simulation/projection state.
-- **Reset all app preferences** restores appearance, workspace, voice, and
+- **Clear unfinished messages** removes unsent text.
+- **Clear saved responses** removes saved conversation responses.
+- **Reset agent activity** clears the current activity status.
+- **Reset all preferences** restores appearance, workspace, voice, and
   mission defaults while keeping agents, credentials, plugins, workspaces, and
   files.
-- **Clear party and responses** removes the current active party and console
+- **Clear team and responses** removes the current active team and saved
   responses while keeping the rostered agents.
 
 None of these controls retires an agent. Use the Agent Editor’s **Agent files →
@@ -607,7 +603,7 @@ explicit evidence.
 The Help panel recognizes product terms in assistant answers and turns them
 into navigation buttons. Current destinations include Recruit, Agents, Agent
 Editor/Registry, Agent files/Files, Command Console, Missions, Monitor,
-Plugins, ClawTalk, Telegram, Settings, Account & License, and Data & reset.
+Plugins, ClawTalk, Telegram, Settings, Account, and Backup & Reset.
 Clicking a link navigates or focuses the relevant surface; it does not perform
 the described action.
 
@@ -672,7 +668,7 @@ its documented sync workflow, then republish the sanitized corpus.
 | Symptom | First place | Correct explanation/action |
 | --- | --- | --- |
 | Login appears again | **Login** / account session | Re-authenticate; do not call this a Gateway failure. |
-| License gate appears | **License Activation** / **Settings → Account & License** | Link/refresh the verified account; never paste the key into Help. |
+| License gate appears | **License Activation** / **Settings → Account** | Link/refresh the verified account; never paste the key into Help. |
 | Gateway migrating | Header chip / **Monitor → Gateway** | Wait for migration and retry window; do not start another process or delete locks. |
 | Gateway offline | **Monitor → Gateway → Doctor** | Read current lifecycle/stderr, then use Restart Gateway if the evidence supports it. |
 | Help unavailable | Help error plus Cloud service configuration | Distinguish service outage, missing serving config, license issue, and local network. |

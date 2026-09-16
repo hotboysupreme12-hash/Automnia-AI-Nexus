@@ -154,7 +154,10 @@ export function createRuntimeRecoveryService(options: RuntimeRecoveryServiceOpti
 
   function processExitCleanup(reason: string): void {
     options.markShuttingDown()
+    options.pauseGatewayAutoRestart()
     options.clearShutdownPinnedTimers()
+    options.stopControlCenterGatewayClient(reason)
+    options.stopAllPluginSetupTerminalSessions(reason)
     options.closeOAuthCallbackServersForProcessExit(reason)
     options.terminateAllOpenClawRuns(reason)
     options.stopGateway()

@@ -66,8 +66,12 @@ test('fallback catalog canonicalizes Codex subscription models and suppresses un
   const fallback = service.fallbackAvailableModels()
   const gemini37Flash = fallback.find((model) => model.id === 'google/gemini-3.7-flash')
   const gemini38Flash = fallback.find((model) => model.id === 'google/gemini-3.8-flash')
+  const gemini35FlashLite = fallback.find((model) => model.id === 'google/gemini-3.5-flash-lite')
   const vertexGemini37Flash = fallback.find((model) => model.id === 'google-vertex/gemini-3.7-flash')
   const vertexGemini38Flash = fallback.find((model) => model.id === 'google-vertex/gemini-3.8-flash')
+  const vertexGemini35FlashLite = fallback.find((model) => model.id === 'google-vertex/gemini-3.5-flash-lite')
+  const astra = fallback.find((model) => model.id === 'openai/gpt-6-astra')
+  const fable51 = fallback.find((model) => model.id === 'anthropic/claude-fable-5-1')
   const codexSpark = fallback.find((model) => model.id === 'openai/gpt-5.3-codex-spark')
   const geminiFlash = fallback.find((model) => model.id === 'google/gemini-3.6-flash')
   const vertexGeminiFlash = fallback.find((model) => model.id === 'google-vertex/gemini-3.6-flash')
@@ -83,9 +87,16 @@ test('fallback catalog canonicalizes Codex subscription models and suppresses un
   assert.equal(isModelSafeForOpenClawConfig('openai/gpt-5.3-codex-spark'), true)
   assert.equal(gemini37Flash?.alias, 'Gemini 3.7 Flash (GA)')
   assert.equal(gemini38Flash?.alias, 'Gemini 3.8 Flash (GA)')
+  assert.equal(gemini35FlashLite?.alias, 'Gemini 3.5 Flash-Lite (GA)')
+  assert.equal(gemini35FlashLite?.streaming.provider, 'google')
   assert.equal(gemini37Flash?.streaming.provider, 'google')
   assert.equal(vertexGemini37Flash?.alias, 'Vertex Gemini 3.7 Flash (GA)')
   assert.equal(vertexGemini38Flash?.alias, 'Vertex Gemini 3.8 Flash (GA)')
+  assert.equal(vertexGemini35FlashLite?.alias, 'Vertex Gemini 3.5 Flash-Lite (GA)')
+  assert.equal(vertexGemini35FlashLite?.streaming.provider, 'google-vertex')
+  assert.equal(astra?.alias, 'GPT-6 Astra (flagship)')
+  assert.equal(astra?.streaming.provider, 'openai')
+  assert.equal(fable51?.alias, 'Claude Fable 5.1 (flagship)')
   assert.equal(vertexGemini37Flash?.streaming.provider, 'google-vertex')
   assert.equal(geminiFlash?.alias, 'Gemini 3.6 Flash (GA)')
   assert.equal(geminiFlash?.streaming.provider, 'google')
@@ -185,8 +196,12 @@ test('configured model allowlist normalizes provider entries and skips unsafe mo
     'google-vertex/gemini-3.8-flash',
     'google/gemini-3.6-flash',
     'google-vertex/gemini-3.6-flash',
+    'google/gemini-3.5-flash-lite',
+    'google-vertex/gemini-3.5-flash-lite',
     'deepseek/deepseek-v4-flash',
     'anthropic/claude-sonnet-5',
+    'anthropic/claude-fable-5-1',
+    'openai/gpt-6-astra',
     'openai/gpt-5.3-chat-latest',
   ])
 
@@ -196,21 +211,30 @@ test('configured model allowlist normalizes provider entries and skips unsafe mo
   assert.equal(typeof config.agents?.defaults?.models?.['google-vertex/gemini-3.7-flash'], 'object')
   assert.equal(typeof config.agents?.defaults?.models?.['google/gemini-3.8-flash'], 'object')
   assert.equal(typeof config.agents?.defaults?.models?.['google-vertex/gemini-3.8-flash'], 'object')
+  assert.equal(typeof config.agents?.defaults?.models?.['google/gemini-3.5-flash-lite'], 'object')
+  assert.equal(typeof config.agents?.defaults?.models?.['google-vertex/gemini-3.5-flash-lite'], 'object')
   assert.equal(typeof config.agents?.defaults?.models?.['deepseek/deepseek-v4-flash'], 'object')
   assert.equal(typeof config.agents?.defaults?.models?.['anthropic/claude-sonnet-5'], 'object')
+  assert.equal(typeof config.agents?.defaults?.models?.['anthropic/claude-fable-5-1'], 'object')
+  assert.equal(typeof config.agents?.defaults?.models?.['openai/gpt-6-astra'], 'object')
   assert.equal(config.agents?.defaults?.models?.['openai/gpt-5.3-chat-latest'], undefined)
   assert.equal(config.models?.providers?.google?.api, 'google-generative-ai')
   assert.equal(config.models?.providers?.['google-vertex']?.api, 'google-vertex')
   assert.equal(config.models?.providers?.deepseek?.api, 'openai-completions')
   assert.equal(config.models?.providers?.deepseek?.baseUrl, 'https://api.deepseek.com')
   assert.equal(config.models?.providers?.anthropic?.api, 'anthropic-messages')
+  assert.equal(config.models?.providers?.openai?.agentRuntime, undefined)
   assert.deepEqual(state.fastModeModelIds.sort(), [
     'google-vertex/gemini-3.7-flash',
     'google/gemini-3.7-flash',
     'google-vertex/gemini-3.8-flash',
     'google/gemini-3.8-flash',
+    'google-vertex/gemini-3.5-flash-lite',
+    'google/gemini-3.5-flash-lite',
     'deepseek/deepseek-v4-flash',
+    'anthropic/claude-fable-5-1',
     'anthropic/claude-sonnet-5',
+    'openai/gpt-6-astra',
     'google-vertex/gemini-3.6-flash',
     'google/gemini-3.6-flash',
   ].sort())

@@ -20,6 +20,7 @@ import type { AgentSkillEntry, BehaviorProfile, FastModeDefault, HeartbeatConfig
 import { apiUrl } from '../../utils/apiUrl'
 import { isSelectableModelId } from '../../utils/modelGrouping'
 import {
+  AUTOMNIA_CREDITS_MODEL_ID,
   AUTOMNIA_RELAY_MODEL_IDS,
   AUTOMNIA_RELAY_MODEL_LABELS,
   isAutomniaCreditsModelId,
@@ -119,15 +120,20 @@ const modelOptionFromId = (modelId: string): AvailableModel | null => {
   return { id, alias: name, provider, name }
 }
 
-const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: string[]) => {
+const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: string[], creditsOnly = false) => {
   const merged = new Map<string, AvailableModel>()
-  const seededCatalog = catalog.some((model) => model.id === CODEX_5_3_SPARK_MODEL_ID)
-    ? catalog
-    : [CODEX_5_3_SPARK_MODEL, ...catalog]
+  const allowedCatalog = creditsOnly
+    ? [...AUTOMNIA_MODEL_OPTIONS, ...catalog.filter((model) => isAutomniaCreditsModelId(model.id))]
+    : catalog
+  const seededCatalog = creditsOnly
+    ? allowedCatalog
+    : catalog.some((model) => model.id === CODEX_5_3_SPARK_MODEL_ID)
+      ? catalog
+      : [CODEX_5_3_SPARK_MODEL, ...catalog]
   for (const model of seededCatalog) {
     if (model.id.trim() && isSelectableModelId(model.id)) merged.set(model.id, model)
   }
-  for (const selectedId of selectedIds) {
+  for (const selectedId of creditsOnly ? selectedIds.filter((modelId) => isAutomniaCreditsModelId(modelId)) : selectedIds) {
     if (!isSelectableModelId(selectedId)) continue
     const synthetic = modelOptionFromId(selectedId)
     if (synthetic && !merged.has(synthetic.id)) merged.set(synthetic.id, synthetic)
@@ -704,7 +710,7 @@ export function AgentEditorModal() {
       ...models.filter((model) => AUTOMNIA_MODEL_IDS.has(model.id)),
     ]
     const routeSelectedModelIds = selectedModelIds.filter((modelId) => isAutomniaCreditsModelId(modelId))
-    return mergeSelectedModelOptions(routeModels, routeSelectedModelIds)
+    return mergeSelectedModelOptions(routeModels, routeSelectedModelIds, true)
   }, [automniaCreditsOnlyRoute, models, selectedModelIds])
   const providerForModel = (modelId:string)=>selectableModels.find((model)=>model.id===modelId)?.provider || (isOpenAiCodexSubscriptionModel(modelId) ? 'openai' : modelId.split('/')[0]||'')
   const authForProvider = (provider:string)=>effectiveAuthStatusForProvider(authProviders, provider)
@@ -1486,6 +1492,13 @@ export function AgentEditorModal() {
     configLoadSeqRef.current += 1
     authRefreshKeyRef.current = ''
   },[isOpen,editingAgentId,requestedEditorTab,editorOpenRequest])
+  useEffect(()=>{
+    if(!isOpen||!automniaCreditsOnlyRoute)return
+    const normalizedPrimary=isAutomniaCreditsModelId(primary)?primary:AUTOMNIA_CREDITS_MODEL_ID
+    const normalizedFallbacks=fallbacks.filter((modelId)=>isAutomniaCreditsModelId(modelId)&&modelId!==normalizedPrimary)
+    if(normalizedPrimary!==primary)setPrimary(normalizedPrimary)
+    if(normalizedFallbacks.length!==fallbacks.length)setFallbacks(normalizedFallbacks)
+  },[isOpen,automniaCreditsOnlyRoute,primary,fallbacks])
   useEffect(()=>{if(isOpen&&agent?.id&&(tab==='model'||tab==='heartbeat'||tab==='policy'))void LdP()},[isOpen,agent?.id,tab,LdP])
   useEffect(()=>{if(isOpen&&tab==='model'){void LdM();void LdAuth()}},[isOpen,tab,LdM,LdAuth])
   useEffect(()=>{

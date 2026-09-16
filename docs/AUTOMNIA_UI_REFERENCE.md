@@ -62,7 +62,7 @@ This workspace is the normal control room for agent work. It combines the active
 
 ### Active Party
 
-The **Active Party** strip shows the agents currently available to a mission or console conversation. Use it to verify who will receive a task before sending it. The workspace has a toolbar control to show or hide the console; the same preference is available from **Settings → Workspace → Command console → Show console in Agents**.
+The **Active Party** strip shows the agents currently available to a mission or console conversation. Use it to verify who will receive a task before sending it. The workspace has a toolbar control to show or hide the console; the same preference is available from **Settings → Workspace → Agent chat panel → Show the chat panel**.
 
 ### Agent registry
 
@@ -246,61 +246,61 @@ Before installing a third-party skill, review its publisher, description, reques
 
 **Click path:** left rail, bottom utility navigation → **Settings**. The Settings screen has a search field and category navigation. Changing a setting saves it persistently; read its hint before changing a bulk or recovery control.
 
-### Account & License
+### Account
 
-Use **Account & License** for account status, read-only account email, optional Automnia password management, plan/access/billing information, account refresh, pooled Automnia credit balance, usage priority, and the **Effective Agent Route**. The effective route applies to normal messages, runtime/work/OpenClaw activity, streamed turns, and buffered recovery. Starter ($19.99) and credit-refill access use Automnia credits only; when the confirmed balance is zero, the app stops and tells the user to refill. BYOK ($29.99) and higher tiers expose **My provider + Automnia credits**, with a secondary order choice of provider first or Automnia first; if Automnia is selected first and its confirmed balance is zero, the connected provider is used. Purchases tied to the same verified email are pooled after Google or confirmed-password sign-in.
+Use **Account** for your email, password, credit balance, account refresh, and **AI service** preference. The Starter and Pro comparison marks your selected option once. Starter and credit-refill access use Automnia credits. Pro and eligible existing options can use **My provider + Automnia credits** and choose which service to use first. When Automnia credits are selected first and the balance is empty, the connected provider is used when available. Purchases tied to the same verified email are pooled after Google or confirmed-password sign-in.
 
 ### Appearance
 
 Use **Appearance** for visual and accessibility choices:
 
-- **Color and surfaces:** accent mode, form chrome, and Compact/Comfortable/Spacious interface density.
-- **Accessibility and effects:** Standard/Reduced motion, High contrast, Reduced glow, Control glow, and Neutral scrollbars.
+- **Colors and layout:** Accent color, Input style, and Compact/Comfortable/Spacious spacing.
+- **Accessibility:** Standard/Reduced animation, High contrast, Reduced glow, Selection glow, and Neutral scrollbars.
 - **Restore appearance defaults:** returns this category to its defaults.
 
 ### Workspace
 
-Use **Workspace** to tune the Agents registry and Command Console:
+Use **Workspace** to adjust the agent list and chat panel:
 
-- **Agent registry:** Default view, Use rarity colors, Card background, Default sort, and persistent Rarity filter.
-- **Command console:** Show console in Agents, Console width slider (360–760px before responsive clamping), and Remember unfinished drafts.
+- **Agent list:** Default view, Use rarity colors, Card background, Agent order, and persistent Rarity filter.
+- **Agent chat panel:** Show the chat panel, Chat panel width (360–760px before responsive adjustment), and Remember unfinished messages.
 - **Restore workspace defaults** resets these layout preferences. **Open Agents** returns directly to the workspace.
 
 ### Voice
 
 Use **Voice** for microphone dictation:
 
-- **Transcription engine:** Local (on-device after a one-time model download) or Cloud (configured OpenAI provider).
-- **Recording behavior:** Stop after a pause, Pause sensitivity, and a maximum recording length of 30 seconds, 1 minute, 2 minutes, or 5 minutes.
-- **Microphone processing:** Noise suppression, Echo cancellation, and Automatic gain.
+- **Dictation service:** Local (on-device after a one-time model download) or Cloud (configured OpenAI provider).
+- **Recording:** Stop after a pause, Pause sensitivity, and a maximum recording length of 30 seconds, 1 minute, 2 minutes, or 5 minutes.
+- **Sound quality:** Noise suppression, Echo cancellation, and Automatic gain.
 - **Restore voice defaults** restores this category.
 
 ### Missions
 
 Use **Missions** in Settings to establish the defaults shown in the Missions workspace: Mission title, objective, mission type, collaboration, duration mode and amount, Complexity, Risk tolerance, and the required-evidence checklist. Click **Open Missions** to work on the current defaults in the mission workspace, or **Restore mission defaults** to reset them.
 
-### Agent runtime
+### Agent Behavior
 
-Use **Agent runtime** for intentional bulk policy. First choose the target source (**Party** or **Selected**) and explicitly select agents if needed. Then configure:
+Use **Agent Behavior** to update selected agents. First choose **Team** or **Selected** and explicitly select agents if needed. Then configure:
 
-- **Heartbeat cadence** and **Idle timeout**.
-- **Continuous heartbeat** and **Automatic recovery**.
-- **Work timeout**, **Thinking default**, **Fast mode**, and **Parallel preferred**.
+- **Check-in interval** and **Stop after inactivity**.
+- **Stay ready between tasks** and **Automatic recovery**.
+- **Maximum task time**, **Reasoning effort**, **Speed preference**, and **Allow parallel work**.
 
-Click **Apply to [number] agents** only after confirming the target count. This is intentionally not automatic. **Restore runtime defaults** returns runtime preferences to their defaults.
+Click **Save for [number] agents** only after confirming the selected agents. **Restore agent defaults** returns their preferences to the defaults.
 
-### Data & reset
+### Backup & Reset
 
-Use **Data & reset** carefully:
+Use **Backup & Reset** carefully:
 
 | Control | What it preserves or clears |
 | --- | --- |
 | **Copy settings backup** | Copies non-secret preferences and the current mission draft. It does not include credentials. |
-| **Clear command drafts** | Removes stored, unsent Command Console text. |
-| **Clear console responses** | Removes the displayed Command Console response history. |
-| **Reset runtime simulation** | Resets simulation state. |
+| **Clear unfinished messages** | Removes stored, unsent chat text. |
+| **Clear saved responses** | Removes saved conversation responses. |
+| **Reset agent activity** | Clears the current agent activity status. |
 | **Reset all preferences** | Restores appearance, workspace, voice, and mission defaults; it keeps agents, provider credentials, plugins, workspaces, and files. |
-| **Clear party and responses** | Removes the current active party and command responses while keeping rostered agents available. |
+| **Clear team and responses** | Removes the current active team and saved responses while keeping agents available. |
 
 ## Help: Automnia Assistant
 

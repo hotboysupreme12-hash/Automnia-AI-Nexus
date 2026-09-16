@@ -317,6 +317,8 @@ await runElectronCase({
     /\[automnia-e2e\] server-ready/,
     /\[automnia-e2e\] navigation-policy-ok/,
     /\[automnia-e2e\] auto-quit/,
+    /\[automnia-e2e\] quit-owned-processes-captured:[1-9]\d*/,
+    /\[automnia-e2e\] quit-owned-processes-remaining:0/,
     /\[automnia-e2e\] quit-cleanup-complete/,
   ],
 })
@@ -336,6 +338,8 @@ await runElectronCase({
     /\[automnia-e2e\] tray-visible-state-ok/,
     /\[automnia-e2e\] tray-hide-on-close-ok/,
     /\[automnia-e2e\] tray-click-restore-ok/,
+    /\[automnia-e2e\] quit-owned-processes-captured:[1-9]\d*/,
+    /\[automnia-e2e\] quit-owned-processes-remaining:0/,
     /\[automnia-e2e\] quit-cleanup-complete/,
   ],
 })

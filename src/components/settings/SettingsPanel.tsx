@@ -93,16 +93,16 @@ const SETTINGS_SECTIONS: Array<{
   description: string
   keywords: string
 }> = [
-  { id: 'account', label: 'Account & License', description: 'Profile, security and billing', keywords: 'account license credits key email tier balance provider oauth usage priority automnia fallback' },
-  { id: 'appearance', label: 'Appearance', description: 'Theme and accessibility', keywords: 'theme color accent contrast glow motion forms scrollbar interface display' },
-  { id: 'workspace', label: 'Workspace', description: 'Registry and console', keywords: 'agents registry cards grid list sort filter console width drafts layout' },
-  { id: 'voice', label: 'Voice', description: 'Microphone and transcription', keywords: 'speech microphone local cloud online silence pause noise echo gain recording' },
-  { id: 'missions', label: 'Missions', description: 'Deployment defaults', keywords: 'mission objective duration risk complexity collaboration evidence build test' },
-  { id: 'agents', label: 'Agent runtime', description: 'Parallel chat and reasoning', keywords: 'agent runtime heartbeat timeout thinking fast parallel concurrency simultaneous chat commands sequential recovery continuous' },
-  { id: 'telegram', label: 'Telegram', description: 'Bot commands and delivery', keywords: 'telegram bot commands agents pairing dm group topics streaming reactions polls media history actions settings' },
-  { id: 'updates', label: 'Updates', description: 'Version and delivery', keywords: 'update upgrade version release download installer restart automatic security' },
-  { id: 'logs', label: 'Logs', description: 'Activity and history', keywords: 'logs activity agent runs gateway events tail automnia runtime response history channel telegram sms incoming sent retain trim memory' },
-  { id: 'data', label: 'Data & reset', description: 'Backup and recovery', keywords: 'reset default backup export clear console responses simulation party data' },
+  { id: 'account', label: 'Account', description: 'Profile, security and billing', keywords: 'account plan license credits key email tier balance provider oauth usage priority automnia fallback' },
+  { id: 'appearance', label: 'Appearance', description: 'Colors, spacing and accessibility', keywords: 'theme color accent contrast glow motion forms scrollbar interface display' },
+  { id: 'workspace', label: 'Workspace', description: 'Layout and notifications', keywords: 'agents registry cards grid list sort filter console width drafts layout' },
+  { id: 'voice', label: 'Voice', description: 'Microphone and dictation', keywords: 'speech microphone local cloud online silence pause noise echo gain recording' },
+  { id: 'missions', label: 'Missions', description: 'Mission setup', keywords: 'mission objective duration risk complexity collaboration evidence build test' },
+  { id: 'agents', label: 'Agent Behavior', description: 'Timing, reasoning and teamwork', keywords: 'agent runtime heartbeat timeout thinking fast parallel concurrency simultaneous chat commands sequential recovery continuous' },
+  { id: 'telegram', label: 'Telegram', description: 'Chats, replies and permissions', keywords: 'telegram bot commands agents pairing dm group topics streaming reactions polls media history actions settings' },
+  { id: 'updates', label: 'Updates', description: 'App version and updates', keywords: 'update upgrade version release download installer restart automatic security' },
+  { id: 'logs', label: 'Activity', description: 'Recent activity and history', keywords: 'logs activity agent runs gateway events tail automnia runtime response history channel telegram sms incoming sent retain trim memory' },
+  { id: 'data', label: 'Backup & Reset', description: 'Backup, cleanup and recovery', keywords: 'reset default backup export clear console responses simulation party data' },
 ]
 
 const DEFAULT_RUNTIME_SETTINGS: RuntimeDefaultsDraft = {
@@ -323,7 +323,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   const runtimeChangedKeys = runtimeDraft.targetKey === runtimeTargetKey ? runtimeDraft.changedKeys : []
   const runtimeMixedFields = mixedRuntimeFields(targetAgents.map(defaultRuntimeDraft))
   const runtimeFieldMixed = (key: keyof RuntimeDefaultsDraft) => runtimeMixedFields.has(key) && !runtimeChangedKeys.includes(key)
-  const runtimeHint = (key: keyof RuntimeDefaultsDraft, hint = '') => `${runtimeFieldMixed(key) ? 'Mixed across selected agents. ' : ''}${hint}`
+  const runtimeHint = (key: keyof RuntimeDefaultsDraft, hint = '') => `${runtimeFieldMixed(key) ? 'Varies across the selected agents. ' : ''}${hint}`
 
   const normalizedSearch = searchQuery.trim().toLowerCase()
   const visibleSections = normalizedSearch
@@ -387,7 +387,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
 
   const openClawCommandFailure = (payload: { ok?: boolean; error?: string; command?: { output?: string; stderr?: string; code?: number } }, fallback: string) => {
     if (payload.ok === false || payload.error || (typeof payload.command?.code === 'number' && payload.command.code !== 0)) {
-      return payload.error || payload.command?.output || payload.command?.stderr || fallback
+      return fallback
     }
     return ''
   }
@@ -401,22 +401,22 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
         runOpenClawPluginCommand('config get channels.telegram', { refreshPlugins: false }),
         runOpenClawPluginCommand('config get messages', { refreshPlugins: false }),
       ])
-      const telegramFailure = openClawCommandFailure(telegramPayload, 'Telegram configuration could not be read.')
-      const messagesFailure = openClawCommandFailure(messagesPayload, 'Telegram acknowledgement settings could not be read.')
+      const telegramFailure = openClawCommandFailure(telegramPayload, 'Telegram settings could not be loaded.')
+      const messagesFailure = openClawCommandFailure(messagesPayload, 'Telegram reaction settings could not be loaded.')
       if (telegramFailure) throw new Error(telegramFailure)
       if (messagesFailure) throw new Error(messagesFailure)
       const parsedTelegram = parseTelegramConfigOutput(telegramPayload.command?.output || '')
       const parsedMessages = parseTelegramConfigOutput(messagesPayload.command?.output || '')
-      if (!parsedTelegram) throw new Error('The gateway returned an unreadable Telegram configuration.')
+      if (!parsedTelegram) throw new Error('Automnia could not read the current Telegram settings.')
       const next = normalizeTelegramSettings({ ...readTelegramSettings(), ...parsedTelegram, ...(parsedMessages || {}) })
       setTelegramSettings(next)
       setTelegramGatewaySettings(next)
       saveTelegramSettings(next)
-      setNotice({ tone: 'success', text: 'Telegram settings reloaded from the gateway.' })
+      setNotice({ tone: 'success', text: 'Telegram settings refreshed.' })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not read Telegram settings from the gateway.'
+      const message = error instanceof Error ? error.message : 'Could not load Telegram settings.'
       setTelegramLoadError(message)
-      setNotice({ tone: 'warning', text: 'Using saved Telegram settings until the gateway is available.' })
+      setNotice({ tone: 'warning', text: 'Showing your last saved Telegram settings. Try again in a moment.' })
     } finally {
       setTelegramLoaded(true)
       setTelegramLoading(false)
@@ -435,22 +435,22 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
       if (!changedKeys.length) {
         setTelegramSettings(next)
         saveTelegramSettings(next)
-        setNotice({ tone: 'success', text: 'Telegram settings are already synchronized with the gateway.' })
+        setNotice({ tone: 'success', text: 'Your Telegram settings are already up to date.' })
         return
       }
       const command = telegramSettingBatchCommand(next, changedKeys)
-      setNotice({ tone: 'neutral', text: `Applying ${changedKeys.length} Telegram setting${changedKeys.length === 1 ? '' : 's'} in one gateway update…` })
+      setNotice({ tone: 'neutral', text: `Saving ${changedKeys.length} Telegram setting${changedKeys.length === 1 ? '' : 's'}…` })
       const payload = await runOpenClawPluginCommand(command, { refreshPlugins: false })
-      const failure = openClawCommandFailure(payload, 'OpenClaw rejected the Telegram settings update.')
+      const failure = openClawCommandFailure(payload, 'Telegram settings could not be saved. Check your Telegram connection and try again.')
       if (failure) throw new Error(failure)
       const restart = await restartPluginGateway()
-      if (restart.ok === false || restart.error) throw new Error(restart.error || 'Gateway restart failed.')
+      if (restart.ok === false || restart.error) throw new Error(restart.error || 'Telegram could not restart with the new settings.')
       setTelegramSettings(next)
       setTelegramGatewaySettings(next)
       saveTelegramSettings(next)
-      setNotice({ tone: 'success', text: 'Telegram settings applied. Gateway restarted with the new policy.' })
+      setNotice({ tone: 'success', text: 'Telegram settings saved and applied.' })
     } catch (error) {
-      setNotice({ tone: 'error', text: `Telegram settings were only partially applied: ${error instanceof Error ? error.message : String(error)}` })
+      setNotice({ tone: 'error', text: `Some Telegram settings could not be saved. ${error instanceof Error ? error.message : String(error)}` })
     } finally {
       setTelegramSaving(false)
     }
@@ -463,20 +463,20 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   const applyRuntimeToTargets = async (values = activeRuntimeDraft, reset = false) => {
     if (runtimeSaveBusy) return
     if (!targetIds.length) {
-      setNotice({ tone: 'warning', text: `No ${targetScope === 'party' ? 'party' : 'selected'} agents are available to update.` })
+      setNotice({ tone: 'warning', text: `Choose at least one agent from your ${targetScope === 'party' ? 'team' : 'selection'} to update.` })
       return
     }
     if (![values.heartbeatSeconds, values.idleTimeoutSeconds, values.timeoutMinutes].every(Number.isFinite)) {
-      setNotice({ tone: 'warning', text: 'Enter valid numeric values for heartbeat, idle timeout and work timeout.' })
+      setNotice({ tone: 'warning', text: 'Enter valid numbers for the check-in interval, inactivity limit, and maximum task time.' })
       return
     }
     const keys = reset ? Object.keys(values) as Array<keyof RuntimeDefaultsDraft> : runtimeChangedKeys
-    if (!keys.length) { setNotice({ tone: 'neutral', text: 'Change a field before applying a runtime policy.' }); return }
+    if (!keys.length) { setNotice({ tone: 'neutral', text: 'Change a setting before saving.' }); return }
     const patch = buildRuntimePolicyPatch(values, keys)
     const targets = targetAgents.map((agent) => ({ id: agent.id, name: agent.name }))
     setRuntimeSaveBusy(true)
     setPendingConfirmation(null)
-    setNotice({ tone: 'neutral', text: `Saving runtime policy for ${targets.length} agent${targets.length === 1 ? '' : 's'}…` })
+    setNotice({ tone: 'neutral', text: `Saving preferences for ${targets.length} agent${targets.length === 1 ? '' : 's'}…` })
     const results = await Promise.allSettled(targets.map(async ({ id }) => {
       if (Object.keys(patch.heartbeat).length) updateHeartbeat(id, patch.heartbeat, { persist: false })
       if (Object.keys(patch.runtimePolicy).length) updateAgentRuntimePolicy(id, patch.runtimePolicy, { persist: false })
@@ -488,8 +488,8 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
       : [])
     setRuntimeSaveBusy(false)
     setNotice(failures.length
-      ? { tone: 'error', text: `Saved ${targets.length - failures.length} of ${targets.length} agents. Not saved: ${failures.join('; ')}. Review the policy and apply again to retry.` }
-      : { tone: 'success', text: `${reset ? 'Default runtime restored for' : 'Runtime policy saved for'} ${targets.length} agent${targets.length === 1 ? '' : 's'}.` })
+      ? { tone: 'error', text: `Saved ${targets.length - failures.length} of ${targets.length} agents. Not saved: ${failures.join('; ')}. Review the settings and try again.` }
+      : { tone: 'success', text: `${reset ? 'Default behavior restored for' : 'Preferences saved for'} ${targets.length} agent${targets.length === 1 ? '' : 's'}.` })
   }
 
   const toggleRuntimeTarget = (agentId: string) => {
@@ -589,34 +589,34 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
 
   const renderAppearance = () => (
     <div className="dui-settings-section" id="settings-section-appearance">
-      <SectionHeader section="appearance" eyebrow="Personalize Automnia" />
-      <SettingsCard title="Color and surfaces" description="Applied live across every workspace.">
-        <Field label="Accent mode" hint="Changes active controls, status color and highlights.">
-          <select value={uiSettings.accentMode} onChange={(event) => updateUiSetting('accentMode', event.target.value as UiAccentMode, 'Accent mode')}>
-            <option value="reference">Reference cyan</option><option value="no-blue">No-blue graphite</option><option value="ember">Amber operations</option><option value="green">Green terminal</option>
+      <SectionHeader section="appearance" eyebrow="Make Automnia feel right for you" />
+      <SettingsCard title="Colors and layout" description="Choose how Automnia looks.">
+        <Field label="Accent color" hint="Used for selected items, highlights, and status indicators.">
+          <select value={uiSettings.accentMode} onChange={(event) => updateUiSetting('accentMode', event.target.value as UiAccentMode, 'Accent color')}>
+            <option value="reference">Cyan</option><option value="no-blue">Graphite</option><option value="ember">Amber</option><option value="green">Green</option>
           </select>
         </Field>
-        <Field label="Form chrome" hint="Input, search, select and composer surfaces.">
-          <select value={uiSettings.formChrome} onChange={(event) => updateUiSetting('formChrome', event.target.value as UiFormChrome, 'Form chrome')}>
+        <Field label="Input style" hint="Changes the appearance of text fields, search boxes, and menus.">
+          <select value={uiSettings.formChrome} onChange={(event) => updateUiSetting('formChrome', event.target.value as UiFormChrome, 'Input style')}>
             <option value="graphite">Graphite</option><option value="obsidian">Obsidian</option><option value="warm">Warm black</option>
           </select>
         </Field>
-        <SettingGroup label="Interface density" hint="Controls spacing without shrinking readable text.">
+        <SettingGroup label="Spacing" hint="Choose how much room appears between items.">
           <div data-dui-setting="density">
-            <SegmentedControl value={uiSettings.density} label="Interface density" options={[{ id: 'compact', label: 'Compact' }, { id: 'comfortable', label: 'Comfortable' }, { id: 'spacious', label: 'Spacious' }]} onChange={(value: UiDensity) => updateUiSetting('density', value, 'Interface density')} />
+            <SegmentedControl value={uiSettings.density} label="Interface spacing" options={[{ id: 'compact', label: 'Compact' }, { id: 'comfortable', label: 'Comfortable' }, { id: 'spacious', label: 'Spacious' }]} onChange={(value: UiDensity) => updateUiSetting('density', value, 'Spacing')} />
           </div>
         </SettingGroup>
       </SettingsCard>
-      <SettingsCard title="Accessibility and effects" description="Make the interface calmer or easier to read.">
-        <SettingGroup label="Motion" hint="Reduced removes most animation and smooth transitions.">
+      <SettingsCard title="Accessibility" description="Make Automnia calmer and easier to read.">
+        <SettingGroup label="Animation" hint="Choose Reduced to limit movement and transitions.">
           <div data-dui-setting="motion">
-            <SegmentedControl value={uiSettings.motion} label="Motion preference" options={[{ id: 'standard', label: 'Standard' }, { id: 'reduced', label: 'Reduced' }]} onChange={(value: UiMotion) => updateUiSetting('motion', value, 'Motion preference')} />
+            <SegmentedControl value={uiSettings.motion} label="Animation preference" options={[{ id: 'standard', label: 'Standard' }, { id: 'reduced', label: 'Reduced' }]} onChange={(value: UiMotion) => updateUiSetting('motion', value, 'Animation preference')} />
           </div>
         </SettingGroup>
-        <ToggleField label="High contrast" hint="Raises muted text, borders, placeholders and focus rings." checked={uiSettings.highContrast} onChange={(value) => updateUiSetting('highContrast', value, 'High contrast')} />
-        <ToggleField label="Reduced glow" hint="Removes nonessential bloom and halo effects." checked={uiSettings.reducedGlow} onChange={(value) => updateUiSetting('reducedGlow', value, 'Reduced glow')} />
-        <ToggleField label="Control glow" hint="Adds a restrained highlight to active controls." checked={uiSettings.controlGlow} disabled={uiSettings.reducedGlow} onChange={(value) => updateUiSetting('controlGlow', value, 'Control glow')} />
-        <ToggleField label="Neutral scrollbars" hint="Uses graphite instead of accent-colored scrollbar thumbs." checked={uiSettings.neutralScrollbars} onChange={(value) => updateUiSetting('neutralScrollbars', value, 'Scrollbar style')} />
+        <ToggleField label="High contrast" hint="Makes text, borders, and selected items easier to see." checked={uiSettings.highContrast} onChange={(value) => updateUiSetting('highContrast', value, 'High contrast')} />
+        <ToggleField label="Reduced glow" hint="Limits decorative lighting effects." checked={uiSettings.reducedGlow} onChange={(value) => updateUiSetting('reducedGlow', value, 'Reduced glow')} />
+        <ToggleField label="Selection glow" hint="Adds a subtle highlight to selected controls." checked={uiSettings.controlGlow} disabled={uiSettings.reducedGlow} onChange={(value) => updateUiSetting('controlGlow', value, 'Selection glow')} />
+        <ToggleField label="Neutral scrollbars" hint="Uses neutral gray instead of your accent color." checked={uiSettings.neutralScrollbars} onChange={(value) => updateUiSetting('neutralScrollbars', value, 'Scrollbar style')} />
         <div className="dui-settings-actions"><button type="button" onClick={resetAppearance}>Restore appearance defaults</button></div>
       </SettingsCard>
     </div>
@@ -624,18 +624,18 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
 
   const renderWorkspace = () => (
     <div className="dui-settings-section" id="settings-section-workspace">
-      <SectionHeader section="workspace" eyebrow="Choose how daily work is arranged" />
+      <SectionHeader section="workspace" eyebrow="Arrange your everyday workspace" />
       <WorkspaceProfiles onApply={() => { setUiSettings(readUiSettings()); setRegistryPreferences(readRegistryPreferences()); setConsolePreferences(readConsolePreferences()) }} />
-      <SettingsCard title="Notifications" description="Choose when Automnia should get your attention."><NotificationSettings /></SettingsCard>
-      <SettingsCard title="Agent registry" description="These controls update the live Agents workspace.">
-        <Field label="Default view" hint="Simple is the 9-agent default; Detailed shows 12 cards with runtime info.">
-          <select value={registryPreferences.displayMode} onChange={(event) => updateRegistryPreferences({ displayMode: event.target.value as AgentDisplayMode }, 'Registry view')}>
+      <SettingsCard title="Notifications" description="Choose when Automnia should alert you."><NotificationSettings /></SettingsCard>
+      <SettingsCard title="Agent list" description="Choose how your agents are displayed.">
+        <Field label="Default view" hint="Simple shows 9 agents. Detailed shows 12 agents with more information.">
+          <select value={registryPreferences.displayMode} onChange={(event) => updateRegistryPreferences({ displayMode: event.target.value as AgentDisplayMode }, 'Agent view')}>
             {REGISTRY_DISPLAY_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label} — {option.hint}</option>)}
           </select>
         </Field>
         <ToggleField
           label="Use rarity colors"
-          hint="Rarity changes the trim and badge while cards stay on a calm obsidian surface."
+          hint="Shows each agent's rarity on its border and badge."
           checked={registryPreferences.rarityColorsEnabled}
           onChange={(value) => updateRegistryPreferences({
             rarityColorsEnabled: value,
@@ -643,7 +643,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
           }, value ? 'Agent card rarity colors' : 'Shared agent card theme')}
         />
         {!registryPreferences.rarityColorsEnabled && (
-          <Field label="Card background" hint="One shared visual treatment behind every agent portrait.">
+          <Field label="Card background" hint="Choose one background style for every agent.">
             <select
               value={registryPreferences.overlayPreset}
               onChange={(event) => updateRegistryPreferences({ overlayPreset: event.target.value as AgentOverlayPreset }, 'Agent card background')}
@@ -652,23 +652,23 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
             </select>
           </Field>
         )}
-        <Field label="Default sort" hint="Determines which agents appear first.">
-          <select value={registryPreferences.sortKey} onChange={(event) => updateRegistryPreferences({ sortKey: event.target.value as RegistrySortKey }, 'Registry sorting')}>
-            <option value="party">Party first</option><option value="level">Highest level</option><option value="name">Name A–Z</option><option value="rarity">Rarity</option>
+        <Field label="Agent order" hint="Choose which agents appear first.">
+          <select value={registryPreferences.sortKey} onChange={(event) => updateRegistryPreferences({ sortKey: event.target.value as RegistrySortKey }, 'Agent order')}>
+            <option value="party">Team first</option><option value="level">Highest level</option><option value="name">Name A–Z</option><option value="rarity">Rarity</option>
           </select>
         </Field>
-        <Field label="Rarity filter" hint="Persist a focused registry or show the full roster.">
-          <select value={registryPreferences.rarityFilter} onChange={(event) => updateRegistryPreferences({ rarityFilter: event.target.value as RegistryPreferences['rarityFilter'] }, 'Registry filter')}>
+        <Field label="Rarity filter" hint="Show every agent or only one rarity.">
+          <select value={registryPreferences.rarityFilter} onChange={(event) => updateRegistryPreferences({ rarityFilter: event.target.value as RegistryPreferences['rarityFilter'] }, 'Rarity filter')}>
             <option value="all">All</option><option value="legendary">Legendary</option><option value="epic">Epic</option><option value="rare">Rare</option><option value="common">Common</option>
           </select>
         </Field>
       </SettingsCard>
-      <SettingsCard title="Command console" description="Layout and draft behavior for conversations with agents.">
-        <ToggleField label="Show console in Agents" hint="Hide it for a full-width registry; restore it here at any time." checked={consolePreferences.visible} onChange={(value) => updateConsolePreferences({ visible: value }, 'Console visibility')} />
-        <Field label={`Console width · ${consolePreferences.width}px`} hint="The live split view clamps this value when the window is narrow.">
-          <input type="range" min={360} max={760} step={20} value={consolePreferences.width} onChange={(event) => updateConsolePreferences({ width: Number(event.target.value) }, 'Console width')} />
+      <SettingsCard title="Agent chat panel" description="Choose how conversations appear in the Agents workspace.">
+        <ToggleField label="Show the chat panel" hint="Turn it off to give the agent list more room." checked={consolePreferences.visible} onChange={(value) => updateConsolePreferences({ visible: value }, 'Chat panel visibility')} />
+        <Field label={`Chat panel width · ${consolePreferences.width}px`} hint="The width adjusts automatically on smaller windows.">
+          <input type="range" min={360} max={760} step={20} value={consolePreferences.width} onChange={(event) => updateConsolePreferences({ width: Number(event.target.value) }, 'Chat panel width')} />
         </Field>
-        <ToggleField label="Remember unfinished drafts" hint="Restores unsent command text after a reload. Turning this off clears stored drafts." checked={consolePreferences.rememberDrafts} onChange={(value) => updateConsolePreferences({ rememberDrafts: value }, 'Draft persistence')} />
+        <ToggleField label="Remember unfinished messages" hint="Keeps unsent text when you leave or reopen the app." checked={consolePreferences.rememberDrafts} onChange={(value) => updateConsolePreferences({ rememberDrafts: value }, 'Unfinished messages')} />
         <div className="dui-settings-actions"><button type="button" onClick={resetWorkspace}>Restore workspace defaults</button><button type="button" onClick={() => setTab('agents')}>Open Agents</button></div>
       </SettingsCard>
     </div>
@@ -676,9 +676,9 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
 
   const renderVoice = () => (
     <div className="dui-settings-section" id="settings-section-voice">
-      <SectionHeader section="voice" eyebrow="Fast dictation with explicit privacy controls" />
-      <SettingsCard title="Transcription engine" description="Local stays on-device after its one-time model download. Cloud uses the configured OpenAI provider.">
-        <SettingGroup label="Provider" hint="The microphone button uses this selection immediately.">
+      <SectionHeader section="voice" eyebrow="Set up dictation your way" />
+      <SettingsCard title="Dictation service" description="Choose private on-device dictation or connected cloud dictation.">
+        <SettingGroup label="Dictation mode" hint="Your choice is used the next time you select the microphone.">
           <div className="dui-settings-voice-mode" role="group" aria-label="Voice transcription provider" data-mode={speechSettings.mode}>
             {([{ id: 'local', label: 'Local', detail: 'On-device · offline after setup' }, { id: 'online', label: 'Cloud', detail: 'OpenAI · internet required' }] as Array<{ id: SpeechTranscriptionMode; label: string; detail: string }>).map((option) => (
               <button key={option.id} type="button" aria-pressed={speechSettings.mode === option.id} onClick={() => updateSpeechSettings({ mode: option.id }, 'Voice provider')}>
@@ -688,30 +688,30 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
           </div>
         </SettingGroup>
       </SettingsCard>
-      <SettingsCard title="Recognition accuracy" description="Local uses multilingual Whisper Base. Cloud uses OpenAI GPT-Transcribe and requires an API key; audio is sent to OpenAI and API usage is billed.">
-        <Field label="Spoken language" hint="Choose your language for local recognition. Cloud can also detect it automatically.">
+      <SettingsCard title="Language and vocabulary" description="Help Automnia understand your speech more accurately.">
+        <Field label="Spoken language" hint="Choose a language, or let cloud dictation detect it automatically.">
           <select value={speechSettings.language || ''} onChange={(event) => updateSpeechSettings({ language: event.target.value }, 'Spoken language')}>
             <option value="">Default · English locally, automatic in cloud</option>
             {Object.entries({ en: 'English', es: 'Spanish', fr: 'French', de: 'German', pt: 'Portuguese', it: 'Italian', ht: 'Haitian Creole', ja: 'Japanese', ko: 'Korean', zh: 'Chinese', ar: 'Arabic', hi: 'Hindi', ru: 'Russian', uk: 'Ukrainian' }).map(([code, label]) => <option key={code} value={code}>{label}</option>)}
           </select>
         </Field>
-        <Field label="Names and vocabulary for cloud dictation" hint="Comma-separated names, products, and technical terms you actually use. Leave blank for general dictation.">
+        <Field label="Names and special terms" hint="Add names, products, or uncommon words separated by commas. This is used for cloud dictation.">
           <textarea rows={3} maxLength={1000} value={speechSettings.vocabulary || ''} onChange={(event) => updateSpeechSettings({ vocabulary: event.target.value }, 'Dictation vocabulary')} placeholder="Automnia, OpenClaw, Jean" />
         </Field>
       </SettingsCard>
-      <SettingsCard title="Recording behavior" description="Tune responsiveness without changing the transcription model.">
+      <SettingsCard title="Recording" description="Choose when dictation stops and how long it can record.">
         <ToggleField label="Stop after a pause" hint="Automatically transcribes when speech ends; turn off for manual stop only." checked={speechSettings.autoStop} onChange={(value) => updateSpeechSettings({ autoStop: value }, 'Automatic pause detection')} />
         <Field label={`Pause sensitivity · ${(speechSettings.pauseDurationMs / 1_000).toFixed(2)}s`} hint="Longer values are better when you pause while thinking.">
           <input type="range" min={600} max={3000} step={50} value={speechSettings.pauseDurationMs} disabled={!speechSettings.autoStop} onChange={(event) => updateSpeechSettings({ pauseDurationMs: Number(event.target.value) }, 'Pause sensitivity')} />
         </Field>
-        <Field label="Maximum recording" hint="A safety limit for an uninterrupted recording.">
+        <Field label="Maximum recording" hint="Recording stops automatically after this amount of time.">
           <select value={speechSettings.maxRecordingSeconds} onChange={(event) => updateSpeechSettings({ maxRecordingSeconds: Number(event.target.value) }, 'Maximum recording length')}>
             <option value={30}>30 seconds</option><option value={60}>1 minute</option><option value={120}>2 minutes</option><option value={300}>5 minutes</option>
           </select>
         </Field>
       </SettingsCard>
       <SettingsCard title="Microphone device and test" description="Record a short local sample and check playback before dictating."><MicrophoneSettings settings={speechSettings} onChange={(microphoneDeviceId) => updateSpeechSettings({ microphoneDeviceId }, 'Microphone selection')} /></SettingsCard>
-      <SettingsCard title="Microphone processing" description="Browser-level audio cleanup applied before local or cloud transcription.">
+      <SettingsCard title="Sound quality" description="Improve voice clarity before your speech is transcribed.">
         <ToggleField label="Noise suppression" hint="Reduces fans, room noise and steady background sound." checked={speechSettings.noiseSuppression} onChange={(value) => updateSpeechSettings({ noiseSuppression: value }, 'Noise suppression')} />
         <ToggleField label="Echo cancellation" hint="Reduces speaker audio feeding back into the microphone." checked={speechSettings.echoCancellation} onChange={(value) => updateSpeechSettings({ echoCancellation: value }, 'Echo cancellation')} />
         <ToggleField label="Automatic gain" hint="Raises quiet speech and evens out microphone volume." checked={speechSettings.autoGainControl} onChange={(value) => updateSpeechSettings({ autoGainControl: value }, 'Automatic microphone gain')} />
@@ -724,8 +724,8 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     const requirements = missionDraft.requiredEvidence || DEFAULT_MISSION_DRAFT.requiredEvidence || []
     return (
       <div className="dui-settings-section" id="settings-section-missions">
-        <SectionHeader section="missions" eyebrow="Define a reliable starting point" />
-        <SettingsCard title="Next mission defaults" description="Changes appear immediately in the Missions workspace.">
+        <SectionHeader section="missions" eyebrow="Prepare your next mission" />
+        <SettingsCard title="Mission defaults" description="Set the starting choices for new missions.">
           <Field label="Mission title"><input value={missionDraft.title} onChange={(event) => updateMissionDraft({ title: event.target.value })} /></Field>
           <Field label="Default objective" hint="Use a concrete instruction that can be verified."><textarea rows={4} value={missionDraft.description} onChange={(event) => updateMissionDraft({ description: event.target.value })} /></Field>
           <Field label="Mission type"><select value={missionDraft.missionType} onChange={(event) => updateMissionDraft({ missionType: event.target.value as CapabilityKey })}>{MISSION_TYPES.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></Field>
@@ -735,10 +735,10 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
           <Field label={`Complexity · ${missionDraft.complexity}%`}><input type="range" min={1} max={100} value={missionDraft.complexity} onChange={(event) => updateMissionDraft({ complexity: Number(event.target.value) })} /></Field>
           <Field label={`Risk tolerance · ${missionDraft.riskTolerance}%`}><input type="range" min={1} max={100} value={missionDraft.riskTolerance} onChange={(event) => updateMissionDraft({ riskTolerance: Number(event.target.value) })} /></Field>
         </SettingsCard>
-        <SettingsCard title="Required evidence" description="Choose which proof the mission must collect before it can be considered complete.">
+        <SettingsCard title="Completion checks" description="Choose what must be confirmed before a mission is complete.">
           <div className="dui-settings-checklist">
             {requirements.map((requirement) => (
-              <ToggleField key={requirement.kind} label={requirement.label} hint={requirement.command ? `Verification: ${requirement.command}` : undefined} checked={requirement.required} onChange={(required) => updateMissionDraft({ requiredEvidence: requirements.map((entry) => entry.kind === requirement.kind ? { ...entry, required } : entry) })} />
+              <ToggleField key={requirement.kind} label={requirement.label} checked={requirement.required} onChange={(required) => updateMissionDraft({ requiredEvidence: requirements.map((entry) => entry.kind === requirement.kind ? { ...entry, required } : entry) })} />
             ))}
           </div>
           <div className="dui-settings-actions"><button type="button" onClick={resetMission}>Restore mission defaults</button><button type="button" onClick={() => setTab('missions')}>Open Missions</button></div>
@@ -749,154 +749,153 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
 
   const renderAgents = () => (
     <div className="dui-settings-section" id="settings-section-agents">
-      <SectionHeader section="agents" eyebrow="Chat execution and agent policies" />
-      <SettingsCard title="Agent Chat execution" description="Applies immediately to new chat commands, including transcribed voice messages.">
-        <ToggleField label="Run Agent Chat in parallel" hint="Start commands for different agents together without waiting for earlier agents to finish. Turn off to run ordinary multi-agent messages in order. Follow-ups to a busy agent still queue for that agent." checked={consolePreferences.parallelAgentChat} onChange={(value) => updateConsolePreferences({ parallelAgentChat: value }, 'Parallel Agent Chat')} />
+      <SectionHeader section="agents" eyebrow="Choose how your agents work" />
+      <SettingsCard title="Agent teamwork" description="Choose whether different agents can work at the same time.">
+        <ToggleField label="Work on separate requests at the same time" hint="When off, agents begin one after another. Follow-up messages still wait for the same agent to finish." checked={consolePreferences.parallelAgentChat} onChange={(value) => updateConsolePreferences({ parallelAgentChat: value }, 'Agent teamwork')} />
       </SettingsCard>
-      <SettingsCard title="Target agents" description="Only fields you explicitly change are applied. Mixed values remain unchanged until edited; Restore runtime defaults replaces every field.">
+      <SettingsCard title="Choose agents" description="Select the agents whose preferences you want to change.">
         <div className="dui-settings-targeting" data-target-scope={targetScope}>
           <div className="dui-settings-targeting__head">
             <div><span>Apply to</span><strong>{targetIds.length ? `${targetIds.length} agent${targetIds.length === 1 ? '' : 's'}` : 'No target selected'}</strong></div>
-            <SegmentedControl value={targetScope} label="Runtime target source" options={[{ id: 'party', label: `Party ${partyTargetIds.length}` }, { id: 'selection', label: `Selected ${selectedTargetIds.length}` }]} onChange={setTargetScope} />
+            <SegmentedControl value={targetScope} label="Agent selection source" options={[{ id: 'party', label: `Team ${partyTargetIds.length}` }, { id: 'selection', label: `Selected ${selectedTargetIds.length}` }]} onChange={setTargetScope} />
           </div>
-          <div className="dui-settings-agent-targets" aria-label="Agent runtime target selector">
+          <div className="dui-settings-agent-targets" aria-label="Choose agents">
             {agents.map((agent) => {
               const selected = selectedTargetIds.includes(agent.id)
               const targeted = targetIds.includes(agent.id)
-              return <button key={agent.id} type="button" aria-pressed={selected} data-target={targeted} onClick={() => toggleRuntimeTarget(agent.id)}><span>{agent.name.split(/\s+/).map((part) => part[0]).slice(0, 2).join('')}</span><strong>{agent.name}</strong><small>{targeted ? 'Target' : selected ? 'Selected' : 'Add'}</small></button>
+              return <button key={agent.id} type="button" aria-pressed={selected} data-target={targeted} onClick={() => toggleRuntimeTarget(agent.id)}><span>{agent.name.split(/\s+/).map((part) => part[0]).slice(0, 2).join('')}</span><strong>{agent.name}</strong><small>{targeted ? 'Included' : selected ? 'Selected' : 'Add'}</small></button>
             })}
           </div>
-          {selectedTargetIds.length > 0 && <button type="button" className="dui-settings-clear-targets" onClick={clearSelectedAgents}>Clear manual selection</button>}
+          {selectedTargetIds.length > 0 && <button type="button" className="dui-settings-clear-targets" onClick={clearSelectedAgents}>Clear selection</button>}
         </div>
       </SettingsCard>
-      <SettingsCard title="Heartbeat and recovery" description="Controls when agents wake and how they recover from interruptions.">
-        <Field label="Heartbeat cadence" hint={runtimeHint('heartbeatSeconds', 'Seconds between runtime pulses.')}><input type="number" min={5} max={1800} placeholder={runtimeFieldMixed('heartbeatSeconds') ? 'Mixed' : undefined} value={runtimeFieldMixed('heartbeatSeconds') ? '' : activeRuntimeDraft.heartbeatSeconds} onChange={(event) => updateRuntimeDraft({ heartbeatSeconds: Number(event.target.value) })} /></Field>
-        <Field label="Idle timeout" hint={runtimeHint('idleTimeoutSeconds', 'Seconds before an inactive agent yields its loop.')}><input type="number" min={5} max={1800} placeholder={runtimeFieldMixed('idleTimeoutSeconds') ? 'Mixed' : undefined} value={runtimeFieldMixed('idleTimeoutSeconds') ? '' : activeRuntimeDraft.idleTimeoutSeconds} onChange={(event) => updateRuntimeDraft({ idleTimeoutSeconds: Number(event.target.value) })} /></Field>
-        <ToggleField label="Continuous heartbeat" hint={runtimeHint('continuous', 'Keeps the runtime loop active between ticks.')} mixed={runtimeFieldMixed('continuous')} checked={activeRuntimeDraft.continuous} onChange={(continuous) => updateRuntimeDraft({ continuous })} />
-        <ToggleField label="Automatic recovery" hint={runtimeHint('recoveryMode', 'Retries after a recoverable runtime failure.')} mixed={runtimeFieldMixed('recoveryMode')} checked={activeRuntimeDraft.recoveryMode} onChange={(recoveryMode) => updateRuntimeDraft({ recoveryMode })} />
+      <SettingsCard title="Availability and recovery" description="Choose how long agents stay ready and whether they retry after an interruption.">
+        <Field label="Check-in interval" hint={runtimeHint('heartbeatSeconds', 'How often an active agent checks for more work, in seconds.')}><input type="number" min={5} max={1800} placeholder={runtimeFieldMixed('heartbeatSeconds') ? 'Varies' : undefined} value={runtimeFieldMixed('heartbeatSeconds') ? '' : activeRuntimeDraft.heartbeatSeconds} onChange={(event) => updateRuntimeDraft({ heartbeatSeconds: Number(event.target.value) })} /></Field>
+        <Field label="Stop after inactivity" hint={runtimeHint('idleTimeoutSeconds', 'How many seconds an inactive agent waits before stopping.')}><input type="number" min={5} max={1800} placeholder={runtimeFieldMixed('idleTimeoutSeconds') ? 'Varies' : undefined} value={runtimeFieldMixed('idleTimeoutSeconds') ? '' : activeRuntimeDraft.idleTimeoutSeconds} onChange={(event) => updateRuntimeDraft({ idleTimeoutSeconds: Number(event.target.value) })} /></Field>
+        <ToggleField label="Stay ready between tasks" hint={runtimeHint('continuous', 'Keeps the agent available for ongoing work.')} mixed={runtimeFieldMixed('continuous')} checked={activeRuntimeDraft.continuous} onChange={(continuous) => updateRuntimeDraft({ continuous })} />
+        <ToggleField label="Automatic recovery" hint={runtimeHint('recoveryMode', 'Tries again after a temporary interruption.')} mixed={runtimeFieldMixed('recoveryMode')} checked={activeRuntimeDraft.recoveryMode} onChange={(recoveryMode) => updateRuntimeDraft({ recoveryMode })} />
       </SettingsCard>
-      <SettingsCard title="Reasoning and execution" description="Defaults used for future turns by the targeted agents.">
-        <Field label="Work timeout" hint={runtimeHint('timeoutMinutes', 'Maximum minutes for an agent turn.')}><input type="number" min={1} max={120} placeholder={runtimeFieldMixed('timeoutMinutes') ? 'Mixed' : undefined} value={runtimeFieldMixed('timeoutMinutes') ? '' : activeRuntimeDraft.timeoutMinutes} onChange={(event) => updateRuntimeDraft({ timeoutMinutes: Number(event.target.value) })} /></Field>
-        <Field label="Thinking default" hint={runtimeHint('thinkingDefault')}><select value={runtimeFieldMixed('thinkingDefault') ? '' : activeRuntimeDraft.thinkingDefault} onChange={(event) => updateRuntimeDraft({ thinkingDefault: event.target.value as ThinkingLevel })}>{runtimeFieldMixed('thinkingDefault') && <option value="" disabled>Mixed — leave unchanged</option>}<option value="off">Off</option><option value="minimal">Minimal</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra high</option><option value="max">Maximum</option></select></Field>
-        <Field label="Fast mode" hint={runtimeHint('fastModeDefault')}><select value={runtimeFieldMixed('fastModeDefault') ? '' : activeRuntimeDraft.fastModeDefault} onChange={(event) => updateRuntimeDraft({ fastModeDefault: event.target.value as FastModeDefault })}>{runtimeFieldMixed('fastModeDefault') && <option value="" disabled>Mixed — leave unchanged</option>}<option value="auto">Auto</option><option value="on">On</option><option value="off">Off</option></select></Field>
-        <ToggleField label="Parallel preferred" hint={runtimeHint('parallelPreferred', 'Allows independent subtasks to run together where supported.')} mixed={runtimeFieldMixed('parallelPreferred')} checked={activeRuntimeDraft.parallelPreferred} onChange={(parallelPreferred) => updateRuntimeDraft({ parallelPreferred })} />
-        <div className="dui-settings-actions"><button type="button" className="is-primary" disabled={runtimeSaveBusy || !targetIds.length || !runtimeChangedKeys.length} onClick={() => void applyRuntimeToTargets()}>{runtimeSaveBusy ? 'Saving runtime policy…' : `Apply to ${targetIds.length} agent${targetIds.length === 1 ? '' : 's'}`}</button><button type="button" disabled={runtimeSaveBusy || !targetIds.length} onClick={() => { setRuntimeDraft({ targetKey: runtimeTargetKey, values: DEFAULT_RUNTIME_SETTINGS, changedKeys: Object.keys(DEFAULT_RUNTIME_SETTINGS) as Array<keyof RuntimeDefaultsDraft> }); setPendingConfirmation('reset-runtime') }}>Restore runtime defaults</button></div>
+      <SettingsCard title="Work preferences" description="Set the starting preferences for future requests.">
+        <Field label="Maximum task time" hint={runtimeHint('timeoutMinutes', 'Maximum time for one request, in minutes.')}><input type="number" min={1} max={120} placeholder={runtimeFieldMixed('timeoutMinutes') ? 'Varies' : undefined} value={runtimeFieldMixed('timeoutMinutes') ? '' : activeRuntimeDraft.timeoutMinutes} onChange={(event) => updateRuntimeDraft({ timeoutMinutes: Number(event.target.value) })} /></Field>
+        <Field label="Reasoning effort" hint={runtimeHint('thinkingDefault', 'Choose how deeply agents should reason by default.')}><select value={runtimeFieldMixed('thinkingDefault') ? '' : activeRuntimeDraft.thinkingDefault} onChange={(event) => updateRuntimeDraft({ thinkingDefault: event.target.value as ThinkingLevel })}>{runtimeFieldMixed('thinkingDefault') && <option value="" disabled>Varies — leave unchanged</option>}<option value="off">Off</option><option value="minimal">Minimal</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra high</option><option value="max">Maximum</option></select></Field>
+        <Field label="Speed preference" hint={runtimeHint('fastModeDefault', 'Choose whether agents favor faster responses.')}><select value={runtimeFieldMixed('fastModeDefault') ? '' : activeRuntimeDraft.fastModeDefault} onChange={(event) => updateRuntimeDraft({ fastModeDefault: event.target.value as FastModeDefault })}>{runtimeFieldMixed('fastModeDefault') && <option value="" disabled>Varies — leave unchanged</option>}<option value="auto">Automatic</option><option value="on">Faster</option><option value="off">Standard</option></select></Field>
+        <ToggleField label="Allow parallel work" hint={runtimeHint('parallelPreferred', 'Lets independent parts of a task run at the same time.')} mixed={runtimeFieldMixed('parallelPreferred')} checked={activeRuntimeDraft.parallelPreferred} onChange={(parallelPreferred) => updateRuntimeDraft({ parallelPreferred })} />
+        <div className="dui-settings-actions"><button type="button" className="is-primary" disabled={runtimeSaveBusy || !targetIds.length || !runtimeChangedKeys.length} onClick={() => void applyRuntimeToTargets()}>{runtimeSaveBusy ? 'Saving preferences…' : `Save for ${targetIds.length} agent${targetIds.length === 1 ? '' : 's'}`}</button><button type="button" disabled={runtimeSaveBusy || !targetIds.length} onClick={() => { setRuntimeDraft({ targetKey: runtimeTargetKey, values: DEFAULT_RUNTIME_SETTINGS, changedKeys: Object.keys(DEFAULT_RUNTIME_SETTINGS) as Array<keyof RuntimeDefaultsDraft> }); setPendingConfirmation('reset-runtime') }}>Restore agent defaults</button></div>
       </SettingsCard>
     </div>
   )
 
   const renderTelegram = () => (
     <div className="dui-settings-section" id="settings-section-telegram">
-      <SectionHeader section="telegram" eyebrow="Control the live Telegram gateway" />
-      <SettingsCard title="Access and commands" description="Keep private chats paired and groups allowlisted unless you intentionally run a public bot.">
-        <Field label="Native command menu" hint="Registers OpenClaw commands such as /agents with Telegram.">
+      <SectionHeader section="telegram" eyebrow="Manage your Telegram experience" />
+      <SettingsCard title="Access and commands" description="Choose who can contact your bot and which commands are available.">
+        <Field label="Command menu" hint="Show Automnia commands such as /agents in Telegram.">
           <select value={telegramSettings.nativeCommands} onChange={(event) => updateTelegramDraft('nativeCommands', event.target.value as TelegramSettings['nativeCommands'])}>
             <option value="auto">Auto</option><option value="on">On</option><option value="off">Off</option>
           </select>
         </Field>
-        <Field label="Direct-message policy" hint="Pairing is the safe default for owner-operated bots.">
+        <Field label="Direct-message access" hint="Pairing requires each new user to be approved.">
           <select value={telegramSettings.dmPolicy} onChange={(event) => updateTelegramDraft('dmPolicy', event.target.value as TelegramSettings['dmPolicy'])}>
-            <option value="pairing">Pairing</option><option value="allowlist">Allowlist</option><option value="open">Open</option><option value="disabled">Disabled</option>
+            <option value="pairing">Approve new users</option><option value="allowlist">Approved users only</option><option value="open">Anyone</option><option value="disabled">Disabled</option>
           </select>
         </Field>
-        <Field label="Group policy" hint="Allowlist blocks unknown groups until they are explicitly configured.">
+        <Field label="Group access" hint="Choose which group chats can use your bot.">
           <select value={telegramSettings.groupPolicy} onChange={(event) => updateTelegramDraft('groupPolicy', event.target.value as TelegramSettings['groupPolicy'])}>
-            <option value="allowlist">Allowlist</option><option value="open">Open</option><option value="disabled">Disabled</option>
+            <option value="allowlist">Approved groups only</option><option value="open">Any group</option><option value="disabled">Disabled</option>
           </select>
         </Field>
-        <ToggleField label="Allow Telegram config writes" hint="Required for Telegram-triggered /config changes and group migration writes." checked={telegramSettings.configWrites} onChange={(value) => updateTelegramDraft('configWrites', value)} />
+        <ToggleField label="Allow settings changes from Telegram" hint="Lets approved Telegram commands update bot settings." checked={telegramSettings.configWrites} onChange={(value) => updateTelegramDraft('configWrites', value)} />
       </SettingsCard>
 
-      <SettingsCard title="Delivery and formatting" description="Tune how the bot streams work, renders messages and handles replies.">
-        <Field label="Streaming mode" hint="Progress shows tool status while keeping the final answer clean.">
+      <SettingsCard title="Replies and formatting" description="Choose how replies appear while Automnia is working.">
+        <Field label="Response updates" hint="Choose what Telegram shows before the final answer is ready.">
           <select value={telegramSettings.streamingMode} onChange={(event) => updateTelegramDraft('streamingMode', event.target.value as TelegramSettings['streamingMode'])}>
-            <option value="progress">Progress</option><option value="partial">Partial answer preview</option><option value="block">Block streaming</option><option value="off">Off</option>
+            <option value="progress">Show progress</option><option value="partial">Preview the answer</option><option value="block">Send when complete</option><option value="off">Off</option>
           </select>
         </Field>
-        <ToggleField label="Show tool progress" hint="Reuses the editable preview for short status updates while an agent works." checked={telegramSettings.toolProgress} onChange={(value) => updateTelegramDraft('toolProgress', value)} />
-        <ToggleField label="Link previews" hint="Let Telegram expand URLs in rich text." checked={telegramSettings.linkPreview} onChange={(value) => updateTelegramDraft('linkPreview', value)} />
-        <Field label="Reply mode" hint="Native quote replies can be useful in busy group chats.">
+        <ToggleField label="Show work updates" hint="Displays short progress messages while Automnia works." checked={telegramSettings.toolProgress} onChange={(value) => updateTelegramDraft('toolProgress', value)} />
+        <ToggleField label="Link previews" hint="Show a preview when a reply includes a link." checked={telegramSettings.linkPreview} onChange={(value) => updateTelegramDraft('linkPreview', value)} />
+        <Field label="Quoted replies" hint="Choose when responses should quote the original message.">
           <select value={telegramSettings.replyToMode} onChange={(event) => updateTelegramDraft('replyToMode', event.target.value as TelegramSettings['replyToMode'])}>
             <option value="off">Off</option><option value="first">Reply to first message</option><option value="all">Reply to every message</option>
           </select>
         </Field>
-        <Field label="Inline button scope" hint="Allowlist requires an explicit Telegram approval surface.">
+        <Field label="Interactive buttons" hint="Choose where Automnia can show action buttons.">
           <select value={telegramSettings.inlineButtons} onChange={(event) => updateTelegramDraft('inlineButtons', event.target.value as TelegramSettings['inlineButtons'])}>
-            <option value="allowlist">Allowlist</option><option value="dm">Direct messages</option><option value="group">Groups</option><option value="all">Every chat</option><option value="off">Off</option>
+            <option value="allowlist">Approved chats</option><option value="dm">Direct messages</option><option value="group">Groups</option><option value="all">Every chat</option><option value="off">Off</option>
           </select>
         </Field>
-        <ToggleField label="Rich messages" hint="Off is most compatible with older Telegram clients." checked={telegramSettings.richMessages} onChange={(value) => updateTelegramDraft('richMessages', value)} />
+        <ToggleField label="Rich formatting" hint="Turn off if messages do not display correctly on an older Telegram app." checked={telegramSettings.richMessages} onChange={(value) => updateTelegramDraft('richMessages', value)} />
       </SettingsCard>
 
-      <SettingsCard title="History, media and recovery" description="Bound context and payload size to reduce overflow and delivery failures.">
-        <Field label="Group history messages" hint="Set 0 to disable the bounded group context window."><input type="number" min={0} max={200} value={telegramSettings.historyLimit} onChange={(event) => updateTelegramDraft('historyLimit', Number(event.target.value))} /></Field>
-        <Field label="DM history messages" hint="Keeps private chats from growing without limit."><input type="number" min={0} max={200} value={telegramSettings.dmHistoryLimit} onChange={(event) => updateTelegramDraft('dmHistoryLimit', Number(event.target.value))} /></Field>
-        <Field label="Text chunk limit" hint="Telegram-safe message size; lower it if clients reject long replies."><input type="number" min={100} max={4096} value={telegramSettings.textChunkLimit} onChange={(event) => updateTelegramDraft('textChunkLimit', Number(event.target.value))} /></Field>
-        <Field label="Media limit (MB)" hint="Caps inbound and outbound Telegram media."><input type="number" min={1} max={2000} value={telegramSettings.mediaMaxMb} onChange={(event) => updateTelegramDraft('mediaMaxMb', Number(event.target.value))} /></Field>
-        <Field label="Error replies" hint="Choose whether provider or delivery errors are sent back to the chat.">
+      <SettingsCard title="Chat history and media" description="Choose how much chat history and media Automnia can use.">
+        <Field label="Group history" hint="Number of recent group messages to remember. Enter 0 for none."><input type="number" min={0} max={200} value={telegramSettings.historyLimit} onChange={(event) => updateTelegramDraft('historyLimit', Number(event.target.value))} /></Field>
+        <Field label="Direct-message history" hint="Number of recent private messages to remember. Enter 0 for none."><input type="number" min={0} max={200} value={telegramSettings.dmHistoryLimit} onChange={(event) => updateTelegramDraft('dmHistoryLimit', Number(event.target.value))} /></Field>
+        <Field label="Maximum reply length" hint="Lower this if Telegram has trouble displaying long replies."><input type="number" min={100} max={4096} value={telegramSettings.textChunkLimit} onChange={(event) => updateTelegramDraft('textChunkLimit', Number(event.target.value))} /></Field>
+        <Field label="Maximum media size (MB)" hint="Applies to media received and sent in Telegram."><input type="number" min={1} max={2000} value={telegramSettings.mediaMaxMb} onChange={(event) => updateTelegramDraft('mediaMaxMb', Number(event.target.value))} /></Field>
+        <Field label="Problem notifications" hint="Choose when a chat should be told that a reply could not be delivered.">
           <select value={telegramSettings.errorPolicy} onChange={(event) => updateTelegramDraft('errorPolicy', event.target.value as TelegramSettings['errorPolicy'])}>
-            <option value="always">Always</option><option value="once">Once per cooldown</option><option value="silent">Silent</option>
+            <option value="always">Every time</option><option value="once">Once, then pause</option><option value="silent">Do not send</option>
           </select>
         </Field>
       </SettingsCard>
 
-      <SettingsCard title="Actions and reactions" description="Outbound actions are explicit controls. Enable only the operations your bot actually needs.">
-        <ToggleField label="Send messages to targets" hint="Allows agent tools to send a separate Telegram message." checked={telegramSettings.sendMessage} onChange={(value) => updateTelegramDraft('sendMessage', value)} />
-        <ToggleField label="Delete messages" hint="Allows agent tools to remove Telegram messages." checked={telegramSettings.deleteMessage} onChange={(value) => updateTelegramDraft('deleteMessage', value)} />
-        <ToggleField label="Reactions action" hint="Allows agents to add or remove Telegram reactions." checked={telegramSettings.reactions} onChange={(value) => updateTelegramDraft('reactions', value)} />
-        <ToggleField label="Sticker actions" hint="Enables sticker send and sticker-search actions." checked={telegramSettings.sticker} onChange={(value) => updateTelegramDraft('sticker', value)} />
-        <ToggleField label="Poll actions" hint="Enables poll creation; regular sends must also be enabled." checked={telegramSettings.poll} onChange={(value) => updateTelegramDraft('poll', value)} />
-        <Field label="Reaction notifications" hint="Receive reaction events from your own messages or every message.">
+      <SettingsCard title="Actions and reactions" description="Choose what Automnia can do in your Telegram chats.">
+        <ToggleField label="Send separate messages" hint="Allow Automnia to start a new Telegram message." checked={telegramSettings.sendMessage} onChange={(value) => updateTelegramDraft('sendMessage', value)} />
+        <ToggleField label="Delete messages" hint="Allow Automnia to remove Telegram messages." checked={telegramSettings.deleteMessage} onChange={(value) => updateTelegramDraft('deleteMessage', value)} />
+        <ToggleField label="Add or remove reactions" hint="Allow Automnia to manage emoji reactions." checked={telegramSettings.reactions} onChange={(value) => updateTelegramDraft('reactions', value)} />
+        <ToggleField label="Send stickers" hint="Allow Automnia to find and send stickers." checked={telegramSettings.sticker} onChange={(value) => updateTelegramDraft('sticker', value)} />
+        <ToggleField label="Create polls" hint="Sending messages must also be enabled." checked={telegramSettings.poll} onChange={(value) => updateTelegramDraft('poll', value)} />
+        <Field label="Reaction notifications" hint="Choose which reactions Automnia should notice.">
           <select value={telegramSettings.reactionNotifications} onChange={(event) => updateTelegramDraft('reactionNotifications', event.target.value as TelegramSettings['reactionNotifications'])}>
             <option value="own">Own messages</option><option value="all">All messages</option><option value="off">Off</option>
           </select>
         </Field>
-        <Field label="Reaction detail" hint="Controls how much context is included in reaction events.">
+        <Field label="Reaction notification detail" hint="Choose how much information to include with reaction updates.">
           <select value={telegramSettings.reactionLevel} onChange={(event) => updateTelegramDraft('reactionLevel', event.target.value as TelegramSettings['reactionLevel'])}>
             <option value="minimal">Minimal</option><option value="ack">Acknowledgement only</option><option value="extensive">Extensive</option><option value="off">Off</option>
           </select>
         </Field>
-        <Field label="Acknowledgement reaction scope" hint="Requires a gateway restart and defaults to group mentions only.">
+        <Field label="Automatic acknowledgement reactions" hint="Choose where Automnia can react to show that a message was received.">
           <select value={telegramSettings.ackReactionScope} onChange={(event) => updateTelegramDraft('ackReactionScope', event.target.value as TelegramSettings['ackReactionScope'])}>
             <option value="group-mentions">Group mentions</option><option value="direct">Direct messages</option><option value="group-all">All group messages</option><option value="all">All chats</option><option value="off">Off</option>
           </select>
         </Field>
         <div className="dui-settings-actions">
-          <button type="button" onClick={() => void loadTelegramFromGateway()} disabled={telegramLoading || telegramSaving}>{telegramLoading ? 'Reloading…' : 'Reload from gateway'}</button>
+          <button type="button" onClick={() => void loadTelegramFromGateway()} disabled={telegramLoading || telegramSaving}>{telegramLoading ? 'Refreshing…' : 'Refresh settings'}</button>
           <button type="button" onClick={() => { const next = normalizeTelegramSettings(DEFAULT_TELEGRAM_SETTINGS); setTelegramSettings(next); saveTelegramSettings(next); void applyTelegramSettings(next) }} disabled={telegramLoading || telegramSaving}>{telegramSaving ? 'Applying…' : 'Restore safe defaults'}</button>
-          <button type="button" className="is-primary" onClick={() => void applyTelegramSettings()} disabled={telegramLoading || telegramSaving}>{telegramSaving ? 'Applying and restarting…' : 'Apply Telegram settings'}</button>
+          <button type="button" className="is-primary" onClick={() => void applyTelegramSettings()} disabled={telegramLoading || telegramSaving}>{telegramSaving ? 'Saving and applying…' : 'Save Telegram settings'}</button>
         </div>
         {telegramLoadError && <p role="alert" style={{ color: '#fbbf24', margin: '0.7rem 0 0', fontSize: '0.82rem' }}>{telegramLoadError}</p>}
-        <p style={{ color: '#748791', margin: '0.7rem 0 0', fontSize: '0.78rem' }}>Bot tokens, allowlist IDs, webhook secrets and proxy credentials are intentionally not shown or changed here.</p>
       </SettingsCard>
     </div>
   )
 
   const renderData = () => (
     <div className="dui-settings-section" id="settings-section-data">
-      <SectionHeader section="data" eyebrow="Back up, clean up and recover safely" />
-      <SettingsCard title="Settings backup" description="Back up appearance, workspace, voice, activity and the current mission draft. Provider and account credential stores are excluded.">
-        <div className="dui-settings-metrics"><div><span>Agents</span><strong>{agents.length}</strong></div><div><span>Party</span><strong>{activePartyIds.length}</strong></div><div><span>Responses</span><strong>{responseCount}</strong></div></div>
+      <SectionHeader section="data" eyebrow="Keep your preferences safe" />
+      <SettingsCard title="Settings backup" description="Save your preferences so you can restore them later. Account and provider sign-ins are not included.">
+        <div className="dui-settings-metrics"><div><span>Agents</span><strong>{agents.length}</strong></div><div><span>Active team</span><strong>{activePartyIds.length}</strong></div><div><span>Saved responses</span><strong>{responseCount}</strong></div></div>
         <div className="dui-settings-actions"><button type="button" onClick={downloadSettingsBackup}>Download backup</button><button type="button" onClick={() => void copySettingsBackup()}>Copy settings backup</button><button type="button" disabled={backupReading} onClick={() => backupInputRef.current?.click()}>{backupReading ? 'Reading backup…' : 'Import backup'}</button><input ref={backupInputRef} type="file" accept=".json,application/json" hidden onChange={(event) => { void previewSettingsBackup(event.target.files?.[0]); event.target.value = '' }} /></div>
         {backupPreview && <div className="mt-4 space-y-3 rounded-lg border border-white/15 p-3">
-          <p className="text-sm text-slate-200">Select preference groups to restore. Existing values in these groups will be replaced.</p>
-          {(Object.keys(backupPreview) as PreferenceGroup[]).map((group) => <div key={group} className="rounded border border-white/10 p-3"><label className="flex items-center gap-2 text-sm text-slate-200"><input type="checkbox" checked={backupGroups.includes(group)} onChange={(event) => setBackupGroups((current) => event.target.checked ? [...current, group] : current.filter((value) => value !== group))} />{PREFERENCE_GROUP_LABELS[group]}</label><details className="mt-2 text-xs text-slate-400"><summary>Preview recognized fields</summary><pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all">{JSON.stringify(backupPreview[group], null, 2)}</pre></details></div>)}
+          <p className="text-sm text-slate-200">Choose what to restore. Your current choices in those groups will be replaced.</p>
+          {(Object.keys(backupPreview) as PreferenceGroup[]).map((group) => <div key={group} className="rounded border border-white/10 p-3"><label className="flex items-center gap-2 text-sm text-slate-200"><input type="checkbox" checked={backupGroups.includes(group)} onChange={(event) => setBackupGroups((current) => event.target.checked ? [...current, group] : current.filter((value) => value !== group))} />{PREFERENCE_GROUP_LABELS[group]}</label><details className="mt-2 text-xs text-slate-400"><summary>Preview contents</summary><pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all">{JSON.stringify(backupPreview[group], null, 2)}</pre></details></div>)}
           <div className="dui-settings-actions"><button type="button" disabled={!backupGroups.length} onClick={applySettingsBackup}>Restore selected preferences</button><button type="button" onClick={() => setBackupPreview(null)}>Cancel import</button></div>
         </div>}
       </SettingsCard>
-      <SettingsCard title="Cleanup" description="Clear temporary interface state without deleting agents or credentials.">
-        <div className="dui-settings-actions dui-settings-actions--stack"><button type="button" onClick={() => { const count = clearAllCommandConsoleDrafts(); setNotice({ tone: 'success', text: `Cleared ${count} stored command draft${count === 1 ? '' : 's'}.` }) }}>Clear command drafts</button><button type="button" onClick={async () => { setNotice({ tone: 'neutral', text: 'Clearing AI sessions…' }); const result = await clearAgentResponses(); setNotice({ tone: result.ok ? 'success' : 'error', text: result.message }) }}>Clear console responses</button><button type="button" onClick={() => { resetSimulation(); setNotice({ tone: 'success', text: 'Runtime simulation state reset.' }) }}>Reset runtime simulation</button></div>
+      <SettingsCard title="Cleanup" description="Remove drafts and saved activity without changing your agents or sign-ins.">
+        <div className="dui-settings-actions dui-settings-actions--stack"><button type="button" onClick={() => { const count = clearAllCommandConsoleDrafts(); setNotice({ tone: 'success', text: `Cleared ${count} unfinished message${count === 1 ? '' : 's'}.` }) }}>Clear unfinished messages</button><button type="button" onClick={async () => { setNotice({ tone: 'neutral', text: 'Clearing saved responses…' }); const result = await clearAgentResponses(); setNotice({ tone: result.ok ? 'success' : 'error', text: result.message }) }}>Clear saved responses</button><button type="button" onClick={() => { resetSimulation(); setNotice({ tone: 'success', text: 'Agent activity status reset.' }) }}>Reset agent activity</button></div>
       </SettingsCard>
-      <SettingsCard title="Recovery" description="Restore known-good defaults while preserving valuable data.">
-        <div className="dui-settings-recovery"><strong>Reset all app preferences</strong><p>Restores appearance, workspace, voice and mission defaults. Agents, provider credentials, plugins, workspaces and files are kept.</p><button type="button" onClick={() => setPendingConfirmation('reset-all')}>Reset all preferences</button></div>
-        <div className="dui-settings-recovery is-danger"><strong>Clear active workspace state</strong><p>Removes the current party and command responses. Rostered agents remain available.</p><button type="button" onClick={() => setPendingConfirmation('clear-workspace')}>Clear party and responses</button></div>
+      <SettingsCard title="Reset" description="Restore default preferences while keeping your important data.">
+        <div className="dui-settings-recovery"><strong>Reset all preferences</strong><p>Restores appearance, workspace, voice, and mission choices. Your agents, sign-ins, plugins, workspaces, and files stay in place.</p><button type="button" onClick={() => setPendingConfirmation('reset-all')}>Reset all preferences</button></div>
+        <div className="dui-settings-recovery is-danger"><strong>Clear the active workspace</strong><p>Removes the current team and saved responses. Your agents remain available.</p><button type="button" onClick={() => setPendingConfirmation('clear-workspace')}>Clear team and responses</button></div>
       </SettingsCard>
     </div>
   )
 
   const renderUpdates = () => (
     <div className="dui-settings-section" id="settings-section-updates">
-      <SectionHeader section="updates" eyebrow="Stay current without interrupting your work" />
+      <SectionHeader section="updates" eyebrow="Keep Automnia current" />
       <AppUpdateSettings />
     </div>
   )
@@ -944,11 +943,11 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     const saveUsagePriority = async (nextPriority: 'automnia_only' | 'provider_first' | 'automnia_first_with_provider_fallback') => {
       if (!usagePriorityManaged || usagePriorityBusy || nextPriority === usagePriority) return
       if (usagePriorityLocked) {
-        setUsagePriorityError('Starter and credit-refill access stay on Automnia credits. Upgrade to Pro to choose another usage priority.')
+        setUsagePriorityError('Starter and credit refills use Automnia credits. Upgrade to Pro to use your own provider.')
         return
       }
       if (!byokAllowed && nextPriority !== 'automnia_only') {
-        setUsagePriorityError('Starter uses Automnia credits only. Upgrade to Pro for provider-plus-Automnia options.')
+        setUsagePriorityError('Starter uses Automnia credits. Upgrade to Pro to add your own provider.')
         return
       }
       setUsagePriorityBusy(true)
@@ -958,15 +957,15 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
         setNotice({
           tone: 'success',
           text: nextPriority === 'provider_first'
-            ? 'Usage priority saved and Gateway synchronized: your provider first, with Automnia credits as fallback.'
+            ? 'Preference saved. Your provider will be used first, with Automnia credits as backup.'
             : nextPriority === 'automnia_first_with_provider_fallback'
-              ? 'Usage priority saved and Gateway synchronized: Automnia credits first, with your provider as fallback.'
+              ? 'Preference saved. Automnia credits will be used first, with your provider as backup.'
               : usagePriorityLocked
-                ? 'Usage priority saved and Gateway synchronized: Automnia credits only.'
-                : 'Usage priority saved and Gateway synchronized: Automnia credits first, with your provider used if credits are exhausted.',
+                ? 'Preference saved. Automnia credits will be used.'
+                : 'Preference saved. Automnia credits will be used first, with your provider available when needed.',
         })
       } catch (error) {
-        setUsagePriorityError(error instanceof Error ? error.message : 'Could not save the usage priority.')
+        setUsagePriorityError(error instanceof Error ? error.message : 'Could not save your usage preference.')
       } finally {
         setUsagePriorityBusy(false)
       }
@@ -1029,7 +1028,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
 
     return (
       <div className="dui-settings-section dui-settings-account-section" id="settings-section-account">
-        <SectionHeader section="account" eyebrow="Automnia AI Nexus Plan, Access & Billing" />
+        <SectionHeader section="account" eyebrow="Manage your account and access" />
         <div className="dui-settings-account-hero">
           <div>
             <span>Signed in as</span>
@@ -1037,14 +1036,14 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
             <small>{account?.googleLinked ? 'Google sign-in linked' : account?.hasPassword ? 'Automnia password enabled' : account ? 'Google connection required for password setup' : 'Account security details loading'}</small>
           </div>
           <div data-tone={license?.active ? 'active' : 'inactive'}>
-            <span>Access status</span>
-            <strong>{entitlement.statusLabel}</strong>
-            <small>{entitlement.tierLabel} · {entitlement.billingLabel}</small>
+            <span>Account access</span>
+            <strong>{license?.active ? `Active · ${isProPlan ? 'Pro Access' : 'Starter'}` : 'Not active'}</strong>
+            <small>{license?.active ? 'Ready to use' : 'Choose a plan to get started'}</small>
           </div>
         </div>
         <div className="dui-settings-account-overview">
-          <SettingsCard className="dui-settings-account-card dui-settings-account-profile" title="Profile & security" description="Manage your account details and sign-in preferences.">
-            <Field label="Account Email" hint="Registered subscriber address.">
+          <SettingsCard className="dui-settings-account-card dui-settings-account-profile" title="Profile & sign-in" description="Manage your email and password.">
+            <Field label="Account email">
               <input type="text" readOnly value={license?.email || 'Not reported'} style={{ fontWeight: 'bold', backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
             </Field>
             <div className="dui-settings-account-password" aria-labelledby="account-password-title">
@@ -1058,11 +1057,11 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
                     ? 'Loading whether this account already has a password…'
                     : account.hasPassword
                       ? account.googleLinked
-                        ? 'This account already has an Automnia password. Google sign-in remains available; enter the current password only if you want to change it.'
-                        : 'This account already has an Automnia password. Enter the current password below to choose a new one.'
+                        ? 'You can sign in with Google or your Automnia password. Enter your current password below only if you want to change it.'
+                        : 'Enter your current password below to choose a new one.'
                       : account.googleLinked
-                        ? 'Google sign-in is connected. No current password is needed—create one below to enable email and password sign-in too.'
-                        : 'This account has no password yet, and Google is not connected on this device. Connect Google first; no password will be changed or removed.'}
+                        ? 'Create a password to add email and password sign-in alongside Google.'
+                        : 'Connect Google to confirm your account before creating a password.'}
                 </p>
               </div>
               {!checking && account && !account.googleLinked && !account.hasPassword && (
@@ -1092,117 +1091,88 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
               {passwordChangeError && <p className="dui-settings-account-password__error" role="alert">{passwordChangeError}</p>}
             </div>
           </SettingsCard>
-          <SettingsCard className="dui-settings-account-card dui-settings-account-plans" title="Two plans. A clear path forward." description="Credits are the simple unit of value—no oversized token totals to decode.">
-            <section className="dui-plan-catalog" aria-label="Automnia plan comparison">
+          <SettingsCard className="dui-settings-account-card dui-settings-account-plans" title="Starter and Pro" description="Compare the options available to you.">
+            <section className="dui-plan-catalog" aria-label="Starter and Pro comparison">
               <article className={`dui-plan-card${isCurrentStarterPlan ? ' is-current' : ''}`}>
                 <div className="dui-plan-card__head">
                   <div><span>STARTER</span><h4>Build your momentum</h4></div>
-                  {isCurrentStarterPlan && <b>Current plan</b>}
+                  {isCurrentStarterPlan && <b>Selected</b>}
                 </div>
                 <strong className="dui-plan-card__credits">{formatAutomniaCreditsFromTokens(AUTOMNIA_STARTER_TOKENS, '')} <small>credits</small></strong>
                 <p>Everything you need to explore, build, and run core Automnia workflows.</p>
                 <ul>
-                  <li>Automnia hosted models</li>
+                  <li>Ready-to-use AI</li>
                   <li>Essential agents and workflows</li>
-                  <li>Secure cloud execution</li>
-                  <li>Credits-only, simple billing</li>
+                  <li>Secure processing</li>
+                  <li>Simple credit billing</li>
                 </ul>
                 {!isCurrentStarterPlan && <button type="button" onClick={() => void openCheckout()} disabled={checkoutBusy}>{checkoutBusy ? 'Opening checkout…' : 'Choose Starter'}</button>}
               </article>
               <article className={`dui-plan-card is-pro${isCurrentProPlan ? ' is-current' : ''}`}>
                 <div className="dui-plan-card__head">
                   <div><span>MOST CAPABLE</span><h4>Pro</h4></div>
-                  {isCurrentProPlan ? <b>Current plan</b> : <b>Full access</b>}
+                  {isCurrentProPlan ? <b>Selected</b> : <b>Full access</b>}
                 </div>
                 <strong className="dui-plan-card__credits">{formatAutomniaCreditsFromTokens(AUTOMNIA_PRO_TOKENS, '')} <small>credits</small></strong>
-                <p>All of Automnia’s highest-level capabilities, consolidated into one decisive plan.</p>
+                <p>Get full access and the flexibility to use your own AI provider.</p>
                 <ul>
                   <li>Everything in Starter</li>
                   <li>All Automnia models and advanced workflows</li>
-                  <li>Bring your own provider + smart fallback routing</li>
-                  <li>Offline-capable provider access and priority controls</li>
+                  <li>Use your own AI provider</li>
+                  <li>Choose which service is used first</li>
                 </ul>
                 {!isCurrentProPlan && <button type="button" onClick={() => void openCheckout()} disabled={checkoutBusy}>{checkoutBusy ? 'Opening checkout…' : 'Upgrade to Pro'}</button>}
               </article>
             </section>
           </SettingsCard>
         </div>
-        <SettingsCard className="dui-settings-account-billing" title="Plan, access & billing" description="Review your plan, credit balance, and billing preferences.">
+        <SettingsCard className="dui-settings-account-billing" title="Usage & credits" description="Choose your AI service and check your Automnia credits.">
           <div className="dui-settings-account-fields">
-            <Field label="License Authorization" hint="The license key remains server-local and is never revealed in the app.">
-              <input type="text" readOnly value={license?.active ? 'Active — stored securely on this device' : 'No active license'} style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
-            </Field>
-            <Field label="Plan or Access Tier" hint="The exact entitlement activated for this account.">
-              <input type="text" readOnly value={entitlement.tierLabel} style={{ fontWeight: 'bold', backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
-            </Field>
-            <Field label="Access & Billing Mode" hint="Starter uses Automnia hosted credits. Pro adds the complete provider and priority-control toolkit.">
-              <input type="text" readOnly value={entitlement.billingLabel} style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
-            </Field>
-            <Field label="Usage Priority" hint={usagePriorityLocked ? 'Starter and credit-refill access stay on Automnia credits.' : hostedCredits || isByok ? 'Pro can choose Automnia credits or My provider + Automnia credits, including the route order.' : 'Activate Starter or Pro to choose a usage priority.'}>
+            <Field label="AI service" hint={usagePriorityLocked ? 'Starter uses Automnia credits.' : hostedCredits || isByok ? 'Choose Automnia credits, or add your connected provider.' : 'Choose a plan to start using Automnia.'}>
               <select
                 value={usagePriorityManaged ? (usagePriority === 'automnia_only' ? 'automnia_only' : 'provider_plus_automnia') : 'automnia_only'}
                 disabled={!usagePriorityManaged || usagePriorityBusy || usagePriorityLocked}
                 onChange={(event) => void saveUsagePriority(event.target.value === 'automnia_only' ? 'automnia_only' : 'provider_first')}
               >
                 <option value="automnia_only">Automnia credits</option>
-                <option value="provider_plus_automnia" disabled={!byokAllowed}>My provider + Automnia credits{byokAllowed ? '' : ' — provider access not included'}</option>
+                <option value="provider_plus_automnia" disabled={!byokAllowed}>My provider + Automnia credits{byokAllowed ? '' : ' — available with Pro'}</option>
               </select>
               {usagePriority !== 'automnia_only' && <div style={{ marginTop: '0.6rem' }}>
                 <label style={{ display: 'block', fontSize: '0.78rem', color: '#cbd5e1' }}>
-                  Fallback order
+                  Use first
                   <select
                     value={usagePriority}
                     disabled={usagePriorityBusy}
                     onChange={(event) => void saveUsagePriority(event.target.value as 'provider_first' | 'automnia_first_with_provider_fallback')}
                     style={{ display: 'block', width: '100%', marginTop: '0.3rem' }}
                   >
-                    <option value="provider_first">My provider first, Automnia credits fallback</option>
-                    <option value="automnia_first_with_provider_fallback">Automnia credits first, my provider fallback</option>
+                    <option value="provider_first">My provider, then Automnia credits</option>
+                    <option value="automnia_first_with_provider_fallback">Automnia credits, then my provider</option>
                   </select>
                 </label>
               </div>}
             </Field>
-            <Field label="Effective Agent Route" hint={hostedCredits || isByok ? 'This saved preference applies to normal messages, /runtime, /work, /openclaw, streamed turns, and buffered recovery.' : 'Activate a Cloud Subscription or BYOK license to enable agent messages.'}>
-              <input type="text" readOnly value={entitlement.defaultRouteLabel} style={{ fontWeight: 'bold', backgroundColor: hostedCredits ? 'rgba(16, 185, 129, 0.10)' : isByok ? 'rgba(56, 189, 248, 0.10)' : 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
-            </Field>
-            {(hostedCredits || (isByok && Number(license?.creditBalance) > 0)) && <Field label="Hosted token efficiency" hint="Automnia Cloud automatically bounds history, tool output, tool schemas, inline images and output budgets before the metered request. Vertex usage metadata remains the billing source of truth.">
-              <input type="text" readOnly value="Automatic · compact context · bounded output · safe request replay" style={{ fontWeight: 'bold', color: '#99f6e4', backgroundColor: 'rgba(16, 185, 129, 0.10)', cursor: 'not-allowed' }} />
-            </Field>}
           </div>
-          <section className="dui-settings-billing-summary" data-billing-mode={hostedCredits ? 'hosted' : isByok ? 'byok' : 'inactive'} aria-label="Subscription and credit summary">
+          <section className="dui-settings-billing-summary" data-billing-mode={hostedCredits ? 'hosted' : isByok ? 'byok' : 'inactive'} aria-label="Automnia credit balance">
             <div className="dui-settings-billing-summary__head">
               <div>
-                <span>Automnia billing</span>
-                <strong>{hostedCredits ? entitlement.tierLabel : isByok ? 'BYOK access' : 'Plan status'}</strong>
-                <small>{hostedCredits || isByok ? usagePriority === 'provider_first' ? license?.creditBalance === 0 ? 'Your connected provider is used first; Automnia credits are currently exhausted.' : 'Your connected provider is used first; Automnia credits are the fallback.' : usagePriority === 'automnia_first_with_provider_fallback' ? 'Automnia credits are used first; your connected provider is the fallback.' : 'Automnia credits are the only active route. Provider fallback is disabled.' : 'Activate a license to receive your current entitlement.'}</small>
+                <span>Automnia credits</span>
+                <strong>{hostedCredits || isByok ? balance : 'Not available'}</strong>
+                <small>{hostedCredits || isByok ? `Updated ${formatAccountTimestamp(license?.creditBalanceUpdatedAt)}` : 'Choose a plan to receive credits.'}</small>
               </div>
-              <b>{entitlement.statusLabel}</b>
+              <b>{hostedCredits || isByok ? license?.creditBalance === 0 ? 'Empty' : 'Available' : 'Inactive'}</b>
             </div>
-            <dl className="dui-settings-billing-summary__metrics">
-              <div>
-                <dt>Plan or access</dt>
-                <dd title={license?.tier || undefined}>{entitlement.tierLabel}</dd>
-              </div>
-              <div>
-                <dt>Usage remaining</dt>
-                <dd data-balance="true">{balance}</dd>
-              </div>
-              <div>
-                <dt>Usage updated</dt>
-                <dd>{hostedCredits || isByok ? formatAccountTimestamp(license?.creditBalanceUpdatedAt) : 'Not applicable — provider-billed'}</dd>
-              </div>
-            </dl>
           </section>
           {(hostedCredits || isByok) && usagePriority === 'automnia_only' && license?.creditBalance === 0 && <p role="alert" style={{ margin: '0.8rem 0 0', color: '#fda4af' }}>
-            Automnia Relay agent runtime is paused because Automnia credits are exhausted. Refill your credits, or switch to a provider route with fallback enabled if your plan supports provider access.
+            Your Automnia credits are empty. Add credits, or choose your connected provider if your plan includes provider access.
           </p>}
           <section className="dui-settings-account-actions" aria-labelledby="settings-account-actions-title">
             <div className="dui-settings-account-actions__head">
               <div>
-                <span>Account controls</span>
-                <strong id="settings-account-actions-title">Manage billing and access</strong>
+                <span>Account options</span>
+                <strong id="settings-account-actions-title">Billing and account</strong>
               </div>
-              <small>Secure account actions</small>
+              <small>Account settings</small>
             </div>
             <div className="dui-settings-account-actions__grid">
               <button
@@ -1212,9 +1182,9 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
                 disabled={checkoutBusy}
               >
                 <span>
-                  <small>Billing & plan</small>
+                  <small>Plan and credits</small>
                   <strong>{checkoutBusy ? 'Opening secure checkout…' : hostedCredits ? 'Manage credits or upgrade' : isByok ? 'Upgrade your Automnia access' : 'Choose an Automnia plan'}</strong>
-                  <em>{hostedCredits ? 'Add usage credits or review available higher tiers.' : 'View available plans in the secure Shopify checkout.'}</em>
+                  <em>{hostedCredits ? 'Add credits or compare available plans.' : 'View available Automnia plans.'}</em>
                 </span>
                 <b aria-hidden="true">›</b>
               </button>
@@ -1227,7 +1197,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
                 <span>
                   <small>Account status</small>
                   <strong>{accountRefreshBusy ? 'Refreshing account…' : hostedCredits ? 'Refresh balance and access' : 'Refresh account access'}</strong>
-                  <em>Sync the latest highest-tier entitlement for this account.</em>
+                  <em>Get the latest plan and credit information.</em>
                 </span>
                 <b aria-hidden="true">›</b>
               </button>
@@ -1239,7 +1209,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
               >
                 <span>
                   <small>License</small>
-                  <strong>{isByok ? 'Link another purchase' : 'Link legacy license'}</strong>
+                  <strong>{isByok ? 'Link another purchase' : 'Link an existing license'}</strong>
                 </span>
                 <b aria-hidden="true">›</b>
               </button>
@@ -1252,7 +1222,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
               </button>
             </div>
           </section>
-          {isByok && <p style={{ color: '#93c5fd', margin: '0.75rem 0 0', fontSize: '0.84rem' }}>BYOK keeps your provider connection, and any pooled Automnia credits carried over from Starter remain available. Choose My provider + Automnia credits to select which route runs first.</p>}
+          {isByok && <p style={{ color: '#93c5fd', margin: '0.75rem 0 0', fontSize: '0.84rem' }}>Your connected provider and any Automnia credits from Starter remain available. Choose which service you want Automnia to use first.</p>}
           {accountRefreshError && <p role="alert" style={{ color: '#fb7185', margin: '0.75rem 0 0' }}>{accountRefreshError}</p>}
           {checkoutError && <p role="alert" style={{ color: '#fb7185', margin: '0.75rem 0 0' }}>{checkoutError}</p>}
           {usagePriorityError && <p role="alert" style={{ color: '#fb7185', margin: '0.75rem 0 0' }}>{usagePriorityError}</p>}
@@ -1275,9 +1245,9 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   }
 
   const confirmationCopy: Record<Exclude<PendingConfirmation, null>, { title: string; text: string; action: string }> = {
-    'reset-all': { title: 'Restore all app preferences?', text: 'Your agents, credentials, plugins and files will not be changed.', action: 'Restore defaults' },
-    'reset-runtime': { title: 'Reset targeted agent runtime?', text: `This will write the default heartbeat and reasoning policy to ${targetIds.length} target agent${targetIds.length === 1 ? '' : 's'}.`, action: 'Reset agent runtime' },
-    'clear-workspace': { title: 'Clear party and responses?', text: 'This removes the active party and console history. Rostered agents are kept.', action: 'Clear workspace state' },
+    'reset-all': { title: 'Reset all preferences?', text: 'Your agents, sign-ins, plugins, and files will stay in place.', action: 'Reset preferences' },
+    'reset-runtime': { title: 'Restore agent defaults?', text: `This will restore the default work preferences for ${targetIds.length} agent${targetIds.length === 1 ? '' : 's'}.`, action: 'Restore agent defaults' },
+    'clear-workspace': { title: 'Clear team and responses?', text: 'This removes the active team and saved responses. Your agents will remain available.', action: 'Clear workspace' },
   }
 
   const confirmPendingAction = () => {
@@ -1285,7 +1255,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     else if (pendingConfirmation === 'reset-runtime') void applyRuntimeToTargets(DEFAULT_RUNTIME_SETTINGS, true)
     else if (pendingConfirmation === 'clear-workspace') {
       setPendingConfirmation(null)
-      setNotice({ tone: 'neutral', text: 'Clearing party and AI sessions…' })
+      setNotice({ tone: 'neutral', text: 'Clearing the active team and saved responses…' })
       void clearAll().then((result) => setNotice({ tone: result.ok ? 'success' : 'error', text: result.message }))
     }
   }
@@ -1293,7 +1263,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   return (
     <section ref={settingsRoot} data-dui-panel="settings" data-ui-revision="settings-v2" className="dui-settings-panel dui-settings-redesign dui-settings-polished">
       <header className="dui-settings-topbar">
-        <div><span>Workspace preferences</span><h2>Settings</h2><p>Make Automnia work the way you do.</p></div>
+        <div><span>Your preferences</span><h2>Settings</h2><p>Make Automnia work the way you do.</p></div>
         <label className="dui-settings-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m16 16 4 4" /></svg><input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search settings…" aria-label="Search settings" />{searchQuery && <button type="button" onClick={() => setSearchQuery('')} aria-label="Clear settings search">×</button>}</label>
       </header>
 
@@ -1306,7 +1276,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
 
       <div className="dui-settings-layout">
         <nav className="dui-settings-nav" aria-label="Settings categories">
-          <p className="dui-settings-nav-label">Preferences</p>
+          <p className="dui-settings-nav-label">Settings</p>
           {SETTINGS_SECTIONS.map((section) => (
             <button key={section.id} type="button" aria-current={!normalizedSearch && activeSection === section.id ? 'page' : undefined} aria-controls={`settings-section-${section.id}`} data-settings-section={section.id} data-active={!normalizedSearch && activeSection === section.id ? 'true' : 'false'} onClick={() => { setActiveSection(section.id); setSearchQuery('') }}>
               <span aria-hidden="true"><SettingsGlyph name={section.id} /></span>
@@ -1319,7 +1289,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
         <div data-workspace-scroll="settings" className="dui-settings-content">
           {normalizedSearch && <div className="dui-settings-results"><strong>Search all settings</strong><span>Results for “{searchQuery.trim()}”</span></div>}
           <SettingsSearchMatches query={searchQuery} root={settingsRoot} />
-          {visibleSections.length ? visibleSections.map((section) => <div key={section} data-search-section-name={section} data-search-section-keywords={SETTINGS_SECTIONS.find((entry) => entry.id === section)?.keywords}>{renderSection(section)}</div>) : <div className="dui-settings-empty"><SettingsGlyph name="appearance" /><strong>No settings found</strong><span>Try “voice”, “console”, “mission”, “contrast” or “runtime”.</span><button type="button" onClick={() => setSearchQuery('')}>Clear search</button></div>}
+          {visibleSections.length ? visibleSections.map((section) => <div key={section} data-search-section-name={section} data-search-section-keywords={SETTINGS_SECTIONS.find((entry) => entry.id === section)?.keywords}>{renderSection(section)}</div>) : <div className="dui-settings-empty"><SettingsGlyph name="appearance" /><strong>No settings found</strong><span>Try “voice”, “chat”, “mission”, “contrast”, or “agents”.</span><button type="button" onClick={() => setSearchQuery('')}>Clear search</button></div>}
         </div>
       </div>
     </section>

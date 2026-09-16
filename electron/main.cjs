@@ -150,9 +150,11 @@ const WINDOWS_DIAGNOSTIC_SINGLE_PROCESS = process.platform === 'win32' &&
   process.env.AUTOMNIA_WINDOWS_DIAGNOSTIC_SINGLE_PROCESS === '1' &&
   process.env.AUTOMNIA_ACK_UNSAFE_ELECTRON_SANDBOX_DIAGNOSTIC === '1'
 const ELECTRON_E2E = process.env.AUTOMNIA_ELECTRON_E2E === '1'
+// Start a fresh desktop profile about three zoom-out steps below the previous
+// 80% default. Once the user changes zoom, the saved preference still wins.
 const DEFAULT_RENDERER_ZOOM_FACTOR = Math.min(
   1,
-  Math.max(0.8, Number(process.env.AUTOMNIA_DEFAULT_ZOOM_FACTOR || 0.8) || 0.8),
+  Math.max(0.5, Number(process.env.AUTOMNIA_DEFAULT_ZOOM_FACTOR || 0.6) || 0.6),
 )
 const ELECTRON_E2E_AUTO_QUIT_MS = Math.max(0, Number(process.env.AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS || 0) || 0)
 const ELECTRON_E2E_ALLOW_PARALLEL = ELECTRON_E2E && process.env.AUTOMNIA_ELECTRON_E2E_ALLOW_PARALLEL === '1'
@@ -1225,10 +1227,14 @@ function listProcessDetails(pids) {
       $ids = @(${uniquePids.join(',')});
       @(Get-CimInstance Win32_Process |
         Where-Object { $ids -contains [int]$_.ProcessId } |
-        Select-Object @{Name='pid';Expression={$_.ProcessId}}, @{Name='commandLine';Expression={$_.CommandLine}}) |
+        Select-Object @{Name='pid';Expression={$_.ProcessId}}, @{Name='commandLine';Expression={$_.CommandLine}}, @{Name='startedAt';Expression={if ($_.CreationDate) {$_.CreationDate.ToUniversalTime().ToString('o')} else {''}}}) |
         ConvertTo-Json -Depth 3 -Compress
     `)
-      .map((row) => ({ pid: Number(row.pid), commandLine: String(row.commandLine || '') }))
+      .map((row) => ({
+        pid: Number(row.pid),
+        commandLine: String(row.commandLine || ''),
+        startedAt: String(row.startedAt || ''),
+      }))
       .filter((row) => Number.isFinite(row.pid))
   }
 
@@ -1256,7 +1262,7 @@ function listDescendantProcesses(rootPid = process.pid) {
     return runPowerShellJson(`
       $root = ${Math.trunc(root)};
       $all = @(Get-CimInstance Win32_Process |
-        Select-Object @{Name='pid';Expression={$_.ProcessId}}, @{Name='parentPid';Expression={$_.ParentProcessId}}, @{Name='commandLine';Expression={$_.CommandLine}})
+        Select-Object @{Name='pid';Expression={$_.ProcessId}}, @{Name='parentPid';Expression={$_.ParentProcessId}}, @{Name='commandLine';Expression={$_.CommandLine}}, @{Name='startedAt';Expression={if ($_.CreationDate) {$_.CreationDate.ToUniversalTime().ToString('o')} else {''}}})
       $pending = @($root);
       $seen = @{};
       $out = @();
@@ -1275,7 +1281,11 @@ function listDescendantProcesses(rootPid = process.pid) {
       }
       @($out) | ConvertTo-Json -Depth 3 -Compress
     `)
-      .map((row) => ({ pid: Number(row.pid), commandLine: String(row.commandLine || '') }))
+      .map((row) => ({
+        pid: Number(row.pid),
+        commandLine: String(row.commandLine || ''),
+        startedAt: String(row.startedAt || ''),
+      }))
       .filter((row) => Number.isFinite(row.pid))
   }
 
@@ -1314,9 +1324,68 @@ function listDescendantProcesses(rootPid = process.pid) {
   return descendants
 }
 
+function sameProcessInstance(captured, current) {
+  if (!captured || !current || Number(captured.pid) !== Number(current.pid)) return false
+  const capturedStartedAt = String(captured.startedAt || '').trim()
+  const currentStartedAt = String(current.startedAt || '').trim()
+  if (capturedStartedAt && currentStartedAt && capturedStartedAt !== currentStartedAt) return false
+  const capturedCommand = normalizeForMatch(captured.commandLine).trim()
+  const currentCommand = normalizeForMatch(current.commandLine).trim()
+  return Boolean(capturedCommand && currentCommand && capturedCommand === currentCommand)
+}
+
+function matchingCapturedProcesses(capturedProcesses) {
+  const captured = Array.isArray(capturedProcesses)
+    ? capturedProcesses.filter((entry) => Number.isFinite(Number(entry?.pid)) && Number(entry.pid) !== process.pid)
+    : []
+  if (!captured.length) return []
+  const currentByPid = new Map(
+    listProcessDetails(captured.map((entry) => entry.pid)).map((entry) => [entry.pid, entry]),
+  )
+  return captured.filter((entry) => sameProcessInstance(entry, currentByPid.get(Number(entry.pid))))
+}
+
+function remainingCapturedProcesses(capturedProcesses) {
+  const captured = Array.isArray(capturedProcesses)
+    ? capturedProcesses.filter((entry) => Number.isFinite(Number(entry?.pid)) && Number(entry.pid) !== process.pid)
+    : []
+  if (!captured.length) return []
+  const currentByPid = new Map(
+    listProcessDetails(captured.map((entry) => entry.pid)).map((entry) => [entry.pid, entry]),
+  )
+  return captured.filter((entry) => {
+    const current = currentByPid.get(Number(entry.pid))
+    if (current) return sameProcessInstance(entry, current)
+    // If process inspection fails but the PID is still alive, report it as
+    // unresolved rather than claiming a clean shutdown or risking PID reuse.
+    return isProcessAlive(entry.pid)
+  })
+}
+
+function captureAppOwnedDescendants() {
+  // Parentage is the strongest ownership signal available for arbitrary task
+  // workers. Capture it before graceful shutdown so a child cannot escape the
+  // final sweep merely because its immediate parent exits first. Command line
+  // plus creation time protect against killing a later process that reused a PID.
+  return listDescendantProcesses(process.pid)
+    .filter((entry) => entry.pid !== process.pid)
+    .filter((entry, index, entries) => entries.findIndex((candidate) => candidate.pid === entry.pid) === index)
+}
+
+function isProcessAlive(pid) {
+  const id = Number(pid)
+  if (!Number.isFinite(id) || id <= 0) return false
+  try {
+    process.kill(id, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
 function killProcessTree(pid, reason) {
   const id = Number(pid)
-  if (!Number.isFinite(id) || id === process.pid) return false
+  if (!Number.isFinite(id) || id <= 0 || id === process.pid) return false
   console.log(`[automnia] stopping app-owned process pid=${id}: ${reason}`)
   if (process.platform === 'win32') {
     const result = spawnSync('taskkill.exe', ['/pid', String(id), '/t', '/f'], {
@@ -1324,7 +1393,7 @@ function killProcessTree(pid, reason) {
       timeout: 10_000,
       windowsHide: true,
     })
-    return !result.error
+    return !result.error && (result.status === 0 || !isProcessAlive(id))
   }
 
   try {
@@ -1335,7 +1404,7 @@ function killProcessTree(pid, reason) {
   return true
 }
 
-async function cleanupAppOwnedHelpers(reason) {
+async function cleanupAppOwnedHelpers(reason, capturedProcesses = []) {
   const helpers = listManagedHelperProcesses()
     .filter((entry) => entry.pid !== process.pid)
     .filter((entry) => isAppOwnedCommand(entry.commandLine) && isManagedHelperCommand(entry.commandLine))
@@ -1349,15 +1418,25 @@ async function cleanupAppOwnedHelpers(reason) {
     .filter((entry) => entry.pid !== process.pid)
     .filter((entry) => isAppOwnedCommand(entry.commandLine) && isManagedHelperCommand(entry.commandLine))
 
+  // This includes arbitrary Node/task descendants that do not match one of the
+  // fixed helper command patterns. Only identities captured while they were in
+  // this Electron process tree are eligible.
+  const capturedDescendants = matchingCapturedProcesses(capturedProcesses)
+
   const byPid = new Map()
-  for (const entry of [...helpers, ...listenerDetails, ...descendants]) byPid.set(entry.pid, entry)
+  for (const entry of [...helpers, ...listenerDetails, ...descendants, ...capturedDescendants]) byPid.set(entry.pid, entry)
   const targets = Array.from(byPid.values()).sort((a, b) => a.pid - b.pid)
 
+  let stopped = 0
   for (const target of targets) {
-    killProcessTree(target.pid, reason)
+    if (killProcessTree(target.pid, reason)) stopped += 1
   }
   if (targets.length) await sleep(1200)
-  return targets.length
+  return {
+    attempted: targets.length,
+    stopped,
+    remainingCaptured: remainingCapturedProcesses(capturedProcesses),
+  }
 }
 
 async function ensurePortAvailable(port, label, reason = 'port repair') {
@@ -1880,19 +1959,33 @@ async function performQuitCleanup() {
   if (quitCleanupInFlight) return quitCleanupInFlight
   isQuitting = true
   updateTrayMenu()
+  const capturedProcesses = captureAppOwnedDescendants()
+  appendDesktopDiagnostic('quit-cleanup-started', {
+    capturedDescendants: capturedProcesses.length,
+  })
+  logE2e(`quit-owned-processes-captured:${capturedProcesses.length}`)
   quitCleanupInFlight = Promise.resolve().then(async () => {
     try {
       await stopRuntimeCompletelyForQuit()
     } catch (err) {
       console.warn('[automnia] runtime cleanup failed:', err?.message || err)
     }
+    const cleanupResults = []
     try {
-      await cleanupAppOwnedHelpers('quit cleanup')
+      cleanupResults.push(await cleanupAppOwnedHelpers('quit cleanup', capturedProcesses))
       await sleep(500)
-      await cleanupAppOwnedHelpers('quit cleanup final sweep')
+      cleanupResults.push(await cleanupAppOwnedHelpers('quit cleanup final sweep', capturedProcesses))
     } catch (err) {
       console.warn('[automnia] helper cleanup failed:', err?.message || err)
     }
+    const remainingCaptured = remainingCapturedProcesses(capturedProcesses)
+    appendDesktopDiagnostic('quit-cleanup-complete', {
+      capturedDescendants: capturedProcesses.length,
+      attempted: cleanupResults.reduce((total, result) => total + result.attempted, 0),
+      stopped: cleanupResults.reduce((total, result) => total + result.stopped, 0),
+      remainingDescendants: remainingCaptured.length,
+    })
+    logE2e(`quit-owned-processes-remaining:${remainingCaptured.length}`)
     quitCleanupComplete = true
     logE2e('quit-cleanup-complete')
   }).finally(() => {

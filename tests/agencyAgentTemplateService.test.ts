@@ -6,6 +6,7 @@ import test from 'node:test'
 
 import {
   loadAgencyAgentTemplateCatalog,
+  resolveAgencyAgentTemplateSourceRoot,
   scanAgencyAgentTemplateCatalog,
 } from '../server/services/recruit/agencyAgentTemplateService'
 
@@ -223,6 +224,25 @@ test('scans original Agency folder layout and plain markdown templates', async (
   assert.equal(spatial?.name, 'visionOS Spatial Engineer')
   assert.equal(spatial?.description, 'Native visionOS spatial computing and SwiftUI volumetric interfaces.')
   assert(spatial?.documents.find((entry) => entry.file === 'AGENCY_SOURCE.md')?.content.includes('# visionOS Spatial Engineer'))
+})
+
+test('resolves the bundled Automnia roster when a stale OpenClaw workspace override is configured', async () => {
+  const appRoot = await mkdtemp(path.join(os.tmpdir(), 'agency-template-app-'))
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'agency-template-workspace-'))
+  const resourcesRoot = await mkdtemp(path.join(os.tmpdir(), 'agency-template-resources-'))
+  const automniaRoot = path.join(appRoot, 'templates', 'automnia-agents')
+  const staleRoot = path.join(workspaceRoot, 'vendor', 'agency-agents')
+  await mkdir(automniaRoot, { recursive: true })
+
+  const resolved = resolveAgencyAgentTemplateSourceRoot({
+    workspaceRoot,
+    appRoot,
+    electronResourcesPath: resourcesRoot,
+    configuredSourceRoot: '%USERPROFILE%\\.openclaw\\workspace\\vendor\\agency-agents',
+  })
+
+  assert.equal(resolved, automniaRoot)
+  assert.notEqual(resolved, staleRoot)
 })
 
 for (const cache of ['sqlite', 'state', 'disk'] as const) {

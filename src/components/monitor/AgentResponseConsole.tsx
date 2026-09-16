@@ -503,7 +503,7 @@ function responseCta(entry: AgentResponse): ResponseCta | null {
     case 'credits_exhausted':
       return {
         label: 'Manage credits or routing',
-        detail: 'Open Account & License to refill Automnia credits or choose a provider fallback route.',
+        detail: 'Open Account to add Automnia credits or choose your connected provider.',
         action: 'open-settings',
       }
     case 'auth_missing':
@@ -820,11 +820,11 @@ const ResponseMessage = memo(function ResponseMessage({
           {cta.action === 'open-settings' && (
             <Button
               onClick={() => window.dispatchEvent(new CustomEvent('automnia:navigate', { detail: 'settings-account' }))}
-              title="Open Settings at Account & License"
+              title="Open Settings at Account"
               size="compact"
               variant="secondary"
             >
-              Open Account &amp; License
+              Open Account
             </Button>
           )}
         </div>
@@ -869,10 +869,15 @@ const ResponseMessages = memo(function ResponseMessages({
 export function AgentResponseConsole() {
   useEffect(() => { window.dispatchEvent(new Event('automnia:console-ready')) }, [])
   const [responseQuery, setResponseQuery] = useState('')
+  const [historySearchOpen, setHistorySearchOpen] = useState(false)
   const [responseLimit, setResponseLimit] = useState(MESSAGE_RENDER_LIMIT)
   const [followingLatest, setFollowingLatest] = useState(true)
+  const historySearchInputRef = useRef<HTMLInputElement | null>(null)
   const lastReadResponseId = useRef<string | undefined>(undefined)
   const olderResponseAnchor = useRef<{ height: number; top: number } | null>(null)
+  useLayoutEffect(() => {
+    if (historySearchOpen) historySearchInputRef.current?.focus({ preventScroll: true })
+  }, [historySearchOpen])
   const { license } = useLicense()
   const agents = useNexusStore((s) => s.agents)
   const selectedAgentIds = useNexusStore((s) => s.selectedAgentIds)
@@ -1973,6 +1978,35 @@ export function AgentResponseConsole() {
     hidePartyTargetFromChat(agentId)
   }
 
+  const closeHistorySearch = () => {
+    setHistorySearchOpen(false)
+    setResponseQuery('')
+    setResponseLimit(MESSAGE_RENDER_LIMIT)
+  }
+
+  const toggleHistorySearch = () => {
+    if (historySearchOpen) {
+      closeHistorySearch()
+      return
+    }
+    setHistorySearchOpen(true)
+  }
+
+  const exportVisibleConversation = () => {
+    const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), responses: visibleDisplayedResponses }, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `automnia-conversation-${new Date().toISOString().slice(0, 10)}.json`
+    anchor.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  const clearConversation = () => {
+    closeHistorySearch()
+    void clearAgentResponses()
+  }
+
   return (
     <section
       data-dui-panel="command-console"
@@ -2025,9 +2059,26 @@ export function AgentResponseConsole() {
             </div>
           </div>
           {responses.length > 0 && (
-            <div className="dy-command-console__meta">
+            <div className="dy-command-console__meta" role="group" aria-label="Conversation actions">
               <IconButton
-                onClick={clearAgentResponses}
+                onClick={toggleHistorySearch}
+                className="dy-command-console__action"
+                title={historySearchOpen ? 'Close conversation search' : 'Search conversation'}
+                aria-label={historySearchOpen ? 'Close conversation search' : 'Search conversation'}
+                aria-controls="agent-chat-history-search"
+                aria-expanded={historySearchOpen}
+                data-active={historySearchOpen ? 'true' : 'false'}
+                variant="quiet"
+                size="compact"
+                icon={(
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="6.5" />
+                    <path d="m16 16 4 4" />
+                  </svg>
+                )}
+              />
+              <IconButton
+                onClick={clearConversation}
                 className="dy-command-console__clear"
                 title="Clear messages and reset AI sessions"
                 aria-label="Clear messages and reset AI sessions"
@@ -2311,18 +2362,25 @@ export function AgentResponseConsole() {
       )}
 
       {/* Messages area */}
-      {responses.length > 0 && <div className="dy-chat-history-tools flex min-w-0 shrink-0 flex-wrap gap-2 px-3 py-2">
-        <input type="search" aria-label="Search retained conversation" placeholder="Search conversation" value={responseQuery} onChange={(event) => { setResponseQuery(event.target.value); setResponseLimit(MESSAGE_RENDER_LIMIT) }} className="min-w-0 flex-1 rounded border border-white/15 bg-transparent px-2 py-2 text-[12px]" />
-        <Button size="compact" variant="quiet" onClick={() => {
-          const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), responses: visibleDisplayedResponses }, null, 2)], { type: 'application/json' })
-          const url = URL.createObjectURL(blob)
-          const anchor = document.createElement('a')
-          anchor.href = url
-          anchor.download = `automnia-conversation-${new Date().toISOString().slice(0, 10)}.json`
-          anchor.click()
-          window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-        }}>Export visible</Button>
-      </div>}
+      {responses.length > 0 && historySearchOpen && (
+        <div id="agent-chat-history-search" className="dy-chat-history-tools flex min-w-0 shrink-0 flex-wrap gap-2 px-3 py-2" role="search">
+          <input
+            ref={historySearchInputRef}
+            type="search"
+            aria-label="Search retained conversation"
+            placeholder="Search conversation"
+            value={responseQuery}
+            onChange={(event) => { setResponseQuery(event.target.value); setResponseLimit(MESSAGE_RENDER_LIMIT) }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Escape') return
+              event.preventDefault()
+              closeHistorySearch()
+            }}
+            className="min-w-0 flex-1 rounded border border-white/15 bg-transparent px-2 py-2 text-[12px]"
+          />
+          <Button size="compact" variant="quiet" onClick={exportVisibleConversation}>Export visible</Button>
+        </div>
+      )}
       <div
         ref={listRef}
         onScroll={handleMessageScroll}

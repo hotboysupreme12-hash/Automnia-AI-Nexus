@@ -128,12 +128,15 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__meta {
   position:static !important;
   display:flex !important;
+  align-items:center !important;
   width:auto !important;
   grid-column:auto !important;
+  gap:2px !important;
   margin:0 !important;
   align-self:flex-start !important;
 }
 
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__action,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__clear {
   width:32px !important;
   height:32px !important;
@@ -144,6 +147,27 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"
   background:transparent !important;
   color:#a0a7b3 !important;
   box-shadow:none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__action svg,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__clear svg {
+  width:15px !important;
+  height:15px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__action:hover:not(:disabled),
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__action[data-active="true"] {
+  background:#ffffff0b !important;
+  color:#f0f1f4 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__action:disabled {
+  opacity:.38 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__clear:hover:not(:disabled) {
+  background:#ef858510 !important;
+  color:#f2a4ab !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-target-bar {

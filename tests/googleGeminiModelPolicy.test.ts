@@ -4,11 +4,16 @@ import test from 'node:test'
 import {
   googleGeminiModelDisallowsCustomSampling,
   googleGeminiThinkingForModel,
+  isGoogleGemini31ProModel,
+  isGoogleGemini35FlashLiteModel,
   isGoogleGemini38FlashModel,
   isGoogleGemini37FlashModel,
 } from '../server/services/providers/googleGeminiModelPolicy'
 
 test('Gemini 3.7 Flash normalizes app thinking choices to supported levels', () => {
+  assert.equal(isGoogleGemini31ProModel('google/gemini-3.1-pro-preview'), true)
+  assert.equal(isGoogleGemini31ProModel('gemini-3.1-pro-preview-customtools'), true)
+  assert.equal(isGoogleGemini35FlashLiteModel('google-vertex/gemini-3.5-flash-lite'), true)
   assert.equal(isGoogleGemini37FlashModel('gemini-3.7-flash'), true)
   assert.equal(isGoogleGemini37FlashModel('models/gemini-3.7-flash'), true)
   assert.equal(isGoogleGemini37FlashModel('google-vertex/gemini-3.7-flash'), true)
@@ -25,10 +30,15 @@ test('Gemini 3.7 Flash normalizes app thinking choices to supported levels', () 
   assert.equal(googleGeminiThinkingForModel('gemini-3.7-flash', 'max'), 'high')
   assert.equal(googleGeminiThinkingForModel('gemini-3.8-flash', 'off'), 'low')
   assert.equal(googleGeminiThinkingForModel('gemini-3.8-flash', 'max'), 'high')
+  assert.equal(googleGeminiThinkingForModel('google/gemini-3.1-pro-preview', 'off'), 'low')
+  assert.equal(googleGeminiThinkingForModel('google-vertex/gemini-3.1-pro-preview', 'minimal'), 'low')
+  assert.equal(googleGeminiThinkingForModel('gemini-3.1-pro-preview', 'max'), 'high')
+  assert.equal(googleGeminiThinkingForModel('gemini-3.5-flash-lite', 'minimal'), 'minimal')
   assert.equal(googleGeminiThinkingForModel('gemini-3.6-flash', 'minimal'), 'minimal')
 })
 
-test('Gemini 3.6, 3.7, and 3.8 Flash direct artifact requests omit custom sampling', () => {
+test('Gemini Flash contracts omit custom sampling where Google disallows it', () => {
+  assert.equal(googleGeminiModelDisallowsCustomSampling('gemini-3.5-flash-lite'), true)
   assert.equal(googleGeminiModelDisallowsCustomSampling('gemini-3.6-flash'), true)
   assert.equal(googleGeminiModelDisallowsCustomSampling('publishers/google/models/gemini-3.7-flash'), true)
   assert.equal(googleGeminiModelDisallowsCustomSampling('gemini-3.8-flash'), true)

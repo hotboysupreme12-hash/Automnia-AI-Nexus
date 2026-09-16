@@ -91,6 +91,9 @@ const modelOptionFromId = (modelId: string): AvailableModel | null => {
 
 function modelBrief(modelId: string): { title: string; description: string; tone: string } | null {
   const normalized = modelId.toLowerCase()
+  if (normalized.includes('gpt-6-astra')) {
+    return { title: 'Frontier research and agent work', description: 'OpenAI\'s highest-capability API model for complex research, reasoning, and tool-assisted work. Requires an OpenAI API key.', tone: 'cyan' }
+  }
   if (normalized.includes('gpt-5.6-sol')) {
     return { title: 'Flagship research and coding', description: 'Best fit for complex planning, agentic coding, and difficult research tasks.', tone: 'cyan' }
   }
@@ -99,6 +102,9 @@ function modelBrief(modelId: string): { title: string; description: string; tone
   }
   if (normalized.includes('gpt-5.6-luna')) {
     return { title: 'High-volume execution', description: 'Optimized for economical, parallel task throughput.', tone: 'amber' }
+  }
+  if (normalized.includes('claude-fable-5-1')) {
+    return { title: 'Anthropic frontier reasoning', description: 'Current Fable flagship for difficult reasoning and agent work; check retention requirements before sensitive workloads.', tone: 'violet' }
   }
   if (normalized.includes('claude-fable-5')) {
     return { title: 'Anthropic flagship', description: 'Highest-capability Claude 5 option; check retention requirements before sensitive workloads.', tone: 'violet' }

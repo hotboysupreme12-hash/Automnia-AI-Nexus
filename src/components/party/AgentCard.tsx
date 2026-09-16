@@ -4,6 +4,7 @@ import { memo, useState } from 'react'
 import type { OpenClawAgent } from '../../types/nexus'
 import { useNexusStore } from '../../store/nexusStore'
 import { agentPortraitSrc } from '../../utils/portrait'
+import { describeAgentModel } from '../../utils/agentModelDisplay'
 import type { AgentCardTheme } from '../settings/workspaceSettings'
 
 const BEHAVIOR_LABELS: Record<string, string> = {
@@ -18,37 +19,6 @@ const BEHAVIOR_LABELS: Record<string, string> = {
 
 function portraitSrcForAgent(agent: OpenClawAgent) {
   return agentPortraitSrc(agent.id, agent.portrait)
-}
-
-function formatModelName(modelId = '') {
-  if (!modelId) return 'Unassigned'
-  const parts = modelId.split('/').filter(Boolean)
-  const model = parts[parts.length - 1] || modelId
-  const friendlyModel = model
-    .replace(/(\d+)-(\d+)(?=-|$)/g, '$1.$2')
-    .replace(/[-_:@]+/g, ' ')
-
-  return friendlyModel
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((part) => {
-      const normalized = part.toLowerCase()
-      if (normalized === 'gpt') return 'GPT'
-      if (normalized === 'gemini') return 'Gemini'
-      if (normalized === 'claude') return 'Claude'
-      if (normalized === 'llama') return 'Llama'
-      if (/^o\d+$/i.test(part)) return part.toUpperCase()
-      if (/^\d+(?:\.\d+)?[a-z]+$/i.test(part)) {
-        return part.replace(/[a-z]+$/i, (suffix) => suffix.toUpperCase())
-      }
-      return `${part.slice(0, 1).toUpperCase()}${part.slice(1).toLowerCase()}`
-    })
-    .join(' ')
-}
-
-function shortProviderName(modelId = '') {
-  if (!modelId) return 'Unassigned'
-  return modelId.split('/').filter(Boolean)[0] || 'Unassigned'
 }
 
 interface AgentCardProps {
@@ -134,15 +104,16 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
   const cardMinHeight = listMode ? 'min-h-[124px]' : denseMode ? 'min-h-[360px]' : compactMode ? 'min-h-[310px]' : 'min-h-[390px]'
   const skillCount = agent.unlockedSkills.length
   const heartbeatSeconds = Math.round((agent.heartbeat.tickIntervalMs || 0) / 1_000)
+  const modelDisplay = describeAgentModel(agent.model?.primary)
   const listDetailItems = [
-    { label: 'Provider', value: shortProviderName(agent.model?.primary) },
-    { label: 'Model', value: formatModelName(agent.model?.primary) },
+    { label: 'Provider', value: modelDisplay.providerLabel },
+    { label: 'Model', value: modelDisplay.modelLabel },
     { label: 'Timing', value: heartbeatSeconds > 0 ? `${heartbeatSeconds}s` : 'off' },
     { label: 'Skills', value: String(skillCount) },
     { label: 'Sandbox', value: agent.sandbox?.mode || 'default' },
   ]
   const detailItems = denseMode ? [
-    { label: 'Model', value: formatModelName(agent.model?.primary) },
+    { label: 'Model', value: modelDisplay.cardLabel },
     { label: 'Thinking', value: agent.runtimePolicy?.thinkingDefault || 'off' },
     { label: 'Heartbeat', value: heartbeatSeconds > 0 ? `${heartbeatSeconds}s` : 'off' },
     { label: 'Skills', value: String(skillCount) },
@@ -161,8 +132,10 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
       data-agent-running={busy ? 'true' : 'false'}
       data-agent-activity={activityStatus?.kind || (busy ? 'working' : 'idle')}
       data-agent-selected={isSelected ? 'true' : 'false'}
+      data-agent-model-label={modelDisplay.cardLabel}
+      data-agent-model-provider={modelDisplay.providerLabel}
       role="group"
-      aria-label={`${agent.name}, ${agent.role}. ${inP ? `In party slot ${displaySlot}.` : 'Not in party.'} ${isSelected ? 'Selected for Agent Chat.' : 'Not selected for Agent Chat.'}`}
+      aria-label={`${agent.name}, ${agent.role}. ${modelDisplay.cardLabel}. ${inP ? `In party slot ${displaySlot}.` : 'Not in party.'} ${isSelected ? 'Selected for Agent Chat.' : 'Not selected for Agent Chat.'}`}
       draggable={!missionRunning}
       onDragStart={handleDragStart}
       onClick={handleCardClick}
@@ -245,9 +218,9 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
 
         {simpleMode && (
           <div className="agent-card-simple-meta" aria-label="Agent model and runtime summary">
-            <div className="agent-card-simple-meta__model" title={agent.model?.primary || 'No primary model assigned'}>
+            <div className="agent-card-simple-meta__model" title={modelDisplay.title}>
               <span>Model</span>
-              <strong className="agent-card-model-value">{formatModelName(agent.model?.primary)}</strong>
+              <strong className="agent-card-model-value">{modelDisplay.cardLabel}</strong>
             </div>
             <div className="agent-card-simple-meta__tools" title={`${skillCount} enabled skills`}>
               <span>Skills</span>

@@ -20,6 +20,18 @@ test('Gemini 3.7 Flash is selectable in both Google provider groups', () => {
   ])
 })
 
+test('current Astra, Fable, and Gemini Flash-Lite models retain their provider grouping', () => {
+  const groups = groupAvailableModels([
+    { id: 'openai/gpt-6-astra', alias: 'GPT-6 Astra (flagship)', provider: 'openai', name: 'gpt-6-astra' },
+    { id: 'anthropic/claude-fable-5-1', alias: 'Claude Fable 5.1 (flagship)', provider: 'anthropic', name: 'claude-fable-5-1' },
+    { id: 'google/gemini-3.5-flash-lite', alias: 'Gemini 3.5 Flash-Lite (GA)', provider: 'google', name: 'gemini-3.5-flash-lite' },
+    { id: 'google-vertex/gemini-3.5-flash-lite', alias: 'Vertex Gemini 3.5 Flash-Lite (GA)', provider: 'google-vertex', name: 'gemini-3.5-flash-lite' },
+  ])
+
+  assert.deepEqual(groups.map((group) => group.key), ['openai', 'anthropic', 'google', 'google-vertex'])
+  assert.equal(groups.every((group) => group.models.length === 1), true)
+})
+
 test('Only Gemini 3.7 Flash is selectable for the Google 3.7 model family', () => {
   assert.equal(isSelectableModelId('google/gemini-3.7-reasoning'), false)
   assert.equal(isSelectableModelId('google-vertex/gemini-3.7-reasoning'), false)

@@ -74,8 +74,8 @@ const HOSTED_TIER_LABELS: Record<string, string> = {
   cloud_starter_subscription: 'Starter Legacy Access',
   pro: 'Pro Access',
   pro_tier: 'Pro Access',
-  enterprise: 'Pro Access (legacy)',
-  enterprise_tier: 'Pro Access (legacy)',
+  enterprise: 'Pro Access',
+  enterprise_tier: 'Pro Access',
   credit_pack_topup: 'Hosted Credit Refill',
   credit_refill: 'Hosted Credit Refill',
 }
@@ -170,8 +170,8 @@ export function resolveLicenseEntitlement(license: LicenseInfo | null | undefine
       statusLabel: providerOnly
         ? 'Legacy route — update Usage Priority'
         : providerFirst || automniaFirstWithFallback
-          ? 'Provider + Automnia active'
-          : 'Automnia credits active',
+          ? 'Provider enabled'
+          : 'Credits active',
     }
   }
 
@@ -211,10 +211,10 @@ export function resolveLicenseEntitlement(license: LicenseInfo | null | undefine
             ? 'Legacy provider-only route — choose My provider + Automnia credits'
             : 'Automnia credits only',
       statusLabel: providerFirst || automniaFirstWithFallback
-        ? 'Provider + Automnia active'
+        ? 'Provider enabled'
         : providerOnly
           ? 'Legacy route — update Usage Priority'
-          : permanentAccess ? 'Automnia credits active' : 'Automnia credits route active',
+          : 'Credits active',
     }
   }
 

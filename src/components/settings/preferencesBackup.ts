@@ -13,7 +13,7 @@ const mission = z.object({ title: z.string().max(500), description: z.string().m
 const preferences = z.object({ appearance: appearance.optional(), voice: voice.optional(), registry: registry.optional(), console: consolePreferences.optional(), activity: activity.optional(), mission: mission.optional() })
 export type PreferencesBackup = z.infer<typeof preferences>
 export type PreferenceGroup = keyof PreferencesBackup
-export const PREFERENCE_GROUP_LABELS: Record<PreferenceGroup, string> = { appearance: 'Appearance', voice: 'Voice and microphone', registry: 'Agent registry', console: 'Command console', activity: 'Activity display', mission: 'Mission draft' }
+export const PREFERENCE_GROUP_LABELS: Record<PreferenceGroup, string> = { appearance: 'Appearance', voice: 'Voice and microphone', registry: 'Agent list', console: 'Agent chat panel', activity: 'Activity display', mission: 'Mission draft' }
 
 export function serializePreferencesBackup(values: PreferencesBackup): string {
   return JSON.stringify({ format: 'automnia-preferences', version: 2, createdAt: new Date().toISOString(), preferences: preferences.parse(values) }, null, 2)

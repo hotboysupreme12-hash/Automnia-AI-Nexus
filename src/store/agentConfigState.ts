@@ -214,12 +214,14 @@ export function sanitizeAgentForPersistentStore(agent: OpenClawAgent): OpenClawA
 
 export function makeAgentConfigState(): NexusAgentConfigState {
   const agents = getSeedAgents().filter((agent) => !isRetiredAgentId(agent.id)).map(withComputedRuntime)
-  const party = makeDefaultParty(agents)
   return {
     agents,
     retiredAgentIds: retiredAgentIdsForStore(),
-    activePartyIds: party,
-    confirmedPartyIds: party,
+    // A fresh install starts with a roster, not a deployed party. Once the
+    // operator chooses agents, the explicit arrays are persisted and restored
+    // on later launches.
+    activePartyIds: [],
+    confirmedPartyIds: [],
   }
 }
 

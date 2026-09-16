@@ -158,7 +158,7 @@ assert(agentTurnRoutes.includes("label: cloudFirst ? 'Automnia credits via Gatew
 assert(licenseContext.includes("apiRequest<LicenseInfo>('/api/license/usage-priority'"), 'the renderer should persist usage priority through the protected license API')
 assert(settingsPanel.includes('<option value="automnia_only">Automnia credits</option>'), 'Account settings should expose the Automnia credits route')
 assert(settingsPanel.includes('<option value="provider_plus_automnia"'), 'Account settings should expose the provider-plus-Automnia route')
-assert(settingsPanel.includes('<option value="automnia_first_with_provider_fallback">Automnia credits first, my provider fallback</option>'), 'Account settings should expose the Automnia-first fallback order')
+assert(settingsPanel.includes('<option value="automnia_first_with_provider_fallback">Automnia credits, then my provider</option>'), 'Account settings should expose the Automnia-first fallback order')
 assert(settingsPanel.includes('<option value="provider_first"'), 'Account settings should expose provider-first priority')
 assert(settingsPanel.includes('<option value="provider_plus_automnia"'), 'Account settings should expose the provider-plus-Automnia priority')
 assert(modelSelector.includes("routePresentation.modelLabel"), 'model selection should label the active agent route')
@@ -223,7 +223,7 @@ assert(
 assert(
   licenseEntitlement.includes("starter: 'Starter Subscription'")
     && licenseEntitlement.includes("pro: 'Pro Access'")
-    && licenseEntitlement.includes("enterprise: 'Pro Access (legacy)'")
+    && licenseEntitlement.includes("enterprise: 'Pro Access'")
     && licenseEntitlement.includes("credit_pack_topup: 'Hosted Credit Refill'")
     && licenseEntitlement.includes("tierLabel: 'BYOK Access'"),
   'license entitlement presentation should cover every published plan and permanent BYOK access',
