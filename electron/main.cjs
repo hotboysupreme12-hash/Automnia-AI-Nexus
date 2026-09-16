@@ -192,6 +192,17 @@ if (!hasSingleInstanceLock) {
 }
 
 let mainWindow = null
+let rendererWindowRecreationAttempted = false
+let e2eRendererLoadCount = 0
+let e2eRendererGone = false
+let e2eRendererUnresponsive = false
+let e2eExternalAssertionsComplete = false
+let e2eRendererCrashRequested = false
+let e2eTrayAssertionsStarted = false
+let e2eRendererJourneyComplete = false
+let e2eScreenshotCaptureStarted = false
+let e2eDesktopBootstrapStarted = false
+let e2eAppRehydrationStarted = false
 let tray = null
 let gatewayProcess = null
 let serverProcess = null
@@ -2191,16 +2202,6 @@ function createMainWindow() {
   })
   configureRendererPermissionPolicy(win)
   configureTextAssistance(win)
-  let e2eRendererLoadCount = 0
-  let e2eRendererGone = false
-  let e2eRendererUnresponsive = false
-  let e2eExternalAssertionsComplete = false
-  let e2eRendererCrashRequested = false
-  let e2eTrayAssertionsStarted = false
-  let e2eRendererJourneyComplete = false
-  let e2eScreenshotCaptureStarted = false
-  let e2eDesktopBootstrapStarted = false
-  let e2eAppRehydrationStarted = false
   let rendererLoadTimer = null
   let rendererRecoveryTimer = null
   let rendererLoadRetryCount = 0
@@ -2265,12 +2266,39 @@ function createMainWindow() {
     }, RENDERER_LOAD_RETRY_DELAY_MS)
   }
 
+  const recreateMainWindowAfterRendererUnresponsive = () => {
+    if (process.platform !== 'linux' || rendererWindowRecreationAttempted || isQuitting || win.isDestroyed()) return false
+    rendererWindowRecreationAttempted = true
+    appendDesktopDiagnostic('renderer-window-recreate-requested')
+    logE2e('renderer-window-recreate-requested')
+    if (mainWindow === win) mainWindow = null
+    try {
+      win.destroy()
+    } catch (error) {
+      appendDesktopDiagnostic('renderer-window-recreate-failed', { message: error?.message || String(error) })
+      logE2e(`renderer-window-recreate-failed:${error?.message || error}`)
+      return false
+    }
+    setImmediate(() => {
+      if (isQuitting || mainWindow) return
+      try {
+        mainWindow = createMainWindow()
+        logE2e('renderer-window-recreated')
+      } catch (error) {
+        appendDesktopDiagnostic('renderer-window-recreate-open-failed', { message: error?.message || String(error) })
+        logE2e(`renderer-window-recreate-open-failed:${error?.message || error}`)
+      }
+    })
+    return true
+  }
+
   win.on('unresponsive', () => {
     appendDesktopDiagnostic('renderer-unresponsive')
     console.warn('[automnia] renderer became unresponsive')
     e2eRendererUnresponsive = true
     logE2e('renderer-unresponsive')
     if (!isQuitting && !win.isDestroyed()) {
+      if (recreateMainWindowAfterRendererUnresponsive()) return
       try {
         win.webContents.reload()
         logE2e('renderer-unresponsive-reload-requested')

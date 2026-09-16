@@ -161,7 +161,6 @@ type ElectronCaseOptions = {
   name: string
   expectedStatus: number
   env?: Record<string, string>
-  disableGpu?: boolean
   timeoutMs?: number
   requiredOutput: RegExp[]
 }
@@ -228,7 +227,7 @@ async function runElectronCase(options: ElectronCaseOptions) {
   const electronArgs = process.platform === 'linux' && (
     process.env.CI === 'true' || process.env.AUTOMNIA_ELECTRON_E2E_NO_SANDBOX === '1'
   )
-    ? ['--no-sandbox', ...(options.disableGpu ? ['--disable-gpu'] : []), '.']
+    ? ['--no-sandbox', '.']
     : ['.']
   const child = spawn(electronPath, electronArgs, {
     cwd: root,
@@ -368,7 +367,6 @@ await runElectronCase({
 await runElectronCase({
   name: 'renderer-recovery',
   expectedStatus: 0,
-  disableGpu: process.platform === 'linux',
   timeoutMs: 60_000,
   env: {
     AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS: '0',

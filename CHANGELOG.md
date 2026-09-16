@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.10 - 2026-09-16
+
+### Bounded Linux renderer replacement
+
+- Recreates the desktop window once when Linux Electron reports an unresponsive renderer and the documented reload path does not produce a new renderer process, while retaining the existing bounded reload fallback on other platforms.
+
 ## 1.0.9 - 2026-09-16
 
 ### Targeted Linux renderer recovery validation
