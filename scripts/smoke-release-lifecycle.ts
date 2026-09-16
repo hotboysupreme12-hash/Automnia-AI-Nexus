@@ -28,6 +28,8 @@ assert.match(lifecycle, /uninstall\.log/, 'Windows lifecycle validation must ret
 assert.match(lifecycle, /corrupted-update\.log/, 'Windows lifecycle validation must retain corrupted-update evidence')
 assert.match(lifecycle, /rollback-existing-version/, 'corrupted update rejection must prove the installed prior version still launches')
 assert.match(lifecycle, /distribution-signing\.json/, 'Windows lifecycle validation must support release-consumable signing evidence when platform signing is enabled')
+assert.match(lifecycle, /ExpectedAppExeName/, 'Windows lifecycle validation must derive the installed executable name from package metadata')
+assert.doesNotMatch(lifecycle, /Filter 'Automnia\\.exe'/, 'Windows lifecycle validation must not hardcode a stale executable name')
 
 assert.match(backupLibrary, /backup-manifest\.json/, 'state backups must carry a verification manifest')
 assert.match(backupLibrary, /symbolic_link_not_followed/, 'state backups must skip symlink traversal without following targets')

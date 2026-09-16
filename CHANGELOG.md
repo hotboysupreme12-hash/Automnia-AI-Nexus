@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.4 - 2026-09-16
+
+### Release validation and product metadata
+
+- Updated the desktop package description to present Automnia AI Nexus as an AI workspace and operations console powered by a secure OpenClaw runtime.
+- Made unsigned macOS packaging fail cleanly without treating empty signing environment variables as certificate paths.
+- Made Linux Electron end-to-end verification compatible with hosted CI sandbox permissions.
+- Made Windows lifecycle validation follow the configured product executable name instead of assuming `Automnia.exe`.
+
 ## 1.0.3 - 2026-09-16
 
 ### Release verification

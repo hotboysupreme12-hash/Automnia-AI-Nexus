@@ -112,7 +112,7 @@ const windowsInstallerOutputDirArgs = process.platform === 'win32' && forwardedA
 const signingOverrideArgs = unsignedDirectoryPackage
   ? [
       '--config.win.signAndEditExecutable=false',
-      ...(forwardedArgs.includes('--mac') ? ['--config.mac.notarize=false'] : []),
+      ...(forwardedArgs.includes('--mac') ? ['--config.mac.identity=null', '--config.mac.notarize=false'] : []),
     ]
   : []
 
@@ -419,38 +419,47 @@ if (vendorPrep.status !== 0) {
 
 cleanGeneratedWindowsPackage()
 
+const childEnv = {
+  ...process.env,
+  ...(unsignedDirectoryPackage
+    ? {
+        CSC_IDENTITY_AUTO_DISCOVERY: 'false',
+      }
+    : {}),
+  ...(pathEntries.length
+    ? {
+        PATH: pathEntries.join(pathDelimiter),
+        NODE_EXE: process.execPath,
+      }
+    : {}),
+  ELECTRON_CACHE: electronCache,
+  ELECTRON_BUILDER_CACHE: builderCache,
+}
+
+if (unsignedDirectoryPackage) {
+  for (const variableName of [
+    'CSC_LINK',
+    'CSC_KEY_PASSWORD',
+    'WIN_CSC_LINK',
+    'WIN_CSC_KEY_PASSWORD',
+    'MAC_CSC_LINK',
+    'MAC_CSC_KEY_PASSWORD',
+    'APPLE_ID',
+    'APPLE_APP_SPECIFIC_PASSWORD',
+    'APPLE_TEAM_ID',
+    'APPLE_API_KEY',
+    'APPLE_API_KEY_ID',
+    'APPLE_API_ISSUER',
+  ]) {
+    delete childEnv[variableName]
+  }
+}
+
 const child = spawn(command, [electronBuilderCli, ...forwardedArgs, ...publishArgs, ...signingOverrideArgs, ...windowsInstallerOutputDirArgs], {
   cwd: root,
   stdio: 'inherit',
   shell: false,
-  env: {
-    ...process.env,
-    ...(unsignedDirectoryPackage
-      ? {
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false',
-          CSC_LINK: '',
-          CSC_KEY_PASSWORD: '',
-          WIN_CSC_LINK: '',
-          WIN_CSC_KEY_PASSWORD: '',
-          MAC_CSC_LINK: '',
-          MAC_CSC_KEY_PASSWORD: '',
-          APPLE_ID: '',
-          APPLE_APP_SPECIFIC_PASSWORD: '',
-          APPLE_TEAM_ID: '',
-          APPLE_API_KEY: '',
-          APPLE_API_KEY_ID: '',
-          APPLE_API_ISSUER: '',
-        }
-      : {}),
-    ...(pathEntries.length
-      ? {
-          PATH: pathEntries.join(pathDelimiter),
-          NODE_EXE: process.execPath,
-        }
-      : {}),
-    ELECTRON_CACHE: electronCache,
-    ELECTRON_BUILDER_CACHE: builderCache,
-  },
+  env: childEnv,
 })
 
 child.on('exit', (code, signal) => {

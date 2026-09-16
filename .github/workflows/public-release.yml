@@ -182,6 +182,8 @@ jobs:
         run: npm run release:update-build-config
 
       - name: Verify release candidate source under virtual display
+        env:
+          AUTOMNIA_ELECTRON_E2E_NO_SANDBOX: '1'
         run: xvfb-run -a npm run verify:release-candidate
 
       - name: Build Linux packages

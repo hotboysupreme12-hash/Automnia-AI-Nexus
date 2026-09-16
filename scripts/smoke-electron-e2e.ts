@@ -224,7 +224,10 @@ async function runElectronCase(options: ElectronCaseOptions) {
     ...options.env,
   }
 
-  const child = spawn(electronPath, ['.'], {
+  const electronArgs = process.platform === 'linux' && (
+    process.env.CI === 'true' || process.env.AUTOMNIA_ELECTRON_E2E_NO_SANDBOX === '1'
+  ) ? ['--no-sandbox', '.'] : ['.']
+  const child = spawn(electronPath, electronArgs, {
     cwd: root,
     env,
     windowsHide: true,

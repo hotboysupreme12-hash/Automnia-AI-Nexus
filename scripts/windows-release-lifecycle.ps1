@@ -12,6 +12,11 @@ Set-StrictMode -Version Latest
 $PlatformSigningRequired = -not ($env:AUTOMNIA_PLATFORM_SIGNING_REQUIRED -match '^(0|false|no)$')
 
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$PackageMetadata = Get-Content -LiteralPath (Join-Path $Root 'package.json') -Raw | ConvertFrom-Json
+$ProductName = [string]$PackageMetadata.build.productName
+if (-not $ProductName) { $ProductName = [string]$PackageMetadata.productName }
+if (-not $ProductName) { $ProductName = [string]$PackageMetadata.name }
+$ExpectedAppExeName = "$ProductName.exe"
 if (-not $EvidenceDir) { $EvidenceDir = Join-Path $Root 'release\evidence' }
 if (-not $UpdateManifestPath) { $UpdateManifestPath = Join-Path $Root 'release\updates\update-manifest.json' }
 if (-not $UpdateSignaturePath) { $UpdateSignaturePath = Join-Path $Root 'release\updates\update-manifest.json.sig' }
@@ -69,8 +74,8 @@ function Install-Automnia {
   param([string]$Path, [string]$Label)
   New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
   Invoke-CheckedProcess -FilePath $Path -ArgumentList @('/S', "/D=$InstallRoot") -Label $Label -TimeoutSeconds 300 | Out-Null
-  $AppExe = Get-ChildItem -LiteralPath $InstallRoot -Filter 'Automnia.exe' -File -Recurse | Select-Object -First 1 -ExpandProperty FullName
-  if (-not $AppExe) { throw "$Label did not install Automnia.exe under $InstallRoot." }
+  $AppExe = Get-ChildItem -LiteralPath $InstallRoot -Filter $ExpectedAppExeName -File -Recurse | Select-Object -First 1 -ExpandProperty FullName
+  if (-not $AppExe) { throw "$Label did not install $ExpectedAppExeName under $InstallRoot." }
   return $AppExe
 }
 
@@ -228,8 +233,8 @@ try {
   Invoke-CheckedProcess -FilePath $Uninstaller -ArgumentList @('/S') -Label 'silent uninstall' -TimeoutSeconds 180 | Out-Null
   $Deadline = [DateTime]::UtcNow.AddSeconds(30)
   while ((Test-Path -LiteralPath $UpgradeExe) -and [DateTime]::UtcNow -lt $Deadline) { Start-Sleep -Milliseconds 250 }
-  if (Test-Path -LiteralPath $UpgradeExe) { throw 'Automnia.exe remained after silent uninstall.' }
-  Write-LifecycleLog -Name 'uninstall.log' -Lines @("Uninstaller: $Uninstaller", 'Automnia.exe removed: true', 'Status: passed') | Out-Null
+  if (Test-Path -LiteralPath $UpgradeExe) { throw "$ExpectedAppExeName remained after silent uninstall." }
+  Write-LifecycleLog -Name 'uninstall.log' -Lines @("Uninstaller: $Uninstaller", "$ExpectedAppExeName removed: true", 'Status: passed') | Out-Null
 
   if ($PlatformSigningRequired) {
     $GeneratedAt = [DateTime]::UtcNow.ToString('o')
