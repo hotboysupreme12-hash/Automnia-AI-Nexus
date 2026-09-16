@@ -1384,6 +1384,15 @@ function remainingCapturedProcesses(capturedProcesses) {
   })
 }
 
+function isElectronManagedChildProcess(commandLine) {
+  const command = normalizeForMatch(commandLine)
+  // Chromium owns renderer, GPU, utility, zygote, and crashpad children. They
+  // live below the Electron main process but must be allowed to exit through
+  // Electron; killing them during app cleanup can make Chromium respawn a GPU
+  // process and hang or terminate the desktop before cleanup completes.
+  return /(?:^|\s)--type=[^\s]+/.test(command)
+}
+
 function captureAppOwnedDescendants() {
   // Parentage is the strongest ownership signal available for arbitrary task
   // workers. Capture it before graceful shutdown so a child cannot escape the
@@ -1391,6 +1400,7 @@ function captureAppOwnedDescendants() {
   // plus creation time protect against killing a later process that reused a PID.
   return listDescendantProcesses(process.pid)
     .filter((entry) => entry.pid !== process.pid)
+    .filter((entry) => !isElectronManagedChildProcess(entry.commandLine))
     .filter((entry, index, entries) => entries.findIndex((candidate) => candidate.pid === entry.pid) === index)
 }
 

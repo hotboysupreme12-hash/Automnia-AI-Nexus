@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.12 - 2026-09-16
+
+### Electron shutdown ownership
+
+- Keeps Chromium-managed renderer, GPU, utility, zygote, and crashpad processes out of Automnia helper cleanup so Linux desktop shutdown can complete without triggering a GPU-process restart.
+
 ## 1.0.11 - 2026-09-16
 
 ### Hosted Linux Electron stability

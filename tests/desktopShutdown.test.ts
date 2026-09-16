@@ -83,6 +83,21 @@ test('captured process identity rejects PID reuse before forced cleanup', () => 
   assert.deepEqual(matches.map((entry) => entry.pid), [41])
 })
 
+test('quit cleanup does not capture Electron-managed Chromium children', () => {
+  const context = vm.createContext({
+    process: { pid: 10 },
+    normalizeForMatch: (value: unknown) => String(value || '').replace(/\\/g, '/').toLowerCase(),
+    listDescendantProcesses: () => [
+      { pid: 20, commandLine: '/opt/automnia/electron --type=gpu-process --user-data-dir=/tmp/automnia' },
+      { pid: 21, commandLine: 'node /tmp/automnia/dist-server/index.cjs' },
+      { pid: 22, commandLine: 'node /tmp/automnia/worker.js' },
+    ],
+  })
+  vm.runInContext(section(main, 'function isElectronManagedChildProcess(', 'function isProcessAlive('), context)
+  const captured = vm.runInContext('captureAppOwnedDescendants()', context) as Array<{ pid: number }>
+  assert.deepEqual(captured.map((entry) => entry.pid), [21, 22])
+})
+
 test('quit cleanup stops captured generic Node descendants without targeting unrelated Node processes', async () => {
   const stopped: number[] = []
   let capturedStillRunning = true
