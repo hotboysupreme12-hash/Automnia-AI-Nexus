@@ -5,6 +5,12 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import net from 'node:net'
 
+import {
+  CONTROL_CENTER_STATE_KEYS,
+  createRuntimeLedgerStore,
+  runtimeLedgerPathsForStateRoot,
+} from '../server/state/runtimeLedgerStore'
+
 const root = process.cwd()
 const CONTROL_TOKEN = 'release-soak-control-token'
 const REQUEST_COUNT = Math.max(100, Math.min(2_000, Number(process.env.AUTOMNIA_SOAK_REQUEST_COUNT || 400)))
@@ -105,6 +111,30 @@ const port = await freePort()
 const workspaceRoot = mkdtempSync(path.join(tmpdir(), 'automnia-soak-workspace-'))
 const stateDir = mkdtempSync(path.join(tmpdir(), 'automnia-soak-state-'))
 const homeDir = mkdtempSync(path.join(tmpdir(), 'automnia-soak-home-'))
+const runtimeLedgerStore = createRuntimeLedgerStore(runtimeLedgerPathsForStateRoot(stateDir))
+try {
+  assert.equal(runtimeLedgerStore.writeControlCenterState(CONTROL_CENTER_STATE_KEYS.licenseActivation, {
+    active: true,
+    email: 'soak@example.test',
+    licenseKey: 'AUT-SOAK-0001',
+    tier: 'founding_beta_byok',
+    mode: 'byok',
+    planPriceCents: null,
+    byokAllowed: true,
+    permanentAccess: true,
+    subscriptionStatus: null,
+    usagePriority: 'provider_first',
+    creditBalance: 0,
+    creditBalanceUpdatedAt: null,
+    creditUsageBaseline: 0,
+    billingUnitVersion: 2,
+    tokensPerCredit: 1_000,
+    activatedAt: '2026-08-11T12:00:00.000Z',
+    verifiedAt: '2026-08-11T12:00:00.000Z',
+  }), true, 'soak fixture must persist an active license before the server starts')
+} finally {
+  runtimeLedgerStore.close()
+}
 const child = spawnServer(port, workspaceRoot, stateDir, homeDir)
 
 try {

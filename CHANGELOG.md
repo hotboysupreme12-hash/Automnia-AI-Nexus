@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.3 - 2026-09-16
+
+### Release verification
+
+- Seeded the API soak server with an isolated active BYOK fixture so authenticated projection requests exercise the API instead of the license-required boundary.
+
 ## 1.0.2 - 2026-09-16
 
 ### Release verification
