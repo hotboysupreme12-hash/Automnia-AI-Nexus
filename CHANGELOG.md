@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.8 - 2026-09-16
+
+### Linux renderer smoke stability
+
+- Runs the Linux Electron recovery smoke with Chromium's GPU path disabled in hosted CI so the intentional renderer-recovery probe exercises a deterministic software-rendered process lifecycle.
+
 ## 1.0.7 - 2026-09-16
 
 ### Renderer recovery timing

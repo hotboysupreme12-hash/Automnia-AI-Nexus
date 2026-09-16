@@ -1,7 +1,7 @@
 {
   "name": "automnia-ai-nexus",
   "private": true,
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Automnia AI Nexus is a desktop AI workspace and operations console for orchestrating agents, model providers, tools, plugins, and connected workflows through a secure OpenClaw-powered runtime.",
   "author": {
     "name": "Automnia AI"
