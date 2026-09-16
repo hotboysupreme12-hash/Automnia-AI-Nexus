@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.2 - 2026-09-16
+
+### Release verification
+
+- Corrected the provider-first exhausted-credit release test fixture so clean CI checkouts exercise the intended route.
+
 ## 1.0.1 - 2026-09-16
 
 ### Desktop updates

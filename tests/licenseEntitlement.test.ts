@@ -64,7 +64,7 @@ test('exposes the Automnia model picker for Starter credits too', () => {
 })
 
 test('shows the connected provider when a BYOK-capable Automnia balance is exhausted', () => {
-  const exhausted = license({ tier: 'pro', creditBalance: 0, byokAllowed: true, permanentAccess: true })
+  const exhausted = license({ tier: 'pro', creditBalance: 0, byokAllowed: true, permanentAccess: true, usagePriority: 'provider_first' })
   const entitlement = resolveLicenseEntitlement(exhausted)
   assert.equal(entitlement.defaultRouteLabel, 'My connected provider — Automnia credits exhausted')
   assert.equal(entitlement.statusLabel, 'Provider + Automnia active')
