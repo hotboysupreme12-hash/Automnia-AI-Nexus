@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.9 - 2026-09-16
+
+### Targeted Linux renderer recovery validation
+
+- Limits the Linux software-rendering Electron flag to the intentional renderer-recovery probe, keeping the normal startup, tray, and renderer-journey smoke cases on their standard Linux path.
+
 ## 1.0.8 - 2026-09-16
 
 ### Linux renderer smoke stability
