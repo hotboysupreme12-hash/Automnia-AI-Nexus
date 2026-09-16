@@ -150,6 +150,9 @@ const WINDOWS_DIAGNOSTIC_SINGLE_PROCESS = process.platform === 'win32' &&
   process.env.AUTOMNIA_WINDOWS_DIAGNOSTIC_SINGLE_PROCESS === '1' &&
   process.env.AUTOMNIA_ACK_UNSAFE_ELECTRON_SANDBOX_DIAGNOSTIC === '1'
 const ELECTRON_E2E = process.env.AUTOMNIA_ELECTRON_E2E === '1'
+const LINUX_E2E_DISABLE_HARDWARE_ACCELERATION = process.platform === 'linux' &&
+  ELECTRON_E2E &&
+  process.env.AUTOMNIA_ELECTRON_E2E_NO_SANDBOX === '1'
 // Start a fresh desktop profile about three zoom-out steps below the previous
 // 80% default. Once the user changes zoom, the saved preference still wins.
 const DEFAULT_RENDERER_ZOOM_FACTOR = Math.min(
@@ -172,6 +175,14 @@ if (WINDOWS_DISABLE_GPU) {
       ? '[automnia] Windows hardware acceleration disabled after a recent GPU-process failure; use AUTOMNIA_WINDOWS_FORCE_GPU=1 to override'
       : '[automnia] Windows hardware acceleration disabled for renderer stability',
   )
+}
+if (LINUX_E2E_DISABLE_HARDWARE_ACCELERATION) {
+  // Hosted Xvfb Electron runs can lose the GPU process during orderly quit,
+  // which leaves the Linux launcher alive even though application cleanup is
+  // complete. Keep this test-only path deterministic without changing the
+  // packaged desktop's normal hardware-acceleration default.
+  app.disableHardwareAcceleration()
+  console.warn('[automnia] Linux Electron E2E hardware acceleration disabled for hosted renderer stability')
 }
 if (WINDOWS_DIAGNOSTIC_SINGLE_PROCESS) {
   console.warn('[automnia] unsafe Electron single-process diagnostic mode is enabled for this development run only.')
@@ -232,7 +243,7 @@ const RENDERER_LOAD_RETRY_DELAY_MS = 750
 const MAX_RENDERER_LOAD_RETRIES = 3
 
 appendDesktopDiagnostic('process-start', {
-  hardwareAcceleration: !WINDOWS_DISABLE_GPU,
+  hardwareAcceleration: !WINDOWS_DISABLE_GPU && !LINUX_E2E_DISABLE_HARDWARE_ACCELERATION,
   adaptiveGpuFallback: WINDOWS_ADAPTIVE_GPU_FALLBACK,
   explicitGpuDisable: WINDOWS_EXPLICIT_DISABLE_GPU,
 })

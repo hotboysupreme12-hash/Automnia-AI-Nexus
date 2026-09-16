@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.11 - 2026-09-16
+
+### Hosted Linux Electron stability
+
+- Disables hardware acceleration only for the hosted Linux Electron E2E process, preventing Xvfb GPU-process shutdown failures while leaving normal packaged desktop rendering unchanged.
+
 ## 1.0.10 - 2026-09-16
 
 ### Bounded Linux renderer replacement
