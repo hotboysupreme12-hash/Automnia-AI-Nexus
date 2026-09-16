@@ -9151,7 +9151,6 @@ function ensureGoogleVertexGlobalRouting(config: OpenClawConfigFile) {
     ? env.vars as Record<string, unknown>
     : {}
 
-  env.GOOGLE_CLOUD_LOCATION = GOOGLE_VERTEX_GLOBAL_LOCATION
   vars.GOOGLE_CLOUD_LOCATION = GOOGLE_VERTEX_GLOBAL_LOCATION
   for (const key of GOOGLE_VERTEX_LOCATION_KEYS) {
     if (typeof env[key] === 'string' && (env[key] as string).trim()) env[key] = GOOGLE_VERTEX_GLOBAL_LOCATION
