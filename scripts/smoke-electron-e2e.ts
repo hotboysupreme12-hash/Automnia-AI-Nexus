@@ -376,7 +376,7 @@ await runElectronCase({
     /\[automnia-e2e\] external-open:https:\/\/example\.com\/automnia-e2e-navigation/,
     /\[automnia-e2e\] renderer-external-policy-ok/,
     /\[automnia-e2e\] renderer-crash-requested/,
-    /\[automnia-e2e\] renderer-process-gone:/,
+    /\[automnia-e2e\] renderer-(?:process-gone:|unresponsive)/,
     /\[automnia-e2e\] renderer-load:2/,
     /\[automnia-e2e\] renderer-recovered/,
     /\[automnia-e2e\] quit-cleanup-complete/,

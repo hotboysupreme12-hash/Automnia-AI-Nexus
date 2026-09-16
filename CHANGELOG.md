@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.6 - 2026-09-16
+
+### Cross-platform renderer recovery
+
+- Added a bounded reload/load retry when Electron reports an unresponsive renderer, covering Linux environments that do not emit `render-process-gone` for the intentional recovery probe.
+
 ## 1.0.5 - 2026-09-16
 
 ### Electron recovery validation

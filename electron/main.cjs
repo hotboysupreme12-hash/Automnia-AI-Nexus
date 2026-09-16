@@ -2100,6 +2100,7 @@ function createMainWindow() {
   configureTextAssistance(win)
   let e2eRendererLoadCount = 0
   let e2eRendererGone = false
+  let e2eRendererUnresponsive = false
   let e2eExternalAssertionsComplete = false
   let e2eRendererCrashRequested = false
   let e2eTrayAssertionsStarted = false
@@ -2174,6 +2175,11 @@ function createMainWindow() {
   win.on('unresponsive', () => {
     appendDesktopDiagnostic('renderer-unresponsive')
     console.warn('[automnia] renderer became unresponsive')
+    e2eRendererUnresponsive = true
+    logE2e('renderer-unresponsive')
+    if (!isQuitting && !win.isDestroyed()) {
+      scheduleRendererLoad('renderer became unresponsive')
+    }
   })
   win.webContents.on('render-process-gone', (_event, details) => {
     appendDesktopDiagnostic('renderer-process-gone', {
@@ -2347,7 +2353,11 @@ function createMainWindow() {
       return
     }
 
-    if (assertRendererRecovery && e2eRendererGone && e2eRendererLoadCount >= 2) {
+    if (
+      assertRendererRecovery &&
+      (e2eRendererGone || e2eRendererUnresponsive) &&
+      e2eRendererLoadCount >= 2
+    ) {
       logE2e('renderer-recovered')
       if ((!assertRendererExternals || e2eExternalAssertionsComplete) && quitAfterRendererAssertions) {
         app.quit()
