@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.5 - 2026-09-16
+
+### Electron recovery validation
+
+- Reloaded immediately after the intentional renderer-crash probe so Linux CI exercises the documented fresh-renderer recovery path without timing out.
+
 ## 1.0.4 - 2026-09-16
 
 ### Release validation and product metadata

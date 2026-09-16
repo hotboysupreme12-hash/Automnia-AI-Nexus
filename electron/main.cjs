@@ -2315,6 +2315,9 @@ function createMainWindow() {
       e2eRendererCrashRequested = true
       logE2e('renderer-crash-requested')
       win.webContents.forcefullyCrashRenderer()
+      // Electron requires an immediate reload to force the recovered page
+      // into a fresh renderer process after an intentional crash.
+      win.webContents.reload()
     }
 
     if (e2eRendererLoadCount === 1 && assertRendererExternals) {
