@@ -21,9 +21,13 @@ The evaluated commit should include these hosted artifacts:
 
 Local tests are useful developer evidence, but they do not replace hosted packaging, packaged launch, release validation, and artifact upload.
 
+## Early Platform Distribution
+
+Until platform-signing certificates are available, the tag-triggered public workflow may publish unsigned Windows and macOS packages. It uses `AUTOMNIA_SKIP_PLATFORM_SIGNING=1` and `AUTOMNIA_RELEASE_REQUIRE_SIGNING=0`, while keeping `AUTOMNIA_UPDATE_REQUIRE_SIGNING=1` so update metadata and payload selection remain cryptographically protected. Windows SmartScreen and macOS Gatekeeper warnings are expected for these packages.
+
 ## Release Signing
 
-Public release validation must fail closed when `AUTOMNIA_RELEASE_REQUIRE_SIGNING=1`. Use `npm run release:sign` with `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE` or `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM` before publishing.
+`AUTOMNIA_RELEASE_REQUIRE_SIGNING=1` remains available for the later signed-release phase. Use `npm run release:sign` with `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE` or `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM` when checksum evidence signing is enabled. The separate update-channel signing key remains required for every published update channel.
 
 Automnia AI remains a local desktop app with a localhost API only; do not treat localhost release evidence as proof for an internet-exposed control plane.
 

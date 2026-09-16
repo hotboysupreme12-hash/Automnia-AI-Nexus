@@ -94,6 +94,34 @@ test('desktop updater checks, downloads, independently verifies, and installs en
   }
 })
 
+test('development builds report the production-only boundary before missing-key details', () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'automnia-app-updater-dev-'))
+  try {
+    const manager = createAppUpdater({
+      app: { getVersion: () => '1.0.0' },
+      autoUpdater: new FakeAutoUpdater(path.join(temp, 'unused-update.exe')),
+      fetch: async () => new Response('{}', { status: 200 }),
+      baseUrl: 'https://updates.automnia.app/stable',
+      channel: 'stable',
+      publicKeyPath: path.join(temp, 'missing-update-public-key.pem'),
+      userDataPath: path.join(temp, 'user-data'),
+      tempPath: temp,
+      platform: 'win32',
+      arch: 'x64',
+      isAppImage: false,
+      isPackaged: false,
+      initialDelayMs: 60_000,
+      checkIntervalMs: 60_000,
+    })
+    assert.equal(manager.getState().status, 'disabled')
+    assert.equal(manager.getState().supported, false)
+    assert.equal(manager.getState().error, 'Automatic updates are available in installed production builds.')
+    manager.stop()
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true })
+  }
+})
+
 test('bounded update fetch stops reading an oversized chunked response', async () => {
   let cancelled = false
   const body = new ReadableStream({

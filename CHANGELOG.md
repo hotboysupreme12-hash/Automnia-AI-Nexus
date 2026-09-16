@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.1 - 2026-09-16
+
+### Desktop updates
+
+- Enabled the Google Cloud Storage update channel for the first public release.
+- Added unsigned early-distribution packaging for Windows and macOS while retaining signed update manifests and GitHub OIDC publication.
+- Added packaged archive verification for the embedded update configuration and public verification key.
+
 ## Unreleased production-readiness package
 
 ### Beta status

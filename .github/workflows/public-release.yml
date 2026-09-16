@@ -14,11 +14,11 @@ permissions:
 
 jobs:
   windows:
-    name: Signed Windows installer and lifecycle evidence
+    name: Unsigned Windows installer and lifecycle evidence
     runs-on: windows-latest
     timeout-minutes: 90
     env:
-      AUTOMNIA_RELEASE_REQUIRE_SIGNING: '1'
+      AUTOMNIA_RELEASE_REQUIRE_SIGNING: '0'
       AUTOMNIA_UPDATE_REQUIRE_SIGNING: '1'
     steps:
       - name: Check out release source
@@ -32,17 +32,12 @@ jobs:
           node-version: '24'
           cache: npm
 
-      - name: Require signing secrets
+      - name: Require update-channel signing secret
         shell: pwsh
         env:
-          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-          RELEASE_KEY: ${{ secrets.AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM }}
           UPDATE_KEY: ${{ secrets.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM }}
         run: |
-          foreach ($name in @('WIN_CSC_LINK', 'WIN_CSC_KEY_PASSWORD', 'RELEASE_KEY', 'UPDATE_KEY')) {
-            if ([string]::IsNullOrWhiteSpace((Get-Item "Env:$name").Value)) { throw "Missing required release secret: $name" }
-          }
+          if ([string]::IsNullOrWhiteSpace($env:UPDATE_KEY)) { throw 'Missing required release secret: AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM' }
 
       - name: Install locked dependencies
         run: npm ci
@@ -60,10 +55,10 @@ jobs:
       - name: Verify release candidate source
         run: npm run verify:release-candidate
 
-      - name: Build and Authenticode-sign NSIS installer
+      - name: Build unsigned NSIS installer
         env:
-          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          AUTOMNIA_SKIP_PLATFORM_SIGNING: '1'
+          AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG: '1'
         run: npm run dist:win
 
       - name: Generate signed update manifest
@@ -78,21 +73,23 @@ jobs:
       - name: Run install, upgrade, rollback, and uninstall lifecycle
         env:
           AUTOMNIA_PREVIOUS_WINDOWS_INSTALLER_PATH: ${{ vars.AUTOMNIA_PREVIOUS_WINDOWS_INSTALLER_PATH }}
+          AUTOMNIA_PLATFORM_SIGNING_REQUIRED: '0'
         run: npm run release:lifecycle:windows
 
       - name: Generate release SBOM and checksums
         run: npm run release:evidence
 
-      - name: Sign checksum manifest
+      - name: Sign checksum manifest when configured
+        if: ${{ vars.AUTOMNIA_RELEASE_SIGNING_ENABLED == 'true' }}
         env:
           AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM: ${{ secrets.AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM }}
           AUTOMNIA_RELEASE_SIGNING_KEY_ID: ${{ vars.AUTOMNIA_RELEASE_SIGNING_KEY_ID }}
         run: npm run release:sign
 
-      - name: Validate complete public release chain
+      - name: Validate unsigned public release chain
         run: npm run release:validate
 
-      - name: Upload signed Windows release candidate
+      - name: Upload unsigned Windows release candidate
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: automnia-windows-public-release
@@ -104,7 +101,7 @@ jobs:
           retention-days: 90
 
   macos:
-    name: Signed and notarized macOS DMG
+    name: Unsigned macOS DMG and ZIP
     runs-on: macos-latest
     timeout-minutes: 90
     steps:
@@ -116,20 +113,6 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-
-      - name: Require Apple signing secrets
-        shell: bash
-        env:
-          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          set -euo pipefail
-          for name in MAC_CSC_LINK MAC_CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
-            test -n "${!name:-}" || { echo "Missing required release secret: $name" >&2; exit 1; }
-          done
 
       - name: Install locked dependencies
         run: npm ci
@@ -147,25 +130,19 @@ jobs:
       - name: Verify release candidate source
         run: npm run verify:release-candidate
 
-      - name: Build, sign, and notarize DMG
+      - name: Build unsigned DMG and ZIP
         env:
-          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          AUTOMNIA_SKIP_PLATFORM_SIGNING: '1'
+          AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG: '1'
         run: npm run dist:mac
 
-      - name: Validate notarization ticket
+      - name: Validate unsigned macOS package outputs
         shell: bash
         run: |
           set -euo pipefail
-          dmg="$(find release -maxdepth 1 -name '*.dmg' -print -quit)"
-          test -n "$dmg"
-          xcrun stapler validate "$dmg"
-          spctl --assess --type open --context context:primary-signature --verbose=4 "$dmg"
+          test -n "$(find release -maxdepth 1 \( -name '*.dmg' -o -name '*.zip' \) -print -quit)"
 
-      - name: Upload notarized macOS release candidate
+      - name: Upload unsigned macOS release candidate
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: automnia-macos-public-release
@@ -208,6 +185,8 @@ jobs:
         run: xvfb-run -a npm run verify:release-candidate
 
       - name: Build Linux packages
+        env:
+          AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG: '1'
         run: npm run dist:linux
 
       - name: Upload Linux release candidates

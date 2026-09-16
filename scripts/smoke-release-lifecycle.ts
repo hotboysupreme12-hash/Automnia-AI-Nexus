@@ -27,7 +27,7 @@ assert.match(lifecycle, /upgrade\.log/, 'Windows lifecycle validation must retai
 assert.match(lifecycle, /uninstall\.log/, 'Windows lifecycle validation must retain uninstall evidence')
 assert.match(lifecycle, /corrupted-update\.log/, 'Windows lifecycle validation must retain corrupted-update evidence')
 assert.match(lifecycle, /rollback-existing-version/, 'corrupted update rejection must prove the installed prior version still launches')
-assert.match(lifecycle, /distribution-signing\.json/, 'Windows lifecycle validation must emit release-consumable evidence')
+assert.match(lifecycle, /distribution-signing\.json/, 'Windows lifecycle validation must support release-consumable signing evidence when platform signing is enabled')
 
 assert.match(backupLibrary, /backup-manifest\.json/, 'state backups must carry a verification manifest')
 assert.match(backupLibrary, /symbolic_link_not_followed/, 'state backups must skip symlink traversal without following targets')

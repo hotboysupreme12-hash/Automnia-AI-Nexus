@@ -1,6 +1,37 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
+const { extractFile } = require('@electron/asar')
+
+function validateEmbeddedUpdateTrustConfig(resourcesDir) {
+  if (process.env.AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG !== '1') return
+
+  const archivePath = path.join(resourcesDir, 'app.asar')
+  if (!fs.existsSync(archivePath)) {
+    throw new Error(`[afterPack] Required updater archive is missing: ${archivePath}`)
+  }
+
+  let config
+  let publicKey
+  try {
+    config = JSON.parse(extractFile(archivePath, 'electron/update-config.json').toString('utf8'))
+    publicKey = extractFile(archivePath, 'electron/update-public-key.pem').toString('utf8')
+  } catch (error) {
+    throw new Error(`[afterPack] Packaged app is missing embedded updater trust configuration: ${error?.message || error}`)
+  }
+
+  if (!config || config.schema !== 1 || typeof config.baseUrl !== 'string' || !/^https:\/\//i.test(config.baseUrl)) {
+    throw new Error('[afterPack] Embedded updater config must contain schema 1 and a credential-free HTTPS baseUrl')
+  }
+  if (!/^-----BEGIN PUBLIC KEY-----[\s\S]+-----END PUBLIC KEY-----\s*$/m.test(publicKey)) {
+    throw new Error('[afterPack] Embedded updater verification key is not a PEM public key')
+  }
+  if (/BEGIN (?:ENCRYPTED )?PRIVATE KEY|PRIVATE KEY-----/.test(publicKey)) {
+    throw new Error('[afterPack] Embedded updater archive contains private key material')
+  }
+
+  console.log(`[afterPack] validated embedded updater trust configuration -> ${config.baseUrl}`)
+}
 
 function resolveWindowsCsc() {
   const candidates = [
@@ -227,6 +258,7 @@ module.exports = async function afterPack(context) {
   copyBundledExtensionSkills(root, resourcesDir)
   copyBundledNodeToolchain(root, resourcesDir)
   copyBundledCodexPlugin(root, resourcesDir)
+  validateEmbeddedUpdateTrustConfig(resourcesDir)
 
   if (!fs.existsSync(json5)) {
     throw new Error(`[afterPack] OpenClaw dependency copy failed; missing ${json5}`)

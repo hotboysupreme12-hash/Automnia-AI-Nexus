@@ -184,9 +184,12 @@ function createAppUpdater(options) {
   } catch (error) {
     disabledReason = publicError(error, 'Automatic updates are not configured')
   }
-  if (!options.isPackaged && !options.allowDevelopment) disabledReason = 'Automatic updates are available in installed production builds.'
-  if (!options.publicKeyPath || !fs.existsSync(options.publicKeyPath)) disabledReason = 'This build does not contain the update verification key.'
-  if (!updater) disabledReason = 'The desktop update service is unavailable in this build.'
+  if (!options.isPackaged && !options.allowDevelopment) {
+    disabledReason = 'Automatic updates are available in installed production builds.'
+  } else if (!disabledReason && (!options.publicKeyPath || !fs.existsSync(options.publicKeyPath))) {
+    disabledReason = 'This build does not contain the update verification key.'
+  }
+  if (!disabledReason && !updater) disabledReason = 'The desktop update service is unavailable in this build.'
   const supported = !disabledReason
   let state = createInitialState({ currentVersion, supported, autoDownload: preferences.autoDownload, disabledReason })
   let expectedManifest = null

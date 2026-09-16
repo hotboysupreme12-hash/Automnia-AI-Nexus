@@ -97,20 +97,11 @@ for (const command of order) {
 }
 
 assert.match(publicRelease, /tags:\s*\n\s*- 'v\*'/, 'version tags must trigger the dedicated public release workflow')
-assert.match(publicRelease, /AUTOMNIA_RELEASE_REQUIRE_SIGNING:\s*'1'/, 'public releases must fail closed without release signing')
+assert.match(publicRelease, /AUTOMNIA_RELEASE_REQUIRE_SIGNING:\s*'0'/, 'early public releases must allow unsigned platform artifacts')
 assert.match(publicRelease, /AUTOMNIA_UPDATE_REQUIRE_SIGNING:\s*'1'/, 'public releases must fail closed without update signing')
-for (const secret of [
-  'WIN_CSC_LINK',
-  'WIN_CSC_KEY_PASSWORD',
-  'AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM',
-  'AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM',
-  'MAC_CSC_LINK',
-  'APPLE_ID',
-  'APPLE_APP_SPECIFIC_PASSWORD',
-  'APPLE_TEAM_ID',
-]) {
-  assert.ok(publicRelease.includes(secret), `public release workflow must require ${secret}`)
-}
+assert.match(publicRelease, /AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG:\s*'1'/, 'public release builds must verify the embedded updater trust configuration')
+assert.match(publicRelease, /AUTOMNIA_SKIP_PLATFORM_SIGNING:\s*'1'/, 'early public releases must explicitly select unsigned platform packaging')
+assert.ok(publicRelease.includes('AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM'), 'public release workflow must require the update signing secret')
 for (const command of [
   'npm run dist:win',
   'npm run release:update-manifest',
@@ -120,7 +111,6 @@ for (const command of [
   'npm run release:sign',
   'npm run release:validate',
   'npm run dist:mac',
-  'xcrun stapler validate',
   'npm run dist:linux',
 ]) {
   assert.ok(publicRelease.includes(command), `public release workflow must run ${command}`)
@@ -158,6 +148,7 @@ assert.match(packageDesktop, /prepare-openclaw-vendor\.cjs/, 'desktop packaging 
 assert.match(packageDesktop, /killGeneratedWindowsPackageProcesses/, 'Windows packaging must stop packaged child processes before replacing output')
 assert.match(packageDesktop, /StartsWith\(\$target/, 'Windows packaging cleanup must be scoped to the generated package directory')
 assert.match(packageDesktop, /config\.directories\.output=release\/win-installer/, 'Windows installers must use an isolated output directory after launch smoke')
+assert.match(read('scripts/after-pack.cjs'), /AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG/, 'packaging must support a release-only embedded updater trust check')
 assert.match(secretScanner, /private-key/, 'secret scan must detect private key material')
 assert.match(secretScanner, /github-token/, 'secret scan must detect GitHub tokens')
 assert.match(secretScanner, /allowlist\\s\+secret/, 'secret scan must support explicit allowlist markers')

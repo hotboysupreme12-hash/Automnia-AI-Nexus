@@ -1,10 +1,10 @@
 # Desktop automatic updates
 
-Automnia desktop updates are a signed, cross-platform release channel backed by Google Cloud Storage. Installed apps check quietly, download in the background, independently verify the payload, and ask for one explicit restart before replacing the running version.
+Automnia desktop updates are a cryptographically signed, cross-platform release channel backed by Google Cloud Storage. Installed apps check quietly, download in the background, independently verify the payload, and ask for one explicit restart before replacing the running version. Early customer distribution may use unsigned Windows and macOS installers until platform-signing certificates are affordable; the update channel signature remains required in every mode.
 
 ## Production architecture
 
-1. The public release workflow builds an Authenticode-signed NSIS installer, a signed/notarized macOS DMG and ZIP updater payload, and Linux AppImage/DEB packages.
+1. The public release workflow builds Windows NSIS, macOS DMG/ZIP, and Linux AppImage/DEB packages. It currently supports an early unsigned Windows/macOS mode and can be switched to platform signing later without changing the GCS update protocol.
 2. Every packaged app contains the Ed25519 public update key and its immutable update origin. The private key exists only as a protected GitHub Actions secret.
 3. A final release job downloads all three platform jobs, flattens one coherent channel, validates every `latest*.yml` reference, signs `update-manifest.json` with the staged-rollout policy, and verifies every artifact before publication.
 4. Payloads are uploaded first to both `releases/<version>/` and `stable/` with create-only generation preconditions. Mutable channel metadata is uploaded in dependency order with the signed manifest last and `Cache-Control: no-store`, so clients never accept metadata for a missing installer.
@@ -45,6 +45,12 @@ https://storage.googleapis.com/<UPDATE_BUCKET>/stable
 
 Cloud CDN and `updates.automnia.app` can be placed in front later. Keep the path ending in `/stable`, preserve HTTPS, and ensure redirects remain on the same origin because the app rejects cross-origin update redirects.
 
+## Early distribution without platform certificates
+
+The tag-triggered public workflow currently sets `AUTOMNIA_SKIP_PLATFORM_SIGNING=1` and `AUTOMNIA_RELEASE_REQUIRE_SIGNING=0`. This removes the Windows Authenticode and Apple Developer ID/notarization prerequisites while preserving the installer lifecycle checks and signed update manifest. Windows and macOS users may see SmartScreen or Gatekeeper warnings and may need to approve the download manually.
+
+When platform certificates become available, remove the unsigned mode, restore the platform-signing secrets, set `AUTOMNIA_RELEASE_REQUIRE_SIGNING=1`, and re-enable the platform signature evidence gate. Do not replace the update signing key or change the GCS origin as part of that switch.
+
 ## Required GitHub configuration
 
 Protected secrets:
@@ -52,7 +58,8 @@ Protected secrets:
 - `AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM`: Ed25519 PKCS#8 private key.
 - `GCP_UPDATE_WORKLOAD_IDENTITY_PROVIDER`: full Workload Identity provider resource name.
 - `GCP_UPDATE_PUBLISHER_SERVICE_ACCOUNT`: publisher service-account email.
-- Existing Windows and Apple platform-signing secrets required by `public-release.yml`.
+
+Windows and Apple platform-signing secrets are optional in the early distribution mode and become required only when the signed public-release gate is enabled.
 
 Repository/environment variables:
 

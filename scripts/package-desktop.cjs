@@ -112,6 +112,7 @@ const windowsInstallerOutputDirArgs = process.platform === 'win32' && forwardedA
 const signingOverrideArgs = unsignedDirectoryPackage
   ? [
       '--config.win.signAndEditExecutable=false',
+      ...(forwardedArgs.includes('--mac') ? ['--config.mac.notarize=false'] : []),
     ]
   : []
 
@@ -427,8 +428,18 @@ const child = spawn(command, [electronBuilderCli, ...forwardedArgs, ...publishAr
     ...(unsignedDirectoryPackage
       ? {
           CSC_IDENTITY_AUTO_DISCOVERY: 'false',
+          CSC_LINK: '',
+          CSC_KEY_PASSWORD: '',
           WIN_CSC_LINK: '',
           WIN_CSC_KEY_PASSWORD: '',
+          MAC_CSC_LINK: '',
+          MAC_CSC_KEY_PASSWORD: '',
+          APPLE_ID: '',
+          APPLE_APP_SPECIFIC_PASSWORD: '',
+          APPLE_TEAM_ID: '',
+          APPLE_API_KEY: '',
+          APPLE_API_KEY_ID: '',
+          APPLE_API_ISSUER: '',
         }
       : {}),
     ...(pathEntries.length

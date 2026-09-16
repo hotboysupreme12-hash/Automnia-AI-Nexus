@@ -9,6 +9,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$PlatformSigningRequired = -not ($env:AUTOMNIA_PLATFORM_SIGNING_REQUIRED -match '^(0|false|no)$')
 
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if (-not $EvidenceDir) { $EvidenceDir = Join-Path $Root 'release\evidence' }
@@ -181,16 +182,23 @@ function Test-CorruptedUpdateRejection {
 }
 
 try {
-  $Signature = Get-AuthenticodeSignature -LiteralPath $InstallerPath
-  if ($Signature.Status -ne 'Valid') { throw "Installer Authenticode status is $($Signature.Status): $($Signature.StatusMessage)" }
-  $Signer = $Signature.SignerCertificate.Subject
-  $Thumbprint = $Signature.SignerCertificate.Thumbprint
-  $Signtool = Get-Command signtool.exe -ErrorAction SilentlyContinue
-  if ($Signtool) {
-    & $Signtool.Source verify /pa /tw $InstallerPath *>&1 | Tee-Object -FilePath (Join-Path $LifecycleDir 'authenticode-verify.log')
-    if ($LASTEXITCODE -ne 0) { throw 'signtool timestamp verification failed.' }
+  if ($PlatformSigningRequired) {
+    $Signature = Get-AuthenticodeSignature -LiteralPath $InstallerPath
+    if ($Signature.Status -ne 'Valid') { throw "Installer Authenticode status is $($Signature.Status): $($Signature.StatusMessage)" }
+    $Signer = $Signature.SignerCertificate.Subject
+    $Thumbprint = $Signature.SignerCertificate.Thumbprint
+    $Signtool = Get-Command signtool.exe -ErrorAction SilentlyContinue
+    if ($Signtool) {
+      & $Signtool.Source verify /pa /tw $InstallerPath *>&1 | Tee-Object -FilePath (Join-Path $LifecycleDir 'authenticode-verify.log')
+      if ($LASTEXITCODE -ne 0) { throw 'signtool timestamp verification failed.' }
+    } else {
+      Write-LifecycleLog -Name 'authenticode-verify.log' -Lines @('signtool.exe unavailable; Get-AuthenticodeSignature returned Valid.') | Out-Null
+    }
   } else {
-    Write-LifecycleLog -Name 'authenticode-verify.log' -Lines @('signtool.exe unavailable; Get-AuthenticodeSignature returned Valid.') | Out-Null
+    Write-LifecycleLog -Name 'authenticode-verify.log' -Lines @(
+      'Platform signing verification skipped because AUTOMNIA_PLATFORM_SIGNING_REQUIRED=0.',
+      'The installer is intentionally unsigned for early distribution; update-channel signature verification remains required.'
+    ) | Out-Null
   }
 
   Verify-UpdateChannel
@@ -223,40 +231,44 @@ try {
   if (Test-Path -LiteralPath $UpgradeExe) { throw 'Automnia.exe remained after silent uninstall.' }
   Write-LifecycleLog -Name 'uninstall.log' -Lines @("Uninstaller: $Uninstaller", 'Automnia.exe removed: true', 'Status: passed') | Out-Null
 
-  $GeneratedAt = [DateTime]::UtcNow.ToString('o')
-  $ArtifactRelative = $InstallerPath.Substring($Root.Length).TrimStart('\', '/').Replace('\', '/')
-  $Evidence = [ordered]@{
-    schema = 1
-    generatedAt = $GeneratedAt
-    artifacts = @(
-      [ordered]@{
-        platform = 'windows'
-        artifact = $ArtifactRelative
-        signing = [ordered]@{
-          type = 'authenticode'
-          status = 'verified'
-          signer = $Signer
-          thumbprint = $Thumbprint
-          timestamp = $GeneratedAt
-          verificationCommand = "Get-AuthenticodeSignature; signtool verify /pa /tw `"$ArtifactRelative`""
+  if ($PlatformSigningRequired) {
+    $GeneratedAt = [DateTime]::UtcNow.ToString('o')
+    $ArtifactRelative = $InstallerPath.Substring($Root.Length).TrimStart('\', '/').Replace('\', '/')
+    $Evidence = [ordered]@{
+      schema = 1
+      generatedAt = $GeneratedAt
+      artifacts = @(
+        [ordered]@{
+          platform = 'windows'
+          artifact = $ArtifactRelative
+          signing = [ordered]@{
+            type = 'authenticode'
+            status = 'verified'
+            signer = $Signer
+            thumbprint = $Thumbprint
+            timestamp = $GeneratedAt
+            verificationCommand = "Get-AuthenticodeSignature; signtool verify /pa /tw `"$ArtifactRelative`""
+          }
         }
+      )
+      updateChannel = [ordered]@{
+        signed = $true
+        rollbackTested = $true
+        verificationCommand = 'node scripts/verify-update-manifest.cjs; reject corrupted artifact; relaunch installed prior version'
       }
-    )
-    updateChannel = [ordered]@{
-      signed = $true
-      rollbackTested = $true
-      verificationCommand = 'node scripts/verify-update-manifest.cjs; reject corrupted artifact; relaunch installed prior version'
+      installTests = [ordered]@{
+        freshInstall = [ordered]@{ status = 'passed'; evidence = 'release/evidence/lifecycle/fresh-install.log' }
+        upgrade = [ordered]@{ status = 'passed'; evidence = 'release/evidence/lifecycle/upgrade.log' }
+        uninstall = [ordered]@{ status = 'passed'; evidence = 'release/evidence/lifecycle/uninstall.log' }
+        corruptedUpdate = [ordered]@{ status = 'passed'; evidence = 'release/evidence/lifecycle/corrupted-update.log' }
+      }
     }
-    installTests = [ordered]@{
-      freshInstall = [ordered]@{ status = 'passed'; evidence = 'release/evidence/lifecycle/fresh-install.log' }
-      upgrade = [ordered]@{ status = 'passed'; evidence = 'release/evidence/lifecycle/upgrade.log' }
-      uninstall = [ordered]@{ status = 'passed'; evidence = 'release/evidence/lifecycle/uninstall.log' }
-      corruptedUpdate = [ordered]@{ status = 'passed'; evidence = 'release/evidence/lifecycle/corrupted-update.log' }
-    }
+    $EvidencePath = Join-Path $EvidenceDir 'distribution-signing.json'
+    $Evidence | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $EvidencePath -Encoding UTF8
+    Write-Host "[release-lifecycle] wrote $EvidencePath"
+  } else {
+    Write-Host '[release-lifecycle] platform signing disabled; install and update-integrity evidence retained without distribution-signing.json'
   }
-  $EvidencePath = Join-Path $EvidenceDir 'distribution-signing.json'
-  $Evidence | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $EvidencePath -Encoding UTF8
-  Write-Host "[release-lifecycle] wrote $EvidencePath"
 } finally {
   if (Test-Path -LiteralPath $TempRoot) { Remove-Item -LiteralPath $TempRoot -Recurse -Force -ErrorAction SilentlyContinue }
 }
