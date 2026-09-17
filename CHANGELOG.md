@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.16 - 2026-09-16
+
+### Update channel publication
+
+- Keeps electron-builder debug metadata out of the public update channel so immutable stable payloads can be published repeatedly without conflicting with a prior release.
+
 ## 1.0.15 - 2026-09-16
 
 ### Update artifact selection

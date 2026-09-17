@@ -34,6 +34,7 @@ const candidates = walk(inputRoot).filter((filePath) => {
   const lower = filePath.toLowerCase()
   const relative = path.relative(inputRoot, filePath).replace(/\\/g, '/').toLowerCase()
   if (
+    path.basename(relative) === 'builder-debug.yml' ||
     relative.includes('/evidence/') ||
     relative.includes('/updates/') ||
     relative.includes('/win-unpacked/') ||

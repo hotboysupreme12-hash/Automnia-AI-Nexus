@@ -20,6 +20,7 @@ test('cross-platform update staging flattens coherent metadata and excludes evid
       'macos/latest-mac.yml': 'version: 1.2.0\npath: Automnia-1.2.0-arm64.zip\nfiles:\n  - url: Automnia-1.2.0-arm64.zip\n',
       'linux/Automnia-1.2.0-x64.AppImage': 'appimage',
       'linux/latest-linux.yml': 'version: 1.2.0\npath: Automnia-1.2.0-x64.AppImage\nfiles:\n  - url: Automnia-1.2.0-x64.AppImage\n',
+      'windows/builder-debug.yml': 'debug metadata',
       'windows/evidence/do-not-publish.zip': 'evidence',
       'windows/win-unpacked/Automnia.exe': 'unpacked',
     }
@@ -36,6 +37,7 @@ test('cross-platform update staging flattens coherent metadata and excludes evid
     assert.equal(result.status, 0, result.stderr)
     assert.equal(fs.existsSync(path.join(output, 'do-not-publish.zip')), false)
     assert.equal(fs.existsSync(path.join(output, 'Automnia.exe')), false)
+    assert.equal(fs.existsSync(path.join(output, 'builder-debug.yml')), false)
     assert.equal(fs.existsSync(path.join(output, 'Automnia-1.2.0-arm64.zip')), true)
     const metadata = yaml.load(fs.readFileSync(path.join(output, 'latest.yml'), 'utf8'))
     assert.equal(metadata.version, '1.2.0')
