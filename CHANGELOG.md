@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.14 - 2026-09-16
+
+### Release publication
+
+- Disables Google Cloud parallel composite uploads for the least-privilege GitHub Actions publisher, preventing large-artifact publication from requiring temporary-object deletion permissions.
+
 ## 1.0.13 - 2026-09-16
 
 ### Windows installer lifecycle

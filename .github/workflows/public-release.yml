@@ -291,6 +291,9 @@ jobs:
           set -euo pipefail
           test -n "$UPDATE_BUCKET" || { echo "AUTOMNIA_UPDATE_BUCKET is required" >&2; exit 1; }
           gcloud storage buckets describe "gs://$UPDATE_BUCKET" >/dev/null
+          # The WIF publisher is intentionally least-privilege and cannot delete
+          # temporary composite-upload parts. Upload each object directly instead.
+          gcloud config set storage/parallel_composite_upload_enabled False >/dev/null
           version="${GITHUB_REF_NAME#v}"
           version_destination="gs://$UPDATE_BUCKET/releases/$version"
           channel_destination="gs://$UPDATE_BUCKET/stable"
