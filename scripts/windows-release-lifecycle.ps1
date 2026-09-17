@@ -338,5 +338,13 @@ try {
     Write-Host '[release-lifecycle] platform signing disabled; install and update-integrity evidence retained without distribution-signing.json'
   }
 } finally {
-  if (Test-Path -LiteralPath $TempRoot) { Remove-Item -LiteralPath $TempRoot -Recurse -Force -ErrorAction SilentlyContinue }
+  try {
+    if (Test-Path -LiteralPath $TempRoot) {
+      Remove-Item -LiteralPath $TempRoot -Recurse -Force -ErrorAction Stop
+    }
+  } catch {
+    if (Test-Path -LiteralPath $TempRoot) {
+      Write-Warning "[release-lifecycle] temporary cleanup incomplete: $($_.Exception.Message)"
+    }
+  }
 }

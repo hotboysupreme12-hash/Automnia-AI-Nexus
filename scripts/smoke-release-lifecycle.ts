@@ -48,6 +48,7 @@ assert.match(lifecycle, /Join-Path \$InstallRoot \$ExpectedAppExeName/, 'Windows
 assert.match(lifecycle, /-and \(\$RequiredPayload \| Where-Object/, 'Windows lifecycle validation must wait only while packaged payload files are missing')
 assert.match(lifecycle, /\$ErrorActionPreference = 'Continue'/, 'Windows lifecycle validation must capture expected integrity-test stderr instead of aborting on it')
 assert.match(lifecycle, /\$ExitCode = \$LASTEXITCODE/, 'Windows lifecycle validation must assert the expected integrity-test exit code')
+assert.match(lifecycle, /temporary cleanup incomplete/, 'Windows lifecycle cleanup races must not mask completed release evidence')
 
 assert.match(backupLibrary, /backup-manifest\.json/, 'state backups must carry a verification manifest')
 assert.match(backupLibrary, /symbolic_link_not_followed/, 'state backups must skip symlink traversal without following targets')

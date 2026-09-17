@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.17 - 2026-09-16
+
+### Windows lifecycle reliability
+
+- Treats a race while removing the temporary lifecycle directory as a cleanup warning instead of failing an otherwise complete installer, integrity, rollback, and uninstall validation.
+
 ## 1.0.16 - 2026-09-16
 
 ### Update channel publication
