@@ -98,6 +98,7 @@ test('artifact discovery classifies platforms and excludes unpacked or evidence 
     assert.equal(inferPlatform('thing.pkg'), 'macos')
     assert.equal(inferPlatform('thing.rpm'), 'linux')
     assert.equal(inferArch('thing-ia32.zip'), 'ia32')
+    assert.equal(inferArch('thing-x86_64.AppImage'), 'x64')
     assert.equal(inferArch('thing.bin'), 'universal')
     assert.throws(() => collectArtifacts(root, ['../outside.exe']), /escapes artifact root/)
     assert.throws(() => collectArtifacts(root, ['missing.exe']), /is missing/)

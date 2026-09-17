@@ -83,8 +83,8 @@ function inferPlatform(relativePath) {
 function inferArch(relativePath) {
   const value = relativePath.toLowerCase()
   if (/(^|[-_.\/])(arm64|aarch64)([-_.\/]|$)/.test(value)) return 'arm64'
+  if (/(^|[-_.\/])(x64|amd64|x86[-_]64)([-_.\/]|$)/.test(value)) return 'x64'
   if (/(^|[-_.\/])(ia32|x86)([-_.\/]|$)/.test(value)) return 'ia32'
-  if (/(^|[-_.\/])(x64|amd64)([-_.\/]|$)/.test(value)) return 'x64'
   return 'universal'
 }
 

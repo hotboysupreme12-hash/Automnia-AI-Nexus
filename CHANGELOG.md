@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.15 - 2026-09-16
+
+### Update artifact selection
+
+- Correctly identifies `x86_64` Linux AppImage filenames as `x64`, allowing the signed updater to select the published Linux artifact on x64 installations.
+
 ## 1.0.14 - 2026-09-16
 
 ### Release publication
