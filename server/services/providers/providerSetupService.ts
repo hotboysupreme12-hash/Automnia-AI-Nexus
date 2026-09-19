@@ -78,15 +78,6 @@ export type OpenAICodexTokenExchangeResult =
       message: string
     }
 
-export type OpenAICodexOAuthTesting = {
-  createAuthorizationFlow: (originator?: string) => Promise<OpenAICodexAuthorizationFlow>
-  exchangeAuthorizationCode: (
-    code: string,
-    verifier: string,
-    redirectUri?: string,
-  ) => Promise<OpenAICodexTokenExchangeResult>
-}
-
 export type OpenAICodexRefreshResult = {
   access: string
   refresh: string
@@ -133,9 +124,36 @@ type OpenAICodexRefreshModule = {
   refreshOpenAICodexToken: (refreshToken: string) => Promise<OpenAICodexRefreshResult>
 }
 
-type OpenAICodexRuntimeModule = OpenAICodexOAuthModule & OpenAICodexRefreshModule & {
-  testing?: OpenAICodexOAuthTesting
+type OpenAICodexAuthorizationRuntimeModule = {
+  createOpenAIAuthorizationFlow: (
+    originator?: string,
+    redirectUri?: string,
+  ) => Promise<OpenAICodexAuthorizationFlow>
 }
+
+type OpenAICodexRuntimeTokenExchangeResult =
+  | {
+      type: 'success'
+      access: string
+      refresh: string
+      expires: number
+    }
+  | {
+      type: 'failed'
+      status?: number
+      message?: string
+      summary?: string
+    }
+
+type OpenAICodexTokenRuntimeModule = {
+  exchangeOpenAIAuthorizationCode: (
+    code: string,
+    verifier: string,
+    redirectUri?: string,
+  ) => Promise<OpenAICodexRuntimeTokenExchangeResult>
+}
+
+type OpenAICodexRuntimeModule = OpenAICodexOAuthModule & OpenAICodexRefreshModule
 
 type SpawnSyncResultLike = {
   stdout?: string | Buffer
@@ -938,16 +956,41 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     ).filter(Boolean)
   }
 
-  function openClawDistModulePath(fileName: string) {
+  function openClawDistModulePathFromCandidates(fileNames: readonly string[]) {
     for (const distDir of openClawDistDirCandidates()) {
-      const candidate = path.join(distDir, fileName)
-      if (exists(candidate)) return candidate
+      for (const fileName of fileNames) {
+        const candidate = path.join(distDir, fileName)
+        if (exists(candidate)) return candidate
+      }
     }
-    return path.join(openClawDistDirCandidates()[0] || path.join(options.workspaceRoot, 'vendor', 'openclaw', 'dist'), fileName)
+    return path.join(
+      openClawDistDirCandidates()[0] || path.join(options.workspaceRoot, 'vendor', 'openclaw', 'dist'),
+      fileNames[0] || 'openai-chatgpt-oauth-flow.runtime.js',
+    )
   }
 
   function openAICodexOAuthModulePath() {
-    return openClawDistModulePath('openai-chatgpt-oauth-flow.runtime.js')
+    // Newer OpenClaw builds publish stable, named OAuth exports through the
+    // extension entrypoint. The top-level file is a hashed/minified shim and
+    // has changed its export names across releases.
+    return openClawDistModulePathFromCandidates([
+      path.join('extensions', 'openai', 'openai-chatgpt-oauth-flow.runtime.js'),
+      'openai-chatgpt-oauth-flow.runtime.js',
+    ])
+  }
+
+  function openAICodexOAuthAuthorizationModulePath() {
+    return openClawDistModulePathFromCandidates([
+      path.join('extensions', 'openai', 'openai-chatgpt-oauth-authorization.runtime.js'),
+      'openai-chatgpt-oauth-authorization.runtime.js',
+    ])
+  }
+
+  function openAICodexOAuthTokenModulePath() {
+    return openClawDistModulePathFromCandidates([
+      path.join('extensions', 'openai', 'openai-chatgpt-oauth-token.runtime.js'),
+      'openai-chatgpt-oauth-token.runtime.js',
+    ])
   }
 
   function anthropicOAuthModulePath() {
@@ -979,8 +1022,10 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     const modulePath = openAICodexOAuthModulePath()
     const oauthModule = await importModule(pathToFileURL(modulePath).href)
     const loginOpenAICodex = oauthModule.loginOpenAICodex ?? oauthModule.t
-    const refreshOpenAICodexToken = oauthModule.refreshOpenAICodexToken ?? oauthModule.r
-    const testing = oauthModule.testing ?? oauthModule.i
+    // Older top-level shims used `r`; OpenClaw 2026.9.2 uses `n`. Prefer
+    // named exports from the extension entrypoint, then retain both shims as
+    // compatibility fallbacks for already-packaged runtimes.
+    const refreshOpenAICodexToken = oauthModule.refreshOpenAICodexToken ?? oauthModule.r ?? oauthModule.n
 
     if (typeof loginOpenAICodex !== 'function') {
       throw new Error(`OpenAI Codex OAuth runtime at ${modulePath} does not export loginOpenAICodex.`)
@@ -993,29 +1038,41 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
       ...oauthModule,
       loginOpenAICodex,
       refreshOpenAICodexToken,
-      ...(testing ? { testing } : {}),
     } as OpenAICodexRuntimeModule
   }
 
-  function openAICodexOAuthTesting(oauthModule: OpenAICodexRuntimeModule): OpenAICodexOAuthTesting {
-    if (
-      !oauthModule.testing ||
-      typeof oauthModule.testing.createAuthorizationFlow !== 'function' ||
-      typeof oauthModule.testing.exchangeAuthorizationCode !== 'function'
-    ) {
-      throw new Error('OpenAI Codex OAuth runtime does not expose the callback flow helpers.')
+  async function importOpenAICodexOAuthAuthorizationModule() {
+    const modulePath = openAICodexOAuthAuthorizationModulePath()
+    const oauthModule = await importModule(pathToFileURL(modulePath).href)
+    const createOpenAIAuthorizationFlow = oauthModule.createOpenAIAuthorizationFlow ?? oauthModule.t
+    if (typeof createOpenAIAuthorizationFlow !== 'function') {
+      throw new Error(`OpenAI Codex OAuth runtime at ${modulePath} does not export createOpenAIAuthorizationFlow.`)
     }
-    return oauthModule.testing
+    return { createOpenAIAuthorizationFlow } as OpenAICodexAuthorizationRuntimeModule
   }
 
-  async function createOpenAICodexAuthorizationFlow(originator?: string) {
-    const oauthModule = await importOpenAICodexOAuthModule()
-    return openAICodexOAuthTesting(oauthModule).createAuthorizationFlow(originator)
+  async function importOpenAICodexOAuthTokenModule() {
+    const modulePath = openAICodexOAuthTokenModulePath()
+    const oauthModule = await importModule(pathToFileURL(modulePath).href)
+    const exchangeOpenAIAuthorizationCode = oauthModule.exchangeOpenAIAuthorizationCode ?? oauthModule.t
+    if (typeof exchangeOpenAIAuthorizationCode !== 'function') {
+      throw new Error(`OpenAI Codex OAuth runtime at ${modulePath} does not export exchangeOpenAIAuthorizationCode.`)
+    }
+    return { exchangeOpenAIAuthorizationCode } as OpenAICodexTokenRuntimeModule
+  }
+
+  async function createOpenAICodexAuthorizationFlow(originator?: string, redirectUri?: string) {
+    return (await importOpenAICodexOAuthAuthorizationModule()).createOpenAIAuthorizationFlow(originator, redirectUri)
   }
 
   async function exchangeOpenAICodexAuthorizationCode(code: string, verifier: string, redirectUri?: string) {
-    const oauthModule = await importOpenAICodexOAuthModule()
-    return openAICodexOAuthTesting(oauthModule).exchangeAuthorizationCode(code, verifier, redirectUri)
+    const result = await (await importOpenAICodexOAuthTokenModule()).exchangeOpenAIAuthorizationCode(code, verifier, redirectUri)
+    if (result.type === 'success') return result
+    return {
+      type: 'failed' as const,
+      ...(typeof result.status === 'number' ? { status: result.status } : {}),
+      message: result.message || result.summary || 'OpenAI Codex token exchange failed.',
+    }
   }
 
   async function refreshOpenAICodexToken(refreshToken: string) {

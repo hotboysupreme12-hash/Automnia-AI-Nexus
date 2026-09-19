@@ -104,7 +104,7 @@ type PendingAnthropicOAuthLogin = {
 type FetchLike = typeof fetch
 
 export type OAuthCallbackServiceOptions = {
-  createOpenAICodexAuthorizationFlow: (originator?: string) => Promise<OpenAICodexAuthorizationFlow>
+  createOpenAICodexAuthorizationFlow: (originator?: string, redirectUri?: string) => Promise<OpenAICodexAuthorizationFlow>
   exchangeGoogleOAuthCodeForTokens?: (code: string, verifier: string, projectId?: string) => Promise<LocalOAuthCredential>
   exchangeOpenAICodexAuthorizationCode: (
     code: string,
@@ -786,7 +786,10 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
     if (options.isShuttingDown()) throw new Error('Control Center is shutting down.')
     pruneOAuthSessions()
     const id = randomUUID()
-    const flow = await options.createOpenAICodexAuthorizationFlow('automnia')
+    // Supply the same loopback callback URI that this service owns. Newer
+    // OpenClaw OAuth modules expose the PKCE helper directly rather than the
+    // old private testing adapter, and require the redirect URI explicitly.
+    const flow = await options.createOpenAICodexAuthorizationFlow('automnia', options.openAiCodexOAuthRedirectUri)
     const session: ProviderOAuthSession = {
       id,
       provider: 'openai',

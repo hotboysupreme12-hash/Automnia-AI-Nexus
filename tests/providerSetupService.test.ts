@@ -388,33 +388,39 @@ test('loads OpenAI Codex OAuth runtime helpers from explicit and minified export
   const harness = await createHarness({
     importModule: async (moduleUrl) => {
       moduleUrls.push(moduleUrl)
+      if (moduleUrl.endsWith('/openai-chatgpt-oauth-authorization.runtime.js')) {
+        return {
+          t: async (originator?: string, redirectUri?: string) => ({
+            verifier: 'verifier',
+            redirectUri: redirectUri || 'http://127.0.0.1:1455/auth/callback',
+            state: originator || 'state',
+            url: `https://auth.openai.test/${originator || 'state'}`,
+          }),
+        }
+      }
+      if (moduleUrl.endsWith('/openai-chatgpt-oauth-token.runtime.js')) {
+        return {
+          t: async (code: string, verifier: string, redirectUri?: string) => ({
+            type: 'success' as const,
+            access: `access-${code}-${verifier}`,
+            refresh: `refresh-${redirectUri || 'default'}`,
+            expires: 1_782_829_900_000,
+          }),
+        }
+      }
       return {
         t: async () => ({ access: 'unused-access', refresh: 'unused-refresh', expires: 1 }),
-        r: async (refreshToken: string) => ({
+        n: async (refreshToken: string) => ({
           access: `access-for-${refreshToken}`,
           refresh: `refresh-for-${refreshToken}`,
           expires: 1_782_829_900_000,
           accountId: 'acct_refreshed',
         }),
-        i: {
-          createAuthorizationFlow: async (originator?: string) => ({
-            verifier: 'verifier',
-            redirectUri: 'http://127.0.0.1:1455/auth/callback',
-            state: originator || 'state',
-            url: `https://auth.openai.test/${originator || 'state'}`,
-          }),
-          exchangeAuthorizationCode: async (code: string, verifier: string, redirectUri?: string) => ({
-            type: 'success',
-            access: `access-${code}-${verifier}`,
-            refresh: `refresh-${redirectUri || 'default'}`,
-            expires: 1_782_829_900_000,
-          }),
-        },
       }
     },
   })
   try {
-    const flow = await harness.service.createOpenAICodexAuthorizationFlow('automnia')
+    const flow = await harness.service.createOpenAICodexAuthorizationFlow('automnia', 'http://127.0.0.1:1455/auth/callback')
     assert.equal(flow.state, 'automnia')
     assert.equal(flow.verifier, 'verifier')
 
@@ -429,7 +435,9 @@ test('loads OpenAI Codex OAuth runtime helpers from explicit and minified export
     const refreshed = await harness.service.refreshOpenAICodexToken('codex-refresh')
     assert.equal(refreshed.access, 'access-for-codex-refresh')
     assert.equal(refreshed.accountId, 'acct_refreshed')
-    assert.ok(moduleUrls.every((moduleUrl) => moduleUrl.endsWith('/openai-chatgpt-oauth-flow.runtime.js')))
+    assert.ok(moduleUrls.some((moduleUrl) => moduleUrl.endsWith('/extensions/openai/openai-chatgpt-oauth-flow.runtime.js')))
+    assert.ok(moduleUrls.some((moduleUrl) => moduleUrl.endsWith('/extensions/openai/openai-chatgpt-oauth-authorization.runtime.js')))
+    assert.ok(moduleUrls.some((moduleUrl) => moduleUrl.endsWith('/extensions/openai/openai-chatgpt-oauth-token.runtime.js')))
   } finally {
     await harness.cleanup()
   }

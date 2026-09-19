@@ -22,7 +22,9 @@ assert.match(providerSetupService, /function resolveGoogleOAuthClientConfig/, 'p
 assert.match(providerSetupService, /function googleOAuthClientConfigStatus/, 'provider setup service must own Google OAuth config status')
 assert.match(providerSetupService, /async function resolveProviderRequestAuth/, 'provider setup service must own provider request-auth resolution')
 assert.match(providerSetupService, /async function importOpenAICodexOAuthModule/, 'provider setup service must own OpenAI Codex OAuth runtime loading')
-assert.match(providerSetupService, /function openAICodexOAuthTesting/, 'provider setup service must own OpenAI Codex callback helper validation')
+assert.match(providerSetupService, /async function importOpenAICodexOAuthAuthorizationModule/, 'provider setup service must load the named OpenAI OAuth authorization helper')
+assert.match(providerSetupService, /async function importOpenAICodexOAuthTokenModule/, 'provider setup service must load the named OpenAI OAuth token helper')
+assert.match(providerSetupService, /extensions', 'openai', 'openai-chatgpt-oauth-flow\.runtime\.js/, 'provider setup service must prefer the stable OpenAI OAuth extension entrypoint')
 assert.match(providerSetupService, /GOOGLE_CLOUD_CLI_INSTALL_URL/, 'provider setup service must own Google Cloud CLI operator guidance')
 
 assert.match(controlPlane, /from '\.\/services\/providers\/providerSetupService'/, 'controlPlane.ts must import provider setup service')
@@ -42,7 +44,6 @@ for (const forbidden of [
   /\bfunction\s+resolveGoogleProjectId\b/,
   /\basync function\s+resolveProviderRequestAuth\b/,
   /\basync function\s+importOpenAICodexOAuthModule\b/,
-  /\bfunction\s+openAICodexOAuthTesting\b/,
   /\bfunction\s+runGcloud\b/,
   /\bfunction\s+spawnGcloud\b/,
 ]) {
