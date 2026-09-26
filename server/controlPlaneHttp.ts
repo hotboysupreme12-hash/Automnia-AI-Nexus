@@ -34,6 +34,7 @@ export type ApiErrorCode =
   | 'agent_session_operation_failed'
   | 'agent_turn_failed'
   | 'agent_config_sync_failed'
+  | 'approval_service_unavailable'
   | 'avatar_preview_failed'
   | 'avatar_upload_failed'
   | 'auth_required'
@@ -58,6 +59,7 @@ export type ApiErrorCode =
   | 'license_service_unavailable'
   | 'mission_invalid_state'
   | 'mission_not_found'
+  | 'mission_persistence_failed'
   | 'mission_report_not_found'
   | 'mission_scheduler_failed'
   | 'model_auth_required'
@@ -80,6 +82,7 @@ export type ApiErrorCode =
   | 'runtime_action_failed'
   | 'runtime_activity_failed'
   | 'runtime_summary_failed'
+  | 'shared_tool_policy_conflict'
   | 'resource_not_found'
   | 'rate_limited'
   | 'recruit_failed'
@@ -90,6 +93,7 @@ export type ApiErrorCode =
   | 'skill_operation_failed'
   | 'speech_transcription_failed'
   | 'team_sync_failed'
+  | 'tool_access_update_failed'
   | 'workspace_unwritable'
 
 type ControlPlaneHttpOptions = {

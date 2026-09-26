@@ -1,6 +1,6 @@
 # Automnia AI User Guide
 
-Last updated: 2026-07-05
+Last updated: 2026-09-26
 
 Automnia AI is a local-first desktop cockpit for configurable agents. It helps you create agents, give them roles and workspaces, connect model/provider routes, launch missions, schedule recurring work, manage plugins, route compatible channels, and monitor runtime evidence from one place.
 
@@ -312,12 +312,12 @@ Use it to inspect:
 Recovery order:
 
 1. Wait for health polling.
-2. Check active work.
-3. Use Clean Slate for stale UI/runtime projection.
-4. Use Reset Gateway when Gateway is unhealthy.
-5. Stop Gateway only when plugin or channel state needs a hard reset.
-6. Reopen the app if runtime cannot recover.
-7. Retry a tiny direct prompt before relaunching big work.
+2. Check active calls and mission history. If a run's outcome is unclear, inspect its session and report before retrying so work is not duplicated.
+3. Use Clean Slate only for stale Monitor/runtime projection; it does not restore a lost response or credential.
+4. Use Reset Gateway only when Gateway is unhealthy. Resetting Gateway interrupts runtime work.
+5. Stop Gateway only when plugin or channel state needs a hard reset and active work has been reviewed.
+6. Reopen the app if runtime cannot recover, then check Monitor before resubmitting work.
+7. Retry a tiny direct prompt before relaunching a larger workflow.
 
 During first setup or an OpenClaw upgrade, the Gateway may run startup migrations and restart several times. Automnia shows `Gateway: MIGRATING` in the top-right status area until health is confirmed; wait for it to return to `ON` before retrying work.
 
@@ -483,6 +483,8 @@ Check model setup, provider availability, agent selection, active runs, denied t
 ### Mission will not deploy
 
 Check deployed agents, confirmed party, title, objective, model setup, and whether selected agents are already busy.
+
+If Automnia says it could not save the mission recovery record, it did not start the agent work. Check Monitor and local storage health before trying again.
 
 ### Channel message does not arrive
 

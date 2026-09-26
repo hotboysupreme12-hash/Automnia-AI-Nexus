@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.18 - 2026-09-26
+
+### Runtime recovery and mission reliability
+
+- Prevents overlapping Control Center restart attempts and retires an unhealthy server process before retrying startup.
+- Persists mission recovery records before dispatching work and reports when recovery data cannot be saved.
+- Repairs eligible OpenClaw restart-recovery claims that were refreshed by ingress retries before startup reconciliation.
+
+### Agent permissions and support
+
+- Supports permission controls and tool catalogs for the implicit Main agent while preserving named-agent tool boundaries.
+- Reports Gateway availability errors clearly in tool approvals and improves guidance for mission recovery, backups, and installer access.
+
 ## 1.0.17 - 2026-09-16
 
 ### Windows lifecycle reliability

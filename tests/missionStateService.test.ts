@@ -342,7 +342,7 @@ test('startMission rolls back mission state when scheduler setup fails', async (
   assert.equal(state.appendedRecords.at(-1)?.persistReason, 'transition:scheduled->failed')
 })
 
-test('transitionMissionState persists lifecycle evidence for mission state, scheduler, and recovery edges', () => {
+test('transitionMissionState persists lifecycle evidence for mission state, scheduler, and recovery edges', async () => {
   const { service, state, missions, missionFeed } = createHarness()
   const transitions: Array<{
     previous: MissionLifecycleState
@@ -379,6 +379,7 @@ test('transitionMissionState persists lifecycle evidence for mission state, sche
         evidence: { edge: `${transition.previous}->${transition.next}` },
       },
     )
+    await service.flushMissionPersistence()
 
     assert.equal(result.previousState, transition.previous)
     assert.equal(result.nextState, transition.next)
@@ -517,6 +518,7 @@ test('stopMission cancels recovered active work after backend restart', async ()
   })
 
   await recoveryService.hydrateMissionRecordsFromLedger()
+  await service.flushMissionPersistence()
 
   const hydratedMission = missions.get('mission-restarted-cancel')
   assert.equal(hydratedMission?.status, 'active')

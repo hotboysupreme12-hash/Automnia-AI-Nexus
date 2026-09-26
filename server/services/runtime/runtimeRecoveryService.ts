@@ -50,6 +50,7 @@ export type RuntimeRecoveryServiceOptions = {
   markShuttingDown: () => void
   pauseGatewayAutoRestart: () => void
   persistAllMissionRecords: (reason: string) => Promise<unknown>
+  flushMissionPersistence?: () => Promise<void>
   pushGatewayLog: (stream: 'lifecycle', message: string, level?: string) => void
   setRuntimeMonitorClearedAtMs: (value: number) => void
   stopAllPluginSetupTerminalSessions: (reason: string) => number
@@ -132,6 +133,9 @@ export function createRuntimeRecoveryService(options: RuntimeRecoveryServiceOpti
         minAgeMs: 0,
       }), null)
       await attempt('browser cache cleanup', () => options.clearBrowserProbeCache(), undefined)
+      if (options.flushMissionPersistence) {
+        await attempt('mission lifecycle persistence flush', () => options.flushMissionPersistence!(), undefined)
+      }
       await attempt('ledger close', () => options.closeRuntimeLedger(), undefined)
       return {
         sessions,

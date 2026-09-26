@@ -30,8 +30,8 @@ import { ConsoleRunSnapshots } from './services/agents/consoleRunSnapshots'
 import { registerClawTalkConsoleRoutes } from './routes/clawTalkConsoleRoutes'
 import { registerDiagnosticsRoutes } from './routes/diagnosticsRoutes'
 import { registerAgentTurnRoutes } from './routes/agentTurnRoutes'
-import { registerToolApprovalRoutes, type ExecAccess } from './routes/toolApprovalRoutes'
-import { DYNAMIC_TOOL_SEARCH, fullAccessToolPolicy, restrictedToolDefaults } from './services/agents/dynamicToolPolicy'
+import { registerToolApprovalRoutes, ToolAccessPolicyConflictError, type ExecAccess } from './routes/toolApprovalRoutes'
+import { DYNAMIC_TOOL_SEARCH, fullAccessToolPolicy, isImplicitMainAgentId, mainAgentToolPolicyForAccess, restrictedToolDefaults } from './services/agents/dynamicToolPolicy'
 import { removeGeneratedHostedToolAllowlist } from './services/agents/hostedToolPolicy'
 import { registerAgentConfigRoutes } from './routes/agentConfigRoutes'
 import { registerFilesystemRoutes } from './routes/filesystemRoutes'
@@ -1447,6 +1447,7 @@ type OpenClawConfigFile = {
   bindings?: OpenClawBinding[]
   tools?: {
     profile?: string
+    exec?: { host?: 'gateway' | 'node' | 'sandbox' | 'auto'; security?: 'deny' | 'allowlist' | 'full'; ask?: 'off' | 'on-miss' | 'always' }
     toolSearch?: typeof DYNAMIC_TOOL_SEARCH
     alsoAllow?: string[]
     allow?: string[]
@@ -17917,7 +17918,11 @@ const runtimeRecoveryService = createRuntimeRecoveryService({
     shuttingDown = true
   },
   pauseGatewayAutoRestart: () => gatewayLifecycle.pauseAutoRestart(),
-  persistAllMissionRecords,
+  persistAllMissionRecords: async (reason) => {
+    await missionStateService.flushMissionPersistence().catch(() => undefined)
+    await persistAllMissionRecords(reason)
+  },
+  flushMissionPersistence: () => missionStateService.flushMissionPersistence(),
   pushGatewayLog,
   setRuntimeMonitorClearedAtMs: (value) => {
     runtimeMonitorClearedAtMs = value
@@ -18873,11 +18878,54 @@ const synchronizeBillingRouteWithGateway = () => {
 registerToolApprovalRoutes(app, {
   interruptAgent: (agentId) => gatewayChatService.interruptAgent(agentId),
   request: async (method, params) => (await gatewayChatService.ensureClient()).client.request(method, params),
-  validAgent: async (id) => isValidAgentId(id) && !isRetiredAgentId(id) && Boolean((await readOpenclawConfig()).agents?.list?.some((entry) => entry.id === id)),
+  validAgent: async (id) => isValidAgentId(id) && !isRetiredAgentId(id) && (
+    isImplicitMainAgentId(id) || Boolean((await readOpenclawConfig()).agents?.list?.some((entry) => entry.id === id))
+  ),
+  resolveToolCatalogAgentId: async (agentId) => {
+    if (!isImplicitMainAgentId(agentId)) return agentId
+    const config = await readOpenclawConfig()
+    const telegramAgentIds = Array.from(new Set((config.bindings || [])
+      .filter((binding) => binding.match?.channel === 'telegram')
+      .map((binding) => binding.agentId)))
+    if (telegramAgentIds.length === 1) return telegramAgentIds[0]
+    return config.agents?.list?.find((entry) => entry.default)?.id
+      || config.agents?.list?.[0]?.id
+      || agentId
+  },
   resetAgentContext: (agentId) => resetAgentTurnSessionsForAgentContextChange(agentId, 'command permissions changed'),
   configure: async (agentId, exec) => {
     const config = await readOpenclawConfig()
     const entry = config.agents?.list?.find((agent) => agent.id === agentId)
+    if (!entry && isImplicitMainAgentId(agentId)) {
+      const otherAgents = (config.agents?.list || []).filter((agent) => agent.id !== agentId)
+      const globalTools = config.tools || {}
+      const hasSharedRestrictions = Boolean(
+        globalTools.allow?.length || globalTools.deny?.length
+        || Object.keys(globalTools.byProvider || {}).length || Object.keys(globalTools.sandbox?.tools || {}).length,
+      )
+      const agentsInheritingProfile = otherAgents.filter((agent) => !agent.tools?.profile)
+      const agentsInheritingChangedExecPolicy = otherAgents.filter((agent) => {
+        const localTools = agent.tools || {}
+        if (localTools.exec) return false
+        if ((localTools.deny || []).includes('exec')) return false
+        if (localTools.allow?.length) {
+          return localTools.allow.includes('exec') || localTools.allow.includes('group:runtime')
+        }
+        return ['full', 'coding'].includes(localTools.profile || globalTools.profile || 'full')
+      })
+      const targetIsDefaultExecPolicy = exec.security === 'full' && exec.ask === 'off'
+      const globalExecPolicyIsExplicit = Boolean(globalTools.exec)
+      if (otherAgents.length && (
+        agentsInheritingProfile.length > 0
+        || hasSharedRestrictions
+        || ((globalExecPolicyIsExplicit || !targetIsDefaultExecPolicy) && agentsInheritingChangedExecPolicy.length > 0)
+      )) {
+        throw new ToolAccessPolicyConflictError('Main uses shared OpenClaw tool settings. Set explicit tool rules for the affected named agents before changing Main access.')
+      }
+      config.tools = mainAgentToolPolicyForAccess(globalTools, exec)
+      await writeOpenclawConfig(config, { allowDuringAgentTurn: true })
+      return
+    }
     if (!entry) throw new Error('Agent not found.')
     const local = await ensureAgentLocalConfig({ agentId, entry })
     local.sandbox = normalizeSandboxConfig({ ...local.sandbox, mode: 'off', scope: 'agent', workspaceAccess: 'rw' })

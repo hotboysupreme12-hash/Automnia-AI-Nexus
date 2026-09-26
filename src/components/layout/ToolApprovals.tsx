@@ -9,10 +9,16 @@ export function ToolApprovals() {
   const [pending, setPending] = useState<Approval[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [pollError, setPollError] = useState('')
   const agents = useNexusStore((s) => s.agents)
   useEffect(() => startForegroundPolling(async (signal) => {
     const result = await apiRequest<{ pending: Approval[] }>('/api/tool-approvals', { timeoutMs: 5000, signal })
-    if (!result.ok || signal.aborted) return
+    if (signal.aborted) return
+    if (!result.ok) {
+      setPollError(apiErrorMessage(result.error) || 'Tool approvals are unavailable while the Gateway is starting.')
+      return
+    }
+    setPollError('')
     const next = result.data.pending.filter((item) => item.expiresAtMs > Date.now())
     setPending((previous) => {
       const unchanged = previous.length === next.length && previous.every((item, index) => {
@@ -25,7 +31,9 @@ export function ToolApprovals() {
     })
   }, 2000), [])
   const current = pending[0]
-  if (!current) return null
+  if (!current) return pollError
+    ? <div role="alert" className="fixed bottom-6 right-6 z-[100] rounded-xl border border-amber-300/20 bg-[#10151d]/95 px-4 py-3 text-sm text-amber-100 shadow-2xl shadow-black/40">Approval controls unavailable: {pollError}</div>
+    : null
   const resolve = async (decision: 'allow-once' | 'allow-always' | 'deny', full = false) => {
     setBusy(true)
     setError('')
@@ -62,7 +70,7 @@ export function ToolApprovals() {
         <button type="button" className="col-span-2 rounded-lg border border-white/[0.07] px-3 py-2 text-xs text-slate-500 transition hover:border-red-300/30 hover:text-red-200 disabled:opacity-50" disabled={busy} onClick={() => void resolve('deny')}>Deny</button>
       </div>
       {current.request.agentId && <p className="text-xs leading-5 text-slate-400">Changing to Full access stops this turn safely. Send your request again to continue with the new permissions.</p>}
-      {error && <p role="alert" className="mt-3 text-sm text-red-300">{error}</p>}
+      {(error || pollError) && <p role="alert" className="mt-3 text-sm text-red-300">{error || pollError}</p>}
     </div>
   </section>
 }
