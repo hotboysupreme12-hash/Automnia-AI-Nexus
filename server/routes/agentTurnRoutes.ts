@@ -479,7 +479,8 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
     res.on('close', () => {
       closed = true
       clearInterval(heartbeat)
-      // A renderer disconnect detaches its observer; explicit runtime Stop owns cancellation.
+      // Turns with a response id are durable and replayable into Agent Chat
+      // after refresh. Cancel only streams that have no recoverable response.
       if (!parsed.data.responseId) abortController.abort()
     })
     const writeObserver: StreamEmitter = (event, data) => {

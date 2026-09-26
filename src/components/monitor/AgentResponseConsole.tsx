@@ -5,11 +5,13 @@ import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMem
 import { indexResponseActivity, selectResponseHistory } from '../../store/responseHistoryIndex'
 import { ResponseMarkdown } from './ResponseMarkdown'
 import { QueuedFollowupControls } from './QueuedFollowupControls'
+import { fetchAgentBackgroundTasks, type AgentBackgroundTask } from '../../api/agentTurns'
 import { apiErrorMessage, apiRequest } from '../../api/client'
 import { isUploadResponse } from '../../api/responseValidation'
 import { abortRuntimeRun, restartGatewayRuntime, useRuntimeSummaryStatus } from '../../hooks/useRuntimeStatus'
 import type { GatewayStabilityStatus, RuntimeRun, RuntimeStatus } from '../../hooks/useRuntimeStatus'
 import {
+  commandConsoleSessionKey,
   makeCommandConsoleDraftStorageKey,
   readCommandConsoleDraft,
   writeCommandConsoleDraft,
@@ -478,6 +480,78 @@ function latestRunStatus(entry?: AgentResponse) {
   return latestActivity?.label.trim() || latestProgress?.trim() || entry.progressLabel?.trim() || 'Agent started working.'
 }
 
+function responseActivityItems(entry: AgentResponse) {
+  const ignoredTypes = new Set([
+    'message.partial',
+    'message.final',
+    'run.accepted',
+    'run.context_building',
+    'run.prompt_assembled',
+    'run.finished',
+  ])
+  const labels = new Set<string>()
+  return (entry.activity || [])
+    .filter((event) => !ignoredTypes.has(event.type) && Boolean(event.label.trim()))
+    .filter((event) => {
+      const label = event.label.trim()
+      if (labels.has(label)) return false
+      labels.add(label)
+      return true
+    })
+    .slice(-5)
+}
+
+function backgroundTaskResponse(task: AgentBackgroundTask, fallbackAgentId: string): AgentResponse {
+  const status = task.status.toLowerCase()
+  const queued = status === 'queued'
+  const streaming = queued || status === 'running'
+  const failed = status === 'failed' || status === 'timed_out' || status === 'cancelled'
+  const createdAtMs = typeof task.createdAt === 'number' ? task.createdAt : Date.now()
+  const startedAtMs = typeof task.startedAt === 'number' ? task.startedAt : createdAtMs
+  const endedAtMs = typeof task.endedAt === 'number' ? task.endedAt : undefined
+  const timestamp = new Date(createdAtMs).toISOString()
+  const currentActivity = task.lastActivity?.trim()
+    || task.progressSummary?.trim()
+    || (queued ? 'Waiting for a worker to start.' : streaming ? 'Working on the delegated task.' : '')
+  const terminalText = task.terminalSummary?.trim()
+    || task.error?.trim()
+    || task.progressSummary?.trim()
+    || (status === 'completed' ? 'The delegated task completed.' : status === 'cancelled' ? 'The delegated task was cancelled.' : status === 'timed_out' ? 'The delegated task timed out.' : 'The delegated task failed.')
+  const activityType = queued ? 'run.queued' : streaming ? 'agent.working' : failed ? 'agent.failed' : 'agent.completed'
+  const activityLabel = streaming ? currentActivity : terminalText
+  return {
+    id: `background-task:${task.id}`,
+    agentId: task.agentId || fallbackAgentId,
+    sessionKey: task.sessionKey,
+    prompt: task.title?.trim() || 'Delegated task',
+    response: streaming ? '' : terminalText,
+    ok: !failed,
+    timestamp,
+    durationMs: Math.max(0, (endedAtMs ?? Date.now()) - startedAtMs),
+    streaming,
+    ...(failed ? { failureKind: status } : {}),
+    transport: 'openclaw-background-task',
+    queuedAt: timestamp,
+    ...(typeof task.startedAt === 'number' ? { startedAt: new Date(task.startedAt).toISOString() } : {}),
+    ...(typeof task.endedAt === 'number' ? { completedAt: new Date(task.endedAt).toISOString() } : {}),
+    progressLabel: queued ? 'Queued' : streaming ? task.lastToolName ? `Using ${task.lastToolName}` : 'Working' : status === 'completed' ? 'Completed' : status === 'cancelled' ? 'Cancelled' : status === 'timed_out' ? 'Timed out' : 'Needs attention',
+    ...(currentActivity ? { progressLines: [currentActivity] } : {}),
+    ...(currentActivity ? { progressUpdatedAt: new Date(task.updatedAt || createdAtMs).toISOString() } : {}),
+    activity: [{
+      id: `background-task-activity:${task.id}:${task.updatedAt || task.createdAt || status}`,
+      type: activityType,
+      label: activityLabel,
+      rawSource: 'gateway.tasks.list',
+      sessionKey: task.childSessionKey || task.sessionKey,
+      timestamp: new Date(task.updatedAt || task.createdAt || createdAtMs).toISOString(),
+      severity: failed ? 'error' : status === 'completed' ? 'success' : 'info',
+      surface: 'chat',
+      collapsed: false,
+      dedupeKey: `gateway-task:${task.id}:${status}:${task.updatedAt || ''}`,
+    }],
+  }
+}
+
 type ResponseCta = {
   label: string
   detail?: string
@@ -603,6 +677,8 @@ const ResponseMessage = memo(function ResponseMessage({
   const statusText = runOutcomeLabel(entry)
   const durationLabel = entry.durationMs > 0 ? `${(entry.durationMs / 1000).toFixed(1)}s` : ''
   const cta = responseCta(entry)
+  const activityItems = responseActivityItems(entry)
+  const showLiveActivity = entry.streaming && activityItems.length > 0
   const hasActivity = (entry.activity || []).some((event) => event.type !== 'message.partial' && event.type !== 'message.final')
   const runtimeTitle = [
     durationLabel ? `Total runtime: ${durationLabel}` : '',
@@ -613,7 +689,7 @@ const ResponseMessage = memo(function ResponseMessage({
   const clockTitle = `${messageTimestampTitle(entry.timestamp)} / ${timeAgo(entry.timestamp)}`
   const bodyText = hasContent ? replyText : entry.streaming ? '' : entry.ok ? 'No output' : 'Request failed'
   const showInlineThinking = entry.streaming && !hasContent && runtimeNoticeActive && !hasActivity && !entry.progressLabel && !entry.progressLines?.length
-  const progressText = entry.streaming && !hasContent && !showInlineThinking ? latestRunStatus(entry) : ''
+  const progressText = entry.streaming && !hasContent && !showInlineThinking && !showLiveActivity ? latestRunStatus(entry) : ''
   const displayText = bodyText || progressText
   const bodyState = showInlineThinking ? 'thinking' : hasContent ? 'response' : progressText ? 'progress' : entry.ok ? 'empty' : 'blocked'
 
@@ -718,6 +794,33 @@ const ResponseMessage = memo(function ResponseMessage({
           <span className="h-1 w-1 rounded-full bg-slate-600" />
           {entry.ok ? 'No output' : 'Request failed'}
         </div>
+      )}
+
+      {showLiveActivity && (
+        <section
+          className="dy-command-live-activity"
+          data-activity-count={activityItems.length}
+          aria-label={`${name} live activity`}
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions text"
+        >
+          <div className="dy-command-live-activity__current">
+            <span className="dy-command-live-activity__pulse" aria-hidden="true" />
+            <span className="dy-command-live-activity__status">{latestRunStatus(entry)}</span>
+            <span className="dy-command-live-activity__label">Live activity</span>
+          </div>
+          {activityItems.length > 1 && (
+            <ol className="dy-command-live-activity__list">
+              {activityItems.slice(0, -1).map((event) => (
+                <li key={event.id} data-activity-type={event.type}>
+                  <span className="dy-command-live-activity__marker" aria-hidden="true" />
+                  <span>{event.label}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
       )}
 
       <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">{name}: {statusText}.</span>
@@ -926,6 +1029,7 @@ export function AgentResponseConsole() {
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [chatRemovedPartyIds, setChatRemovedPartyIds] = useState<string[]>([])
   const [laneDiagnosticNow, setLaneDiagnosticNow] = useState(() => Date.now())
+  const [backgroundTasks, setBackgroundTasks] = useState<AgentBackgroundTask[]>([])
   const [clawTalkStreamHealth, setClawTalkStreamHealth] = useState<ConsoleStreamHealth>(() => ({
     state: 'connecting',
     detail: 'Restoring conversation and live agent activity.',
@@ -1139,12 +1243,34 @@ export function AgentResponseConsole() {
     ? `Stop ${runningSurfaceCount} monitored running Command Console ${runningSurfaceCount === 1 ? 'run' : 'runs'}`
     : `Stop ${busyAgents.length} running Command Console ${busyAgents.length === 1 ? 'run' : 'runs'}`
   const deferredResponseQuery = useDeferredValue(responseQuery)
+  const backgroundTaskResponses = useMemo(() => {
+    const latestTurnBySession = new Map<string, number>()
+    for (const response of responses) {
+      if (!response.sessionKey) continue
+      const timestamp = Date.parse(response.timestamp)
+      if (!Number.isFinite(timestamp)) continue
+      latestTurnBySession.set(response.sessionKey, Math.max(latestTurnBySession.get(response.sessionKey) || 0, timestamp))
+    }
+    return backgroundTasks
+      .filter((task) => {
+        const createdAt = task.createdAt || task.updatedAt || 0
+        const latestTurn = latestTurnBySession.get(task.sessionKey)
+        if (task.status === 'queued' || task.status === 'running') return true
+        if (!latestTurn) return false
+        return !createdAt || createdAt >= latestTurn - 5_000
+      })
+      .map((task) => backgroundTaskResponse(task, task.agentId || task.sessionKey.split(':')[1] || 'Agent'))
+  }, [backgroundTasks, responses])
+  const chatResponses = useMemo(() => [
+    ...responses,
+    ...backgroundTaskResponses,
+  ].sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp)), [backgroundTaskResponses, responses])
   const responseHistory = useMemo(() => selectResponseHistory(
-    responses,
+    chatResponses,
     deferredResponseQuery,
     (agentId) => agentById.get(agentId)?.name || agentId,
     responseLimit,
-  ), [responses, deferredResponseQuery, responseLimit, agentById])
+  ), [chatResponses, deferredResponseQuery, responseLimit, agentById])
   const visibleDisplayedResponses = responseHistory.entries
   const hiddenResponseCount = responseHistory.total - visibleDisplayedResponses.length
   const agentReplyInFlight = busyAgents.length > 0 || visibleDisplayedResponses.some((entry) => entry.streaming)
@@ -1154,6 +1280,59 @@ export function AgentResponseConsole() {
   const armedTargets = selectedTargets.length
     ? selectedTargets
     : partyTargetIds.map((id) => agentById.get(id)).filter((a): a is OpenClawAgent => Boolean(a))
+  const taskSessionTargets = useMemo(() => {
+    const sessions = new Map<string, { agentId: string; sessionKey: string }>()
+    for (const response of responses.slice(0, 24)) {
+      const agentId = response.agentId.trim()
+      if (!agentId) continue
+      const sessionKey = response.sessionKey?.trim() || commandConsoleSessionKey(agentId)
+      sessions.set(`${agentId}\u0000${sessionKey}`, { agentId, sessionKey })
+    }
+    for (const agent of armedTargets) {
+      const sessionKey = commandConsoleSessionKey(agent.id)
+      sessions.set(`${agent.id}\u0000${sessionKey}`, { agentId: agent.id, sessionKey })
+    }
+    return [...sessions.values()]
+  }, [armedTargets, responses])
+  const hasLiveChatResponses = responses.some((response) => response.streaming)
+  const hasRunningBackgroundTasks = backgroundTasks.some((task) => task.status === 'queued' || task.status === 'running')
+
+  useEffect(() => {
+    if (!taskSessionTargets.length) {
+      setBackgroundTasks([])
+      return
+    }
+    const controller = new AbortController()
+    let disposed = false
+    let inFlight = false
+    const refreshTasks = async () => {
+      if (disposed || inFlight) return
+      inFlight = true
+      try {
+        const result = await fetchAgentBackgroundTasks(taskSessionTargets, controller.signal)
+        if (disposed) return
+        if (!result.ok) return
+        const byId = new Map<string, AgentBackgroundTask>()
+        for (const task of result.data.tasks || []) if (task.id) byId.set(task.id, task)
+        setBackgroundTasks([...byId.values()].sort((left, right) => (right.updatedAt || right.createdAt || 0) - (left.updatedAt || left.createdAt || 0)))
+      } catch {
+        // Task visibility is additive; a temporary status refresh error must
+        // not interrupt the live answer stream.
+      } finally {
+        inFlight = false
+      }
+    }
+
+    void refreshTasks()
+    const timer = hasLiveChatResponses || hasRunningBackgroundTasks
+      ? window.setInterval(() => void refreshTasks(), 2_500)
+      : null
+    return () => {
+      disposed = true
+      controller.abort()
+      if (timer !== null) window.clearInterval(timer)
+    }
+  }, [hasLiveChatResponses, hasRunningBackgroundTasks, taskSessionTargets])
   const targetCount = armedTargets.length
   const thinkingCount = armedTargets.filter((agent) => agent.runtimePolicy?.thinkingDefault && agent.runtimePolicy.thinkingDefault !== 'off').length
   const runnableArmedTargets = useMemo(

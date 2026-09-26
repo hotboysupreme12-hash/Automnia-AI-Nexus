@@ -17959,6 +17959,47 @@ const runtimeActionService = createRuntimeActionService({
 
 registerRuntimeRoutes(app, {
   getGatewayActivityFeed,
+  getAgentBackgroundTasks: async (targets) => {
+    const { client } = await gatewayChatService.ensureClient()
+    const results = await Promise.all(targets.map(async ({ agentId, sessionKey }) => {
+      const response = await client.request('tasks.list', {
+        agentId,
+        sessionKey,
+        limit: 30,
+      }, { timeoutMs: 5_000 })
+      if (!isLooseRecord(response) || !Array.isArray(response.tasks)) return []
+
+      const taskText = (value: unknown, maxChars: number) => {
+        if (typeof value !== 'string' || !value.trim()) return undefined
+        const safe = redactHiddenReasoningAndSecrets(redactSensitiveText(sanitizeUserVisibleRuntimeText(value))).trim()
+        return safe ? safe.slice(0, maxChars) : undefined
+      }
+      return response.tasks
+        .filter((task): task is Record<string, unknown> => isLooseRecord(task))
+        .filter((task) => task.sessionKey === sessionKey && ['subagent', 'acp', 'cli'].includes(String(task.runtime || '')))
+        .map((task) => ({
+          id: taskText(task.id, 160) || '',
+          status: taskText(task.status, 32) || 'running',
+          runtime: taskText(task.runtime, 32) || 'subagent',
+          ...(taskText(task.title, 180) ? { title: taskText(task.title, 180) } : {}),
+          ...(taskText(task.agentId, 120) ? { agentId: taskText(task.agentId, 120) } : {}),
+          sessionKey,
+          ...(taskText(task.childSessionKey, 512) ? { childSessionKey: taskText(task.childSessionKey, 512) } : {}),
+          ...(typeof task.createdAt === 'number' ? { createdAt: task.createdAt } : {}),
+          ...(typeof task.updatedAt === 'number' ? { updatedAt: task.updatedAt } : {}),
+          ...(typeof task.startedAt === 'number' ? { startedAt: task.startedAt } : {}),
+          ...(typeof task.endedAt === 'number' ? { endedAt: task.endedAt } : {}),
+          ...(typeof task.toolUseCount === 'number' ? { toolUseCount: task.toolUseCount } : {}),
+          ...(taskText(task.lastToolName, 96) ? { lastToolName: taskText(task.lastToolName, 96) } : {}),
+          ...(taskText(task.lastActivity, 180) ? { lastActivity: taskText(task.lastActivity, 180) } : {}),
+          ...(taskText(task.progressSummary, 240) ? { progressSummary: taskText(task.progressSummary, 240) } : {}),
+          ...(taskText(task.terminalSummary, 1200) ? { terminalSummary: taskText(task.terminalSummary, 1200) } : {}),
+          ...(taskText(task.error, 360) ? { error: taskText(task.error, 360) } : {}),
+          ...(taskText(task.deliveryStatus, 40) ? { deliveryStatus: taskText(task.deliveryStatus, 40) } : {}),
+        }))
+    }))
+    return results.flat()
+  },
   getRuntimeStatusPayload,
   getRuntimeSummaryPayload,
   isValidAgentId,

@@ -28,6 +28,31 @@ export type AgentTurnSessionClearPayload = {
   }
 }
 
+export type AgentBackgroundTask = {
+  id: string
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timed_out' | string
+  runtime: 'subagent' | 'acp' | 'cli' | string
+  title?: string
+  agentId?: string
+  sessionKey: string
+  childSessionKey?: string
+  createdAt?: number
+  updatedAt?: number
+  startedAt?: number
+  endedAt?: number
+  toolUseCount?: number
+  lastToolName?: string
+  lastActivity?: string
+  progressSummary?: string
+  terminalSummary?: string
+  error?: string
+  deliveryStatus?: string
+}
+
+type AgentBackgroundTaskPayload = {
+  tasks?: AgentBackgroundTask[]
+}
+
 export type AgentTurnPayload = {
   ok: boolean
   reply?: unknown
@@ -150,6 +175,18 @@ export function preflightAgentRuntime(agentId: string): Promise<ApiResult<AgentR
     method: 'POST',
     timeoutMs: 30_000,
     body: { agent: agentId },
+  })
+}
+
+export function fetchAgentBackgroundTasks(
+  targets: Array<{ agentId: string; sessionKey: string }>,
+  signal?: AbortSignal,
+): Promise<ApiResult<AgentBackgroundTaskPayload>> {
+  const query = new URLSearchParams({ targets: JSON.stringify(targets) })
+  return apiRequest<AgentBackgroundTaskPayload>(`/api/openclaw/runtime/agent-tasks?${query.toString()}`, {
+    method: 'GET',
+    timeoutMs: 8_000,
+    signal,
   })
 }
 

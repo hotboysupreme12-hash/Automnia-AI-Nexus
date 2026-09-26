@@ -8,6 +8,7 @@ type RuntimeRoutesOptions = {
   getRuntimeStatusPayload: (forcePluginRefresh: boolean) => Promise<Record<string, unknown>>
   getRuntimeSummaryPayload: (forceRefresh: boolean) => Promise<Record<string, unknown>>
   getGatewayActivityFeed: (limit?: number) => Promise<GatewayActivityFeed>
+  getAgentBackgroundTasks: (targets: Array<{ agentId: string; sessionKey: string }>) => Promise<unknown[]>
   isValidAgentId: (agentId: string) => boolean
   runtimeActions: RuntimeActionService
 }
@@ -31,6 +32,14 @@ const RuntimeRunAbortSchema = z.object({
 
 const RuntimeActivityQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(48),
+})
+
+const RuntimeAgentTaskTargetSchema = z.object({
+  agentId: z.string().trim().min(1).max(120),
+  sessionKey: z.string().trim().min(1).max(512),
+})
+const RuntimeAgentTasksQuerySchema = z.object({
+  targets: z.string().min(1).max(16_000),
 })
 
 export function registerRuntimeRoutes(app: Express, options: RuntimeRoutesOptions) {
@@ -137,6 +146,33 @@ export function registerRuntimeRoutes(app: Express, options: RuntimeRoutesOption
       return apiSuccess(res, await options.getGatewayActivityFeed(parsed.data.limit))
     } catch (error) {
       return apiFailure(res, 500, 'runtime_activity_failed', 'Failed to fetch Gateway activity', String(error))
+    }
+  })
+
+  app.get('/api/openclaw/runtime/agent-tasks', async (req, res) => {
+    const parsed = RuntimeAgentTasksQuerySchema.safeParse(req.query)
+    if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent task query', parsed.error.flatten())
+    let rawTargets: unknown
+    try {
+      rawTargets = JSON.parse(parsed.data.targets)
+    } catch {
+      return apiFailure(res, 400, 'invalid_payload', 'Agent task targets must be valid JSON.')
+    }
+    const targets = z.array(RuntimeAgentTaskTargetSchema).min(1).max(32).safeParse(rawTargets)
+    if (!targets.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent task targets', targets.error.flatten())
+    for (const target of targets.data) {
+      if (!options.isValidAgentId(target.agentId)) {
+        return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id.')
+      }
+      if (!target.sessionKey.startsWith(`agent:${target.agentId}:`)) {
+        return apiFailure(res, 400, 'invalid_payload', 'A session key must belong to its requested agent.')
+      }
+    }
+
+    try {
+      return apiSuccess(res, { tasks: await options.getAgentBackgroundTasks(targets.data) })
+    } catch (error) {
+      return apiFailure(res, 500, 'runtime_activity_failed', 'Failed to fetch agent background tasks', String(error))
     }
   })
 }

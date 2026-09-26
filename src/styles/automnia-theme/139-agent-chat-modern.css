@@ -276,6 +276,78 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"
   color:#f0f1f4 !important;
 }
 
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-live-activity {
+  display:block;
+  margin-top:12px;
+  padding:10px 12px;
+  border:1px solid rgba(148,163,184,.13);
+  border-radius:10px;
+  background:rgba(8,13,20,.72);
+  color:#c5ccd7;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-live-activity__current {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-live-activity__pulse {
+  width:7px;
+  height:7px;
+  flex:none;
+  border-radius:50%;
+  background:#73d9cf;
+  box-shadow:0 0 0 3px rgba(115,217,207,.11);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-live-activity__status {
+  min-width:0;
+  flex:1;
+  color:#dce3ec;
+  font-size:12px;
+  line-height:1.5;
+  overflow-wrap:anywhere;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-live-activity__label {
+  flex:none;
+  color:#8e9aa9;
+  font-size:10px;
+  font-weight:600;
+  letter-spacing:.045em;
+  text-transform:uppercase;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-live-activity__list {
+  display:grid;
+  gap:5px;
+  margin:8px 0 0 3px;
+  padding:0 0 0 12px;
+  border-left:1px solid rgba(148,163,184,.17);
+  list-style:none;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-live-activity__list li {
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  color:#9ea8b6;
+  font-size:11px;
+  line-height:1.45;
+  overflow-wrap:anywhere;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-live-activity__marker {
+  width:4px;
+  height:4px;
+  flex:none;
+  margin-top:5px;
+  border-radius:50%;
+  background:#657487;
+}
+
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-messages {
   padding:20px !important;
   background:transparent !important;
