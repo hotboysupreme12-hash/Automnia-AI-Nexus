@@ -1929,15 +1929,17 @@ async function stopControlServerProcess(reason = 'control server cleanup', expec
       try { child.kill('SIGTERM') } catch {}
     }
     // The group may still contain workers after its leader exits.
-    let exited = await waitForProcessExit(child, 4000)
-    if (!exited) {
-      try {
-        process.kill(-pid, 'SIGKILL')
-      } catch {
+    await waitForProcessExit(child, 4000)
+    // The leader can exit while its process group still has workers. Always
+    // retire the owned group after the grace period, even when the leader exits.
+    try {
+      process.kill(-pid, 'SIGKILL')
+    } catch {
+      if (child.exitCode === null && !child.signalCode) {
         try { child.kill('SIGKILL') } catch {}
       }
-      exited = await waitForProcessExit(child, 1000)
     }
+    const exited = await waitForProcessExit(child, 1000)
     if (!exited && !serverProcess) serverProcess = child
     return exited
   }

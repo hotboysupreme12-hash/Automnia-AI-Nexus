@@ -87,13 +87,18 @@ test('approvals validate decisions, preserve other agents, and synchronize host 
     for (const mode of ['ask', 'full']) {
       assert.equal((await post('/api/party/agent/brandon/tool-access', { mode })).status, 200)
       const update = calls.findLast((c) => c.method === 'exec.approvals.set')!
-      assert.ok(calls.findLastIndex((c) => c.method === 'interrupt-agent') < calls.lastIndexOf(update))
+      const interruptionIndex = calls.findLastIndex((c) => c.method === 'interrupt-agent')
+      const configuration = calls.findLast((c) => c.method === 'configure')!
+      const configurationIndex = calls.lastIndexOf(configuration)
+      const updateIndex = calls.lastIndexOf(update)
+      assert.ok(interruptionIndex < configurationIndex)
+      assert.ok(configurationIndex < updateIndex)
       assert.equal(update.params.baseHash, 'revision-1')
       const file = update.params.file as { agents: Record<string, Record<string, unknown>> }
       assert.deepEqual(file.agents.other, { security: 'deny' })
       assert.deepEqual(file.agents.brandon.allowlist, [{ pattern: '/usr/bin/pwd' }])
       assert.equal(file.agents.brandon.ask, mode === 'full' ? 'off' : 'on-miss')
-      assert.deepEqual(calls.at(-2)?.params, { agentId: 'brandon', access: { host: 'gateway', security: mode === 'full' ? 'full' : 'allowlist', ask: mode === 'full' ? 'off' : 'on-miss' } })
+      assert.deepEqual(configuration.params, { agentId: 'brandon', access: { host: 'gateway', security: mode === 'full' ? 'full' : 'allowlist', ask: mode === 'full' ? 'off' : 'on-miss' } })
       assert.deepEqual(calls.at(-1)?.params, { agentId: 'brandon' })
     }
   } finally { await new Promise<void>((resolve) => server.close(() => resolve())) }
