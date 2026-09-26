@@ -502,7 +502,9 @@ This is a safeguard against accidental bulk overwrites.
 **Backup & Reset** has deliberately separate scopes:
 
 - **Copy settings backup** copies non-secret UI preferences and the current
-  mission draft to the clipboard. It excludes credentials.
+  mission draft to the clipboard. It excludes credentials, agents, saved
+  responses, workspace files, and OpenClaw runtime history. It is not a full
+  workspace or runtime backup.
 - **Clear unfinished messages** removes unsent text.
 - **Clear saved responses** removes saved conversation responses.
 - **Reset agent activity** clears the current activity status.

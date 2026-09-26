@@ -1,6 +1,6 @@
 # Application improvement roadmap
 
-Updated 2026-09-07. 180 audited improvements: **87 complete, 70 partial, 23 planned**.
+Audit baseline 2026-09-07. The 180-item snapshot recorded **87 complete, 70 partial, and 23 planned** improvements.
 
 Complete means the described implementation is present and its recorded checks pass. Partial includes work that still needs implementation or the stated validation matrix. The full roadmap is not yet complete.
 
@@ -107,7 +107,9 @@ Direct-provider conversation turns serialize; concurrency regression tests pass.
 
 **Status:** partial · **Priority:** P1 · **Effort:** L
 
-Per-ledger append ordering and immutable snapshots are implemented and tested. End-to-end durable acknowledgement in mission lifecycle callers remains.
+Per-ledger append ordering and immutable snapshots are implemented. Mission lifecycle writes now serialize across event and snapshot ledgers; mission launch/stop acknowledgements and graceful shutdown wait for the queued writes. Complete acknowledgement for every scheduler progress update and fault-injection/restart validation remain.
+
+**Implementation update (2026-09-26):** the application typecheck and focused lint pass for this follow-up. Mission recovery regressions were not rerun, so this item remains partial.
 
 **Purpose:** crash recovery observes the latest real lifecycle rather than a stale or half-persisted one.
 

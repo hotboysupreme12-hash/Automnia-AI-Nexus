@@ -295,7 +295,7 @@ Use **Backup & Reset** carefully:
 
 | Control | What it preserves or clears |
 | --- | --- |
-| **Copy settings backup** | Copies non-secret preferences and the current mission draft. It does not include credentials. |
+| **Copy settings backup** | Copies preferences and the current mission draft. It does not include agents, saved responses, workspace files, OpenClaw runtime history, or sign-ins; it is not a full workspace backup. |
 | **Clear unfinished messages** | Removes stored, unsent chat text. |
 | **Clear saved responses** | Removes saved conversation responses. |
 | **Reset agent activity** | Clears the current agent activity status. |

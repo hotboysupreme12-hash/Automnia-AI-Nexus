@@ -7,6 +7,10 @@ export const DYNAMIC_TOOL_SEARCH = { enabled: true, mode: 'tools' as const, sear
 // an explicit allow/deny policy exists.
 export const BASIC_RESTRICTED_TOOLS = ['read', 'write', 'edit', 'apply_patch', 'session_status'] as const
 
+export function isImplicitMainAgentId(agentId: string) {
+  return agentId === 'main'
+}
+
 export function restrictedToolDefaults<T extends { allow?: string[]; deny?: string[]; profile?: string }>(policy: T): T {
   if ((policy.allow?.length || 0) > 0 || (policy.deny?.length || 0) > 0) return policy
   return { ...policy, profile: policy.profile || 'full', allow: [...BASIC_RESTRICTED_TOOLS] }
@@ -17,6 +21,38 @@ export function fullAccessToolPolicy<T extends { exec?: { security?: string; ask
   const next = { ...policy, profile: 'full' }
   delete next.allow
   delete next.alsoAllow
+  delete next.deny
+  delete next.byProvider
+  delete next.sandbox
+  return next
+}
+
+type MainAgentToolPolicy = {
+  exec?: { host?: string; security?: string; ask?: string; [key: string]: unknown }
+  profile?: string
+  allow?: string[]
+  alsoAllow?: string[]
+  deny?: string[]
+  byProvider?: unknown
+  sandbox?: unknown
+}
+
+export function mainAgentToolPolicyForAccess<T extends MainAgentToolPolicy>(
+  policy: T,
+  access: { host: 'gateway'; security: 'allowlist' | 'full'; ask: 'on-miss' | 'always' | 'off' },
+): T {
+  const fullAccess = access.security === 'full' && access.ask === 'off'
+  const next = {
+    ...policy,
+    ...(fullAccess ? { profile: 'full' } : {}),
+    exec: { ...policy.exec, ...access },
+  } as T
+  if (!fullAccess) return next
+
+  // Main has no per-agent config entry, so its full-access grant is stored in
+  // the shared tool policy. Keep additive grants such as `alsoAllow` intact,
+  // while removing rules that would still restrict Main.
+  delete next.allow
   delete next.deny
   delete next.byProvider
   delete next.sandbox

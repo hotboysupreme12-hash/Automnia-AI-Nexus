@@ -227,6 +227,8 @@ let quitCleanupComplete = false
 let controlServerEntry = null
 let serverRestartTimer = null
 let serverRestartAttempts = 0
+let serverRestartInFlight = false
+let serverRestartCleanupChild = null
 let controlCenterLaunchToken = ''
 let lastTrayMenuSnapshot = []
 let serverStartupOutputTail = ''
@@ -1750,7 +1752,7 @@ function pipeServerOutput(stream, chunk) {
 }
 
 function scheduleControlServerRestart(reason) {
-  if (isQuitting || startupFailed || startingUp || serverRestartTimer || !controlServerEntry) return
+  if (isQuitting || startupFailed || startingUp || serverRestartTimer || serverRestartInFlight || !controlServerEntry) return
 
   serverRestartAttempts += 1
   const delay = Math.min(
@@ -1761,19 +1763,52 @@ function scheduleControlServerRestart(reason) {
   serverRestartTimer = setTimeout(async () => {
     serverRestartTimer = null
     if (isQuitting || startupFailed || startingUp || !controlServerEntry) return
+    serverRestartInFlight = true
+    let retryReason = null
     try {
-      const child = startControlServerProcess(controlServerEntry)
-      await waitForSpawnedControlServer(child)
-      serverRestartAttempts = 0
-      console.log('[automnia] API server restarted on port', APP_PORT)
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.reloadIgnoringCache()
+      if (serverRestartCleanupChild) {
+        const staleChild = serverRestartCleanupChild
+        const stopped = await stopControlServerProcess('failed API server restart cleanup', staleChild)
+        if (stopped) {
+          serverRestartCleanupChild = null
+        } else {
+          retryReason = 'previous API server process is still stopping'
+          console.warn('[automnia] failed API server process is still running; delaying another start')
+        }
       }
-      updateTrayMenu()
+
+      if (!retryReason) {
+        const child = startControlServerProcess(controlServerEntry)
+        try {
+          await waitForSpawnedControlServer(child)
+          if (serverProcess !== child || child.exitCode !== null || child.signalCode) {
+            throw startupErrorWithServerDiagnostics(new Error('Control Center API exited immediately after becoming ready.'))
+          }
+        } catch (error) {
+          // A child that never becomes ready will not emit `exit`; retire that
+          // exact app-owned process before another attempt, or the retry path
+          // would keep reusing the same unhealthy child indefinitely.
+          if (serverProcess === child) {
+            const stopped = await stopControlServerProcess('API server did not become ready after restart', child)
+            if (!stopped) serverRestartCleanupChild = child
+          }
+          throw error
+        }
+        serverRestartAttempts = 0
+        console.log('[automnia] API server restarted on port', APP_PORT)
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.reloadIgnoringCache()
+        }
+        updateTrayMenu()
+      }
     } catch (error) {
       console.error('[automnia] API server restart failed:', error?.message || error)
-      scheduleControlServerRestart('previous restart attempt failed')
+      retryReason = retryReason || 'previous restart attempt failed'
+    } finally {
+      serverRestartInFlight = false
     }
+
+    if (retryReason) scheduleControlServerRestart(retryReason)
   }, delay)
   serverRestartTimer.unref?.()
 }
@@ -1872,19 +1907,19 @@ function waitForProcessExit(child, timeoutMs = 2000) {
   })
 }
 
-async function stopControlServerProcess(reason = 'control server cleanup') {
+async function stopControlServerProcess(reason = 'control server cleanup', expectedChild = null) {
   if (serverRestartTimer) {
     clearTimeout(serverRestartTimer)
     serverRestartTimer = null
   }
-  const child = serverProcess
+  const child = expectedChild || serverProcess
   if (!child?.pid) {
-    serverProcess = null
-    return
+    if (serverProcess === child) serverProcess = null
+    return true
   }
 
   const pid = child.pid
-  serverProcess = null
+  if (serverProcess === child) serverProcess = null
   console.log(`[automnia] stopping API server pid=${pid}: ${reason}`)
 
   if (process.platform !== 'win32') {
@@ -1894,18 +1929,27 @@ async function stopControlServerProcess(reason = 'control server cleanup') {
       try { child.kill('SIGTERM') } catch {}
     }
     // The group may still contain workers after its leader exits.
-    await waitForProcessExit(child, 4000)
-    try {
-      process.kill(-pid, 'SIGKILL')
-    } catch {
-      try { child.kill('SIGKILL') } catch {}
+    let exited = await waitForProcessExit(child, 4000)
+    if (!exited) {
+      try {
+        process.kill(-pid, 'SIGKILL')
+      } catch {
+        try { child.kill('SIGKILL') } catch {}
+      }
+      exited = await waitForProcessExit(child, 1000)
     }
-    await waitForProcessExit(child, 1000)
-    return
+    if (!exited && !serverProcess) serverProcess = child
+    return exited
   }
 
   killProcessTree(pid, reason)
-  await waitForProcessExit(child, 1000)
+  let exited = await waitForProcessExit(child, 1000)
+  if (!exited) {
+    killProcessTree(pid, `${reason}; retrying process-tree cleanup`)
+    exited = await waitForProcessExit(child, 1000)
+  }
+  if (!exited && !serverProcess) serverProcess = child
+  return exited
 }
 
 function forceKillSpawnedGateway() {

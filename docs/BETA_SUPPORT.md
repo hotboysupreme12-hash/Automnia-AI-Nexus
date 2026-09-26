@@ -1,6 +1,6 @@
 # Automnia AI Support Guide
 
-Last updated: 2026-07-05
+Last updated: 2026-09-26
 
 Automnia AI is stable for Windows, macOS, and Linux. This guide covers recovery, feedback, local state, and safe operation for the desktop app, agent runtime, missions, schedules, plugins, compatible channels, and local-first data boundaries.
 
@@ -35,12 +35,12 @@ Recommended local tooling for source runs:
 
 1. Open Monitor and wait for health polling.
 2. Check active calls, cron jobs, channel activity, sessions, and recent logs.
-3. If work is active, stop it or let it finish before resetting Gateway.
-4. Use `Clean Slate` for stale monitor or runtime projection state.
-5. Use `Reset Gateway` when Gateway is unhealthy or disconnected.
-6. Use `Stop Gateway`, close Automnia AI, and reopen it if plugin or channel state remains stale.
-7. Reconnect expired provider or plugin access.
-8. Send a small direct Command Console prompt before retrying a mission or channel workflow.
+3. If a run's status is unclear, check its session, mission history, and report before retrying. This helps avoid repeating work that may already have completed.
+4. Let active work finish where possible. Resetting Gateway interrupts runtime work.
+5. Use `Clean Slate` only for stale Monitor or runtime projection state; it does not restore a lost response or credential.
+6. Use `Reset Gateway` when Gateway is unhealthy or disconnected. Wait for health to return before retrying.
+7. If the desktop view reports a connection problem, keep Automnia open while it retries. If the app itself closed, reopen one instance and check Monitor before resubmitting work.
+8. Reconnect expired provider or plugin access, then send a small direct Command Console prompt before retrying a mission or channel workflow.
 
 ### Gateway startup migrations
 
@@ -55,7 +55,22 @@ Start with the least destructive option:
 3. Use `Reset Gateway` if Gateway itself is unhealthy.
 4. Restart Automnia AI.
 
-For a full reset, close Automnia AI, create a backup if running from source with `npm run state:backup`, rename local app and OpenClaw state folders, then reopen the app and reconnect providers or plugins.
+Do not rename or delete Automnia or OpenClaw state folders as a routine recovery step. **Settings → Backup & Reset → Download backup** contains preferences and the current mission draft only. It does not back up agents, saved responses, workspace files, or OpenClaw runtime history.
+
+For an OpenClaw state backup from a source checkout, close Automnia AI first. The backup copies the configured OpenClaw state directory (by default `~/.openclaw`) to `~/Automnia Backups` and verifies copied files with checksums. Set `OPENCLAW_STATE_DIR` or `OPENCLAW_HOME` if the app uses a different state directory. Workspace files stored elsewhere and Automnia UI preferences are not included.
+
+```bash
+npm run state:backup
+npm run state:verify -- "<backup-folder>"
+```
+
+Restore only to a deliberate target while the app is closed. The restore command requires an explicit destination; verify the backup first.
+
+```bash
+npm run state:restore -- "<backup-folder>" "<target-state-folder>"
+```
+
+If you need a full reset or cannot confirm which state directory contains the work, keep the folders in place and contact support before changing local state.
 
 ## Send safe logs
 

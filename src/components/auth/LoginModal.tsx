@@ -5,6 +5,7 @@ import { useAuth } from '../../context/useAuth'
 
 const AUTOMNIA_LOCKUP_SRC = '/brand/automnia-ai-nexus-logo-transparent-cropped.png'
 const AUTOMNIA_BRAND_LABEL = 'Automnia AI Nexus'
+const AUTOMNIA_PURCHASE_URL = 'https://automnia.app/collections/automnia-plans-and-refills'
 
 export function LoginModal() {
   const { login, setupAccount, loginWithGoogle, cancelGoogleLogin, skipDesktopSessionBootstrap, checking } = useAuth()
@@ -198,7 +199,19 @@ export function LoginModal() {
             <button type="button" className="text-slate-200 underline decoration-slate-500 underline-offset-4" onClick={() => { setError(''); setMode(isSetup ? 'login' : 'setup') }}>
               {isSetup ? 'Already linked? Sign in' : 'First time here? Link your Automnia purchase'}
             </button>
-            <p className="mt-3">Your password is verified locally after account linking; eligible Pro and higher permanent tiers can continue offline. Starter requires online subscription verification. Automnia never uses the password itself as a session token.</p>
+            <p className="mt-3">Use the email associated with your Automnia purchase.</p>
+          </div>
+
+          <div className="mt-5 rounded-xl border border-slate-200/10 bg-white/[0.025] px-4 py-3 text-center">
+            <p className="text-xs text-slate-400">Don’t have an Automnia license yet?</p>
+            <a
+              href={AUTOMNIA_PURCHASE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-200/15 bg-white/[0.04] px-3 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200/40"
+            >
+              Browse plans and purchase <span aria-hidden="true">↗</span>
+            </a>
           </div>
         </form>
       </div>

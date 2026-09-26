@@ -874,7 +874,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   const renderData = () => (
     <div className="dui-settings-section" id="settings-section-data">
       <SectionHeader section="data" eyebrow="Keep your preferences safe" />
-      <SettingsCard title="Settings backup" description="Save your preferences so you can restore them later. Account and provider sign-ins are not included.">
+      <SettingsCard title="Settings backup" description="Only preferences and your current mission draft are included. Agents, saved responses, workspace files, runtime history, and sign-ins are excluded.">
         <div className="dui-settings-metrics"><div><span>Agents</span><strong>{agents.length}</strong></div><div><span>Active team</span><strong>{activePartyIds.length}</strong></div><div><span>Saved responses</span><strong>{responseCount}</strong></div></div>
         <div className="dui-settings-actions"><button type="button" onClick={downloadSettingsBackup}>Download backup</button><button type="button" onClick={() => void copySettingsBackup()}>Copy settings backup</button><button type="button" disabled={backupReading} onClick={() => backupInputRef.current?.click()}>{backupReading ? 'Reading backup…' : 'Import backup'}</button><input ref={backupInputRef} type="file" accept=".json,application/json" hidden onChange={(event) => { void previewSettingsBackup(event.target.files?.[0]); event.target.value = '' }} /></div>
         {backupPreview && <div className="mt-4 space-y-3 rounded-lg border border-white/15 p-3">

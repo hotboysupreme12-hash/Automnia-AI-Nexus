@@ -5,6 +5,7 @@ const https = require('node:https')
 const { tmpdir } = require('node:os')
 const path = require('node:path')
 const { ensureRelayThoughtSignatureReplay } = require('./lib/relay-thought-signature-patch.cjs')
+const { ensureRestartRecoveryClaimStartupRepair } = require('./lib/restart-recovery-stale-claim-patch.cjs')
 
 const root = path.resolve(__dirname, '..')
 const vendorRoot = path.resolve(process.env.AUTOMNIA_OPENCLAW_VENDOR_ROOT || path.join(root, 'vendor', 'openclaw'))
@@ -694,6 +695,7 @@ async function main() {
   ensureAutomniaRelayRetrySafetySupport()
   ensureAutomniaRelayCompactContextSupport()
   ensureAutomniaRelayPayloadCompactionSupport()
+  ensureRestartRecoveryClaimStartupRepair(vendorRoot)
 
   if (!refresh && fs.existsSync(nodeModulesRoot)) {
     const missing = validateInstalledPackages(lock)

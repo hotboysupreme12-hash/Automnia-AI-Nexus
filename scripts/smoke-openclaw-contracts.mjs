@@ -88,6 +88,7 @@ assertIncludes(openclawVendorPrep, 'Idempotency-Key', 'Automnia Relay requests s
 assertIncludes(openclawVendorPrep, 'isAutomniaHostedRelay', 'Automnia Relay should skip whole-turn transient retries')
 assertIncludes(openclawVendorPrep, 'ensureAutomniaRelayCompactContextSupport', 'OpenClaw vendor prep should install Automnia compact context policy')
 assertIncludes(openclawVendorPrep, 'ensureAutomniaRelayPayloadCompactionSupport', 'OpenClaw vendor prep should install Automnia payload compaction policy')
+assertIncludes(openclawVendorPrep, 'ensureRestartRecoveryClaimStartupRepair', 'OpenClaw vendor prep should repair retry-refreshed orphaned restart claims at startup')
 assertIncludes(openclawVendorPrep, 'compactAutomniaRelayToolSchemas', 'Automnia Relay should compact redundant tool schema metadata before transport')
 assertIncludes(openclawVendorPrep, 'isTokenEfficientPromptMode', 'every model should use the token-efficient minimal system prompt mode')
 assertIncludes(server, 'reserveTokensFloor: AUTOMNIA_COMPACTION_RESERVE_TOKENS', 'Automnia should create a bounded compaction reserve')
