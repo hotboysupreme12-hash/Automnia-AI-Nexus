@@ -464,7 +464,6 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       : null
     if (clawTalkMirror) rememberClawTalkConsoleMirror(clawTalkMirror)
     let closed = false
-    let finalSent = false
     let liveTextStreamed = false
     const heartbeat = setInterval(() => {
       if (closed) return
@@ -473,18 +472,16 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       } catch {
         // The client can disconnect between the closed check and the write.
         closed = true
-        if (parsed.data.source !== 'clawtalk') abortController.abort()
+        if (!parsed.data.responseId) abortController.abort()
       }
     }, 15_000)
     heartbeat.unref?.()
     res.on('close', () => {
       closed = true
       clearInterval(heartbeat)
-      // Agent Chat owns the response stream, so disconnecting it must not leave
-      // a tool loop running without a visible conversation. ClawTalk has its
-      // own mirrored channel delivery and may continue after its HTTP observer
-      // detaches.
-      if (parsed.data.source !== 'clawtalk' && !finalSent) abortController.abort()
+      // Turns with a response id are durable and replayable into Agent Chat
+      // after refresh. Cancel only streams that have no recoverable response.
+      if (!parsed.data.responseId) abortController.abort()
     })
     const writeObserver: StreamEmitter = (event, data) => {
       if (closed) return
@@ -498,7 +495,6 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       }
     }
     const emit: StreamEmitter = (event, data) => {
-      if (event === 'final') finalSent = true
       if (event === 'delta' && typeof data.text === 'string') {
         const text = data.text
         if (text) liveTextStreamed = true
