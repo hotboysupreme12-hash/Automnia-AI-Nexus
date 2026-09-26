@@ -1759,6 +1759,7 @@ export const useNexusStore = create<NexusState>()(
         const liveResponseId = crypto.randomUUID()
         let liveResponseCreated = false
         let liveResponseModelId = agent?.model?.primary?.trim() || ''
+        let liveSessionKey = options.sessionKey?.trim() || ''
         let liveTransport = 'control-center-sse'
         let liveBuffered = false
         let liveStartedAt = ''
@@ -1842,6 +1843,7 @@ export const useNexusStore = create<NexusState>()(
               id: liveResponseId,
               ...(missionId ? { missionId } : {}),
               agentId: aid,
+              ...(liveSessionKey || existing?.sessionKey ? { sessionKey: liveSessionKey || existing?.sessionKey } : {}),
               prompt: visiblePrompt,
               response: visibleResponse,
               ok,
@@ -1951,6 +1953,7 @@ export const useNexusStore = create<NexusState>()(
               id: liveResponseId,
               ...(missionId ? { missionId } : {}),
               agentId: aid,
+              ...(liveSessionKey || existing?.sessionKey ? { sessionKey: liveSessionKey || existing?.sessionKey } : {}),
               prompt: visiblePrompt,
               response: response.slice(0, MAX_LIVE_RESPONSE_TEXT_CHARS),
               ok,
@@ -2014,6 +2017,8 @@ export const useNexusStore = create<NexusState>()(
             return text.trim()
           }
           const captureStreamMeta = (data: Record<string, unknown>) => {
+            const sessionKey = typeof data.sessionKey === 'string' ? data.sessionKey.trim() : ''
+            if (sessionKey) liveSessionKey = sessionKey
             const modelId = typeof data.modelId === 'string' ? data.modelId.trim() : ''
             const provider = typeof data.provider === 'string' ? data.provider.trim() : ''
             const model = typeof data.model === 'string' ? data.model.trim() : ''
@@ -2837,6 +2842,7 @@ export const useNexusStore = create<NexusState>()(
               ...(completedAt ? { completedAt } : {}),
               tokenCountEstimate: estimateTokenCount(response),
               progressLabel: frame.label?.trim() || existing?.progressLabel || (eventName === 'start' ? 'ClawTalk' : progressText ? 'Working' : undefined),
+              ...(frame.sessionKey?.trim() || existing?.sessionKey ? { sessionKey: frame.sessionKey?.trim() || existing?.sessionKey } : {}),
               progressMode: existing?.progressMode || 'progress',
               ...(progressLines.length ? { progressLines } : existing?.progressLines ? { progressLines: existing.progressLines } : {}),
               ...(progressText ? { progressUpdatedAt: ts } : existing?.progressUpdatedAt ? { progressUpdatedAt: existing.progressUpdatedAt } : {}),

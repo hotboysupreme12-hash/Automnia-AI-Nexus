@@ -436,6 +436,7 @@ export interface AgentResponse {
   id: string
   missionId?: string
   agentId: string
+  sessionKey?: string
   prompt: string
   response: string
   ok: boolean
