@@ -13144,7 +13144,8 @@ async function runOpenClawWithManagedSkillsWorkspace(args: string[], timeoutMs =
   // on OpenClaw's current schema even while Automnia retains compatibility
   // fields in its in-memory config model. OpenClaw 2026.9.2 rejects
   // skills.load.watchDebounceMs and agents.list before it can run an install.
-  const { watchDebounceMs: _watchDebounceMs, ...skillsLoad } = config.skills?.load || {}
+  const skillsLoad = { ...(config.skills?.load || {}) }
+  delete skillsLoad.watchDebounceMs
   const tempConfig = {
     skills: {
       load: { watch: true, ...skillsLoad, extraDirs: uniqueStrings(SHARED_SKILLS_ROOT, skillsLoad.extraDirs) },

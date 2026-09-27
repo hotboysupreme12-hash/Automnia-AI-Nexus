@@ -102,6 +102,12 @@ assert.match(publicRelease, /AUTOMNIA_UPDATE_REQUIRE_SIGNING:\s*'1'/, 'public re
 assert.match(publicRelease, /AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG:\s*'1'/, 'public release builds must verify the embedded updater trust configuration')
 assert.match(publicRelease, /AUTOMNIA_SKIP_PLATFORM_SIGNING:\s*'1'/, 'early public releases must explicitly select unsigned platform packaging')
 assert.ok(publicRelease.includes('AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM'), 'public release workflow must require the update signing secret')
+assert.ok(publicRelease.includes('npm run dist:mac -- --arm64'), 'public release must build an Apple-silicon macOS artifact')
+assert.ok(publicRelease.includes('npm run dist:mac -- --x64'), 'public release must build an Intel macOS artifact')
+assert.match(publicRelease, /AUTOMNIA_INSTALLER_BUCKET/, 'public release must publish customer installers to the configured private bucket')
+assert.match(publicRelease, /Automnia-AI-Nexus-arm64\.dmg/, 'public release must publish the Apple-silicon DMG under the portal object name')
+assert.match(publicRelease, /Automnia-AI-Nexus-x64\.dmg/, 'public release must publish the Intel DMG under the portal object name')
+assert.match(publicRelease, /Automnia-Setup-x64\.exe/, 'public release must publish the Windows installer under the portal object name')
 for (const command of [
   'npm run dist:win',
   'npm run release:update-manifest',

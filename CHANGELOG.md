@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.19 - 2026-09-27
+
+### ClawHub installs and launch packaging
+
+- Fixes ClawHub skill installs against OpenClaw 2026.9.2 by removing retired managed-skill config fields.
+- Shows ClawHub ratings and download counts in the skill catalog.
+- Publishes the Windows, macOS Apple silicon, macOS Intel, and Linux installers to the private customer-download bucket used by the portal and welcome email.
+
 ## 1.0.18 - 2026-09-26
 
 ### Runtime recovery and mission reliability

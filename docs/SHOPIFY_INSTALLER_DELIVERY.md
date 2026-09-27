@@ -59,8 +59,28 @@ Linux remain hidden until their corresponding stable objects are uploaded.
 
 ## Build and publish installers
 
-Build each platform on that platform (or in trusted CI). On an Apple-silicon
-Mac, this creates the M-series DMG:
+The tagged public-release workflow builds every supported artifact, including
+both macOS architectures, and uploads the stable installer objects after the
+update manifest has passed verification. Configure the GitHub Actions variable
+`AUTOMNIA_INSTALLER_BUCKET` to the private bucket created by `deploy.ps1` and
+grant the `GCP_UPDATE_PUBLISHER_SERVICE_ACCOUNT` scoped object-admin access (or
+equivalent create/delete/overwrite permissions) to that bucket. The workflow also requires the existing update signing secret,
+WIF provider, publisher service account, and `AUTOMNIA_UPDATE_BUCKET` variable.
+
+To publish a release, bump the package version, push the matching `vX.Y.Z` tag,
+then wait for the `Public Release Candidate` workflow to complete. It uploads
+these exact stable objects for the Cloud Run portal and welcome email:
+
+| Platform | Stable object |
+| --- | --- |
+| Windows x64 | `releases/current/windows/Automnia-Setup-x64.exe` |
+| macOS Apple silicon | `releases/current/macos/Automnia-AI-Nexus-arm64.dmg` |
+| macOS Intel | `releases/current/macos/Automnia-AI-Nexus-x64.dmg` |
+| Linux x64 AppImage | `releases/current/linux/Automnia-AI-Nexus-x86_64.AppImage` |
+| Linux x64 Debian | `releases/current/linux/Automnia-AI-Nexus-x86_64.deb` |
+
+For a local smoke build, build each platform on that platform (or in trusted
+CI). On an Apple-silicon Mac, this creates the M-series DMG:
 
 ```bash
 npm ci
@@ -72,8 +92,8 @@ version, for example `Automnia AI Nexus-1.0.0-arm64.dmg`. Rename/copy it only
 at upload time; the bucket object name stays stable. This project deliberately
 does not sign or notarize the package in this flow.
 
-Upload a release only after it has been locally tested. Replace each stable
-object atomically by uploading to the configured exact destination:
+Manual upload is only a recovery path. If it is required, replace each stable
+object by uploading to the configured exact destination:
 
 ```bash
 gcloud storage cp "release/Automnia AI Nexus-1.0.0-arm64.dmg" \

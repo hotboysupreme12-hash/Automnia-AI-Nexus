@@ -55,7 +55,7 @@ assert.match(skillRoutesModule, /reference\.includes\('\/'\) && !reference\.star
 assert.match(skillRoutesModule, /\['skills', 'install', skillRef, '--global'\]/, 'ClawHub installs must target the shared managed skills directory')
 assert.match(skillRoutesModule, /\['skills', 'update', '--all', '--global'\]/, 'bulk ClawHub updates must target shared managed skills')
 assert.match(skillRoutesModule, /\['skills', 'update', skillRef, '--global'\]/, 'ClawHub updates must preserve the publisher-qualified skill reference')
-assert.match(server, /const \{ watchDebounceMs: _watchDebounceMs, \.\.\.skillsLoad \} = config\.skills\?\.load \|\| \{\}/, 'managed skill commands must omit the retired skills.load.watchDebounceMs field')
+assert.match(server, /const skillsLoad = \{ \.\.\.\(config\.skills\?\.load \|\| \{\}\) \}[\s\S]*delete skillsLoad\.watchDebounceMs/, 'managed skill commands must omit the retired skills.load.watchDebounceMs field')
 assert.match(server, /entries: \{\s*main: \{\s*workspace: OPENCLAW_STATE_ROOT/, 'managed skill commands must use canonical agents.entries instead of agents.list')
 assert.match(skillRoutesModule, /normalizeClawHubSearchResult/, 'ClawHub search results must normalize registry statistics for the clients')
 assert.match(skillRoutesModule, /stats\?\.downloads/, 'ClawHub search must retain registry download counts')
