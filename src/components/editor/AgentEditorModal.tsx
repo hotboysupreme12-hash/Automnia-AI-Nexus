@@ -168,6 +168,8 @@ interface ClawHubSkillResult {
   summary?: string
   version?: string | null
   updatedAt?: number | null
+  downloads?: number | null
+  rating?: number | null
   ownerHandle?: string
   owner?: { handle?: string; displayName?: string; image?: string }
 }
@@ -280,6 +282,11 @@ function formatClawHubDate(value?: number | null) {
   } catch {
     return ''
   }
+}
+
+function formatClawHubMetric(value?: number | null) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return ''
+  return new Intl.NumberFormat().format(value)
 }
 
 function skillIdKey(value: string) {
@@ -1984,12 +1991,15 @@ export function AgentEditorModal() {
                             const skillRef = clawHubSkillReference(result)
                             const installed = installedClawHubIds.has(skillIdKey(result.slug))
                             const updated = formatClawHubDate(result.updatedAt)
+                            const downloads = formatClawHubMetric(result.downloads)
+                            const rating = formatClawHubMetric(result.rating)
                             return (
                               <div key={skillRef} className="rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2.5">
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="min-w-0">
                                     <p className="truncate text-[11px] font-bold text-slate-100">{result.displayName||result.slug}</p>
                                     <p className="mt-0.5 truncate font-mono text-[8px] text-slate-600">{skillRef}{result.version?` / v${result.version}`:''}{updated?` / ${updated}`:''}</p>
+                                    {(downloads||rating)&&<p className="mt-1 flex flex-wrap gap-x-2 font-mono text-[8px] text-slate-500">{rating&&<span title="ClawHub ratings">★ {rating}</span>}{downloads&&<span title="ClawHub downloads">↓ {downloads}</span>}</p>}
                                   </div>
                                   {installed?(
                                     <button type="button" onClick={()=>void UpdateClawHub(result)} disabled={clawHubUpdating===skillRef} title={`Update ${result.displayName||result.slug}`} className="shrink-0 rounded-md border border-cyan-400/20 bg-cyan-400/[0.06] px-2.5 py-1.5 text-[8px] font-bold uppercase tracking-[0.10em] text-cyan-300 hover:bg-cyan-400/[0.12] disabled:opacity-40">{clawHubUpdating===skillRef?'Updating':'Update'}</button>

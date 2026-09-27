@@ -33,6 +33,8 @@ type ClawHubSkillResult = {
   summary?: string
   version?: string | null
   updatedAt?: number | null
+  downloads?: number | null
+  rating?: number | null
   ownerHandle?: string
   owner?: {
     handle?: string
@@ -119,6 +121,11 @@ function formatClawHubDate(value?: number | null) {
   } catch {
     return ''
   }
+}
+
+function formatClawHubMetric(value?: number | null) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return ''
+  return new Intl.NumberFormat().format(value)
 }
 
 function titleCaseSkill(value: string) {
@@ -625,6 +632,8 @@ export function SkillsPanel() {
                 const busyInstall = installingClawHubSlug === skillRef
                 const busyUpdate = updatingClawHubSlug === skillRef
                 const updated = formatClawHubDate(result.updatedAt)
+                const downloads = formatClawHubMetric(result.downloads)
+                const rating = formatClawHubMetric(result.rating)
                 return (
                   <div key={skillRef} className="rounded-lg border border-white/[0.04] bg-black/15 px-3 py-2">
                     <div className="flex flex-wrap items-start justify-between gap-2">
@@ -639,6 +648,10 @@ export function SkillsPanel() {
                         <p className="mt-1 font-mono text-[8px] text-slate-600">
                           {skillRef}{updated ? ` updated ${updated}` : ''}
                         </p>
+                        {(downloads || rating) && <p className="mt-1 flex flex-wrap gap-x-2 font-mono text-[8px] text-slate-500">
+                          {rating && <span title="ClawHub ratings">★ {rating}</span>}
+                          {downloads && <span title="ClawHub downloads">↓ {downloads}</span>}
+                        </p>}
                       </div>
                       <div className="flex shrink-0 flex-wrap gap-1.5">
                         {installed ? (

@@ -48,6 +48,39 @@ type SkillRoutesOptions = {
 
 const CLAWHUB_SKILL_REFERENCE_PATTERN = /^(?:@?[a-z0-9][a-z0-9._-]{0,63}\/)?[a-z0-9][a-z0-9._-]{0,127}$/i
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
+}
+
+function finiteNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
+}
+
+/**
+ * The ClawHub API exposes lifetime downloads at the result level and star
+ * ratings inside native.skill.stats. Keep a stable, compact API shape for
+ * the renderer while tolerating equivalent registry response variants.
+ */
+function normalizeClawHubSearchResult(value: unknown) {
+  const result = asRecord(value)
+  if (!result) return value
+  const native = asRecord(result.native)
+  const skill = asRecord(native?.skill)
+  const stats = asRecord(skill?.stats) || asRecord(result.stats)
+  const downloads = finiteNumber(result.downloads)
+    ?? finiteNumber(result.downloadCount)
+    ?? finiteNumber(stats?.downloads)
+  const rating = finiteNumber(result.rating)
+    ?? finiteNumber(result.stars)
+    ?? finiteNumber(stats?.rating)
+    ?? finiteNumber(stats?.stars)
+  return {
+    ...result,
+    ...(downloads === undefined ? {} : { downloads }),
+    ...(rating === undefined ? {} : { rating }),
+  }
+}
+
 function queryAgentId(value: unknown) {
   return typeof value === 'string' ? value : undefined
 }
@@ -186,7 +219,8 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
         )
       }
       const parsed = JSON.parse(result.stdout || '{"results":[]}') as { results?: unknown[] }
-      return apiSuccess(res, { results: Array.isArray(parsed.results) ? parsed.results : [] })
+      const results = Array.isArray(parsed.results) ? parsed.results.map(normalizeClawHubSearchResult) : []
+      return apiSuccess(res, { results })
     } catch (error) {
       return apiFailure(res, 500, 'skill_operation_failed', 'Failed to search ClawHub', String(error))
     }

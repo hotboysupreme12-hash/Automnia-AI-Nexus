@@ -13140,9 +13140,14 @@ async function runOpenClawWithManagedSkillsWorkspace(args: string[], timeoutMs =
   const tempDir = path.join(OPENCLAW_STATE_ROOT, 'tmp')
   const tempConfigPath = path.join(tempDir, `managed-skills-${randomUUID()}.json`)
   const model = defaults?.model || defaultAgentModelSelection()
+  // Managed skill commands run against a standalone config. Keep that config
+  // on OpenClaw's current schema even while Automnia retains compatibility
+  // fields in its in-memory config model. OpenClaw 2026.9.2 rejects
+  // skills.load.watchDebounceMs and agents.list before it can run an install.
+  const { watchDebounceMs: _watchDebounceMs, ...skillsLoad } = config.skills?.load || {}
   const tempConfig = {
     skills: {
-      load: { watch: true, watchDebounceMs: 250, ...(config.skills?.load || {}) },
+      load: { watch: true, ...skillsLoad, extraDirs: uniqueStrings(SHARED_SKILLS_ROOT, skillsLoad.extraDirs) },
       entries: config.skills?.entries || {},
       install: config.skills?.install || { nodeManager: 'npm' },
       ...(config.skills?.allowBundled ? { allowBundled: config.skills.allowBundled } : {}),
@@ -13152,14 +13157,12 @@ async function runOpenClawWithManagedSkillsWorkspace(args: string[], timeoutMs =
         workspace: OPENCLAW_STATE_ROOT,
         model,
       },
-      list: [
-        {
-          id: 'main',
-          default: true,
+      entries: {
+        main: {
           workspace: OPENCLAW_STATE_ROOT,
           model,
         },
-      ],
+      },
     },
   }
 
