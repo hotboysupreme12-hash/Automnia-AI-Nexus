@@ -33,6 +33,43 @@ function validateEmbeddedUpdateTrustConfig(resourcesDir) {
   console.log(`[afterPack] validated embedded updater trust configuration -> ${config.baseUrl}`)
 }
 
+function validatePackagedElectronDependencies(resourcesDir) {
+  const archivePath = path.join(resourcesDir, 'app.asar')
+  if (!fs.existsSync(archivePath)) {
+    throw new Error(`[afterPack] Packaged app archive is missing: ${archivePath}`)
+  }
+
+  let updaterPackage
+  try {
+    updaterPackage = JSON.parse(extractFile(archivePath, 'node_modules/electron-updater/package.json').toString('utf8'))
+  } catch (error) {
+    throw new Error(`[afterPack] Packaged app is missing electron-updater metadata: ${error?.message || error}`)
+  }
+
+  const dependencyNames = Object.keys(updaterPackage?.dependencies || {})
+  const requiredFiles = dependencyNames.flatMap((dependency) => [
+    `node_modules/${dependency}/package.json`,
+  ])
+  requiredFiles.push(
+    'node_modules/electron-updater/out/main.js',
+    'node_modules/fs-extra/lib/index.js',
+  )
+
+  const missing = requiredFiles.filter((filePath) => {
+    try {
+      extractFile(archivePath, filePath)
+      return false
+    } catch {
+      return true
+    }
+  })
+  if (missing.length) {
+    throw new Error(`[afterPack] Packaged electron-updater dependency closure is incomplete; missing ${missing.join(', ')}`)
+  }
+
+  console.log(`[afterPack] validated electron-updater dependency closure (${dependencyNames.length} dependencies)`)
+}
+
 function resolveWindowsCsc() {
   const candidates = [
     'C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe',
@@ -234,6 +271,25 @@ function copyBundledCodexPlugin(root, resourcesDir) {
   console.log(`[afterPack] bundled Codex plugin -> ${target}`)
 }
 
+function validateBundledOpenClawRuntime(resourcesDir) {
+  const runtimeRoot = path.join(resourcesDir, 'openclaw')
+  const required = [
+    path.join(runtimeRoot, 'package.json'),
+    path.join(runtimeRoot, 'dist', 'entry.js'),
+  ]
+  const launcher = [
+    path.join(runtimeRoot, 'openclaw.mjs'),
+    path.join(runtimeRoot, 'dist', 'entry.js'),
+    path.join(runtimeRoot, 'dist', 'entry.mjs'),
+  ].find((candidate) => fs.existsSync(candidate))
+  if (!launcher) required.push(path.join(runtimeRoot, 'openclaw.mjs'))
+  const missing = required.filter((candidate) => !fs.existsSync(candidate))
+  if (missing.length) {
+    throw new Error(`[afterPack] Bundled OpenClaw runtime is incomplete; missing ${missing.join(', ')}`)
+  }
+  console.log(`[afterPack] validated bundled OpenClaw runtime -> ${launcher}`)
+}
+
 module.exports = async function afterPack(context) {
   const root = path.resolve(__dirname, '..')
   const source = path.join(root, 'vendor', 'openclaw', 'node_modules')
@@ -258,6 +314,8 @@ module.exports = async function afterPack(context) {
   copyBundledExtensionSkills(root, resourcesDir)
   copyBundledNodeToolchain(root, resourcesDir)
   copyBundledCodexPlugin(root, resourcesDir)
+  validateBundledOpenClawRuntime(resourcesDir)
+  validatePackagedElectronDependencies(resourcesDir)
   validateEmbeddedUpdateTrustConfig(resourcesDir)
 
   if (!fs.existsSync(json5)) {
