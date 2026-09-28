@@ -95,7 +95,30 @@ test('quit cleanup does not capture Electron-managed Chromium children', () => {
   })
   vm.runInContext(section(main, 'function isElectronManagedChildProcess(', 'function isProcessAlive('), context)
   const captured = vm.runInContext('captureAppOwnedDescendants()', context) as Array<{ pid: number }>
-  assert.deepEqual(captured.map((entry) => entry.pid), [21, 22])
+  assert.deepEqual([...captured].map((entry) => entry.pid), [21, 22])
+})
+
+test('quit cleanup captures known live children when process-tree inspection misses them', () => {
+  const context = vm.createContext({
+    process: { pid: 10 },
+    serverProcess: {
+      pid: 21,
+      exitCode: null,
+      signalCode: null,
+      spawnfile: 'electron.exe',
+      spawnargs: ['dist-server/index.cjs'],
+    },
+    gatewayProcess: null,
+    listDescendantProcesses: () => [],
+    listProcessDetails: () => [],
+    normalizeForMatch: (value: unknown) => String(value || '').replace(/\\/g, '/').toLowerCase(),
+  })
+  vm.runInContext(section(main, 'function isElectronManagedChildProcess(', 'function isProcessAlive('), context)
+  const captured = vm.runInContext('captureAppOwnedDescendants()', context) as Array<{ pid: number; commandLine: string }>
+  assert.deepEqual(
+    [...captured].map((entry) => ({ pid: entry.pid, commandLine: entry.commandLine, startedAt: (entry as { startedAt?: string }).startedAt })),
+    [{ pid: 21, commandLine: 'electron.exe dist-server/index.cjs', startedAt: '' }],
+  )
 })
 
 test('quit cleanup stops captured generic Node descendants without targeting unrelated Node processes', async () => {
