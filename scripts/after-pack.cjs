@@ -59,7 +59,6 @@ function validatePackagedElectronDependencies(resourcesDir) {
     archiveMember('node_modules', 'electron-updater', 'out', 'main.js'),
     archiveMember('node_modules', 'fs-extra', 'lib', 'index.js'),
   )
-  )
 
   const missing = requiredFiles.filter((filePath) => {
     try {
