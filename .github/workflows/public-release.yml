@@ -338,6 +338,22 @@ jobs:
           gcloud storage cp --cache-control="no-store,max-age=0" "$linux_appimage" "gs://$INSTALLER_BUCKET/releases/current/linux/Automnia-AI-Nexus-x86_64.AppImage"
           gcloud storage cp --cache-control="no-store,max-age=0" "$linux_deb" "gs://$INSTALLER_BUCKET/releases/current/linux/Automnia-AI-Nexus-x86_64.deb"
 
+      - name: Publish public website download aliases
+        shell: bash
+        env:
+          PUBLIC_DOWNLOAD_BUCKET: ${{ vars.AUTOMNIA_PUBLIC_DOWNLOAD_BUCKET }}
+        run: |
+          set -euo pipefail
+          test -n "$PUBLIC_DOWNLOAD_BUCKET" || { echo "AUTOMNIA_PUBLIC_DOWNLOAD_BUCKET is required" >&2; exit 1; }
+          gcloud storage buckets describe "gs://$PUBLIC_DOWNLOAD_BUCKET" >/dev/null
+          # These stable aliases are the URLs rendered by the Shopify download
+          # page. Keep them non-cacheable so a browser never retains a prior
+          # release after the next tagged publish. Apple-silicon macOS and the
+          # Debian package are intentionally managed outside this public flow.
+          gcloud storage cp --cache-control="no-store,max-age=0" "$windows_installer" "gs://$PUBLIC_DOWNLOAD_BUCKET/releases/current/Automnia-Setup-x64.exe"
+          gcloud storage cp --cache-control="no-store,max-age=0" "$mac_x64" "gs://$PUBLIC_DOWNLOAD_BUCKET/releases/current/Automnia-AI-Nexus-x64.dmg"
+          gcloud storage cp --cache-control="no-store,max-age=0" "$linux_appimage" "gs://$PUBLIC_DOWNLOAD_BUCKET/releases/current/Automnia-AI-Nexus-x86_64.AppImage"
+
       - name: Publish immutable payloads, then channel metadata
         shell: bash
         env:
