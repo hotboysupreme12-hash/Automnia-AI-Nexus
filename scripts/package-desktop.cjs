@@ -399,12 +399,17 @@ function validatePackagedMacToolchain() {
     throw new Error(`[package-desktop] Packaged macOS Node/npm toolchain is incomplete: ${nodeDir}`)
   }
 
+  const nodeCheck = spawnSync(nodeBin, ['--version'], { encoding: 'utf8', timeout: 10_000 })
+  if (nodeCheck.error || nodeCheck.status !== 0 || !/^v\d+\.\d+\.\d+\s*$/.test(nodeCheck.stdout || '')) {
+    throw new Error(`[package-desktop] Packaged macOS Node binary is not executable: ${nodeBin} ${nodeCheck.error?.message || nodeCheck.stderr || nodeCheck.stdout || `exit ${nodeCheck.status}`}`)
+  }
+
   const npmShim = fs.readFileSync(npmBin, 'utf8')
   if (!npmShim.includes('../lib/node_modules/npm/bin/npm-cli.js')) {
     throw new Error(`[package-desktop] Packaged macOS npm shim still points at the broken Node archive layout: ${npmBin}`)
   }
 
-  console.log(`[package-desktop] validated packaged macOS Node/npm files -> ${nodeDir}`)
+  console.log(`[package-desktop] validated packaged macOS Node/npm runtime -> ${nodeDir}`)
 }
 
 const vendorPrep = spawnSync(command, [openClawVendorPrep], {

@@ -186,6 +186,26 @@ assert.match(
 )
 assert.match(
   serverControlPlane,
+  /path\.join\(dir, 'dist', 'entry\.js'\)/,
+  'server runtime discovery must accept the bundled OpenClaw dist entry when openclaw.mjs is absent',
+)
+assert.match(
+  serverControlPlane,
+  /keeping bundled runtime first/,
+  'server runtime discovery must keep an existing bundled runtime ahead of PATH fallbacks',
+)
+assert.match(
+  serverControlPlane,
+  /configuredIsManagedBundle/,
+  'server runtime discovery must accept the desktop-managed repaired bundled runtime when the immutable resource copy is unavailable',
+)
+assert.match(
+  serverControlPlane,
+  /rehydrate the bundled OpenClaw runtime/,
+  'Doctor must tell operators to use the bundled runtime rehydration path instead of changing PATH',
+)
+assert.match(
+  serverControlPlane,
   /AUTOMNIA_OPENCLAW_VENDOR_ROOT/,
   'server startup self-heal must run the vendor prep script against the detected vendor root',
 )
@@ -193,6 +213,21 @@ assert.match(
   serverControlPlane,
   /function resolveNodeRuntimeExecutable/,
   'server startup must resolve a real Node runtime instead of reusing Electron for OpenClaw scripts',
+)
+assert.match(
+  serverControlPlane,
+  /nodeRuntimeToolchainRoots\(\)\.flatMap\(nodeRuntimeCandidatesFromToolchainRoot\),[\s\S]*process\.env\.AUTOMNIA_NODE_BIN/,
+  'the verified bundled Node runtime must be preferred ahead of environment and PATH fallbacks',
+)
+assert.match(
+  serverControlPlane,
+  /function isOpenClawNodeRuntimeUnavailableText/,
+  'missing Node runtime failures must be classified separately from invalid OpenClaw config',
+)
+assert.match(
+  serverControlPlane,
+  /pauseGatewayAutoRestartForRuntimeUnavailable\(`Bundled Node\.js could not start OpenClaw/,
+  'Node launch failures must pause runtime recovery without presenting as config repair failures',
 )
 assert.match(
   serverControlPlane,
@@ -208,6 +243,36 @@ assert.match(
   electronMain,
   /nodeToolchainDirMatchesCurrentPlatform/,
   'desktop launcher must discover bundled Node/npm toolchains for the current platform',
+)
+assert.match(
+  electronMain,
+  /function preferBundledNodeRuntime\(\)/,
+  'desktop launcher must explicitly export its bundled Node binary to the control-plane child',
+)
+assert.match(
+  electronMain,
+  /process\.env\.AUTOMNIA_NODE_BIN = bundledNode/,
+  'desktop launcher must use the exact bundled Node path instead of relying on PATH',
+)
+assert.match(
+  electronMain,
+  /path\.join\(dir, 'dist', 'entry\.js'\)/,
+  'desktop launcher must accept the bundled OpenClaw dist entry when openclaw.mjs is absent',
+)
+assert.match(
+  electronMain,
+  /AUTOMNIA_ENABLE_WRITABLE_OPENCLAW_RUNTIME === '0'/,
+  'desktop launcher must hydrate a writable bundled OpenClaw copy by default, with an explicit opt-out',
+)
+assert.match(
+  electronMain,
+  /\.automnia-runtime-ready/,
+  'desktop launcher must leave a readiness marker for the self-repaired runtime copy',
+)
+assert.match(
+  electronMain,
+  /path\.join\(dir, 'dist', 'entry\.js'\)/,
+  'desktop launcher must accept the bundled OpenClaw dist entry when openclaw.mjs is absent',
 )
 assert.doesNotMatch(
   electronMain,

@@ -626,8 +626,17 @@ function resolveStaticDir() {
 
 function openClawRuntimeCandidatesForDir(dir) {
   return process.platform === 'win32'
-    ? [path.join(dir, 'openclaw.cmd'), path.join(dir, 'openclaw.mjs')]
-    : [path.join(dir, 'openclaw.mjs')]
+    ? [
+        path.join(dir, 'openclaw.cmd'),
+        path.join(dir, 'openclaw.mjs'),
+        path.join(dir, 'dist', 'entry.js'),
+        path.join(dir, 'dist', 'entry.mjs'),
+      ]
+    : [
+        path.join(dir, 'openclaw.mjs'),
+        path.join(dir, 'dist', 'entry.js'),
+        path.join(dir, 'dist', 'entry.mjs'),
+      ]
 }
 
 function safeRuntimeSegment(value) {
@@ -662,21 +671,29 @@ async function ensureWritablePackagedOpenClawRuntime(bundledRuntime) {
     isDev ||
     !bundledRuntime ||
     process.platform === 'win32' ||
-    process.env.AUTOMNIA_ENABLE_WRITABLE_OPENCLAW_RUNTIME !== '1'
+    process.env.AUTOMNIA_ENABLE_WRITABLE_OPENCLAW_RUNTIME === '0'
   ) return bundledRuntime
-  const bundledRoot = path.dirname(path.resolve(bundledRuntime))
+
+  const resolvedBundledRuntime = path.resolve(bundledRuntime)
+  const directRoot = path.dirname(resolvedBundledRuntime)
+  const bundledRoot = fs.existsSync(path.join(directRoot, 'package.json'))
+    ? directRoot
+    : path.dirname(directRoot)
   const required = [
-    bundledRuntime,
+    resolvedBundledRuntime,
     path.join(bundledRoot, 'package.json'),
     path.join(bundledRoot, 'dist'),
   ]
-  if (!required.every((candidate) => fs.existsSync(candidate))) return bundledRuntime
+  const hasEntryArtifact = fs.existsSync(path.join(bundledRoot, 'openclaw.mjs'))
+    || fs.existsSync(path.join(bundledRoot, 'dist', 'entry.js'))
+    || fs.existsSync(path.join(bundledRoot, 'dist', 'entry.mjs'))
+  if (!required.every((candidate) => fs.existsSync(candidate)) || !hasEntryArtifact) return bundledRuntime
 
   const stamp = packagedOpenClawRuntimeStamp(bundledRoot)
   const targetRoot = path.join(AUTOMNIA_USER_DATA_DIR, 'runtimes', 'openclaw', stamp)
-  const targetRuntime = path.join(targetRoot, path.basename(bundledRuntime))
+  const targetRuntime = path.join(targetRoot, path.relative(bundledRoot, resolvedBundledRuntime))
   const readyMarker = path.join(targetRoot, '.automnia-runtime-ready')
-  if (fs.existsSync(targetRuntime) && fs.existsSync(readyMarker)) return targetRuntime
+  if (fs.existsSync(targetRuntime) && fs.existsSync(readyMarker) && fs.existsSync(path.join(targetRoot, 'package.json'))) return targetRuntime
 
   const parent = path.dirname(targetRoot)
   const tempRoot = path.join(parent, `.${path.basename(targetRoot)}.tmp-${process.pid}-${Date.now()}`)
@@ -733,15 +750,13 @@ async function resolveOpenClawRuntime() {
   const root = appRoot()
   const candidates = process.platform === 'win32'
     ? [
-        resourcePath('openclaw', 'openclaw.cmd'),
-        resourcePath('openclaw', 'openclaw.mjs'),
-        path.join(root, 'vendor', 'openclaw', 'openclaw.cmd'),
-        path.join(root, 'vendor', 'openclaw', 'openclaw.mjs'),
+        ...openClawRuntimeCandidatesForDir(resourcePath('openclaw')),
+        ...openClawRuntimeCandidatesForDir(path.join(root, 'vendor', 'openclaw')),
         ...releaseOpenClawRuntimeCandidates(root),
       ]
     : [
-        resourcePath('openclaw', 'openclaw.mjs'),
-        path.join(root, 'vendor', 'openclaw', 'openclaw.mjs'),
+        ...openClawRuntimeCandidatesForDir(resourcePath('openclaw')),
+        ...openClawRuntimeCandidatesForDir(path.join(root, 'vendor', 'openclaw')),
         ...releaseOpenClawRuntimeCandidates(root),
       ]
   const found = candidates.find((c) => fs.existsSync(c)) || ''
@@ -835,6 +850,16 @@ function isExecutableFile(filePath) {
   }
 }
 
+function isRunnableNodeBinary(filePath) {
+  if (!isExecutableFile(filePath)) return false
+  if (process.platform === 'win32') return true
+  try {
+    return (fs.statSync(filePath).mode & 0o111) !== 0
+  } catch {
+    return false
+  }
+}
+
 function findNpmOnPath() {
   const names = process.platform === 'win32' ? ['npm.cmd', 'npm.exe'] : ['npm']
   for (const dir of splitPathEnv(process.env[pathEnvKey(process.env)])) {
@@ -891,6 +916,26 @@ function existingNpmBinInToolchainRoot(root) {
 
 function existingBundledNpmBin() {
   return existingNpmBinInToolchainRoot(BUNDLED_NPM_TOOLCHAIN_ROOT)
+}
+
+function existingNodeBinInToolchainRoot(root) {
+  if (!root || !fs.existsSync(root)) return ''
+  return fs.readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && nodeToolchainDirMatchesCurrentPlatform(entry.name))
+    .map((entry) => nodeBinInNodeDir(path.join(root, entry.name)))
+    .filter(isRunnableNodeBinary)
+    .sort((a, b) => b.localeCompare(a))[0] || ''
+}
+
+function preferBundledNodeRuntime() {
+  const bundledNode = existingNodeBinInToolchainRoot(BUNDLED_NPM_TOOLCHAIN_ROOT)
+  if (!bundledNode) return ''
+  prependProcessPath(path.dirname(bundledNode))
+  // The desktop control-plane child inherits this exact path. Do not depend on
+  // a login-shell PATH: Finder launches normally do not receive Homebrew/nvm.
+  process.env.NODE_EXE = bundledNode
+  process.env.AUTOMNIA_NODE_BIN = bundledNode
+  return bundledNode
 }
 
 function existingManagedNpmBin() {
@@ -3393,6 +3438,10 @@ app.whenReady().then(async () => {
     process.env.CONTROL_CENTER_AUTOSTART_GATEWAY = process.env.CONTROL_CENTER_AUTOSTART_GATEWAY || '1'
     if (openclawRuntime) process.env.OPENCLAW_BIN = openclawRuntime
 
+    const bundledNode = preferBundledNodeRuntime()
+    if (app.isPackaged && process.platform === 'darwin' && !bundledNode) {
+      throw new Error('The packaged Automnia app is missing an executable bundled Node.js runtime. Reinstall a complete macOS build; do not install Node globally as a workaround.')
+    }
     await ensureNpmToolchainAvailable()
     if (process.env.AUTOMNIA_ELECTRON_E2E_SKIP_PORT_CLEANUP === '1') {
       logE2e('port-cleanup-skipped')

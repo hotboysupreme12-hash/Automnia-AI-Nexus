@@ -857,11 +857,14 @@ function resolveNodeRuntimeExecutable() {
   if (resolvedNodeRuntimeExecutable) return resolvedNodeRuntimeExecutable
   const pathNode = process.platform === 'win32' ? 'node.exe' : 'node'
   const candidates = uniqueStrings(
+    // A packaged desktop build must execute OpenClaw with its verified Node
+    // toolchain. This is deliberately ahead of env/PATH because macOS Finder
+    // launches do not inherit shell setup such as Homebrew or nvm.
+    ...nodeRuntimeToolchainRoots().flatMap(nodeRuntimeCandidatesFromToolchainRoot),
     process.env.AUTOMNIA_NODE_BIN || '',
     process.env.NODE_EXE || '',
     process.env.NODE_BINARY || '',
     isLikelyNodeExecutable(process.execPath) ? process.execPath : '',
-    ...nodeRuntimeToolchainRoots().flatMap(nodeRuntimeCandidatesFromToolchainRoot),
     pathNode,
   ).filter(Boolean)
   resolvedNodeRuntimeExecutable = candidates.find(nodeRuntimeCommandExists) || pathNode
@@ -935,7 +938,7 @@ function sourceOpenClawVendorCandidate() {
     const vendorRoot = path.join(root, 'vendor', 'openclaw')
     const prepScript = path.join(root, 'scripts', 'prepare-openclaw-vendor.cjs')
     if (
-      existsSync(path.join(vendorRoot, 'openclaw.mjs')) &&
+      (existsSync(path.join(vendorRoot, 'openclaw.mjs')) || hasOpenClawEntryArtifact(vendorRoot)) &&
       existsSync(path.join(vendorRoot, 'package.json')) &&
       existsSync(prepScript)
     ) {
@@ -975,8 +978,17 @@ function prepareSourceOpenClawVendorIfMissing() {
 
 function openClawExecutableCandidatesForDir(dir: string) {
   return process.platform === 'win32'
-    ? [path.join(dir, 'openclaw.cmd'), path.join(dir, 'openclaw.mjs')]
-    : [path.join(dir, 'openclaw.mjs')]
+    ? [
+        path.join(dir, 'openclaw.cmd'),
+        path.join(dir, 'openclaw.mjs'),
+        path.join(dir, 'dist', 'entry.js'),
+        path.join(dir, 'dist', 'entry.mjs'),
+      ]
+    : [
+        path.join(dir, 'openclaw.mjs'),
+        path.join(dir, 'dist', 'entry.js'),
+        path.join(dir, 'dist', 'entry.mjs'),
+      ]
 }
 
 function sourceReleaseOpenClawBinCandidates() {
@@ -1084,15 +1096,24 @@ function cliOpenClawBinCandidates() {
 
 function resolveOpenClawBin() {
   const configured = process.env.OPENCLAW_BIN?.trim()
-  if (configured) return configured
-
   const embeddedCandidates = embeddedOpenClawBinCandidates()
   const embedded = embeddedCandidates.find((candidate) => isUsableOpenClawBin(candidate))
   if (embedded) return embedded
   const existingEmbedded = embeddedCandidates.find(openClawBinExists)
-  if (FORCE_LOCAL_AGENT_RUNTIME && existingEmbedded) {
-    console.warn(`[openclaw] embedded runtime exists but did not pass preflight; forcing local runtime: ${existingEmbedded}`)
+  if (existingEmbedded) {
+    console.warn(`[openclaw] embedded runtime exists but did not pass preflight; keeping bundled runtime first: ${existingEmbedded}`)
     return existingEmbedded
+  }
+
+  // A caller-provided path is only a fallback. The packaged runtime is the
+  // product's source of truth and must win whenever it is present. Set
+  // CONTROL_CENTER_ALLOW_EXTERNAL_OPENCLAW_RUNTIME=1 for an intentional
+  // development override.
+  const configuredIsManagedBundle = Boolean(
+    configured && /[\\/]runtimes[\\/]openclaw[\\/]/i.test(path.resolve(configured)),
+  )
+  if (configured && (configuredIsManagedBundle || /^(1|true|yes)$/i.test(process.env.CONTROL_CENTER_ALLOW_EXTERNAL_OPENCLAW_RUNTIME || ''))) {
+    return configured
   }
 
   const cliCandidates = cliOpenClawBinCandidates()
@@ -1132,7 +1153,13 @@ function resolvedOpenClawRuntimeInfo() {
   let version: string | null = null
   if (openclawBin !== 'openclaw') {
     try {
-      const parsed = JSON.parse(readFileSync(path.join(path.dirname(openclawBin), 'package.json'), 'utf-8')) as { version?: unknown }
+      const packageCandidates = [
+        path.join(path.dirname(openclawBin), 'package.json'),
+        path.join(path.dirname(path.dirname(openclawBin)), 'package.json'),
+      ]
+      const packagePath = packageCandidates.find((candidate) => existsSync(candidate))
+      if (!packagePath) throw new Error('OpenClaw package metadata is missing')
+      const parsed = JSON.parse(readFileSync(packagePath, 'utf-8')) as { version?: unknown }
       version = typeof parsed.version === 'string' ? parsed.version : null
     } catch {
       version = null
@@ -1147,12 +1174,22 @@ function resolvedOpenClawRuntimeInfo() {
   }
 }
 
+function openClawPackageRootForBin(bin: string) {
+  if (!bin || bin === 'openclaw') return ''
+  const resolved = path.resolve(bin)
+  const directRoot = path.dirname(resolved)
+  if (existsSync(path.join(directRoot, 'package.json'))) return directRoot
+  const parentRoot = path.dirname(directRoot)
+  if (existsSync(path.join(parentRoot, 'package.json'))) return parentRoot
+  return directRoot
+}
+
 function openClawSpawnSpec(args: string[]) {
   return openClawSpawnSpecForBin(openclawBin, args)
 }
 
 function openClawRuntimeCwd() {
-  return openclawBin && openclawBin !== 'openclaw' ? path.dirname(path.resolve(openclawBin)) : WORKSPACE_ROOT
+  return openclawBin && openclawBin !== 'openclaw' ? openClawPackageRootForBin(openclawBin) : WORKSPACE_ROOT
 }
 
 function openClawProcessEnv(overrides: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
@@ -3890,6 +3927,14 @@ function isInvalidOpenClawConfigText(value: string) {
     || /\bagents\.list\.\d+:\s*Invalid input\b/i.test(value)
 }
 
+function isOpenClawNodeRuntimeUnavailableText(value: string) {
+  // `spawn node ENOENT` is a launcher/runtime problem, not evidence that the
+  // OpenClaw JSON is invalid. Treating it as a config failure repeatedly ran
+  // Doctor and obscured the actual repair path in the desktop diagnostics.
+  return /\bspawn\s+(?:[^\s/]+[\\/])?node(?:\.exe)?\s+ENOENT\b/i.test(value)
+    || /\bENOENT\b[\s\S]{0,160}\bnode(?:\.exe)?\b/i.test(value)
+}
+
 /**
  * Keep Automnia's richer runtime policy in memory while projecting only the
  * fields understood by the bundled OpenClaw schema to disk. OpenClaw 2026.9
@@ -3982,12 +4027,15 @@ async function validateOpenClawConfigForGateway(reason: string) {
   const result = await runOpenClaw(['config', 'validate', '--json'], GATEWAY_CONFIG_VALIDATE_TIMEOUT_MS)
   const valid = openClawValidateResultIsValid(result)
   const detail = compactOpenClawCommandOutput(result, valid ? 'OpenClaw config valid.' : `openclaw config validate exited ${result.code}`)
+  const runtimeUnavailable = !valid && isOpenClawNodeRuntimeUnavailableText(`${result.stderr || ''}\n${result.stdout || ''}\n${detail}`)
   if (valid) {
     await promoteValidatedOpenClawConfigLastGood(reason)
+  } else if (runtimeUnavailable) {
+    pushGatewayLog('lifecycle', `OpenClaw config validation could not start its Node.js runtime (${reason}): ${detail}`)
   } else {
     pushGatewayLog('lifecycle', `OpenClaw config validation failed (${reason}): ${detail}`)
   }
-  return { valid, detail, result }
+  return { valid, detail, result, runtimeUnavailable }
 }
 
 function pauseGatewayAutoRestartForInvalidConfig(detail: string) {
@@ -4046,6 +4094,10 @@ async function prepareOpenClawConfigForGatewayStartup(reason: string) {
       await cleanupLegacyConfigHealthStateForGateway(reason)
       let validation = await validateOpenClawConfigForGateway(reason)
       if (validation.valid) return true
+      if (validation.runtimeUnavailable) {
+        pauseGatewayAutoRestartForRuntimeUnavailable(`Bundled Node.js could not start OpenClaw. ${validation.detail}`)
+        return false
+      }
 
       const repair = await repairOpenClawConfigForGateway(reason)
       openclawConfigCache = null
@@ -4058,10 +4110,19 @@ async function prepareOpenClawConfigForGatewayStartup(reason: string) {
         return true
       }
 
+      if (validation.runtimeUnavailable || isOpenClawNodeRuntimeUnavailableText(repair.detail)) {
+        pauseGatewayAutoRestartForRuntimeUnavailable(`Bundled Node.js could not start OpenClaw. ${validation.detail || repair.detail}`)
+        return false
+      }
+
       pauseGatewayAutoRestartForInvalidConfig(validation.detail || repair.detail)
       return false
     } catch (error) {
       const detail = compactGatewayLogMessage(redactSensitiveText(stripAnsi(String(error))), 900)
+      if (isOpenClawNodeRuntimeUnavailableText(detail)) {
+        pauseGatewayAutoRestartForRuntimeUnavailable(`Bundled Node.js could not start OpenClaw. ${detail}`)
+        return false
+      }
       pauseGatewayAutoRestartForInvalidConfig(detail)
       return false
     }
@@ -5879,7 +5940,7 @@ function openClawDistModulePathByPrefix(prefix: string) {
 
 function openClawDistDirCandidates() {
   const electronResourcesPath = getElectronResourcesPath()
-  const binDir = openclawBin && openclawBin !== 'openclaw' ? path.dirname(path.resolve(openclawBin)) : ''
+  const binDir = openclawBin && openclawBin !== 'openclaw' ? openClawPackageRootForBin(openclawBin) : ''
   return uniqueStrings(
     binDir ? path.join(binDir, 'dist') : '',
     binDir,
@@ -10760,7 +10821,7 @@ function isClawTalkPluginPath(value: unknown) {
 
 function bundledOpenClawPluginExtensionRootCandidates() {
   const electronResourcesPath = getElectronResourcesPath()
-  const openclawDir = openclawBin && openclawBin !== 'openclaw' ? path.dirname(path.resolve(openclawBin)) : ''
+  const openclawDir = openclawBin && openclawBin !== 'openclaw' ? openClawPackageRootForBin(openclawBin) : ''
   return uniqueStrings(
     openclawDir ? path.join(openclawDir, 'dist', 'extensions') : '',
     path.resolve(WORKSPACE_ROOT, 'vendor', 'openclaw', 'dist', 'extensions'),
@@ -10800,7 +10861,7 @@ function sanitizeBundledPluginLoadPaths(config: OpenClawConfigFile) {
 
 function bundledClawTalkPluginRootCandidates() {
   const electronResourcesPath = getElectronResourcesPath()
-  const openclawDir = openclawBin && openclawBin !== 'openclaw' ? path.dirname(path.resolve(openclawBin)) : ''
+  const openclawDir = openclawBin && openclawBin !== 'openclaw' ? openClawPackageRootForBin(openclawBin) : ''
   return uniqueStrings(
     openclawDir ? path.join(openclawDir, 'dist', 'extensions', CLAWTALK_PLUGIN_ID) : '',
     path.resolve(WORKSPACE_ROOT, 'vendor', 'openclaw', 'dist', 'extensions', CLAWTALK_PLUGIN_ID),
@@ -11313,7 +11374,7 @@ function patchedTelegramBotRuntimeSource(source: string) {
 function openClawPackageRootCandidates() {
   const electronResourcesPath = getElectronResourcesPath()
   return uniqueStrings(
-    openclawBin && openclawBin !== 'openclaw' ? path.dirname(path.resolve(openclawBin)) : '',
+    openclawBin && openclawBin !== 'openclaw' ? openClawPackageRootForBin(openclawBin) : '',
     path.resolve(process.cwd(), 'vendor', 'openclaw'),
     path.resolve(process.cwd(), 'resources', 'openclaw'),
     path.resolve(WORKSPACE_ROOT, 'vendor', 'openclaw'),
@@ -11836,7 +11897,7 @@ function parseOpenClawCommandInput(input: string) {
 
 function bundledCodexPluginRootCandidates() {
   const electronResourcesPath = getElectronResourcesPath()
-  const openclawDir = openclawBin && openclawBin !== 'openclaw' ? path.dirname(path.resolve(openclawBin)) : ''
+  const openclawDir = openclawBin && openclawBin !== 'openclaw' ? openClawPackageRootForBin(openclawBin) : ''
   return uniqueStrings(
     openclawDir ? path.join(openclawDir, 'dist', 'extensions', 'codex') : '',
     path.resolve(process.cwd(), 'vendor', 'openclaw', 'dist', 'extensions', 'codex'),
@@ -13911,7 +13972,7 @@ function legacyAgentLocalConfigPath(agentId: string) {
 function embeddedAgentRootCandidates(agentId?: string) {
   const electronResourcesPath = getElectronResourcesPath()
   const openclawRuntimeAgentRoot = openclawBin && openclawBin !== 'openclaw'
-    ? path.join(path.dirname(openclawBin), 'agents')
+    ? path.join(openClawPackageRootForBin(openclawBin), 'agents')
     : ''
   const roots = uniqueStrings(
     path.join(WORKSPACE_ROOT, SHARED_AGENT_STATE_DIR),
@@ -17671,7 +17732,7 @@ async function runDoctorChecks(): Promise<{ id: string; startedAt: string; ended
     ok: version.ok,
     severity: version.severity as DoctorCheck['severity'],
     evidence: version.message,
-    repairAction: version.ok ? undefined : 'Rebuild/package with the expected OpenClaw beta runtime or set OPENCLAW_BIN to the desired runtime.',
+    repairAction: version.ok ? undefined : 'Close and reopen Automnia to rehydrate the bundled OpenClaw runtime, then rerun Doctor. The app keeps the bundled runtime ahead of PATH fallbacks.',
   })
 
   const configCheck = await boundedOperation('OpenClaw config parse', 8000, async () => readOpenclawConfig())

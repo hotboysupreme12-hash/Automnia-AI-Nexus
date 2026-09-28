@@ -158,6 +158,7 @@ assert.match(packageDesktop, /killGeneratedWindowsPackageProcesses/, 'Windows pa
 assert.match(packageDesktop, /StartsWith\(\$target/, 'Windows packaging cleanup must be scoped to the generated package directory')
 assert.match(packageDesktop, /config\.directories\.output=release\/win-installer/, 'Windows installers must use an isolated output directory after launch smoke')
 assert.match(read('scripts/after-pack.cjs'), /AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG/, 'packaging must support a release-only embedded updater trust check')
+assert.match(read('scripts/after-pack.cjs'), /validateBundledOpenClawRuntime/, 'packaging must validate the bundled OpenClaw runtime payload')
 assert.match(secretScanner, /private-key/, 'secret scan must detect private key material')
 assert.match(secretScanner, /github-token/, 'secret scan must detect GitHub tokens')
 assert.match(secretScanner, /allowlist\\s\+secret/, 'secret scan must support explicit allowlist markers')
