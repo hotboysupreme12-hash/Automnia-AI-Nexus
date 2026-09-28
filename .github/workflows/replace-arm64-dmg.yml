@@ -35,6 +35,10 @@ jobs:
       - name: Install Google Cloud CLI
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
 
+      - name: Use non-composite uploads for public bucket compatibility
+        shell: bash
+        run: gcloud config set storage/parallel_composite_upload_enabled False
+
       - name: Fetch current signed channel metadata and replacement DMG
         shell: bash
         run: |
