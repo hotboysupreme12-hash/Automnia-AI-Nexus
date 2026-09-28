@@ -387,8 +387,9 @@ function validatePackagedMacToolchain() {
   if (!appPath) throw new Error('[package-desktop] Could not find the packaged macOS app for toolchain validation.')
 
   const toolchainRoot = path.join(appPath, 'Contents', 'Resources', 'toolchains', 'node')
+  const runtimeArch = macArchLabel() === 'universal' ? (process.arch === 'arm64' ? 'arm64' : 'x64') : macArchLabel()
   const nodeDir = fs.readdirSync(toolchainRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && /^node-v\d+\.\d+\.\d+-darwin-(?:x64|arm64)$/.test(entry.name))
+    .filter((entry) => entry.isDirectory() && new RegExp(`^node-v\\d+\\.\\d+\\.\\d+-darwin-${runtimeArch}$`).test(entry.name))
     .map((entry) => path.join(toolchainRoot, entry.name))[0]
   if (!nodeDir) throw new Error(`[package-desktop] Packaged macOS app is missing its Node.js toolchain: ${toolchainRoot}`)
 
