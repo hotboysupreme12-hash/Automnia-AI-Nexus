@@ -1395,12 +1395,42 @@ function isElectronManagedChildProcess(commandLine) {
   return /(?:^|\s)--type=[^\s]+/.test(command)
 }
 
+function knownOwnedChildProcesses() {
+  // Windows process-parent inspection can briefly omit a live child while
+  // Electron is handling quit. Keep the direct ChildProcess references as a
+  // fallback so cleanup remains observable and the child cannot escape the
+  // final sweep merely because WMI missed the parent edge.
+  const children = [
+    typeof serverProcess !== 'undefined' ? serverProcess : null,
+    typeof gatewayProcess !== 'undefined' ? gatewayProcess : null,
+  ].filter((child) => (
+    child &&
+    Number.isFinite(Number(child.pid)) &&
+    Number(child.pid) !== process.pid &&
+    child.exitCode == null &&
+    child.signalCode == null
+  ))
+  if (!children.length) return []
+
+  const detailsByPid = new Map(
+    listProcessDetails(children.map((child) => child.pid)).map((entry) => [entry.pid, entry]),
+  )
+  return children.map((child) => detailsByPid.get(Number(child.pid)) || {
+    pid: Number(child.pid),
+    commandLine: [child.spawnfile, ...(Array.isArray(child.spawnargs) ? child.spawnargs : [])]
+      .filter(Boolean)
+      .join(' '),
+    startedAt: '',
+  })
+}
+
 function captureAppOwnedDescendants() {
   // Parentage is the strongest ownership signal available for arbitrary task
   // workers. Capture it before graceful shutdown so a child cannot escape the
   // final sweep merely because its immediate parent exits first. Command line
   // plus creation time protect against killing a later process that reused a PID.
-  return listDescendantProcesses(process.pid)
+  const candidates = [...listDescendantProcesses(process.pid), ...knownOwnedChildProcesses()]
+  return candidates
     .filter((entry) => entry.pid !== process.pid)
     .filter((entry) => !isElectronManagedChildProcess(entry.commandLine))
     .filter((entry, index, entries) => entries.findIndex((candidate) => candidate.pid === entry.pid) === index)
