@@ -2,6 +2,9 @@ name: Replace Apple-silicon DMG
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - arm64-dmg-hotfix
 
 permissions:
   contents: read
