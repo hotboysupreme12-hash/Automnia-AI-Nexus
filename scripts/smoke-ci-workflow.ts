@@ -108,6 +108,9 @@ assert.match(publicRelease, /AUTOMNIA_INSTALLER_BUCKET/, 'public release must pu
 assert.match(publicRelease, /Automnia-AI-Nexus-arm64\.dmg/, 'public release must publish the Apple-silicon DMG under the portal object name')
 assert.match(publicRelease, /Automnia-AI-Nexus-x64\.dmg/, 'public release must publish the Intel DMG under the portal object name')
 assert.match(publicRelease, /Automnia-Setup-x64\.exe/, 'public release must publish the Windows installer under the portal object name')
+const afterPack = read('scripts/after-pack.cjs')
+assert.match(afterPack, /const archiveMember = \(\.\.\.segments\) => path\.join\(\.\.\.segments\)/, 'packaged archive validation must use host-native member paths for Windows')
+assert.ok(!afterPack.includes("'electron/update-config.json'"), 'packaged archive validation must not hard-code POSIX member separators')
 for (const command of [
   'npm run dist:win',
   'npm run release:update-manifest',

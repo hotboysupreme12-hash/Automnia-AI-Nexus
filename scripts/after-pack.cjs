@@ -3,6 +3,11 @@ const path = require('node:path')
 const { spawnSync } = require('node:child_process')
 const { extractFile } = require('@electron/asar')
 
+// @electron/asar resolves archive members with the host platform's path
+// separator. Keep member paths platform-native so validation works on Windows
+// as well as macOS/Linux.
+const archiveMember = (...segments) => path.join(...segments)
+
 function validateEmbeddedUpdateTrustConfig(resourcesDir) {
   if (process.env.AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG !== '1') return
 
@@ -14,8 +19,8 @@ function validateEmbeddedUpdateTrustConfig(resourcesDir) {
   let config
   let publicKey
   try {
-    config = JSON.parse(extractFile(archivePath, 'electron/update-config.json').toString('utf8'))
-    publicKey = extractFile(archivePath, 'electron/update-public-key.pem').toString('utf8')
+    config = JSON.parse(extractFile(archivePath, archiveMember('electron', 'update-config.json')).toString('utf8'))
+    publicKey = extractFile(archivePath, archiveMember('electron', 'update-public-key.pem')).toString('utf8')
   } catch (error) {
     throw new Error(`[afterPack] Packaged app is missing embedded updater trust configuration: ${error?.message || error}`)
   }
@@ -41,18 +46,18 @@ function validatePackagedElectronDependencies(resourcesDir) {
 
   let updaterPackage
   try {
-    updaterPackage = JSON.parse(extractFile(archivePath, 'node_modules/electron-updater/package.json').toString('utf8'))
+    updaterPackage = JSON.parse(extractFile(archivePath, archiveMember('node_modules', 'electron-updater', 'package.json')).toString('utf8'))
   } catch (error) {
     throw new Error(`[afterPack] Packaged app is missing electron-updater metadata: ${error?.message || error}`)
   }
 
   const dependencyNames = Object.keys(updaterPackage?.dependencies || {})
   const requiredFiles = dependencyNames.flatMap((dependency) => [
-    `node_modules/${dependency}/package.json`,
+    archiveMember('node_modules', dependency, 'package.json'),
   ])
   requiredFiles.push(
-    'node_modules/electron-updater/out/main.js',
-    'node_modules/fs-extra/lib/index.js',
+    archiveMember('node_modules', 'electron-updater', 'out', 'main.js'),
+    archiveMember('node_modules', 'fs-extra', 'lib', 'index.js'),
   )
 
   const missing = requiredFiles.filter((filePath) => {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.20 - 2026-09-27
+
+### Windows release packaging
+
+- Fixes Windows packaged-archive validation by using native archive member separators with `@electron/asar`.
+
 ## 1.0.19 - 2026-09-27
 
 ### ClawHub installs and launch packaging
