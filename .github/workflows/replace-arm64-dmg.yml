@@ -1,0 +1,129 @@
+name: Replace Apple-silicon DMG
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  replace:
+    name: Replace v1.0.20 Apple-silicon DMG everywhere
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RELEASE_VERSION: '1.0.20'
+      INSTALLER_BUCKET: ${{ vars.AUTOMNIA_INSTALLER_BUCKET }}
+      PUBLIC_DOWNLOAD_BUCKET: ${{ vars.AUTOMNIA_PUBLIC_DOWNLOAD_BUCKET }}
+      UPDATE_BUCKET: ${{ vars.AUTOMNIA_UPDATE_BUCKET }}
+      AUTOMNIA_UPDATE_SIGNING_KEY_ID: ${{ vars.AUTOMNIA_UPDATE_SIGNING_KEY_ID }}
+      AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM: ${{ secrets.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM }}
+    steps:
+      - name: Check out release tooling
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: ${{ secrets.GCP_UPDATE_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_UPDATE_PUBLISHER_SERVICE_ACCOUNT }}
+
+      - name: Install Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+
+      - name: Fetch current signed channel metadata and replacement DMG
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$INSTALLER_BUCKET" && test -n "$PUBLIC_DOWNLOAD_BUCKET" && test -n "$UPDATE_BUCKET"
+          mkdir -p release/arm64-replacement
+          gcloud storage cp \
+            "gs://$INSTALLER_BUCKET/replacements/arm64/Automnia-AI-Nexus-$RELEASE_VERSION-arm64.dmg" \
+            release/arm64-replacement/Automnia-AI-Nexus-arm64.dmg
+          gcloud storage cp "gs://$UPDATE_BUCKET/stable/latest-mac.yml" release/arm64-replacement/latest-mac.yml
+          gcloud storage cp "gs://$UPDATE_BUCKET/stable/update-manifest.json" release/arm64-replacement/update-manifest.json
+
+      - name: Update and re-sign arm64 channel metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const crypto = require('node:crypto')
+          const fs = require('node:fs')
+          const path = require('node:path')
+          const { manifestBytes, signManifest } = require('./scripts/lib/update-manifest.cjs')
+
+          const root = path.resolve('release/arm64-replacement')
+          const dmgPath = path.join(root, 'Automnia-AI-Nexus-arm64.dmg')
+          const manifestPath = path.join(root, 'update-manifest.json')
+          const latestMacPath = path.join(root, 'latest-mac.yml')
+          const dmgBytes = fs.readFileSync(dmgPath)
+          const dmgSha256 = crypto.createHash('sha256').update(dmgBytes).digest('hex')
+          const dmgSha512 = crypto.createHash('sha512').update(dmgBytes).digest('base64')
+          const dmgSize = dmgBytes.length
+
+          const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+          const artifact = manifest.artifacts.find((entry) => entry.file === `Automnia AI Nexus-${process.env.RELEASE_VERSION}-arm64.dmg`)
+          if (!artifact) throw new Error('arm64 DMG is missing from update-manifest.json')
+          artifact.size = dmgSize
+          artifact.sha256 = dmgSha256
+          manifest.generatedAt = new Date().toISOString()
+          fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+
+          let latestMac = fs.readFileSync(latestMacPath, 'utf8')
+          const escapedName = `Automnia AI Nexus-${process.env.RELEASE_VERSION}-arm64\\.dmg`
+          const dmgEntry = new RegExp(`(- url: ${escapedName}\\n    sha512: )[^\\n]+(\\n    size: )\\d+`)
+          if (!dmgEntry.test(latestMac)) throw new Error('arm64 DMG is missing from latest-mac.yml')
+          latestMac = latestMac.replace(dmgEntry, `$1${dmgSha512}$2${dmgSize}`)
+          latestMac = latestMac.replace(/releaseDate: '[^']*'/, `releaseDate: '${new Date().toISOString()}'`)
+          fs.writeFileSync(latestMacPath, latestMac)
+
+          const signed = signManifest(manifest, {
+            privateKeyPem: process.env.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM,
+            keyId: process.env.AUTOMNIA_UPDATE_SIGNING_KEY_ID,
+          })
+          if (!signed) throw new Error('Manifest signing key was unavailable')
+          fs.writeFileSync(path.join(root, 'update-manifest.json.sig'), `${signed.signature.toString('base64')}\n`)
+          fs.writeFileSync(path.join(root, 'update-manifest-public-key.pem'), signed.publicKeyPem)
+          fs.writeFileSync(path.join(root, 'update-signing.json'), `${JSON.stringify(signed.summary, null, 2)}\n`)
+          console.log(JSON.stringify({ size: dmgSize, sha256: dmgSha256, sha512: dmgSha512 }))
+          NODE
+
+      - name: Replace public and private installer objects
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg=release/arm64-replacement/Automnia-AI-Nexus-arm64.dmg
+          gcloud storage cp --cache-control="no-store,max-age=0" "$dmg" \
+            "gs://$INSTALLER_BUCKET/releases/current/macos/Automnia-AI-Nexus-arm64.dmg"
+          gcloud storage cp --cache-control="no-store,max-age=0" "$dmg" \
+            "gs://$PUBLIC_DOWNLOAD_BUCKET/releases/current/Automnia-AI-Nexus-arm64.dmg"
+          gcloud storage cp --cache-control="public,max-age=31536000,immutable" "$dmg" \
+            "gs://$UPDATE_BUCKET/releases/$RELEASE_VERSION/Automnia AI Nexus-$RELEASE_VERSION-arm64.dmg"
+          gcloud storage cp --cache-control="no-store,max-age=0" "$dmg" \
+            "gs://$UPDATE_BUCKET/stable/Automnia AI Nexus-$RELEASE_VERSION-arm64.dmg"
+
+      - name: Publish refreshed macOS metadata and remove stale arm64 blockmaps
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=release/arm64-replacement
+          for metadata in latest-mac.yml update-manifest.json update-manifest.json.sig update-manifest-public-key.pem update-signing.json; do
+            gcloud storage cp --cache-control="no-store,max-age=0" "$root/$metadata" "gs://$UPDATE_BUCKET/releases/$RELEASE_VERSION/$metadata"
+            gcloud storage cp --cache-control="no-store,max-age=0" "$root/$metadata" "gs://$UPDATE_BUCKET/stable/$metadata"
+          done
+          gcloud storage rm "gs://$INSTALLER_BUCKET/releases/current/macos/Automnia-AI-Nexus-arm64.dmg.blockmap" || true
+          gcloud storage rm "gs://$UPDATE_BUCKET/releases/$RELEASE_VERSION/Automnia AI Nexus-$RELEASE_VERSION-arm64.dmg.blockmap" || true
+          gcloud storage rm "gs://$UPDATE_BUCKET/stable/Automnia AI Nexus-$RELEASE_VERSION-arm64.dmg.blockmap" || true
+          gcloud storage rm "gs://$INSTALLER_BUCKET/replacements/arm64/Automnia-AI-Nexus-$RELEASE_VERSION-arm64.dmg"
+
+      - name: Verify replacement object and metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud storage ls \
+            "gs://$PUBLIC_DOWNLOAD_BUCKET/releases/current/Automnia-AI-Nexus-arm64.dmg" \
+            "gs://$INSTALLER_BUCKET/releases/current/macos/Automnia-AI-Nexus-arm64.dmg" \
+            "gs://$UPDATE_BUCKET/stable/Automnia AI Nexus-$RELEASE_VERSION-arm64.dmg"
+          gcloud storage cat "gs://$UPDATE_BUCKET/stable/latest-mac.yml" | grep -A2 "Automnia AI Nexus-$RELEASE_VERSION-arm64.dmg"
