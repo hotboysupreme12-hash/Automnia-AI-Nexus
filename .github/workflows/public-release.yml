@@ -309,6 +309,8 @@ jobs:
           for required in "$windows_installer" "$mac_x64" "$linux_appimage" "$linux_deb"; do
             test -n "$required" && test -f "$required" || { echo "Missing installer artifact: $required" >&2; exit 1; }
           done
+          printf 'AUTOMNIA_WINDOWS_INSTALLER=%s\nAUTOMNIA_MAC_X64=%s\nAUTOMNIA_LINUX_APPIMAGE=%s\nAUTOMNIA_LINUX_DEB=%s\n' \
+            "$windows_installer" "$mac_x64" "$linux_appimage" "$linux_deb" >> "$GITHUB_ENV"
           gcloud storage buckets describe "gs://$INSTALLER_BUCKET" >/dev/null
           gcloud config set storage/parallel_composite_upload_enabled False >/dev/null
           gcloud storage cp --cache-control="no-store,max-age=0" "$windows_installer" "gs://$INSTALLER_BUCKET/releases/current/windows/Automnia-Setup-x64.exe"
@@ -323,14 +325,17 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$PUBLIC_DOWNLOAD_BUCKET" || { echo "AUTOMNIA_PUBLIC_DOWNLOAD_BUCKET is required" >&2; exit 1; }
+          for required in "$AUTOMNIA_WINDOWS_INSTALLER" "$AUTOMNIA_MAC_X64" "$AUTOMNIA_LINUX_APPIMAGE"; do
+            test -n "$required" && test -f "$required" || { echo "Missing installer artifact: $required" >&2; exit 1; }
+          done
           gcloud storage buckets describe "gs://$PUBLIC_DOWNLOAD_BUCKET" >/dev/null
           # These stable aliases are the URLs rendered by the Shopify download
           # page. Keep them non-cacheable so a browser never retains a prior
           # release after the next tagged publish. Apple-silicon macOS and the
           # Debian package are intentionally not overwritten by this flow.
-          gcloud storage cp --cache-control="no-store,max-age=0" "$windows_installer" "gs://$PUBLIC_DOWNLOAD_BUCKET/releases/current/Automnia-Setup-x64.exe"
-          gcloud storage cp --cache-control="no-store,max-age=0" "$mac_x64" "gs://$PUBLIC_DOWNLOAD_BUCKET/releases/current/Automnia-AI-Nexus-x64.dmg"
-          gcloud storage cp --cache-control="no-store,max-age=0" "$linux_appimage" "gs://$PUBLIC_DOWNLOAD_BUCKET/releases/current/Automnia-AI-Nexus-x86_64.AppImage"
+          gcloud storage cp --cache-control="no-store,max-age=0" "$AUTOMNIA_WINDOWS_INSTALLER" "gs://$PUBLIC_DOWNLOAD_BUCKET/releases/current/Automnia-Setup-x64.exe"
+          gcloud storage cp --cache-control="no-store,max-age=0" "$AUTOMNIA_MAC_X64" "gs://$PUBLIC_DOWNLOAD_BUCKET/releases/current/Automnia-AI-Nexus-x64.dmg"
+          gcloud storage cp --cache-control="no-store,max-age=0" "$AUTOMNIA_LINUX_APPIMAGE" "gs://$PUBLIC_DOWNLOAD_BUCKET/releases/current/Automnia-AI-Nexus-x86_64.AppImage"
 
       - name: Publish immutable payloads, then channel metadata
         shell: bash

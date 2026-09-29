@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.24 - 2026-09-29
+
+### Release publication
+
+- Preserves validated installer paths between GitHub Actions steps so public download aliases and the signed x64 update channel can be published after private installer uploads.
+
 ## 1.0.23 - 2026-09-29
 
 ### Intel macOS release packaging
