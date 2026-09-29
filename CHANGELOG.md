@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.22 - 2026-09-29
+
+### Intel macOS release packaging
+
+- Selects the x64 Node.js runtime explicitly when building the Intel macOS package on Apple silicon CI runners.
+
 ## 1.0.21 - 2026-09-29
 
 ### Windows OpenClaw recovery

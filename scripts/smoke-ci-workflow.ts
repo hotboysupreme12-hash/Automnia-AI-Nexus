@@ -103,6 +103,7 @@ assert.match(publicRelease, /AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG:\s*'1'/, 'p
 assert.match(publicRelease, /AUTOMNIA_SKIP_PLATFORM_SIGNING:\s*'1'/, 'early public releases must explicitly select unsigned platform packaging')
 assert.ok(publicRelease.includes('AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM'), 'public release workflow must require the update signing secret')
 assert.ok(publicRelease.includes('npm run dist:mac -- --x64'), 'public release must build an Intel macOS artifact')
+assert.match(publicRelease, /Build unsigned Intel Mac DMG and ZIP[\s\S]*?AUTOMNIA_TARGET_ARCH:\s*x64/, 'Intel macOS packaging must prepare an Intel Node runtime even on Apple silicon runners')
 assert.doesNotMatch(publicRelease, /--arm64|aarch64|Automnia-AI-Nexus-arm64\.dmg/i, 'x64-only release must not build or publish an ARM64 installer')
 assert.match(publicRelease, /AUTOMNIA_UPDATE_CHANNEL:\s*stable-x64/, 'x64-only installers must use an isolated signed update channel')
 assert.match(publicRelease, /channel_destination="gs:\/\/\$UPDATE_BUCKET\/stable-x64"/, 'x64-only release must not replace the shared stable update channel')

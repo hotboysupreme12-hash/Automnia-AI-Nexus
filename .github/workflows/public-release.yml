@@ -139,6 +139,7 @@ jobs:
         env:
           AUTOMNIA_SKIP_PLATFORM_SIGNING: '1'
           AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG: '1'
+          AUTOMNIA_TARGET_ARCH: x64
         run: npm run dist:mac -- --x64
 
       - name: Validate unsigned macOS package outputs
