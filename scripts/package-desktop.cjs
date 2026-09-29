@@ -400,7 +400,10 @@ function validatePackagedMacToolchain() {
     throw new Error(`[package-desktop] Packaged macOS Node/npm toolchain is incomplete: ${nodeDir}`)
   }
 
-  const nodeCheck = spawnSync(nodeBin, ['--version'], { encoding: 'utf8', timeout: 10_000 })
+  // The first run from a fresh macOS app bundle can be slower than the usual
+  // CLI launch while Gatekeeper/provenance checks settle. Keep the packaging
+  // check bounded, but do not reject a valid bundled runtime at ten seconds.
+  const nodeCheck = spawnSync(nodeBin, ['--version'], { encoding: 'utf8', timeout: 60_000 })
   if (nodeCheck.error || nodeCheck.status !== 0 || !/^v\d+\.\d+\.\d+\s*$/.test(nodeCheck.stdout || '')) {
     throw new Error(`[package-desktop] Packaged macOS Node binary is not executable: ${nodeBin} ${nodeCheck.error?.message || nodeCheck.stderr || nodeCheck.stdout || `exit ${nodeCheck.status}`}`)
   }
