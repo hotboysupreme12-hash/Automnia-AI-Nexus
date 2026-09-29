@@ -106,7 +106,7 @@ jobs:
 
   macos:
     name: Unsigned macOS DMG and ZIP
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     timeout-minutes: 90
     steps:
       - name: Check out release source

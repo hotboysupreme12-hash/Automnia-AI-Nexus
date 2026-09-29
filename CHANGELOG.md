@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.23 - 2026-09-29
+
+### Intel macOS release packaging
+
+- Builds the Intel macOS installer on a native Intel runner so bundled optional native dependencies match the app architecture.
+
 ## 1.0.22 - 2026-09-29
 
 ### Intel macOS release packaging
