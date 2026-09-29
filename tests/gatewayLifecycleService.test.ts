@@ -23,11 +23,13 @@ type HarnessOptions = {
   onClawTalkRepair?: () => Promise<void> | void
   onTelegramRepair?: () => Promise<void> | void
   onSpawn?: (child: ChildProcess) => void
+  healthFromActiveProcess?: boolean
+  delayMs?: (ms: number) => Promise<void>
 }
 
-function fakeChildProcess(onSpawn?: (child: ChildProcess) => void): ChildProcess {
+function fakeChildProcess(onSpawn?: (child: ChildProcess) => void, pid = 4242): ChildProcess {
   const child = Object.assign(new EventEmitter(), {
-    pid: 4242,
+    pid,
     stdout: new PassThrough(),
     stderr: new PassThrough(),
     stdin: null,
@@ -58,6 +60,8 @@ function createHarness(config: HarnessOptions = {}) {
   let clawTalkRepairCalls = 0
   let telegramRepairCalls = 0
   let spawnCalls = 0
+  const terminatedPids = new Set<number>()
+  const processEvents: string[] = []
   const healthSequence = config.healthSequence ? [...config.healthSequence] : [false]
   const portBusySequence = config.portBusySequence ? [...config.portBusySequence] : null
   const spawnedChildren: ChildProcess[] = []
@@ -91,15 +95,21 @@ function createHarness(config: HarnessOptions = {}) {
     }),
     spawnProcess: () => {
       spawnCalls += 1
+      const pid = 4242 + spawnCalls
+      processEvents.push(`spawn:${pid}`)
       return fakeChildProcess((child) => {
         spawnedChildren.push(child)
         config.onSpawn?.(child)
         process.nextTick(() => {
           child.stdout?.emit('data', Buffer.from('http server listening\n'))
         })
-      })
+      }, pid)
     },
-    terminateProcessTree: async () => ({ ok: true, detail: 'terminated' }),
+    terminateProcessTree: async (pid) => {
+      if (pid) terminatedPids.add(pid)
+      processEvents.push(`terminate:${pid}`)
+      return { ok: true, detail: 'terminated' }
+    },
     checkTcpPort: async () => {
       if (portBusySequence && portBusySequence.length) return portBusySequence.shift() === true
       return config.portBusy === true
@@ -108,8 +118,8 @@ function createHarness(config: HarnessOptions = {}) {
       releaseCalls += 1
       return config.releaseResult || { released: true, detail: 'released' }
     },
-    isPidAlive: (pid) => pid > 0,
-    delayMs: async () => undefined,
+    isPidAlive: (pid) => pid > 0 && !terminatedPids.has(pid),
+    delayMs: config.delayMs || (async () => undefined),
     appendBoundedRuntimeOutput: (current, chunk) => `${current}${String(chunk)}`,
     compactGatewayLogMessage: (value, max = 220) => value.slice(0, max),
     redactSensitiveText: (value) => value.replace(/secret/gi, '[redacted]'),
@@ -141,6 +151,9 @@ function createHarness(config: HarnessOptions = {}) {
       },
     }),
     fetchGatewayHealthPayload: async () => {
+      if (config.healthFromActiveProcess) {
+        return { healthy: spawnCalls > terminatedPids.size, payload: {} }
+      }
       const index = Math.min(healthCalls, healthSequence.length - 1)
       healthCalls += 1
       return { healthy: healthSequence[index] === true, payload: {} }
@@ -185,6 +198,7 @@ function createHarness(config: HarnessOptions = {}) {
     },
     lifecycleEvents,
     logs,
+    processEvents,
     service,
     spawnedChildren,
     spawnSpecs,
@@ -387,6 +401,29 @@ test('forced restart releases the port and starts the gateway with Control Cente
   assert.equal(harness.envOverrides[0]?.CLAWTALK_CONTROL_CENTER_AGENT_TURN_STREAM_URL, 'http://127.0.0.1:13337/api/openclaw/agent-turn/stream')
   assert.equal(harness.envOverrides[0]?.CLAWTALK_CONTROL_CENTER_CONSOLE_FINAL_URL, 'http://127.0.0.1:13337/api/openclaw/clawtalk-console/final')
   assert.equal(harness.service.lifecycleSnapshot().lastRestartOutcome, 'succeeded')
+})
+
+test('forced restart waits for an active startup before replacing the gateway', async () => {
+  const repair = deferred()
+  const harness = createHarness({
+    healthFromActiveProcess: true,
+    onClawTalkRepair: async () => repair.promise,
+    delayMs: (ms) => new Promise((resolve) => setTimeout(resolve, Math.min(ms, 5))),
+  })
+
+  const initialStartup = harness.service.ensureGatewayRunning()
+  await new Promise((resolve) => setImmediate(resolve))
+  const restart = harness.service.tryRestartGatewayService({ force: true, reason: 'unit restart during startup' })
+  await new Promise((resolve) => setImmediate(resolve))
+  repair.resolve()
+
+  const result = await restart
+  await initialStartup
+  harness.service.stopGatewayHealthMonitor()
+
+  assert.equal(result.restarted, true)
+  assert.equal(harness.spawnCalls, 2)
+  assert.deepEqual(harness.processEvents, ['spawn:4243', 'terminate:4243', 'spawn:4244'])
 })
 
 test('gatewayStatusSnapshot exposes Monitor healthy, offline, and restarting states', async () => {

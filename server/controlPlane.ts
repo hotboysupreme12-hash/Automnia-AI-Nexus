@@ -1039,6 +1039,10 @@ function sameResolvedRuntimePath(left: string, right: string) {
   return path.resolve(left).toLowerCase() === path.resolve(right).toLowerCase()
 }
 
+function isManagedOpenClawRuntimePath(value: string | undefined) {
+  return Boolean(value && /[\\/]runtimes[\\/]openclaw[\\/]/i.test(path.resolve(value)))
+}
+
 function isUsableOpenClawBin(candidate: string) {
   if (!openClawBinExists(candidate)) return false
   const spec = openClawSpawnSpecForBin(candidate, ['--help'])
@@ -1096,6 +1100,14 @@ function cliOpenClawBinCandidates() {
 
 function resolveOpenClawBin() {
   const configured = process.env.OPENCLAW_BIN?.trim()
+  const configuredIsManagedBundle = isManagedOpenClawRuntimePath(configured)
+  if (configured && configuredIsManagedBundle && openClawBinExists(configured)) {
+    if (!isUsableOpenClawBin(configured)) {
+      console.warn(`[openclaw] managed writable runtime did not pass preflight; keeping it ahead of immutable resources: ${configured}`)
+    }
+    return configured
+  }
+
   const embeddedCandidates = embeddedOpenClawBinCandidates()
   const embedded = embeddedCandidates.find((candidate) => isUsableOpenClawBin(candidate))
   if (embedded) return embedded
@@ -1109,9 +1121,6 @@ function resolveOpenClawBin() {
   // product's source of truth and must win whenever it is present. Set
   // CONTROL_CENTER_ALLOW_EXTERNAL_OPENCLAW_RUNTIME=1 for an intentional
   // development override.
-  const configuredIsManagedBundle = Boolean(
-    configured && /[\\/]runtimes[\\/]openclaw[\\/]/i.test(path.resolve(configured)),
-  )
   if (configured && (configuredIsManagedBundle || /^(1|true|yes)$/i.test(process.env.CONTROL_CENTER_ALLOW_EXTERNAL_OPENCLAW_RUNTIME || ''))) {
     return configured
   }
@@ -1148,8 +1157,11 @@ function openClawRuntimeUnavailableMessage() {
 }
 
 function resolvedOpenClawRuntimeInfo() {
-  const embedded = openclawBin !== 'openclaw' && embeddedOpenClawBinCandidates()
-    .some((candidate) => openClawBinExists(candidate) && sameResolvedRuntimePath(candidate, openclawBin))
+  const embedded = openclawBin !== 'openclaw' && (
+    isManagedOpenClawRuntimePath(openclawBin) ||
+    embeddedOpenClawBinCandidates()
+      .some((candidate) => openClawBinExists(candidate) && sameResolvedRuntimePath(candidate, openclawBin))
+  )
   let version: string | null = null
   if (openclawBin !== 'openclaw') {
     try {
@@ -18881,8 +18893,27 @@ async function synchronizeBillingRoutePass(version: number) {
   // for models and agents. A full restart is reserved for a failed patch or a
   // Gateway that cannot confirm the exact route.
   if (beforeRoute !== afterRoute) {
-    const hotReload = await applyBillingRouteViaGatewayConfigPatch(afterConfig || await readOpenclawConfig())
+    let hotReload = await applyBillingRouteViaGatewayConfigPatch(afterConfig || await readOpenclawConfig())
     if (version !== billingRouteSyncVersion) return
+    if (!hotReload.ok) {
+      // On first launch, the Gateway may be applying migrations for the new
+      // OpenClaw state directory. Wait for that single process to finish and
+      // retry the route patch before considering a restart. Starting another
+      // Gateway during this window collides with the state-directory lock.
+      let startup = await gatewayLifecycle.waitForGatewayStartupHealthIfStarting()
+      if (!startup.waited && !await isGatewayHealthy()) {
+        // A billing route can change just before the server's scheduled
+        // first-start callback fires. Start or join that one lifecycle now;
+        // do not interpret the tiny scheduling gap as an unhealthy Gateway.
+        await ensureGatewayRunning()
+        startup = await gatewayLifecycle.waitForGatewayStartupHealthIfStarting()
+      }
+      if (version !== billingRouteSyncVersion) return
+      if (startup.waited && startup.healthy) {
+        hotReload = await applyBillingRouteViaGatewayConfigPatch(afterConfig || await readOpenclawConfig())
+        if (version !== billingRouteSyncVersion) return
+      }
+    }
     if (!hotReload.ok) {
       pushGatewayLog(
         'lifecycle',

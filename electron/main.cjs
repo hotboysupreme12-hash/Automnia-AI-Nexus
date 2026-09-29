@@ -670,9 +670,12 @@ async function ensureWritablePackagedOpenClawRuntime(bundledRuntime) {
   if (
     isDev ||
     !bundledRuntime ||
-    process.platform === 'win32' ||
-    process.env.AUTOMNIA_ENABLE_WRITABLE_OPENCLAW_RUNTIME === '0'
+    (process.platform !== 'win32' && process.env.AUTOMNIA_ENABLE_WRITABLE_OPENCLAW_RUNTIME === '0')
   ) return bundledRuntime
+
+  if (process.platform === 'win32' && process.env.AUTOMNIA_ENABLE_WRITABLE_OPENCLAW_RUNTIME === '0') {
+    throw new Error('Packaged Windows startup requires a writable OpenClaw runtime so plugin repairs do not write into Program Files. Remove AUTOMNIA_ENABLE_WRITABLE_OPENCLAW_RUNTIME=0 and restart Automnia.')
+  }
 
   const resolvedBundledRuntime = path.resolve(bundledRuntime)
   const directRoot = path.dirname(resolvedBundledRuntime)
@@ -693,10 +696,47 @@ async function ensureWritablePackagedOpenClawRuntime(bundledRuntime) {
   const targetRoot = path.join(AUTOMNIA_USER_DATA_DIR, 'runtimes', 'openclaw', stamp)
   const targetRuntime = path.join(targetRoot, path.relative(bundledRoot, resolvedBundledRuntime))
   const readyMarker = path.join(targetRoot, '.automnia-runtime-ready')
-  if (fs.existsSync(targetRuntime) && fs.existsSync(readyMarker) && fs.existsSync(path.join(targetRoot, 'package.json'))) return targetRuntime
+  const codexRuntimeRelative = path.join('dist', 'extensions', 'codex', 'node_modules', '@openai', 'codex', 'bin', 'codex.js')
+  const expectedArtifacts = [
+    targetRuntime,
+    path.join(targetRoot, 'package.json'),
+    path.join(targetRoot, 'dist'),
+    ...(fs.existsSync(path.join(bundledRoot, codexRuntimeRelative))
+      ? [path.join(targetRoot, codexRuntimeRelative)]
+      : []),
+  ]
+  let readyMetadata = null
+  try {
+    readyMetadata = JSON.parse(fs.readFileSync(readyMarker, 'utf8'))
+  } catch {}
+  if (
+    readyMetadata?.schema === 1 &&
+    readyMetadata?.stamp === stamp &&
+    expectedArtifacts.every((candidate) => fs.existsSync(candidate))
+  ) return targetRuntime
 
   const parent = path.dirname(targetRoot)
   const tempRoot = path.join(parent, `.${path.basename(targetRoot)}.tmp-${process.pid}-${Date.now()}`)
+  const copyBundledDist = async (source, target) => {
+    const maxAttempts = process.platform === 'win32' ? 3 : 1
+    let lastError = null
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        await fs.promises.rm(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+        await fs.promises.mkdir(path.dirname(target), { recursive: true })
+        await fs.promises.cp(source, target, { recursive: true, force: true })
+        return
+      } catch (error) {
+        lastError = error
+        const retryable = process.platform === 'win32' && ['EBUSY', 'EACCES', 'ENOENT', 'EPERM'].includes(error?.code)
+        if (!retryable || attempt === maxAttempts) throw error
+        console.warn(`[automnia] OpenClaw runtime copy attempt ${attempt}/${maxAttempts} failed (${error.code}); retrying`)
+        await fs.promises.rm(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }).catch(() => {})
+        await new Promise((resolve) => setTimeout(resolve, 250 * attempt))
+      }
+    }
+    throw lastError || new Error('OpenClaw runtime copy failed without an error detail')
+  }
   try {
     await fs.promises.rm(tempRoot, { recursive: true, force: true })
     await fs.promises.mkdir(parent, { recursive: true })
@@ -705,7 +745,18 @@ async function ensureWritablePackagedOpenClawRuntime(bundledRuntime) {
       const source = path.join(bundledRoot, entry.name)
       const target = path.join(tempRoot, entry.name)
       if (entry.name === 'dist') {
-        await fs.promises.cp(source, target, { recursive: true, force: true })
+        await copyBundledDist(source, target)
+      } else if (process.platform === 'win32' && entry.isDirectory()) {
+        try {
+          await fs.promises.symlink(source, target, 'junction')
+        } catch {
+          // Directory junctions work without Windows Developer Mode. If the
+          // filesystem blocks them, copy this directory so runtime discovery
+          // and package resolution still work from the user's writable path.
+          await fs.promises.cp(source, target, { recursive: true, force: true })
+        }
+      } else if (process.platform === 'win32') {
+        await fs.promises.copyFile(source, target)
       } else {
         await fs.promises.symlink(source, target, entry.isDirectory() ? 'dir' : 'file')
       }
@@ -716,15 +767,41 @@ async function ensureWritablePackagedOpenClawRuntime(bundledRuntime) {
         await fs.promises.chmod(candidate, 0o755)
       } catch {}
     }
-    await fs.promises.writeFile(path.join(tempRoot, '.automnia-runtime-ready'), `${new Date().toISOString()}\n`, 'utf8')
-    await fs.promises.rm(targetRoot, { recursive: true, force: true })
-    await fs.promises.rename(tempRoot, targetRoot)
-    console.log(`[automnia] hydrated writable OpenClaw runtime -> ${targetRoot}`)
-    return targetRuntime
+    await fs.promises.writeFile(path.join(tempRoot, '.automnia-runtime-ready'), `${JSON.stringify({
+      schema: 1,
+      stamp,
+      generatedAt: new Date().toISOString(),
+    }, null, 2)}\n`, 'utf8')
+    let finalRoot = targetRoot
+    try {
+      await fs.promises.rm(targetRoot, { recursive: true, force: true })
+      await fs.promises.rename(tempRoot, targetRoot)
+    } catch (replaceError) {
+      // A stale Gateway may still have files open. Keep its runtime intact and
+      // install a fresh copy beside it so recovery can proceed without killing
+      // a process that this Electron instance does not own.
+      finalRoot = `${targetRoot}-repaired-${process.pid}-${Date.now()}`
+      await fs.promises.rename(tempRoot, finalRoot).catch(() => { throw replaceError })
+    }
+    const finalRuntime = path.join(finalRoot, path.relative(bundledRoot, resolvedBundledRuntime))
+    const missingArtifact = [
+      finalRuntime,
+      path.join(finalRoot, 'package.json'),
+      path.join(finalRoot, 'dist'),
+      ...(fs.existsSync(path.join(bundledRoot, codexRuntimeRelative))
+        ? [path.join(finalRoot, codexRuntimeRelative)]
+        : []),
+    ].find((candidate) => !fs.existsSync(candidate))
+    if (missingArtifact) throw new Error(`writable OpenClaw runtime copy is incomplete; missing ${missingArtifact}`)
+    console.log(`[automnia] hydrated writable OpenClaw runtime -> ${finalRoot}`)
+    return finalRuntime
   } catch (error) {
     try {
       await fs.promises.rm(tempRoot, { recursive: true, force: true })
     } catch {}
+    if (process.platform === 'win32') {
+      throw new Error(`Could not create a writable OpenClaw runtime under ${parent}: ${error?.message || error}`)
+    }
     console.warn('[automnia] writable OpenClaw runtime hydration failed:', error?.message || error)
     return bundledRuntime
   }

@@ -197,7 +197,22 @@ assert.match(
 assert.match(
   serverControlPlane,
   /configuredIsManagedBundle/,
-  'server runtime discovery must accept the desktop-managed repaired bundled runtime when the immutable resource copy is unavailable',
+  'server runtime discovery must identify the desktop-managed writable OpenClaw bundle',
+)
+const writableOpenClawPreferenceIndex = serverControlPlane.indexOf(
+  'if (configured && configuredIsManagedBundle && openClawBinExists(configured))',
+)
+const immutableOpenClawPreferenceIndex = serverControlPlane.indexOf(
+  'const embedded = embeddedCandidates.find((candidate) => isUsableOpenClawBin(candidate))',
+)
+assert(
+  writableOpenClawPreferenceIndex >= 0 && writableOpenClawPreferenceIndex < immutableOpenClawPreferenceIndex,
+  'server runtime discovery must select the staged writable OpenClaw bundle before immutable packaged resources',
+)
+assert.match(
+  serverControlPlane,
+  /isManagedOpenClawRuntimePath\(openclawBin\) \|\|/,
+  'runtime diagnostics must identify the writable managed bundle as the app-bundled OpenClaw runtime',
 )
 assert.match(
   serverControlPlane,

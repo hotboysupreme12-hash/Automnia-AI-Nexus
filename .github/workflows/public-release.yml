@@ -20,6 +20,7 @@ jobs:
     env:
       AUTOMNIA_RELEASE_REQUIRE_SIGNING: '0'
       AUTOMNIA_UPDATE_REQUIRE_SIGNING: '1'
+      AUTOMNIA_UPDATE_CHANNEL: stable-x64
     steps:
       - name: Check out release source
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -49,7 +50,8 @@ jobs:
         env:
           AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM: ${{ secrets.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM }}
           AUTOMNIA_UPDATE_SIGNING_KEY_ID: ${{ vars.AUTOMNIA_UPDATE_SIGNING_KEY_ID }}
-          AUTOMNIA_UPDATE_BASE_URL: ${{ vars.AUTOMNIA_UPDATE_BASE_URL }}
+          AUTOMNIA_UPDATE_BASE_URL: ${{ vars.AUTOMNIA_UPDATE_BASE_URL }}-x64
+          AUTOMNIA_UPDATE_CHANNEL: stable-x64
         run: npm run release:update-build-config
 
       - name: Verify release candidate source
@@ -65,6 +67,7 @@ jobs:
         env:
           AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM: ${{ secrets.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM }}
           AUTOMNIA_UPDATE_SIGNING_KEY_ID: ${{ vars.AUTOMNIA_UPDATE_SIGNING_KEY_ID }}
+          AUTOMNIA_UPDATE_CHANNEL: stable-x64
         run: npm run release:update-manifest
 
       - name: Verify update manifest
@@ -125,24 +128,12 @@ jobs:
         env:
           AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM: ${{ secrets.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM }}
           AUTOMNIA_UPDATE_SIGNING_KEY_ID: ${{ vars.AUTOMNIA_UPDATE_SIGNING_KEY_ID }}
-          AUTOMNIA_UPDATE_BASE_URL: ${{ vars.AUTOMNIA_UPDATE_BASE_URL }}
+          AUTOMNIA_UPDATE_BASE_URL: ${{ vars.AUTOMNIA_UPDATE_BASE_URL }}-x64
+          AUTOMNIA_UPDATE_CHANNEL: stable-x64
         run: npm run release:update-build-config
 
       - name: Verify release candidate source
         run: npm run verify:release-candidate
-
-      - name: Build unsigned Apple-silicon DMG and ZIP
-        env:
-          AUTOMNIA_SKIP_PLATFORM_SIGNING: '1'
-          AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG: '1'
-        run: |
-          npm run dist:mac -- --arm64
-          mac_backup="$(mktemp -d)"
-          cp release/*-arm64.dmg release/*-arm64.zip release/latest-mac.yml "$mac_backup/"
-          for artifact in release/*-arm64.blockmap; do
-            [ -f "$artifact" ] && cp "$artifact" "$mac_backup/"
-          done
-          printf '%s\n' "$mac_backup" > mac-release-backup.txt
 
       - name: Build unsigned Intel Mac DMG and ZIP
         env:
@@ -150,27 +141,13 @@ jobs:
           AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG: '1'
         run: npm run dist:mac -- --x64
 
-      - name: Restore both macOS architectures for release publication
-        shell: bash
-        run: |
-          set -euo pipefail
-          mac_backup="$(cat mac-release-backup.txt)"
-          mkdir -p release/macos-arm64
-          cp "$mac_backup"/*-arm64.dmg "$mac_backup"/*-arm64.zip release/macos-arm64/
-          for artifact in "$mac_backup"/*-arm64.blockmap; do
-            [ -f "$artifact" ] && cp "$artifact" release/macos-arm64/
-          done
-          cp "$mac_backup/latest-mac.yml" release/latest-mac.yml
-          rm -f mac-release-backup.txt
-          rm -rf "$mac_backup"
-
       - name: Validate unsigned macOS package outputs
         shell: bash
         run: |
           set -euo pipefail
           test -n "$(find release -type f \( -name '*.dmg' -o -name '*.zip' \) -print -quit)"
-          test -n "$(find release -type f -name '*-arm64.dmg' -print -quit)"
           test -n "$(find release -type f -name '*-x64.dmg' -print -quit)"
+          test -z "$(find release -type f -iname '*-arm64.*' -print -quit)"
 
       - name: Upload unsigned macOS release candidate
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -208,7 +185,8 @@ jobs:
         env:
           AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM: ${{ secrets.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM }}
           AUTOMNIA_UPDATE_SIGNING_KEY_ID: ${{ vars.AUTOMNIA_UPDATE_SIGNING_KEY_ID }}
-          AUTOMNIA_UPDATE_BASE_URL: ${{ vars.AUTOMNIA_UPDATE_BASE_URL }}
+          AUTOMNIA_UPDATE_BASE_URL: ${{ vars.AUTOMNIA_UPDATE_BASE_URL }}-x64
+          AUTOMNIA_UPDATE_CHANNEL: stable-x64
         run: npm run release:update-build-config
 
       - name: Verify release candidate source under virtual display
@@ -246,6 +224,7 @@ jobs:
       id-token: write
     env:
       AUTOMNIA_UPDATE_REQUIRE_SIGNING: '1'
+      AUTOMNIA_UPDATE_CHANNEL: stable-x64
     steps:
       - name: Check out release source
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -323,17 +302,15 @@ jobs:
             find release/update-channel -maxdepth 1 -type f -iname "$1" -print -quit
           }
           windows_installer="$(find_one '*Setup*.exe')"
-          mac_arm64="$(find_one '*-arm64.dmg')"
           mac_x64="$(find_one '*-x64.dmg')"
           linux_appimage="$(find_one '*.AppImage')"
           linux_deb="$(find_one '*.deb')"
-          for required in "$windows_installer" "$mac_arm64" "$mac_x64" "$linux_appimage" "$linux_deb"; do
+          for required in "$windows_installer" "$mac_x64" "$linux_appimage" "$linux_deb"; do
             test -n "$required" && test -f "$required" || { echo "Missing installer artifact: $required" >&2; exit 1; }
           done
           gcloud storage buckets describe "gs://$INSTALLER_BUCKET" >/dev/null
           gcloud config set storage/parallel_composite_upload_enabled False >/dev/null
           gcloud storage cp --cache-control="no-store,max-age=0" "$windows_installer" "gs://$INSTALLER_BUCKET/releases/current/windows/Automnia-Setup-x64.exe"
-          gcloud storage cp --cache-control="no-store,max-age=0" "$mac_arm64" "gs://$INSTALLER_BUCKET/releases/current/macos/Automnia-AI-Nexus-arm64.dmg"
           gcloud storage cp --cache-control="no-store,max-age=0" "$mac_x64" "gs://$INSTALLER_BUCKET/releases/current/macos/Automnia-AI-Nexus-x64.dmg"
           gcloud storage cp --cache-control="no-store,max-age=0" "$linux_appimage" "gs://$INSTALLER_BUCKET/releases/current/linux/Automnia-AI-Nexus-x86_64.AppImage"
           gcloud storage cp --cache-control="no-store,max-age=0" "$linux_deb" "gs://$INSTALLER_BUCKET/releases/current/linux/Automnia-AI-Nexus-x86_64.deb"
@@ -349,7 +326,7 @@ jobs:
           # These stable aliases are the URLs rendered by the Shopify download
           # page. Keep them non-cacheable so a browser never retains a prior
           # release after the next tagged publish. Apple-silicon macOS and the
-          # Debian package are intentionally managed outside this public flow.
+          # Debian package are intentionally not overwritten by this flow.
           gcloud storage cp --cache-control="no-store,max-age=0" "$windows_installer" "gs://$PUBLIC_DOWNLOAD_BUCKET/releases/current/Automnia-Setup-x64.exe"
           gcloud storage cp --cache-control="no-store,max-age=0" "$mac_x64" "gs://$PUBLIC_DOWNLOAD_BUCKET/releases/current/Automnia-AI-Nexus-x64.dmg"
           gcloud storage cp --cache-control="no-store,max-age=0" "$linux_appimage" "gs://$PUBLIC_DOWNLOAD_BUCKET/releases/current/Automnia-AI-Nexus-x86_64.AppImage"
@@ -367,7 +344,7 @@ jobs:
           gcloud config set storage/parallel_composite_upload_enabled False >/dev/null
           version="${GITHUB_REF_NAME#v}"
           version_destination="gs://$UPDATE_BUCKET/releases/$version"
-          channel_destination="gs://$UPDATE_BUCKET/stable"
+          channel_destination="gs://$UPDATE_BUCKET/stable-x64"
           while IFS= read -r -d '' file; do
             gcloud storage cp --if-generation-match=0 --cache-control="public,max-age=31536000,immutable" "$file" "$version_destination/"
             gcloud storage cp --if-generation-match=0 --cache-control="public,max-age=31536000,immutable" "$file" "$channel_destination/"

@@ -186,6 +186,8 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
   let gatewayRestartTimer: NodeJS.Timeout | null = null
   let gatewayRestartCount = 0
   let gatewayEnsureInFlight: Promise<void> | null = null
+  let gatewayEnsureStartedAtMs = 0
+  let gatewayRestartInFlight: Promise<{ restarted: boolean; detail: string }> | null = null
   let gatewayProcessOwnedByControlCenter = false
   let lastGatewayPortReleaseAt = 0
   let gatewayAutoRestartPaused = false
@@ -466,6 +468,41 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
     return false
   }
 
+  async function waitForGatewayStartupHealthIfStarting(): Promise<{ waited: boolean; healthy: boolean }> {
+    const hasStartupWork = () => Boolean(
+      gatewayEnsureInFlight
+      || gatewayRestartTimer
+      || (gatewayProcess?.pid && options.isPidAlive(gatewayProcess.pid))
+      || gatewayStartupGraceRemainingMs() > 0,
+    )
+
+    if (!hasStartupWork()) return { waited: false, healthy: false }
+
+    const timeoutMs = Math.max(
+      options.startupHealthConfirmTimeoutMs,
+      options.startupHealthGraceMs + options.startupHealthConfirmTimeoutMs,
+    )
+    const startupStartedAt = gatewayEnsureStartedAtMs || gatewayStartupTimelineStartedAtMs || Date.now()
+    const deadline = startupStartedAt + timeoutMs
+    options.pushGatewayLog('lifecycle', 'waiting for the in-progress Gateway startup to become healthy')
+
+    while (Date.now() <= deadline) {
+      if (await isGatewayHealthy()) return { waited: true, healthy: true }
+      if (!hasStartupWork()) return { waited: true, healthy: false }
+
+      const remainingMs = Math.max(1, deadline - Date.now())
+      const delay = options.delayMs(Math.min(options.startupHealthPollMs, remainingMs))
+      const inFlight = gatewayEnsureInFlight
+      if (inFlight) {
+        await Promise.race([inFlight.catch(() => undefined), delay])
+      } else {
+        await delay
+      }
+    }
+
+    return { waited: true, healthy: await isGatewayHealthy() }
+  }
+
   function startGatewayHealthMonitor(): void {
     if (gatewayHealthCheckInterval) return
     gatewayHealthCheckInterval = setInterval(async () => {
@@ -646,8 +683,10 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
 
   async function ensureGatewayRunning(): Promise<void> {
     if (gatewayEnsureInFlight) return gatewayEnsureInFlight
+    gatewayEnsureStartedAtMs = Date.now()
     gatewayEnsureInFlight = ensureGatewayRunningInner().finally(() => {
       gatewayEnsureInFlight = null
+      gatewayEnsureStartedAtMs = 0
     })
     return gatewayEnsureInFlight
   }
@@ -1012,22 +1051,57 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
     }
   }
 
-  async function tryRestartGatewayService(optionsArg: { force?: boolean; allowExternalTakeover?: boolean; reason?: string } = {}): Promise<{ restarted: boolean; detail: string }> {
+  function tryRestartGatewayService(optionsArg: { force?: boolean; allowExternalTakeover?: boolean; reason?: string } = {}): Promise<{ restarted: boolean; detail: string }> {
+    if (gatewayRestartInFlight) return gatewayRestartInFlight
+
+    const restartPromise = tryRestartGatewayServiceInner(optionsArg).finally(() => {
+      if (gatewayRestartInFlight === restartPromise) gatewayRestartInFlight = null
+    })
+    gatewayRestartInFlight = restartPromise
+    return restartPromise
+  }
+
+  async function tryRestartGatewayServiceInner(optionsArg: { force?: boolean; allowExternalTakeover?: boolean; reason?: string } = {}): Promise<{ restarted: boolean; detail: string }> {
     try {
       const logs: string[] = []
       const restartReason = optionsArg.reason || (optionsArg.force ? 'forced gateway restart' : 'gateway restart recovery')
+      const startup = await waitForGatewayStartupHealthIfStarting()
       if (!optionsArg.force && await isGatewayHealthy()) {
         startGatewayHealthMonitor()
         recordGatewayRestartRequest(restartReason, 'skipped')
         return { restarted: true, detail: 'gateway already healthy' }
       }
+      if (!optionsArg.force && startup.waited && startup.healthy) {
+        startGatewayHealthMonitor()
+        recordGatewayRestartRequest(restartReason, 'skipped')
+        return { restarted: true, detail: 'gateway startup completed and health was confirmed' }
+      }
       recordGatewayRestartRequest(restartReason, 'started')
 
+      // A forced restart may arrive while the initial start is still running.
+      // Join that attempt before stopping anything so a second OpenClaw process
+      // cannot enter the same state directory during startup migrations.
+      const activeStartup = gatewayEnsureInFlight
+      if (activeStartup) await activeStartup.catch(() => undefined)
+      if (gatewayRestartTimer) clearRestartTimer()
+
       if (gatewayProcess) {
+        const pid = gatewayProcess.pid
         try {
-          await options.terminateProcessTree(gatewayProcess.pid, 'gateway restart', true)
+          await options.terminateProcessTree(pid, 'gateway restart', true)
         } catch {
           // The port release path below is authoritative.
+        }
+        if (pid && options.isPidAlive(pid)) {
+          const deadline = Date.now() + 5000
+          while (Date.now() <= deadline && options.isPidAlive(pid)) {
+            await options.delayMs(Math.min(options.startupHealthPollMs, Math.max(1, deadline - Date.now())))
+          }
+          if (options.isPidAlive(pid)) {
+            const detail = `owned gateway process pid=${pid} is still running after termination; refusing to launch a duplicate`
+            markGatewayRestartOutcome('failed')
+            return { restarted: false, detail }
+          }
         }
         gatewayProcess = null
         gatewayProcessOwnedByControlCenter = false
@@ -1046,7 +1120,11 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
       logs.push(`[gateway-port-release] ${released.released ? 'ok' : 'failed'} | ${released.detail}`)
       gatewayRestartCount = 0
       await ensureGatewayRunning()
-      const restarted = await isGatewayHealthy()
+      let restarted = await isGatewayHealthy()
+      if (!restarted) {
+        const startupAfterRestart = await waitForGatewayStartupHealthIfStarting()
+        restarted = startupAfterRestart.waited && startupAfterRestart.healthy
+      }
       if (restarted) startGatewayHealthMonitor()
       markGatewayRestartOutcome(restarted ? 'succeeded' : 'failed')
       logs.push(`[gateway-health-after-restart] ${restarted ? 'ok' : 'failed'}`)
@@ -1103,6 +1181,7 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
     stopGatewayHealthMonitor,
     stopGatewayRuntime,
     tryRestartGatewayService,
+    waitForGatewayStartupHealthIfStarting,
     ensureGatewayRunning,
   }
 }

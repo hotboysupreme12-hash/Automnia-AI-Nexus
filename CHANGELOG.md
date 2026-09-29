@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.21 - 2026-09-29
+
+### Windows OpenClaw recovery
+
+- Stages the packaged OpenClaw runtime in writable per-user storage so startup can recover after OpenClaw state folders are removed and never writes plugin files under Program Files.
+- Waits for an in-progress Gateway startup before reconciling provider routes, preventing duplicate starts and false unhealthy restart failures.
+- Publishes this x64-only release through the isolated `stable-x64` update channel; the existing ARM64 installer and shared `stable` channel remain unchanged.
+
 ## 1.0.20 - 2026-09-27
 
 ### Windows release packaging

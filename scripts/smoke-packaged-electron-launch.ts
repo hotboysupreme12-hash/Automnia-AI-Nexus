@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import net from 'node:net'
@@ -142,9 +142,6 @@ const userDataDir = path.join(tempRoot, 'user-data')
 const openclawDir = path.join(tempRoot, 'openclaw')
 const workspaceRoot = path.join(tempRoot, 'workspace')
 const logPath = path.join(tempRoot, 'electron-e2e.log')
-mkdirSync(userDataDir, { recursive: true })
-mkdirSync(openclawDir, { recursive: true })
-mkdirSync(workspaceRoot, { recursive: true })
 
 const apiPort = await freePort()
 const frontendPort = await freePort()
@@ -204,6 +201,28 @@ try {
     /\[automnia-e2e\] auto-quit/,
     /\[automnia-e2e\] quit-cleanup-complete/,
   ])
+
+  assert.ok(existsSync(userDataDir), 'packaged startup must recreate a missing Automnia user-data directory')
+  assert.ok(existsSync(openclawDir), 'packaged startup must recreate a missing OpenClaw state directory')
+
+  const writableRuntimeParent = path.join(userDataDir, 'runtimes', 'openclaw')
+  assert.ok(existsSync(writableRuntimeParent), 'packaged startup must stage OpenClaw under Automnia user data')
+  const writableRuntimeName = readdirSync(writableRuntimeParent).find((entry) =>
+    existsSync(path.join(writableRuntimeParent, entry, 'package.json')),
+  )
+  assert.ok(writableRuntimeName, 'packaged startup must create a complete writable OpenClaw runtime')
+  const writableRuntimeRoot = path.join(writableRuntimeParent, writableRuntimeName)
+  const bundledRuntimeRoot = path.join(resourcesDir, 'openclaw')
+  assert.notEqual(path.resolve(writableRuntimeRoot), path.resolve(bundledRuntimeRoot), 'mutable OpenClaw files must not point into the packaged resources directory')
+
+  const codexCliRelative = path.join('dist', 'extensions', 'codex', 'node_modules', '@openai', 'codex', 'bin', 'codex.js')
+  const bundledCodexCli = path.join(bundledRuntimeRoot, codexCliRelative)
+  if (process.platform === 'win32' && existsSync(bundledCodexCli)) {
+    const writableCodexCli = path.join(writableRuntimeRoot, codexCliRelative)
+    assert.ok(existsSync(writableCodexCli), 'writable OpenClaw copy must include the bundled Codex executable')
+    const descriptor = openSync(writableCodexCli, 'r+')
+    closeSync(descriptor)
+  }
 } finally {
   killPackagedElectronProcesses()
   await removeTempRootWithWindowsRetries(tempRoot)
