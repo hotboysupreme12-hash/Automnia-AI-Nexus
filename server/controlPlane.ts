@@ -2,6 +2,7 @@
 // temporary composition glue; new backend behavior must declare and use its
 // target service folder from docs/BETA_CODEBASE_SPLIT_PLAN.md.
 import { createIdempotentShiftService, type PreparedShift } from './services/runtime/idempotentShiftService'
+import { isEquivalentManagedRuntimeBundledPluginPath } from './services/plugins/managedRuntimePluginPath'
 import { ConfigEditConflict, configSnapshot, mergeConfigEdit, rememberConfigSnapshot } from './services/filesystem/configMerge'
 import { writeBoundedSseEvent } from './services/agents/downstreamSse'
 import { boundConversationMessages } from './services/agents/conversationBudgetService'
@@ -10848,6 +10849,12 @@ function looksLikePackagedBundledPluginPath(resolved: string) {
   return /\/(?:resources|vendor)\/openclaw\/dist\/extensions\/[a-z0-9][a-z0-9._-]{0,79}$/.test(normalized)
 }
 
+function isManagedRuntimeBundledPluginPath(resolved: string, pluginId: string) {
+  const openclawRoot = openclawBin && openclawBin !== 'openclaw' ? openClawPackageRootForBin(openclawBin) : ''
+  if (!openclawRoot) return false
+  return isEquivalentManagedRuntimeBundledPluginPath(resolved, pluginId, openclawRoot)
+}
+
 function isBundledOpenClawPluginPath(value: unknown) {
   if (typeof value !== 'string' || !value.trim()) return false
   const resolved = path.resolve(value)
@@ -10855,7 +10862,8 @@ function isBundledOpenClawPluginPath(value: unknown) {
   if (!PLUGIN_ID_PATTERN.test(pluginId)) return false
   const parent = path.dirname(resolved)
   return bundledOpenClawPluginExtensionRootCandidates().some((candidate) => sameResolvedRuntimePath(parent, candidate)) ||
-    looksLikePackagedBundledPluginPath(resolved)
+    looksLikePackagedBundledPluginPath(resolved) ||
+    isManagedRuntimeBundledPluginPath(resolved, pluginId)
 }
 
 function sanitizedPluginLoadPaths(value: unknown) {
