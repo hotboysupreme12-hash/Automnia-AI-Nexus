@@ -13,10 +13,10 @@ const installWorkRoot = path.join(bundleRoot, '.work')
 
 const RUNTIME_BUNDLE_METADATA_FILE = '.automnia-runtime-bundle.json'
 const DEFAULT_BUNDLED_NODE_VERSION = 'v24.16.0'
-const DEFAULT_BUNDLED_CODEX_VERSION = '2026.7.1-1'
+const DEFAULT_BUNDLED_CODEX_VERSION = '2026.9.2'
 const DEFAULT_BUNDLED_CODEX_SPEC = `@openclaw/codex@${DEFAULT_BUNDLED_CODEX_VERSION}`
-const DEFAULT_BUNDLED_CODEX_INTEGRITY = 'sha512-fRQITjqjC4Q/M6WmkR9XPWPuL+7vcvyVUWIDztB08X2G/mhzSwCYwQp4hugxAtuKmO3yx/7ULMK3nyeKsg5zGw=='
-const DEFAULT_BUNDLED_CODEX_TARBALL = 'https://registry.npmjs.org/@openclaw/codex/-/codex-2026.7.1-1.tgz'
+const DEFAULT_BUNDLED_CODEX_INTEGRITY = 'sha512-4eviHXQGkpvZSk9uXjnO37wbwv7MJ9hE7NjZut4oNSpC1hDFY62LfUcRG7ZcfVghUV8YAs+8sfqEys6oW8dClQ=='
+const DEFAULT_BUNDLED_CODEX_TARBALL = 'https://registry.npmjs.org/@openclaw/codex/-/codex-2026.9.2.tgz'
 const targetArch = String(process.env.AUTOMNIA_TARGET_ARCH || process.arch).trim().toLowerCase()
 
 if (!['x64', 'arm64'].includes(targetArch)) {
@@ -377,7 +377,17 @@ async function prepareCodexBundle() {
     throw new Error(`npm install produced unexpected Codex package ${installedPackage.name}@${installedPackage.version}`)
   }
   const installLock = packageLockPathFor(workDir)
-  const sourceDependencyLock = packageLockPathFor(source)
+  let sourceDependencyLock
+  try {
+    sourceDependencyLock = packageLockPathFor(source)
+  } catch {
+    // Newer published Codex packages no longer ship their own shrinkwrap.
+    // The exact package-lock created by the pinned install is the authoritative
+    // dependency tree in that case, and it still contains the native platform
+    // package plus every integrity entry needed for reproducible packaging.
+    sourceDependencyLock = installLock
+    console.log('[runtime-bundles] Codex package has no embedded lockfile; reusing the pinned install lock')
+  }
   verifyPackageLockPackage(installLock, '@openclaw/codex', {
     version: bundledCodex.version,
     integrity: bundledCodexIntegrity,
@@ -392,7 +402,12 @@ async function prepareCodexBundle() {
   fs.cpSync(source, bundledCodexRoot, { recursive: true })
 
   console.log('[runtime-bundles] copying locked Codex plugin dependencies into bundle root')
-  fs.cpSync(path.join(source, 'node_modules'), path.join(bundledCodexRoot, 'node_modules'), { recursive: true })
+  // npm 11 hoists the dependencies of newer Codex packages into the install
+  // prefix rather than creating a nested node_modules folder under the
+  // published plugin. Support both layouts while preserving the exact lock
+  // tree validated above.
+  const dependencyRoot = fs.existsSync(path.join(source, 'node_modules')) ? source : workDir
+  fs.cpSync(path.join(dependencyRoot, 'node_modules'), path.join(bundledCodexRoot, 'node_modules'), { recursive: true })
   removeNestedBundledPackage(bundledCodexRoot)
   fs.copyFileSync(sourceDependencyLock, path.join(bundledCodexRoot, '.automnia-runtime-package-lock.json'))
 

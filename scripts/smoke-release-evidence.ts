@@ -58,18 +58,18 @@ writeFileSync(path.join(codexRuntimeDir, '.automnia-runtime-bundle.json'), `${JS
   generatedAt: '2026-06-24T00:00:00.000Z',
   codex: {
     package: '@openclaw/codex',
-    spec: '@openclaw/codex@2026.7.1-1',
-    version: '2026.7.1-1',
-    integrity: 'sha512-fRQITjqjC4Q/M6WmkR9XPWPuL+7vcvyVUWIDztB08X2G/mhzSwCYwQp4hugxAtuKmO3yx/7ULMK3nyeKsg5zGw==',
-    tarball: 'https://registry.npmjs.org/@openclaw/codex/-/codex-2026.7.1-1.tgz',
+    spec: '@openclaw/codex@2026.9.2',
+    version: '2026.9.2',
+    integrity: 'sha512-4eviHXQGkpvZSk9uXjnO37wbwv7MJ9hE7NjZut4oNSpC1hDFY62LfUcRG7ZcfVghUV8YAs+8sfqEys6oW8dClQ==',
+    tarball: 'https://registry.npmjs.org/@openclaw/codex/-/codex-2026.9.2.tgz',
     lockfile: '.automnia-runtime-package-lock.json',
     dependencies: {
       '@openai/codex': {
-        version: '0.139.0',
+        version: '0.153.4',
         integrity: 'sha512-test-runtime',
       },
       '@openai/codex-win32-x64': {
-        version: '0.139.0-win32-x64',
+        version: '0.153.4-win32-x64',
         integrity: 'sha512-test-native',
       },
     },
@@ -114,7 +114,7 @@ assert.equal(sbom.bomFormat, 'CycloneDX')
 assert.equal(sbom.specVersion, '1.5')
 assert.ok(sbom.components.some((component) => component.name === 'react'), 'SBOM must include lockfile dependencies')
 assert.ok(sbom.components.some((component) => component.name === 'node' && component.hashes?.some((hash) => hash.alg === 'SHA-256')), 'SBOM must include hashed Node runtime metadata')
-assert.ok(sbom.components.some((component) => component.name === '@openclaw/codex' && component.version === '2026.7.1-1'), 'SBOM must include bundled Codex runtime metadata')
+assert.ok(sbom.components.some((component) => component.name === '@openclaw/codex' && component.version === '2026.9.2'), 'SBOM must include bundled Codex runtime metadata')
 assert.ok(sbom.components.some((component) => component.name === '@openai/codex-win32-x64'), 'SBOM must include native Codex runtime dependency metadata')
 assert.match(checksums, /Automnia-test-artifact\.txt/, 'checksum manifest must include release artifacts')
 assert.match(checksums, /automnia-sbom\.cdx\.json/, 'checksum manifest must include the generated SBOM')

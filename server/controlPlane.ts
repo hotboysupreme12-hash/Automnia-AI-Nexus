@@ -231,6 +231,7 @@ import {
   createPluginRuntimeService,
   type PluginRuntimeService,
 } from './services/plugins/pluginRuntimeService'
+import { codexPluginAvailableForRuntime, codexPluginNeedsRepair } from './services/plugins/codexPluginHealth'
 import { pluginToggleRequiresGatewayRestart } from './services/plugins/pluginRestartPolicy'
 import { computeShiftDurationMinutes } from './shiftContracts'
 import type {
@@ -12260,10 +12261,7 @@ function isRealInstalledPluginEntry(plugin: PluginControlEntry | undefined) {
 }
 
 function isCodexPluginAvailableForRuntime(plugin: PluginControlEntry | undefined, bundledCodexSource = resolveBundledCodexPluginRoot()) {
-  if (!plugin) return Boolean(bundledCodexSource)
-  if (isRealInstalledPluginEntry(plugin)) return true
-  if (plugin.runtimeLoaded || plugin.status.trim().toLowerCase() === 'loaded') return true
-  return plugin.enabled === true && plugin.configuredEnabled !== false && Boolean(bundledCodexSource)
+  return codexPluginAvailableForRuntime(plugin, bundledCodexSource)
 }
 
 async function ensureCodexPluginInstalledForOpenAiRuntime(config: OpenClawConfigFile) {
@@ -12289,9 +12287,11 @@ async function ensureCodexPluginInstalledForOpenAiRuntime(config: OpenClawConfig
       }
 
       console.log(
-        bundledCodexSource
-          ? `[plugins/codex] Codex plugin is enabled; installing bundled codex plugin from ${bundledCodexSource}.`
-          : '[plugins/codex] Codex plugin is enabled; installing official codex plugin with --pin.',
+        codexPluginNeedsRepair(existing)
+          ? `[plugins/codex] Codex plugin is degraded; repairing from ${bundledCodexSource || 'the pinned official package'}.`
+          : bundledCodexSource
+            ? `[plugins/codex] Codex plugin is enabled; installing bundled codex plugin from ${bundledCodexSource}.`
+            : '[plugins/codex] Codex plugin is enabled; installing official codex plugin with --pin.',
       )
       try {
         const result = await installOpenClawPlugin({
@@ -12299,7 +12299,11 @@ async function ensureCodexPluginInstalledForOpenAiRuntime(config: OpenClawConfig
           pluginId: 'codex',
           pin: !bundledCodexSource,
           enable: true,
-          force: false,
+          // A degraded entry can point at an older managed project whose
+          // manifest/dependency tree is still present. Force the replacement
+          // so startup cannot report a repaired plugin while leaving the stale
+          // 2026.7.x Codex package selected.
+          force: Boolean(existing && codexPluginNeedsRepair(existing)),
           restart: false,
         })
         const installed = result.controls.plugins.find((plugin) => plugin.id === 'codex')

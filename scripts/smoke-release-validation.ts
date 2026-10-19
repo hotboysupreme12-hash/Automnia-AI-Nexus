@@ -87,14 +87,14 @@ writeFileSync(path.join(codexRuntimeDir, '.automnia-runtime-bundle.json'), `${JS
   generatedAt: '2026-06-24T00:00:00.000Z',
   codex: {
     package: '@openclaw/codex',
-    spec: '@openclaw/codex@2026.7.1-1',
-    version: '2026.7.1-1',
-    integrity: 'sha512-fRQITjqjC4Q/M6WmkR9XPWPuL+7vcvyVUWIDztB08X2G/mhzSwCYwQp4hugxAtuKmO3yx/7ULMK3nyeKsg5zGw==',
-    tarball: 'https://registry.npmjs.org/@openclaw/codex/-/codex-2026.7.1-1.tgz',
+    spec: '@openclaw/codex@2026.9.2',
+    version: '2026.9.2',
+    integrity: 'sha512-4eviHXQGkpvZSk9uXjnO37wbwv7MJ9hE7NjZut4oNSpC1hDFY62LfUcRG7ZcfVghUV8YAs+8sfqEys6oW8dClQ==',
+    tarball: 'https://registry.npmjs.org/@openclaw/codex/-/codex-2026.9.2.tgz',
     lockfile: '.automnia-runtime-package-lock.json',
     dependencies: {
       '@openai/codex': {
-        version: '0.139.0',
+        version: '0.153.4',
         integrity: 'sha512-test-runtime',
       },
     },

@@ -318,6 +318,34 @@ function ensureAutomniaRelayThoughtSignatureSupport() {
   if (!patched) throw new Error('[openclaw-vendor] Could not install Automnia Relay thought-signature compatibility patch')
 }
 
+function ensureWindowsOpenSslGitFallback() {
+  if (process.platform !== 'win32') return
+  const distRoot = path.join(vendorRoot, 'dist')
+  if (!fs.existsSync(distRoot)) throw new Error('[openclaw-vendor] Missing OpenClaw dist directory for Windows OpenSSL resolver patch')
+
+  const resolverFiles = fs.readdirSync(distRoot).filter((name) => /^resolve-system-bin-.*\.js$/.test(name))
+  if (!resolverFiles.length) throw new Error('[openclaw-vendor] Missing OpenClaw system-binary resolver bundle')
+
+  const anchor = 'dirs.push(path.win32.join(programFilesRoot, "OpenSSL", "bin"));'
+  const replacement = `${anchor}
+\t\t// Git for Windows is installed under Program Files and ships an OS-managed
+\t\t// OpenSSL build. Keep it behind the dedicated OpenSSL locations so a
+\t\t// normal Git install can satisfy certificate generation without trusting
+\t\t// arbitrary PATH entries or user-writable directories.
+\t\tdirs.push(path.win32.join(programFilesRoot, "Git", "mingw64", "bin"));
+\t\tdirs.push(path.win32.join(programFilesRoot, "Git", "usr", "bin"));`
+  let patched = false
+  for (const name of resolverFiles) {
+    const filePath = path.join(distRoot, name)
+    const source = fs.readFileSync(filePath, 'utf8')
+    if (source.includes('path.win32.join(programFilesRoot, "Git", "mingw64", "bin")')) continue
+    if (!source.includes(anchor)) throw new Error(`[openclaw-vendor] OpenClaw system-binary resolver changed; cannot patch ${name}`)
+    fs.writeFileSync(filePath, source.replace(anchor, replacement))
+    patched = true
+  }
+  if (patched) console.log('[openclaw-vendor] added trusted Git for Windows OpenSSL fallback')
+}
+
 function ensureAutomniaRelayRetrySafetySupport() {
   if (readJson(packageJsonPath).version === '2026.9.2') return
   const distRoot = path.join(vendorRoot, 'dist')
@@ -691,6 +719,7 @@ async function main() {
   const shrinkwrapSha256 = sha256File(shrinkwrapPath)
   validateVendorSource(lock)
   const packageArtifacts = await hydratePublishedPackageArtifacts(packageJson)
+  ensureWindowsOpenSslGitFallback()
   ensureAutomniaRelayThoughtSignatureSupport()
   ensureAutomniaRelayRetrySafetySupport()
   ensureAutomniaRelayCompactContextSupport()
