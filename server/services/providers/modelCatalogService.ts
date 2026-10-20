@@ -121,6 +121,8 @@ export const FALLBACK_MODELS: Array<{ id: string; alias?: string }> = [
   // Keep the local picker useful while OpenClaw is starting or the catalog is
   // temporarily unavailable. These are individually verified current model IDs.
   { id: 'openai/gpt-6-astra', alias: 'GPT-6 Astra (flagship)' },
+  { id: 'openai/gpt-6.1-sol', alias: 'GPT-6.1 Sol (balanced)' },
+  { id: 'openai/gpt-6-luna', alias: 'GPT-6 Luna (high-volume)' },
   { id: 'openai/gpt-5.6-sol', alias: 'GPT-5.6 Sol (flagship)' },
   { id: 'openai/gpt-5.6-terra', alias: 'GPT-5.6 Terra (balanced)' },
   { id: 'openai/gpt-5.6-luna', alias: 'GPT-5.6 Luna (high-volume)' },
@@ -147,15 +149,14 @@ export const FALLBACK_MODELS: Array<{ id: string; alias?: string }> = [
   // Automnia is a provider-backed billing route. Keep its bounded hosted
   // fallback chain in the shared catalog so the Gateway can fail over without
   // ever leaving the hosted credits boundary.
-  { id: AUTOMNIA_RELAY_MODEL_IDS[0], alias: AUTOMNIA_RELAY_MODEL_LABELS[AUTOMNIA_RELAY_MODEL_IDS[0]] },
-  { id: AUTOMNIA_RELAY_MODEL_IDS[1], alias: AUTOMNIA_RELAY_MODEL_LABELS[AUTOMNIA_RELAY_MODEL_IDS[1]] },
-  { id: AUTOMNIA_RELAY_MODEL_IDS[2], alias: AUTOMNIA_RELAY_MODEL_LABELS[AUTOMNIA_RELAY_MODEL_IDS[2]] },
+  ...AUTOMNIA_RELAY_MODEL_IDS.map((id) => ({ id, alias: AUTOMNIA_RELAY_MODEL_LABELS[id] })),
   { id: AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS[1], alias: 'Automnia Classic' },
   { id: 'anthropic/claude-fable-5-1', alias: 'Claude Fable 5.1 (flagship)' },
   { id: 'anthropic/claude-fable-5', alias: 'Claude Fable 5 (flagship)' },
   { id: 'anthropic/claude-sonnet-5', alias: 'Claude Sonnet 5' },
   { id: 'anthropic/claude-opus-5', alias: 'Claude Opus 5' },
   { id: 'anthropic/claude-opus-4-8', alias: 'Claude Opus 4.8' },
+  { id: 'anthropic/claude-opus-4-7', alias: 'Claude Opus 4.7' },
   { id: 'anthropic/claude-haiku-4-5', alias: 'Claude Haiku 4.5' },
   { id: 'anthropic/claude-opus-4-6', alias: 'Claude Opus 4.6' },
   { id: 'anthropic/claude-sonnet-4-6', alias: 'Claude Sonnet 4.6' },

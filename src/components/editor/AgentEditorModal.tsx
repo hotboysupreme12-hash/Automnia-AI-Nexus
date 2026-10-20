@@ -25,6 +25,7 @@ import {
   AUTOMNIA_RELAY_MODEL_LABELS,
   isAutomniaCreditsModelId,
   isAutomniaCreditsModelSelectionRoute,
+  isAutomniaFrontierModelId,
   resolveAgentRoutePresentation,
   resolveLicenseEntitlement,
 } from '../../utils/licenseEntitlement'
@@ -120,11 +121,11 @@ const modelOptionFromId = (modelId: string): AvailableModel | null => {
   return { id, alias: name, provider, name }
 }
 
-const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: string[], creditsOnly = false) => {
+const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: string[], creditsOnly = false, frontierAllowed = false) => {
   const merged = new Map<string, AvailableModel>()
   const allowedCatalog = creditsOnly
-    ? [...AUTOMNIA_MODEL_OPTIONS, ...catalog.filter((model) => isAutomniaCreditsModelId(model.id))]
-    : catalog
+    ? [...AUTOMNIA_MODEL_OPTIONS.filter((model) => isAutomniaCreditsModelId(model.id)), ...catalog.filter((model) => isAutomniaCreditsModelId(model.id))]
+    : catalog.filter((model) => frontierAllowed || !isAutomniaFrontierModelId(model.id))
   const seededCatalog = creditsOnly
     ? allowedCatalog
     : catalog.some((model) => model.id === CODEX_5_3_SPARK_MODEL_ID)
@@ -133,7 +134,9 @@ const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: strin
   for (const model of seededCatalog) {
     if (model.id.trim() && isSelectableModelId(model.id)) merged.set(model.id, model)
   }
-  for (const selectedId of creditsOnly ? selectedIds.filter((modelId) => isAutomniaCreditsModelId(modelId)) : selectedIds) {
+  for (const selectedId of creditsOnly
+    ? selectedIds.filter((modelId) => isAutomniaCreditsModelId(modelId))
+    : selectedIds.filter((modelId) => frontierAllowed || !isAutomniaFrontierModelId(modelId))) {
     if (!isSelectableModelId(selectedId)) continue
     const synthetic = modelOptionFromId(selectedId)
     if (synthetic && !merged.has(synthetic.id)) merged.set(synthetic.id, synthetic)
@@ -711,14 +714,14 @@ export function AgentEditorModal() {
   },[])
   const selectedModelIds = useMemo(() => [primary, ...fallbacks].filter(Boolean), [primary, fallbacks])
   const selectableModels = useMemo(() => {
-    if (!automniaCreditsOnlyRoute) return mergeSelectedModelOptions(models, selectedModelIds)
+    if (!automniaCreditsOnlyRoute) return mergeSelectedModelOptions(models, selectedModelIds, false, entitlement.automniaFrontierAllowed)
     const routeModels = [
-      ...AUTOMNIA_MODEL_OPTIONS,
+      ...AUTOMNIA_MODEL_OPTIONS.filter((model) => isAutomniaCreditsModelId(model.id)),
       ...models.filter((model) => AUTOMNIA_MODEL_IDS.has(model.id)),
     ]
     const routeSelectedModelIds = selectedModelIds.filter((modelId) => isAutomniaCreditsModelId(modelId))
-    return mergeSelectedModelOptions(routeModels, routeSelectedModelIds, true)
-  }, [automniaCreditsOnlyRoute, models, selectedModelIds])
+    return mergeSelectedModelOptions(routeModels, routeSelectedModelIds, true, false)
+  }, [automniaCreditsOnlyRoute, entitlement.automniaFrontierAllowed, models, selectedModelIds])
   const providerForModel = (modelId:string)=>selectableModels.find((model)=>model.id===modelId)?.provider || (isOpenAiCodexSubscriptionModel(modelId) ? 'openai' : modelId.split('/')[0]||'')
   const authForProvider = (provider:string)=>effectiveAuthStatusForProvider(authProviders, provider)
   const maybePromptProviderAuth = (modelId:string)=>{const status=authForProvider(providerForModel(modelId));if(status&&!status.configured)setAuthModalProvider(status)}
@@ -1506,6 +1509,13 @@ export function AgentEditorModal() {
     if(normalizedPrimary!==primary)setPrimary(normalizedPrimary)
     if(normalizedFallbacks.length!==fallbacks.length)setFallbacks(normalizedFallbacks)
   },[isOpen,automniaCreditsOnlyRoute,primary,fallbacks])
+  useEffect(()=>{
+    if(!isOpen||automniaCreditsOnlyRoute||entitlement.automniaFrontierAllowed)return
+    const normalizedPrimary=isAutomniaFrontierModelId(primary)?AUTOMNIA_CREDITS_MODEL_ID:primary
+    const normalizedFallbacks=fallbacks.filter((modelId)=>!isAutomniaFrontierModelId(modelId))
+    if(normalizedPrimary!==primary)setPrimary(normalizedPrimary)
+    if(normalizedFallbacks.length!==fallbacks.length)setFallbacks(normalizedFallbacks)
+  },[isOpen,automniaCreditsOnlyRoute,entitlement.automniaFrontierAllowed,primary,fallbacks])
   useEffect(()=>{if(isOpen&&agent?.id&&(tab==='model'||tab==='heartbeat'||tab==='policy'))void LdP()},[isOpen,agent?.id,tab,LdP])
   useEffect(()=>{if(isOpen&&tab==='model'){void LdM();void LdAuth()}},[isOpen,tab,LdM,LdAuth])
   useEffect(()=>{

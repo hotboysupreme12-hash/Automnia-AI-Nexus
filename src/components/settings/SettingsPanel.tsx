@@ -914,8 +914,10 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
         : 'automnia_only'
     const balance = hostedCredits || isByok ? formatCreditBalance(license?.creditBalance) : 'Not applicable — provider-billed'
     const isProPlan = /(?:^|[_-])(pro|enterprise)(?:$|[_-])/.test((license?.tier || '').toLowerCase())
-    const isCurrentStarterPlan = license?.active === true && !isProPlan
-    const isCurrentProPlan = license?.active === true && isProPlan
+    const isFrontierPlan = entitlement.automniaFrontierAllowed
+    const isCurrentStarterPlan = license?.active === true && !isProPlan && !isFrontierPlan
+    const isCurrentProPlan = license?.active === true && isProPlan && !isFrontierPlan
+    const isCurrentFrontierPlan = license?.active === true && isFrontierPlan
     const refreshAccount = async () => {
       if (accountRefreshBusy) return
       setAccountRefreshBusy(true)
@@ -1037,7 +1039,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
           </div>
           <div data-tone={license?.active ? 'active' : 'inactive'}>
             <span>Account access</span>
-            <strong>{license?.active ? `Active · ${isProPlan ? 'Pro Access' : 'Starter'}` : 'Not active'}</strong>
+            <strong>{license?.active ? `Active · ${entitlement.tierLabel}` : 'Not active'}</strong>
             <small>{license?.active ? 'Ready to use' : 'Choose a plan to get started'}</small>
           </div>
         </div>
@@ -1091,8 +1093,8 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
               {passwordChangeError && <p className="dui-settings-account-password__error" role="alert">{passwordChangeError}</p>}
             </div>
           </SettingsCard>
-          <SettingsCard className="dui-settings-account-card dui-settings-account-plans" title="Starter and Pro" description="Compare the options available to you.">
-            <section className="dui-plan-catalog" aria-label="Starter and Pro comparison">
+          <SettingsCard className="dui-settings-account-card dui-settings-account-plans" title="Starter, Pro, and Frontier" description="Compare the options available to you.">
+            <section className="dui-plan-catalog" aria-label="Starter, Pro, and Frontier comparison">
               <article className={`dui-plan-card${isCurrentStarterPlan ? ' is-current' : ''}`}>
                 <div className="dui-plan-card__head">
                   <div><span>STARTER</span><h4>Build your momentum</h4></div>
@@ -1117,11 +1119,26 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
                 <p>Get full access and the flexibility to use your own AI provider.</p>
                 <ul>
                   <li>Everything in Starter</li>
-                  <li>All Automnia models and advanced workflows</li>
+                  <li>Prime and core Automnia models</li>
                   <li>Use your own AI provider</li>
                   <li>Choose which service is used first</li>
                 </ul>
                 {!isCurrentProPlan && <button type="button" onClick={() => void openCheckout()} disabled={checkoutBusy}>{checkoutBusy ? 'Opening checkout…' : 'Upgrade to Pro'}</button>}
+              </article>
+              <article className={`dui-plan-card is-pro is-frontier${isCurrentFrontierPlan ? ' is-current' : ''}`}>
+                <div className="dui-plan-card__head">
+                  <div><span>FRONTIER</span><h4>Automnia Frontier</h4></div>
+                  {isCurrentFrontierPlan ? <b>Selected</b> : <b>Highest hosted tier</b>}
+                </div>
+                <strong className="dui-plan-card__credits">Google Gemini 4 Argon <small>hosted</small></strong>
+                <p>Our highest hosted reasoning tier for deep research, software engineering, and long-horizon agent work.</p>
+                <ul>
+                  <li>Everything in Pro</li>
+                  <li>Google Gemini 4 Argon reasoning</li>
+                  <li>Long-context research and coding</li>
+                  <li>Frontier-only hosted relay access</li>
+                </ul>
+                {!isCurrentFrontierPlan && <button type="button" onClick={() => void openCheckout()} disabled={checkoutBusy}>{checkoutBusy ? 'Opening checkout…' : 'Explore Frontier'}</button>}
               </article>
             </section>
           </SettingsCard>

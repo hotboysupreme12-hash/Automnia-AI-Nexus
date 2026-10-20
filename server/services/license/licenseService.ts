@@ -1,6 +1,7 @@
 import { AUTOMNIA_PUBLIC_CLOUD_URL, automniaCloudBaseUrl, automniaCloudRuntimeBaseUrl } from '../../config/automniaCloud'
 import { usageBaseline } from '../../../src/utils/usageRemaining'
 import { AUTOMNIA_BILLING_UNIT_VERSION, AUTOMNIA_TOKENS_PER_CREDIT } from '../../../src/utils/creditDisplay'
+import { isAutomniaFrontierTier } from './creditsOnlyModelPolicy'
 
 export const DEFAULT_LICENSE_API_URL = AUTOMNIA_PUBLIC_CLOUD_URL
 const ACTIVATION_TIMEOUT_MS = 10_000
@@ -128,8 +129,9 @@ function tierAllowsByok(tier: string | null | undefined) {
 
 function tierRank(tier: string | null | undefined) {
   const normalized = String(tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
-  // The two-plan catalog makes Pro the highest entitlement. Enterprise is
-  // retained here solely so existing customers keep equivalent access.
+  if (isAutomniaFrontierTier(normalized)) return 4
+  // Enterprise is retained here solely so existing customers keep equivalent
+  // access below the dedicated Automnia Frontier tier.
   if (normalized.includes('enterprise') || normalized.includes('pro')) return 3
   if (normalized === 'starter' || normalized.includes('starter') || normalized === 'byok' || normalized.includes('byok')) return 1
   if (normalized.includes('credit') || normalized.includes('refill') || normalized.includes('topup')) return 0
@@ -494,6 +496,10 @@ export function createLicenseService(options: LicenseServiceOptions) {
       isUsagePriorityLocked: (): boolean => {
         const record = current()
         return Boolean(record?.active && creditsOnlyEntitlement(record))
+    },
+    isAutomniaFrontierTier: (): boolean => {
+      const record = current()
+      return Boolean(record?.active && isAutomniaFrontierTier(record.tier))
     },
     activate: async ({ email, licenseKey }: { email: string; licenseKey: string }): Promise<LicenseStatus> => {
       const payload = await verifyWithProvisioner({ email, licenseKey })

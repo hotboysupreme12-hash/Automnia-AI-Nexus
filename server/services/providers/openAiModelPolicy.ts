@@ -19,7 +19,7 @@ export function isOpenAiAstraModel(model: string) {
 
 export function isOpenAiReasoningModel(model: string) {
   const normalized = normalizedOpenAiModel(model)
-  return isOpenAiAstraModel(normalized) || /^(gpt-5|o[1-9]|gpt-oss)/.test(normalized)
+  return isOpenAiAstraModel(normalized) || /^gpt-6(?:\.|-)/.test(normalized) || /^(gpt-5|o[1-9]|gpt-oss)/.test(normalized)
 }
 
 function parsedOpenAiGpt5Minor(model: string): number | null {

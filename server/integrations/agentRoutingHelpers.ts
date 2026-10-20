@@ -1089,6 +1089,7 @@ function isTelegramAutomniaCreditsModel(value) {
 }
 function telegramAutomniaModelLabel(value) {
     var normalized = String(value == null ? '' : value).trim().toLowerCase();
+    if (/^automnia-cloud\/gemini-4-argon(?:$|[-@])/i.test(normalized)) return 'Automnia Frontier';
     if (/^automnia-cloud\/gemini-3\.8-flash(?:$|[-@])/i.test(normalized)) return 'Automnia Prime';
     if (/^automnia-cloud\/gemini-3\.7-flash(?:$|[-@])/i.test(normalized)) return 'Automnia Balanced';
     if (/^automnia-cloud\/gemini-3\.6-flash(?:$|[-@])/i.test(normalized)) return 'Automnia Swift';

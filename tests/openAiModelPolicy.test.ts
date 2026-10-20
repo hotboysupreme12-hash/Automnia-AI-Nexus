@@ -15,6 +15,8 @@ test('GPT-6 Astra is recognized across provider-qualified model IDs', () => {
   assert.equal(isOpenAiAstraModel('openai/gpt-6-astra'), true)
   assert.equal(isOpenAiAstraModel('gpt-5.6-sol'), false)
   assert.equal(isOpenAiReasoningModel('openai/gpt-6-astra'), true)
+  assert.equal(isOpenAiReasoningModel('openai/gpt-6.1-sol'), true)
+  assert.equal(isOpenAiReasoningModel('openai/gpt-6-luna'), true)
 })
 
 test('GPT-6 Astra maps broad app thinking choices to supported reasoning efforts', () => {

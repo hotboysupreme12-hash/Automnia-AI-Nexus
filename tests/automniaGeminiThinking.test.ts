@@ -21,6 +21,8 @@ test('Automnia Gemini 3.7 runtime clamps app choices to supported thinking level
   assert.equal(thinkingForAutomniaGeminiRuntimeModel('google/gemini-3.6-flash', 'max'), 'max')
   assert.equal(thinkingForAutomniaGeminiRuntimeModel('automnia-cloud/gemini-3.8-flash', 'off'), 'low')
   assert.equal(thinkingForAutomniaGeminiRuntimeModel('automnia-cloud/gemini-3.8-flash', 'max'), 'high')
+  assert.equal(thinkingForAutomniaGeminiRuntimeModel('automnia-cloud/gemini-4-argon', 'off'), 'low')
+  assert.equal(thinkingForAutomniaGeminiRuntimeModel('automnia-cloud/gemini-4-argon', 'max'), 'high')
 })
 
 test('Automnia Gemini config keeps every app thinking choice on a supported relay level', () => {
@@ -53,6 +55,7 @@ test('Automnia relay maps every app thinking choice to a Gemini 3.7/3.8 native l
   for (const [requested, expected] of Object.entries(expectations)) {
     assert.deepEqual(geminiThinkingConfigFromOpenAiRequest({ reasoning_effort: requested }, 'gemini-3.7-flash'), { thinkingLevel: expected })
     assert.deepEqual(geminiThinkingConfigFromOpenAiRequest({ reasoning_effort: requested }, 'gemini-3.8-flash'), { thinkingLevel: expected })
+    assert.deepEqual(geminiThinkingConfigFromOpenAiRequest({ reasoning_effort: requested }, 'gemini-4-argon'), { thinkingLevel: expected })
   }
   assert.equal(geminiThinkingConfigFromOpenAiRequest({}), undefined)
   assert.equal(geminiThinkingConfigFromOpenAiRequest({ reasoning_effort: 'invalid' }, 'gemini-3.7-flash'), undefined)

@@ -1,10 +1,10 @@
 export type AutomniaThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
 const AUTOMNIA_CLOUD_PROVIDER = 'automnia-cloud'
-const AUTOMNIA_GEMINI_FLASH_MODELS = new Set(['gemini-3.7-flash', 'gemini-3.8-flash'])
+const AUTOMNIA_GEMINI_FLASH_MODELS = new Set(['gemini-3.7-flash', 'gemini-3.8-flash', 'gemini-4-argon'])
 
 /**
- * Gemini 3.7 Flash accepts low, medium, and high thinking levels. The
+ * Gemini 3.7 Flash and Gemini 4 Argon accept low, medium, and high thinking levels. The
  * Gateway's broader controls include off, minimal, xhigh, and max, so map
  * those app choices to the closest valid 3.7 level before OpenClaw validates
  * the turn. The hosted relay performs the same translation at the Vertex
