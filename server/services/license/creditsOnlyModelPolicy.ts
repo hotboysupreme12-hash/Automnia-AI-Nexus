@@ -39,9 +39,21 @@ const FRONTIER_TIER_KEYS = new Set([
   'automnia_frontier',
 ])
 
+const FRONTIER_ELIGIBLE_TIER_KEYS = new Set([
+  'pro',
+  'pro_tier',
+  'enterprise',
+  'enterprise_tier',
+])
+
 export function isAutomniaFrontierTier(value: unknown) {
   const normalized = String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
   return FRONTIER_TIER_KEYS.has(normalized) || normalized.endsWith('_frontier')
+}
+
+export function isAutomniaFrontierEligibleTier(value: unknown) {
+  const normalized = String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
+  return isAutomniaFrontierTier(normalized) || FRONTIER_ELIGIBLE_TIER_KEYS.has(normalized)
 }
 
 export function isAutomniaFrontierModelId(value: unknown) {
@@ -50,14 +62,14 @@ export function isAutomniaFrontierModelId(value: unknown) {
 }
 
 export function automniaHostedModelIdsForTier(tier: unknown) {
-  return AUTOMNIA_RELAY_MODEL_IDS.filter((modelId) => !isAutomniaFrontierModelId(modelId) || isAutomniaFrontierTier(tier))
+  return AUTOMNIA_RELAY_MODEL_IDS.filter((modelId) => !isAutomniaFrontierModelId(modelId) || isAutomniaFrontierEligibleTier(tier))
 }
 
 export const CREDITS_ONLY_MODEL_ACCESS_MESSAGE =
   'Starter Subscription is locked to Automnia credits only. Connect your own provider or choose a provider model after upgrading to a BYOK-eligible tier.'
 
 export const AUTOMNIA_FRONTIER_MODEL_ACCESS_MESSAGE =
-  'Automnia Frontier requires the Automnia Frontier tier. Choose Automnia Prime or connect an eligible provider instead.'
+  'Automnia Frontier requires a Pro, Enterprise, or Automnia Frontier entitlement. Choose Automnia Prime or connect an eligible provider instead.'
 
 export type CreditsOnlyModelSelection = {
   primary: string

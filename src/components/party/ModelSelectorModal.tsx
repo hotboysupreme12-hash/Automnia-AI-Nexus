@@ -23,7 +23,7 @@ import {
   isAutomniaCreditsModelId,
   isAutomniaCreditsModelSelectionRoute,
   isAutomniaFrontierModelId,
-  isAutomniaFrontierTier,
+  isAutomniaFrontierEligibleTier,
   resolveAgentRoutePresentation,
   resolveLicenseEntitlement,
 } from '../../utils/licenseEntitlement'
@@ -189,7 +189,7 @@ export function ModelSelectorModal({
 }: ModelSelectorModalProps) {
   const { license } = useLicense()
   const creditsOnly = isAutomniaCreditsModelSelectionRoute(license)
-  const frontierAllowed = isAutomniaFrontierTier(license?.tier)
+  const frontierAllowed = isAutomniaFrontierEligibleTier(license?.tier)
   const [models, setModels] = useState<AvailableModel[]>([])
   const [loading, setLoading] = useState(false)
   const dialogId = useId()
@@ -298,7 +298,7 @@ export function ModelSelectorModal({
     if (!frontierAllowed && isAutomniaFrontierModelId(selectedPrimary)) {
       setSelectedPrimary(AUTOMNIA_CREDITS_MODEL_ID)
       setSelectedFallbacks((current) => current.filter((modelId) => !isAutomniaFrontierModelId(modelId)))
-      setStatus('Automnia Frontier requires the Automnia Frontier tier.')
+      setStatus('Automnia Frontier requires a Pro, Enterprise, or Automnia Frontier entitlement.')
       return
     }
     const primaryProvider = providerForModel(selectedPrimary)

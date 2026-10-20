@@ -1,7 +1,7 @@
 import { AUTOMNIA_PUBLIC_CLOUD_URL, automniaCloudBaseUrl, automniaCloudRuntimeBaseUrl } from '../../config/automniaCloud'
 import { usageBaseline } from '../../../src/utils/usageRemaining'
 import { AUTOMNIA_BILLING_UNIT_VERSION, AUTOMNIA_TOKENS_PER_CREDIT } from '../../../src/utils/creditDisplay'
-import { isAutomniaFrontierTier } from './creditsOnlyModelPolicy'
+import { isAutomniaFrontierEligibleTier, isAutomniaFrontierTier } from './creditsOnlyModelPolicy'
 
 export const DEFAULT_LICENSE_API_URL = AUTOMNIA_PUBLIC_CLOUD_URL
 const ACTIVATION_TIMEOUT_MS = 10_000
@@ -500,6 +500,10 @@ export function createLicenseService(options: LicenseServiceOptions) {
     isAutomniaFrontierTier: (): boolean => {
       const record = current()
       return Boolean(record?.active && isAutomniaFrontierTier(record.tier))
+    },
+    isAutomniaFrontierAccessAllowed: (): boolean => {
+      const record = current()
+      return Boolean(record?.active && isAutomniaFrontierEligibleTier(record.tier))
     },
     activate: async ({ email, licenseKey }: { email: string; licenseKey: string }): Promise<LicenseStatus> => {
       const payload = await verifyWithProvisioner({ email, licenseKey })

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import type { LicenseInfo } from '../src/context/licenseContextValue'
-import { isAutomniaCreditsModelSelectionRoute, isAutomniaFrontierModelId, isAutomniaFrontierTier, isStarterSubscriptionOnly, mergeHostedCreditBalance, resolveAgentRoutePresentation, resolveLicenseEntitlement } from '../src/utils/licenseEntitlement'
+import { isAutomniaCreditsModelSelectionRoute, isAutomniaFrontierEligibleTier, isAutomniaFrontierModelId, isAutomniaFrontierTier, isStarterSubscriptionOnly, mergeHostedCreditBalance, resolveAgentRoutePresentation, resolveLicenseEntitlement } from '../src/utils/licenseEntitlement'
 
 function license(overrides: Partial<LicenseInfo> = {}): LicenseInfo {
   return {
@@ -37,16 +37,20 @@ test('presents permanent hosted tiers as their highest account access and Automn
   }
 })
 
-test('exposes Frontier only to the dedicated Automnia Frontier tier', () => {
+test('exposes Frontier to Pro, Enterprise, and the dedicated Automnia Frontier tier', () => {
   const frontier = resolveLicenseEntitlement(license({ tier: 'frontier', permanentAccess: true, byokAllowed: true }))
   assert.equal(frontier.tierLabel, 'Automnia Frontier')
   assert.equal(frontier.automniaFrontierAllowed, true)
   assert.equal(frontier.permanentAccess, true)
   assert.equal(isAutomniaFrontierTier('automnia-frontier'), true)
+  assert.equal(isAutomniaFrontierEligibleTier('pro'), true)
+  assert.equal(isAutomniaFrontierEligibleTier('enterprise'), true)
   assert.equal(isAutomniaFrontierModelId('automnia-cloud/gemini-4-argon'), true)
 
   const prime = resolveLicenseEntitlement(license({ tier: 'pro', permanentAccess: true, byokAllowed: true }))
-  assert.equal(prime.automniaFrontierAllowed, false)
+  assert.equal(prime.automniaFrontierAllowed, true)
+  const enterprise = resolveLicenseEntitlement(license({ tier: 'enterprise', permanentAccess: true, byokAllowed: true }))
+  assert.equal(enterprise.automniaFrontierAllowed, true)
   const starter = resolveLicenseEntitlement(license({ tier: 'starter' }))
   assert.equal(starter.automniaFrontierAllowed, false)
 })

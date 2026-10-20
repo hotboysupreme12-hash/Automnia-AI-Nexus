@@ -260,6 +260,18 @@ function creditsOnlyEntitlement(record) {
   return (record?.mode || 'hosted_credits') === 'hosted_credits' && (starterSubscriptionOnly(record) || refillOnly);
 }
 
+function frontierModelAllowedForTier(tier) {
+  const normalized = String(tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  return normalized === 'frontier'
+    || normalized === 'frontier_tier'
+    || normalized === 'automnia_frontier'
+    || normalized.endsWith('_frontier')
+    || normalized === 'pro'
+    || normalized === 'pro_tier'
+    || normalized === 'enterprise'
+    || normalized === 'enterprise_tier';
+}
+
 function validUsagePriority(value) {
   return value === 'automnia_only'
     || value === 'provider_first'
@@ -2665,6 +2677,9 @@ app.post('/v1/chat/completions', requireWritesEnabled, async (req, res) => {
     if (!converted.contents.length) return openAiError(res, 400, 'At least one text, tool-call, or tool-response message is required.');
     const targetModel = resolveAutomniaRelayModel(req.body?.model);
     if (!targetModel) return openAiError(res, 400, 'The requested model is not an enabled Automnia hosted relay model.');
+    if (targetModel === 'gemini-4-argon' && !frontierModelAllowedForTier(access.record.tier)) {
+      return openAiError(res, 403, 'Automnia Frontier requires a Pro, Enterprise, or Automnia Frontier entitlement.', 'model_not_allowed', 'automnia_frontier_entitlement_required');
+    }
     const toolCount = toolOptimization.tools.length;
     const outputBudget = resolveRelayOutputTokenBudget(req.body, { maxAllowed: Math.min(vertexMaxOutputTokens, automniaRelayTokenOptimization.maxOutputTokens), hasTools: toolCount > 0 && req.body?.tool_choice !== 'none' });
     const optimization = relayOptimizationSummary(messageOptimization.stats, toolOptimization.stats, outputBudget);
