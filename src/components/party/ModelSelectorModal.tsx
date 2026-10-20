@@ -132,10 +132,16 @@ function modelBrief(modelId: string): { title: string; description: string; tone
   return null
 }
 
+const isAllowedAutomniaHostedModel = (modelId: string, frontierAllowed: boolean) =>
+  isAutomniaCreditsModelId(modelId) || (frontierAllowed && isAutomniaFrontierModelId(modelId))
+
 const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: string[], creditsOnly = false, frontierAllowed = false) => {
   const merged = new Map<string, AvailableModel>()
   const allowedCatalog = creditsOnly
-    ? [...AUTOMNIA_MODEL_OPTIONS.filter((model) => isAutomniaCreditsModelId(model.id)), ...catalog.filter((model) => isAutomniaCreditsModelId(model.id))]
+    ? [
+        ...AUTOMNIA_MODEL_OPTIONS.filter((model) => isAllowedAutomniaHostedModel(model.id, frontierAllowed)),
+        ...catalog.filter((model) => isAllowedAutomniaHostedModel(model.id, frontierAllowed)),
+      ]
     : catalog.filter((model) => frontierAllowed || !isAutomniaFrontierModelId(model.id))
   const seededCatalog = creditsOnly
     ? allowedCatalog
@@ -146,7 +152,7 @@ const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: strin
     if (model.id.trim() && isSelectableModelId(model.id)) merged.set(model.id, model)
   }
   for (const selectedId of creditsOnly
-    ? selectedIds.filter((modelId) => isAutomniaCreditsModelId(modelId))
+    ? selectedIds.filter((modelId) => isAllowedAutomniaHostedModel(modelId, frontierAllowed))
     : selectedIds.filter((modelId) => frontierAllowed || !isAutomniaFrontierModelId(modelId))) {
     if (!isSelectableModelId(selectedId)) continue
     const synthetic = modelOptionFromId(selectedId)
@@ -217,8 +223,8 @@ export function ModelSelectorModal({
       const models = await fetchModelSelectorModels()
       setModels(models)
       if (creditsOnly) {
-        setSelectedPrimary(isAutomniaCreditsModelId(currentModel) ? currentModel : AUTOMNIA_CREDITS_MODEL_ID)
-        setSelectedFallbacks(currentFallbacks.filter((modelId) => isAutomniaCreditsModelId(modelId)))
+        setSelectedPrimary(isAllowedAutomniaHostedModel(currentModel, frontierAllowed) ? currentModel : AUTOMNIA_CREDITS_MODEL_ID)
+        setSelectedFallbacks(currentFallbacks.filter((modelId) => isAllowedAutomniaHostedModel(modelId, frontierAllowed)))
       } else if (!frontierAllowed && isAutomniaFrontierModelId(currentModel)) {
         setSelectedPrimary(AUTOMNIA_CREDITS_MODEL_ID)
         setSelectedFallbacks(currentFallbacks.filter((modelId) => !isAutomniaFrontierModelId(modelId)))
@@ -256,13 +262,13 @@ export function ModelSelectorModal({
 
   useEffect(() => {
     if (!isOpen) return
-    setSelectedPrimary(creditsOnly && !isAutomniaCreditsModelId(currentModel)
+    setSelectedPrimary(creditsOnly && !isAllowedAutomniaHostedModel(currentModel, frontierAllowed)
       ? AUTOMNIA_CREDITS_MODEL_ID
       : !frontierAllowed && isAutomniaFrontierModelId(currentModel)
         ? AUTOMNIA_CREDITS_MODEL_ID
         : currentModel)
     setSelectedFallbacks(creditsOnly
-      ? currentFallbacks.filter((modelId) => isAutomniaCreditsModelId(modelId))
+      ? currentFallbacks.filter((modelId) => isAllowedAutomniaHostedModel(modelId, frontierAllowed))
       : currentFallbacks.filter((modelId) => frontierAllowed || !isAutomniaFrontierModelId(modelId)))
     setThinkingEnabled(currentThinking !== 'off')
     setThinkingLevel(currentThinking === 'off' ? 'minimal' : currentThinking)
@@ -289,10 +295,12 @@ export function ModelSelectorModal({
       setStatus('Select a primary model before saving.')
       return
     }
-    if (creditsOnly && !isAutomniaCreditsModelId(selectedPrimary)) {
+    if (creditsOnly && !isAllowedAutomniaHostedModel(selectedPrimary, frontierAllowed)) {
       setSelectedPrimary(AUTOMNIA_CREDITS_MODEL_ID)
       setSelectedFallbacks([])
-      setStatus('Starter subscriptions can use Automnia credits only.')
+      setStatus(frontierAllowed
+        ? 'Choose an Automnia hosted model.'
+        : 'Starter subscriptions can use Automnia credits only.')
       return
     }
     if (!frontierAllowed && isAutomniaFrontierModelId(selectedPrimary)) {
@@ -323,11 +331,9 @@ export function ModelSelectorModal({
   }
 
   const toggleFallback = (modelId: string) => {
-    if (selectedFallbacks.includes(modelId)) {
-      setSelectedFallbacks(selectedFallbacks.filter((id) => id !== modelId))
-    } else {
-      setSelectedFallbacks([...selectedFallbacks, modelId])
-    }
+    setSelectedFallbacks((current) => current.includes(modelId)
+      ? current.filter((id) => id !== modelId)
+      : [...current, modelId])
   }
 
   const primaryProvider = selectedPrimary ? providerForModel(selectedPrimary) : ''

@@ -25,6 +25,8 @@ export type LicenseStatus = {
   permanentAccess: boolean
   subscriptionStatus: string | null
   usagePriority: HostedUsagePriority | null
+  /** User-selected provider model used when provider-first routing is active. */
+  preferredProviderModel?: string | null
   creditBalance: number | null
   creditUsageBaseline?: number | null
   creditBalanceUpdatedAt: string | null
@@ -120,6 +122,13 @@ function validUsagePriority(value: unknown): value is HostedUsagePriority {
     || value === 'byok_only'
 }
 
+function preferredProviderModel(value: unknown) {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  if (!normalized || normalized.length > 180 || !normalized.includes('/') || /^automnia-cloud\//i.test(normalized)) return null
+  return normalized
+}
+
 function tierAllowsByok(tier: string | null | undefined) {
   const normalized = String(tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
   if (!normalized) return false
@@ -195,6 +204,7 @@ function publicStatus(record: StoredLicense | null): LicenseStatus {
       permanentAccess: false,
       subscriptionStatus: null,
       usagePriority: null,
+      preferredProviderModel: null,
       creditBalance: null,
       creditBalanceUpdatedAt: null,
       billingUnitVersion: AUTOMNIA_BILLING_UNIT_VERSION,
@@ -214,6 +224,7 @@ function publicStatus(record: StoredLicense | null): LicenseStatus {
     permanentAccess: permanentAccessFor(record),
     subscriptionStatus: record.subscriptionStatus || null,
     usagePriority: effectiveUsagePriority(record, mode),
+    preferredProviderModel: preferredProviderModel(record.preferredProviderModel),
     creditBalance: validCreditBalance(record.creditBalance) ? record.creditBalance : null,
     creditBalanceUpdatedAt: record.creditBalanceUpdatedAt || null,
     ...(record.billingUnitVersion === AUTOMNIA_BILLING_UNIT_VERSION
@@ -312,6 +323,7 @@ function storedLicense(value: unknown): StoredLicense | null {
     permanentAccess: !creditsOnly && (record.permanentAccess === true || mode === 'byok' || tierRank(tier) >= 2),
     subscriptionStatus: typeof record.subscriptionStatus === 'string' ? record.subscriptionStatus : null,
     usagePriority: validUsagePriority(record.usagePriority) ? record.usagePriority : null,
+    preferredProviderModel: preferredProviderModel(record.preferredProviderModel),
     creditBalance: validCreditBalance(record.creditBalance) ? record.creditBalance : null,
     creditBalanceUpdatedAt: typeof record.creditBalanceUpdatedAt === 'string' ? record.creditBalanceUpdatedAt : null,
     creditUsageBaseline: billingUnitVersion === AUTOMNIA_BILLING_UNIT_VERSION
@@ -383,6 +395,7 @@ export function createLicenseService(options: LicenseServiceOptions) {
           : validUsagePriority(payload.usagePriority)
             ? payload.usagePriority
             : mode === 'byok' && !(validCreditBalance(reportedCreditBalance) && reportedCreditBalance > 0) ? 'provider_first' : 'automnia_only',
+      preferredProviderModel: preferredProviderModel(fallback.preferredProviderModel) || preferredProviderModel(payload.preferredProviderModel),
       creditBalance: reportedCreditBalance,
       creditUsageBaseline: billingUnitVersion === AUTOMNIA_BILLING_UNIT_VERSION
         ? usageBaseline(reportedCreditBalance, fallback.creditBalance, fallback.creditUsageBaseline)
@@ -572,12 +585,16 @@ export function createLicenseService(options: LicenseServiceOptions) {
         verifiedAt: now(),
       }, 'The provider charged this request, but the local credit balance could not be saved. Refresh Account & License to reconcile it.')
     },
-    setUsagePriority: (usagePriority: HostedUsagePriority): LicenseStatus => {
+    setUsagePriority: (usagePriority: HostedUsagePriority, nextPreferredProviderModel?: string | null): LicenseStatus => {
       const record = current()
       if (!record?.active) return publicStatus(record)
+      const normalizedPreferred = nextPreferredProviderModel === undefined
+        ? preferredProviderModel(record.preferredProviderModel)
+        : preferredProviderModel(nextPreferredProviderModel)
       return store({
         ...record,
         usagePriority: creditsOnlyEntitlement(record) ? 'automnia_only' : usagePriority,
+        preferredProviderModel: normalizedPreferred,
       }, 'The usage priority could not be saved on this device.')
     },
     refresh: async (): Promise<LicenseStatus> => {

@@ -122,10 +122,16 @@ const modelOptionFromId = (modelId: string): AvailableModel | null => {
   return { id, alias: name, provider, name }
 }
 
+const isAllowedAutomniaHostedModel = (modelId: string, frontierAllowed: boolean) =>
+  isAutomniaCreditsModelId(modelId) || (frontierAllowed && isAutomniaFrontierModelId(modelId))
+
 const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: string[], creditsOnly = false, frontierAllowed = false) => {
   const merged = new Map<string, AvailableModel>()
   const allowedCatalog = creditsOnly
-    ? [...AUTOMNIA_MODEL_OPTIONS.filter((model) => isAutomniaCreditsModelId(model.id)), ...catalog.filter((model) => isAutomniaCreditsModelId(model.id))]
+    ? [
+        ...AUTOMNIA_MODEL_OPTIONS.filter((model) => isAllowedAutomniaHostedModel(model.id, frontierAllowed)),
+        ...catalog.filter((model) => isAllowedAutomniaHostedModel(model.id, frontierAllowed)),
+      ]
     : catalog.filter((model) => frontierAllowed || !isAutomniaFrontierModelId(model.id))
   const seededCatalog = creditsOnly
     ? allowedCatalog
@@ -136,7 +142,7 @@ const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: strin
     if (model.id.trim() && isSelectableModelId(model.id)) merged.set(model.id, model)
   }
   for (const selectedId of creditsOnly
-    ? selectedIds.filter((modelId) => isAutomniaCreditsModelId(modelId))
+    ? selectedIds.filter((modelId) => isAllowedAutomniaHostedModel(modelId, frontierAllowed))
     : selectedIds.filter((modelId) => frontierAllowed || !isAutomniaFrontierModelId(modelId))) {
     if (!isSelectableModelId(selectedId)) continue
     const synthetic = modelOptionFromId(selectedId)
@@ -717,11 +723,11 @@ export function AgentEditorModal() {
   const selectableModels = useMemo(() => {
     if (!automniaCreditsOnlyRoute) return mergeSelectedModelOptions(models, selectedModelIds, false, entitlement.automniaFrontierAllowed)
     const routeModels = [
-      ...AUTOMNIA_MODEL_OPTIONS.filter((model) => isAutomniaCreditsModelId(model.id)),
-      ...models.filter((model) => AUTOMNIA_MODEL_IDS.has(model.id)),
+      ...AUTOMNIA_MODEL_OPTIONS.filter((model) => isAllowedAutomniaHostedModel(model.id, entitlement.automniaFrontierAllowed)),
+      ...models.filter((model) => AUTOMNIA_MODEL_IDS.has(model.id) || (entitlement.automniaFrontierAllowed && isAutomniaFrontierModelId(model.id))),
     ]
-    const routeSelectedModelIds = selectedModelIds.filter((modelId) => isAutomniaCreditsModelId(modelId))
-    return mergeSelectedModelOptions(routeModels, routeSelectedModelIds, true, false)
+    const routeSelectedModelIds = selectedModelIds.filter((modelId) => isAllowedAutomniaHostedModel(modelId, entitlement.automniaFrontierAllowed))
+    return mergeSelectedModelOptions(routeModels, routeSelectedModelIds, true, entitlement.automniaFrontierAllowed)
   }, [automniaCreditsOnlyRoute, entitlement.automniaFrontierAllowed, models, selectedModelIds])
   const providerForModel = (modelId:string)=>selectableModels.find((model)=>model.id===modelId)?.provider || (isOpenAiCodexSubscriptionModel(modelId) ? 'openai' : modelId.split('/')[0]||'')
   const authForProvider = (provider:string)=>effectiveAuthStatusForProvider(authProviders, provider)
@@ -1530,11 +1536,11 @@ export function AgentEditorModal() {
   },[isOpen,editingAgentId,requestedEditorTab,editorOpenRequest])
   useEffect(()=>{
     if(!isOpen||!automniaCreditsOnlyRoute)return
-    const normalizedPrimary=isAutomniaCreditsModelId(primary)?primary:AUTOMNIA_CREDITS_MODEL_ID
-    const normalizedFallbacks=fallbacks.filter((modelId)=>isAutomniaCreditsModelId(modelId)&&modelId!==normalizedPrimary)
+    const normalizedPrimary=isAllowedAutomniaHostedModel(primary, entitlement.automniaFrontierAllowed)?primary:AUTOMNIA_CREDITS_MODEL_ID
+    const normalizedFallbacks=fallbacks.filter((modelId)=>isAllowedAutomniaHostedModel(modelId, entitlement.automniaFrontierAllowed)&&modelId!==normalizedPrimary)
     if(normalizedPrimary!==primary)setPrimary(normalizedPrimary)
     if(normalizedFallbacks.length!==fallbacks.length)setFallbacks(normalizedFallbacks)
-  },[isOpen,automniaCreditsOnlyRoute,primary,fallbacks])
+  },[isOpen,automniaCreditsOnlyRoute,entitlement.automniaFrontierAllowed,primary,fallbacks])
   useEffect(()=>{
     if(!isOpen||automniaCreditsOnlyRoute||entitlement.automniaFrontierAllowed)return
     const normalizedPrimary=isAutomniaFrontierModelId(primary)?AUTOMNIA_CREDITS_MODEL_ID:primary
@@ -1698,40 +1704,37 @@ export function AgentEditorModal() {
                 {tab==='model'&&(
                   <div data-editor-panel="model" className="space-y-4">
                     <div>
-                      {routePresentation.managedRoute ? (
-                        <div data-editor-managed-route className="rounded-lg border border-emerald-400/20 bg-emerald-400/[0.05] px-3 py-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-sm font-extrabold text-emerald-100">Automnia</span>
-                            <span className="rounded-full border border-emerald-300/25 bg-emerald-300/[0.08] px-2 py-1 text-[8px] font-bold uppercase tracking-[0.12em] text-emerald-200">Subscription Relay</span>
-                          </div>
-                          <p className="mt-2 text-[9px] text-slate-400">{routePresentation.managedRouteDescription}</p>
+                      {routePresentation.managedRoute && <div data-editor-managed-route className="mb-3 rounded-lg border border-emerald-400/20 bg-emerald-400/[0.05] px-3 py-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm font-extrabold text-emerald-100">Automnia</span>
+                          <span className="rounded-full border border-emerald-300/25 bg-emerald-300/[0.08] px-2 py-1 text-[8px] font-bold uppercase tracking-[0.12em] text-emerald-200">Subscription Relay</span>
                         </div>
-                      ) : (
-                        <AgentModelPicker
-                          models={selectableModels}
-                          selectedIds={primary ? [primary] : []}
-                          fallbackIds={fallbacks}
-                          onToggleFallback={(modelId) => {
-                            setFallbacks((current) => {
-                              const next = current.includes(modelId)
-                                ? current.filter((id) => id !== modelId)
-                                : [...current, modelId]
-                              scheduleModelAutosave(primary, next)
-                              return next
-                            })
-                          }}
-                          disabled={modelsLoading}
-                          loading={modelsLoading}
-                          providerAuthStatusFor={(provider) => authForProvider(provider)}
-                          onProviderAuth={(_, providerStatus) => setAuthModalProvider(providerStatus)}
-                          onSelect={(next) => {
-                            setPrimary(next)
-                            setFallbacks(current => current.filter(id => id !== next))
-                            maybePromptProviderAuth(next)
-                            scheduleModelAutosave(next, fallbacks.filter((id) => id !== next))
-                          }}
-                        />
-                      )}
+                        <p className="mt-2 text-[9px] text-slate-400">{routePresentation.managedRouteDescription}</p>
+                      </div>}
+                      <AgentModelPicker
+                        models={selectableModels}
+                        selectedIds={primary ? [primary] : []}
+                        fallbackIds={fallbacks}
+                        onToggleFallback={(modelId) => {
+                          setFallbacks((current) => {
+                            const next = current.includes(modelId)
+                              ? current.filter((id) => id !== modelId)
+                              : [...current, modelId]
+                            scheduleModelAutosave(primary, next)
+                            return next
+                          })
+                        }}
+                        disabled={modelsLoading}
+                        loading={modelsLoading}
+                        providerAuthStatusFor={(provider) => authForProvider(provider)}
+                        onProviderAuth={(_, providerStatus) => setAuthModalProvider(providerStatus)}
+                        onSelect={(next) => {
+                          setPrimary(next)
+                          setFallbacks(current => current.filter(id => id !== next))
+                          maybePromptProviderAuth(next)
+                          scheduleModelAutosave(next, fallbacks.filter((id) => id !== next))
+                        }}
+                      />
                     </div>
                     {usesHostedCredits && providerFirst && <div data-editor-managed-route className="rounded-xl border border-emerald-400/15 bg-emerald-400/[0.04] p-3">
                       <p className="text-[11px] font-extrabold text-emerald-100">Automnia</p>

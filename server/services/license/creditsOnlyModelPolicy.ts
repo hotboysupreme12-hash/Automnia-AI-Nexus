@@ -53,7 +53,12 @@ export function isAutomniaFrontierTier(value: unknown) {
 
 export function isAutomniaFrontierEligibleTier(value: unknown) {
   const normalized = String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
-  return isAutomniaFrontierTier(normalized) || FRONTIER_ELIGIBLE_TIER_KEYS.has(normalized)
+  return isAutomniaFrontierTier(normalized)
+    || FRONTIER_ELIGIBLE_TIER_KEYS.has(normalized)
+    || normalized === 'pro_access'
+    || normalized === 'enterprise_access'
+    || normalized.startsWith('pro_')
+    || normalized.startsWith('enterprise_')
 }
 
 export function isAutomniaFrontierModelId(value: unknown) {

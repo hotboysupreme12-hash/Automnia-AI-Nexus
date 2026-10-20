@@ -132,11 +132,14 @@ test('persists hosted usage priority across balance updates and provisioner refr
   })
   await harness.service.activate({ email: 'customer@example.test', licenseKey: 'AUT-TEST-PRIORITY' })
 
-  const providerFirst = harness.service.setUsagePriority('provider_first')
+  const providerFirst = harness.service.setUsagePriority('provider_first', 'openai/gpt-5.6-sol')
   assert.equal(providerFirst.usagePriority, 'provider_first')
+  assert.equal(providerFirst.preferredProviderModel, 'openai/gpt-5.6-sol')
   assert.equal(harness.service.getActiveRelayCredentials()?.usagePriority, 'provider_first')
   assert.equal(harness.service.recordHostedCreditBalance(450)?.usagePriority, 'provider_first')
+  assert.equal(harness.service.getStatus().preferredProviderModel, 'openai/gpt-5.6-sol')
   assert.equal((await harness.service.refresh()).usagePriority, 'provider_first')
+  assert.equal(harness.service.getStatus().preferredProviderModel, 'openai/gpt-5.6-sol')
   assert.equal(harness.service.getStatus().creditBalance, 700)
 })
 

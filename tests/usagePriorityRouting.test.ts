@@ -42,7 +42,7 @@ test('Automnia-only does not silently switch to a provider when credits reach ze
     { automniaCreditBalance: 0 },
   )
 
-  assert.deepEqual(selection, { primary: AUTOMNIA, fallbacks: [...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS] })
+  assert.deepEqual(selection, { primary: AUTOMNIA })
 })
 
 test('Automnia remains primary while credits are available', () => {
@@ -54,7 +54,7 @@ test('Automnia remains primary while credits are available', () => {
     { automniaCreditBalance: 250 },
   )
 
-  assert.deepEqual(selection, { primary: AUTOMNIA, fallbacks: [...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS] })
+  assert.deepEqual(selection, { primary: AUTOMNIA })
 })
 
 test('Automnia credits preserve a user-selected hosted model', () => {
@@ -78,10 +78,10 @@ test('credits-only entitlements do not gain a provider fallback at zero balance'
     { automniaCreditBalance: 0, allowProviderFallbackWhenCreditsExhausted: false },
   )
 
-  assert.deepEqual(selection, { primary: AUTOMNIA, fallbacks: [...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS] })
+  assert.deepEqual(selection, { primary: AUTOMNIA })
 })
 
-test('provider-first is exactly provider followed by Automnia', () => {
+test('provider-first preserves the selected provider and fallback order', () => {
   const selection = applyUsagePriorityModelOrder(
     { primary: AUTOMNIA, fallbacks: ['google/gemini-2.5-pro', 'openai/gpt-5'] },
     'provider_first',
@@ -91,8 +91,60 @@ test('provider-first is exactly provider followed by Automnia', () => {
 
   assert.deepEqual(selection, {
     primary: 'google/gemini-2.5-pro',
-    fallbacks: [AUTOMNIA, ...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS],
+    fallbacks: ['openai/gpt-5'],
   })
+})
+
+test('provider-first honors the provider model selected in the agent stack over a legacy account preference', () => {
+  const selection = applyUsagePriorityModelOrder(
+    { primary: 'automnia-cloud/gemini-3.8-flash', fallbacks: ['openai/gpt-5.6-luna'] },
+    'provider_first',
+    ['openai/gpt-5.6-luna', 'openai/gpt-5.6-sol'],
+    AUTOMNIA,
+    { preferredProviderModel: 'openai/gpt-5.6-sol' },
+  )
+
+  assert.deepEqual(selection, {
+    primary: 'openai/gpt-5.6-luna',
+  })
+})
+
+test('provider-first keeps an explicitly empty fallback stack empty', () => {
+  assert.deepEqual(
+    applyUsagePriorityModelOrder(
+      { primary: 'openai/gpt-5.6-sol', fallbacks: [] },
+      'provider_first',
+      ['openai/gpt-5.6-sol', 'openai/gpt-5.6-luna'],
+      AUTOMNIA,
+    ),
+    { primary: 'openai/gpt-5.6-sol' },
+  )
+})
+
+test('provider-first uses the legacy preference only when the agent stack has no provider model', () => {
+  assert.deepEqual(
+    applyUsagePriorityModelOrder(
+      { primary: AUTOMNIA, fallbacks: [] },
+      'provider_first',
+      ['openai/gpt-5.6-luna', 'openai/gpt-5.6-sol'],
+      AUTOMNIA,
+      { preferredProviderModel: 'openai/gpt-5.6-sol' },
+    ),
+    { primary: 'openai/gpt-5.6-sol' },
+  )
+})
+
+test('provider-first refuses a saved provider model that is no longer configured', () => {
+  assert.equal(
+    applyUsagePriorityModelOrder(
+      { primary: 'automnia-cloud/gemini-3.8-flash', fallbacks: ['openai/gpt-5.6-luna'] },
+      'provider_first',
+      ['openai/gpt-5.6-luna'],
+      AUTOMNIA,
+      { preferredProviderModel: 'anthropic/claude-opus-5' },
+    ),
+    undefined,
+  )
 })
 
 test('the combined route can run Automnia first with the provider as fallback', () => {
@@ -105,7 +157,7 @@ test('the combined route can run Automnia first with the provider as fallback', 
 
   assert.deepEqual(selection, {
     primary: AUTOMNIA,
-    fallbacks: [...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS, 'google/gemini-2.5-pro'],
+    fallbacks: ['openai/gpt-5'],
   })
 })
 

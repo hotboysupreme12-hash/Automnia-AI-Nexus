@@ -3,18 +3,18 @@ import { usageBaseline } from './usageRemaining'
 
 export const LICENSE_STATUS_UPDATED_EVENT = 'automnia-license-updated'
 
-export const AUTOMNIA_CREDITS_MODEL_ID = 'automnia-cloud/gemini-3.7-flash'
+export const AUTOMNIA_CREDITS_MODEL_ID = 'automnia-cloud/gemini-3.8-flash'
 export const AUTOMNIA_FRONTIER_MODEL_ID = 'automnia-cloud/gemini-4-argon'
 export const AUTOMNIA_RELAY_MODEL_IDS = [
   AUTOMNIA_FRONTIER_MODEL_ID,
-  'automnia-cloud/gemini-3.8-flash',
   AUTOMNIA_CREDITS_MODEL_ID,
+  'automnia-cloud/gemini-3.7-flash',
   'automnia-cloud/gemini-3.6-flash',
 ] as const
 export const AUTOMNIA_RELAY_MODEL_LABELS: Record<string, string> = {
   [AUTOMNIA_FRONTIER_MODEL_ID]: 'Automnia Frontier',
-  'automnia-cloud/gemini-3.8-flash': 'Automnia Prime',
-  [AUTOMNIA_CREDITS_MODEL_ID]: 'Automnia Balanced',
+  [AUTOMNIA_CREDITS_MODEL_ID]: 'Automnia Prime',
+  'automnia-cloud/gemini-3.7-flash': 'Automnia Balanced',
   'automnia-cloud/gemini-3.6-flash': 'Automnia Swift',
   'automnia-cloud/gemini-2.5-flash': 'Automnia Classic',
 }
@@ -23,8 +23,8 @@ export const AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS = [
   'automnia-cloud/gemini-2.5-flash',
 ] as const
 export const AUTOMNIA_CREDITS_MODEL_IDS = [
-  'automnia-cloud/gemini-3.8-flash',
   AUTOMNIA_CREDITS_MODEL_ID,
+  'automnia-cloud/gemini-3.7-flash',
   ...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS,
 ] as const
 
@@ -38,11 +38,21 @@ export function isAutomniaFrontierTier(value: string | null | undefined) {
 
 export function isAutomniaFrontierEligibleTier(value: string | null | undefined) {
   const normalized = value?.trim().toLowerCase().replace(/[\s-]+/g, '_') || ''
-  return isAutomniaFrontierTier(normalized) || FRONTIER_ELIGIBLE_TIER_KEYS.has(normalized)
+  return isAutomniaFrontierTier(normalized)
+    || FRONTIER_ELIGIBLE_TIER_KEYS.has(normalized)
+    || normalized === 'pro_access'
+    || normalized === 'enterprise_access'
+    || normalized.startsWith('pro_')
+    || normalized.startsWith('enterprise_')
 }
 
 export function isAutomniaFrontierModelId(value: string | null | undefined) {
   return value?.trim().toLowerCase() === AUTOMNIA_FRONTIER_MODEL_ID
+}
+
+export function isAutomniaRelayModelId(value: string | null | undefined) {
+  const normalized = value?.trim().toLowerCase()
+  return Boolean(normalized && AUTOMNIA_RELAY_MODEL_IDS.includes(normalized as typeof AUTOMNIA_RELAY_MODEL_IDS[number]))
 }
 
 export function isAutomniaCreditsModelId(value: string | null | undefined) {

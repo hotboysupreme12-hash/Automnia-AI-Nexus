@@ -76,6 +76,7 @@ export function registerLicenseRoutes(app: Express, options: {
   app.post('/api/license/usage-priority', async (req, res) => {
     const parsed = z.object({
       usagePriority: z.enum(['automnia_only', 'provider_first', 'automnia_first_with_provider_fallback']),
+      preferredProviderModel: z.string().trim().min(3).max(180).nullable().optional(),
     }).safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Choose Automnia credits only, or My provider + Automnia credits with a fallback order.')
     const currentStatus = options.licenseService.getStatus()
@@ -85,8 +86,15 @@ export function registerLicenseRoutes(app: Express, options: {
     if (options.licenseService.isUsagePriorityLocked() && parsed.data.usagePriority !== 'automnia_only') {
       return apiFailure(res, 409, 'invalid_payload', 'Starter and credit-refill access stay on Automnia credits. Upgrade to Pro to choose another usage priority.')
     }
+    if (parsed.data.preferredProviderModel && /^automnia-cloud\//i.test(parsed.data.preferredProviderModel)) {
+      return apiFailure(res, 400, 'invalid_payload', 'Choose a connected provider model, not an Automnia hosted model, for the provider-first preference.')
+    }
+    const desiredPreferredProviderModel = parsed.data.preferredProviderModel === undefined
+      ? currentStatus.preferredProviderModel || null
+      : parsed.data.preferredProviderModel
+    const samePreferredProviderModel = (left: string | null | undefined, right: string | null | undefined) => (left || null) === (right || null)
     try {
-      options.licenseService.setUsagePriority(parsed.data.usagePriority)
+      options.licenseService.setUsagePriority(parsed.data.usagePriority, desiredPreferredProviderModel)
       // Do not acknowledge a route change until OpenClaw has been reconciled.
       // Returning first creates a window where the next turn still uses the
       // old Automnia-first config and can debit hosted credits unexpectedly.
@@ -99,11 +107,14 @@ export function registerLicenseRoutes(app: Express, options: {
       // Route application is part of the setting transaction. If Gateway
       // confirmation fails, restore the prior policy so the next turn cannot
       // observe a persisted preference whose live route was never applied.
-      if (currentStatus.usagePriority && currentStatus.usagePriority !== parsed.data.usagePriority) {
+      if (currentStatus.usagePriority && (
+        currentStatus.usagePriority !== parsed.data.usagePriority
+        || !samePreferredProviderModel(currentStatus.preferredProviderModel, desiredPreferredProviderModel)
+      )) {
         const latestStatus = options.licenseService.getStatus()
-        if (latestStatus.usagePriority === parsed.data.usagePriority) {
+        if (latestStatus.usagePriority === parsed.data.usagePriority && samePreferredProviderModel(latestStatus.preferredProviderModel, desiredPreferredProviderModel)) {
           try {
-            options.licenseService.setUsagePriority(currentStatus.usagePriority)
+            options.licenseService.setUsagePriority(currentStatus.usagePriority, currentStatus.preferredProviderModel)
             await synchronizeOpenClawBillingRoute()
           } catch {
             // Keep the original failure as the user-facing error. The route

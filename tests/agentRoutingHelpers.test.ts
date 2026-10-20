@@ -323,9 +323,32 @@ test('Telegram model callbacks are locked to Automnia credits for Starter runtim
 
   const starterConfig = { env: { vars: { AUTOMNIA_CREDITS_ONLY: '1' } } }
   assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'automnia-cloud', model: 'gemini-3.7-flash' }), true)
+  assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'automnia-cloud', model: 'gemini-4-argon' }), false)
   assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'google', model: 'gemini-2.5-pro' }), false)
   assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'openai', model: 'gpt-5.5' }), false)
   assert.equal(selectionAllowed({}, { type: 'select', provider: 'google', model: 'gemini-2.5-pro' }), true)
+})
+
+test('Telegram model menus expose Frontier for eligible hosted routes and never for Starter', () => {
+  const billingModelData = new Function(`
+    ${TELEGRAM_AGENT_ROUTING_HELPER}
+    return telegramBillingModelData
+  `)() as (config: unknown, data: { byProvider: Map<string, Set<string>>; providers: string[] }) => {
+    byProvider: Map<string, Set<string>>
+    providers: string[]
+  }
+
+  const eligible = billingModelData(
+    { env: { vars: { AUTOMNIA_FRONTIER_ALLOWED: '1' } } },
+    { byProvider: new Map([['automnia-cloud', new Set(['gemini-3.8-flash'])]]), providers: ['automnia-cloud'] },
+  )
+  assert.equal(eligible.byProvider.get('automnia-cloud')?.has('gemini-4-argon'), true)
+
+  const starter = billingModelData(
+    { env: { vars: { AUTOMNIA_CREDITS_ONLY: '1', AUTOMNIA_FRONTIER_ALLOWED: '1' } } },
+    { byProvider: new Map([['google', new Set(['gemini-2.5-pro'])]]), providers: ['google'] },
+  )
+  assert.equal(starter.byProvider.get('automnia-cloud')?.has('gemini-4-argon'), false)
 })
 
 test('Telegram Automnia model detection does not leak a regex flag as a variable', () => {

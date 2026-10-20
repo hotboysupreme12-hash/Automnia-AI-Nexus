@@ -1959,9 +1959,13 @@ function resilienceFallbacksForModel(modelId: string) {
 }
 
 function modelSelectionForOpenClawConfig(model: { primary?: string; fallbacks?: string[] }) {
+  const hasExplicitFallbacks = Array.isArray(model?.fallbacks)
   const primary = primaryModelForOpenClawConfig(model.primary)
   const fallbackSet = new Set<string>()
-  for (const modelId of [...(model.fallbacks || []), ...resilienceFallbacksForModel(primary)]) {
+  for (const modelId of [
+    ...(model.fallbacks || []),
+    ...(hasExplicitFallbacks ? [] : resilienceFallbacksForModel(primary)),
+  ]) {
     const fallback = fallbackModelForOpenClawConfig(modelId)
     if (fallback && fallback !== primary) fallbackSet.add(fallback)
   }
@@ -8983,10 +8987,10 @@ function normalizeModelSelectionForOpenClawConfig(value: { primary?: string; fal
   if (!value) return
   const normalized = modelSelectionForOpenClawConfig({
     primary: value.primary,
-    fallbacks: Array.isArray(value.fallbacks) ? value.fallbacks : [],
+    ...(Array.isArray(value.fallbacks) ? { fallbacks: value.fallbacks } : {}),
   })
   value.primary = normalized.primary
-  if (normalized.fallbacks.length) {
+  if (normalized.fallbacks.length || Array.isArray(value.fallbacks)) {
     value.fallbacks = normalized.fallbacks
   } else {
     delete value.fallbacks
@@ -9915,6 +9919,7 @@ function isAutomniaOpenClawModel(value: unknown) {
 function modelSelectionForActiveBillingRoute(selection: OpenClawModelSelection) {
   const frontierAllowed = licenseService.isAutomniaFrontierAccessAllowed()
   const creditsOnly = licenseService.isUsagePriorityLocked()
+  const hasExplicitFallbacks = Array.isArray(selection?.fallbacks)
   const requestedPrimary = typeof selection?.primary === 'string' ? selection.primary : ''
   const primary = !frontierAllowed && isAutomniaFrontierModelId(canonicalAgentModelId(requestedPrimary))
     ? AUTOMNIA_OPENCLAW_MODEL
@@ -9929,7 +9934,10 @@ function modelSelectionForActiveBillingRoute(selection: OpenClawModelSelection) 
     return !creditsOnly || isAutomniaCreditsModelId(canonical)
   }).filter((modelId) => modelId !== primary)
   if (!creditsOnly && frontierAllowed && primary === requestedPrimary) return selection
-  return { primary: primary || AUTOMNIA_OPENCLAW_MODEL, ...(fallbacks.length ? { fallbacks } : {}) }
+  return {
+    primary: primary || AUTOMNIA_OPENCLAW_MODEL,
+    ...(fallbacks.length || hasExplicitFallbacks ? { fallbacks } : {}),
+  }
 }
 
 function modelSelectionBlocked(modelId: string) {
@@ -9986,6 +9994,7 @@ function applyAutomniaBillingModelOrder(
   usagePriority: 'automnia_only' | 'provider_first' | 'automnia_first_with_provider_fallback' | 'automnia_first' | 'byok_only' | null,
   providerCandidates: string[] = [],
   automniaCreditBalance?: number | null,
+  preferredProviderModel?: string | null,
 ) {
   const activeSelection = selection ? modelSelectionForActiveBillingRoute(selection) : selection
   return applyUsagePriorityModelOrder(activeSelection, usagePriority, [
@@ -9993,6 +10002,7 @@ function applyAutomniaBillingModelOrder(
     ...providerCandidates,
   ], AUTOMNIA_OPENCLAW_MODEL, {
     automniaCreditBalance,
+    preferredProviderModel,
   })
 }
 
@@ -10063,12 +10073,16 @@ function enforceActiveBillingRouteModelOrder(config: OpenClawConfigFile) {
     priority,
     providerCandidates,
     status.creditBalance,
+    status.preferredProviderModel,
   )
+  if ((priority === 'provider_first' || priority === 'byok_only') && status.preferredProviderModel && !defaultSelection) {
+    throw new Error(`The selected provider model is not configured: ${status.preferredProviderModel}. Reconnect that provider or choose another model.`)
+  }
   config.agents.defaults.model = defaultSelection
   setTelegramBillingDefaultModel(config, defaultSelection?.primary)
   for (const agent of config.agents.list || []) {
     delete agent.modelOverride
-    const nextSelection = applyAutomniaBillingModelOrder(agent.model, priority, providerCandidates, status.creditBalance)
+    const nextSelection = applyAutomniaBillingModelOrder(agent.model, priority, providerCandidates, status.creditBalance, status.preferredProviderModel)
     if (nextSelection) agent.model = nextSelection
     else delete agent.model
   }
@@ -10088,6 +10102,7 @@ function enforceActiveBillingRouteModelOrder(config: OpenClawConfigFile) {
   // runtime contract while retaining the local provider records for a future
   // upgrade. The local agent files remain the durable source for restoration.
   const creditsOnly = licenseService.isUsagePriorityLocked()
+  const frontierAllowed = licenseService.isAutomniaFrontierAccessAllowed()
   if (creditsOnly) {
     const existingAutomniaEntries = AUTOMNIA_CREDITS_MODEL_IDS.reduce<Record<string, OpenClawModelAllowlistEntry>>((entries, modelId) => {
       const existing = config.agents?.defaults?.models?.[modelId]
@@ -10109,6 +10124,7 @@ function enforceActiveBillingRouteModelOrder(config: OpenClawConfigFile) {
       vars: {
         ...(config.env?.vars || {}),
         AUTOMNIA_CREDITS_ONLY: '1',
+        AUTOMNIA_FRONTIER_ALLOWED: frontierAllowed ? '1' : '0',
       },
     }
   } else if (config.env?.vars?.AUTOMNIA_CREDITS_ONLY !== undefined) {
@@ -10119,6 +10135,15 @@ function enforceActiveBillingRouteModelOrder(config: OpenClawConfigFile) {
       ...(Object.keys(vars).length ? { vars } : {}),
     }
     if (!config.env.vars) delete config.env
+  }
+  if (!creditsOnly) {
+    config.env = {
+      ...(config.env || {}),
+      vars: {
+        ...(config.env?.vars || {}),
+        AUTOMNIA_FRONTIER_ALLOWED: frontierAllowed ? '1' : '0',
+      },
+    }
   }
 }
 
@@ -10236,7 +10261,11 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
     priority,
     allProviderModels,
     licenseStatus.creditBalance,
+    licenseStatus.preferredProviderModel,
   )
+  if ((priority === 'provider_first' || priority === 'byok_only') && licenseStatus.preferredProviderModel && !defaultSelection) {
+    throw new Error(`The selected provider model is not configured: ${licenseStatus.preferredProviderModel}. Reconnect that provider or choose another model.`)
+  }
   config.agents.defaults.model = defaultSelection
   setTelegramBillingDefaultModel(config, defaultSelection?.primary)
   for (const agent of config.agents.list || []) {
@@ -10246,7 +10275,7 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
     agent.model = applyAutomniaBillingModelOrder(localModels.get(agent.id) || agent.model, priority, uniqueStrings(
       ...nonAutomniaOpenClawModels(localModels.get(agent.id)),
       ...allProviderModels,
-    ), licenseStatus.creditBalance)
+    ), licenseStatus.creditBalance, licenseStatus.preferredProviderModel)
   }
   if (!config.agents.defaults.models) config.agents.defaults.models = {}
   const modelIdsForConfig = licenseService.isUsagePriorityLocked()
@@ -11400,11 +11429,13 @@ function patchedTelegramBotRuntimeSource(source: string) {
     console.warn('[plugins/telegram] identity delivery guard skipped: reply delivery marker not found')
   }
   const modelDataMarker = 'const { byProvider, providers, modelNames, resolvedDefault: activeResolvedDefault } = modelData;'
-  if (!next.includes('telegramCreditsOnlyModelData(runtimeCfg, modelData)')) {
-    if (next.includes(modelDataMarker)) {
+  if (!next.includes('telegramBillingModelData(runtimeCfg, modelData)')) {
+    if (next.includes('telegramCreditsOnlyModelData(runtimeCfg, modelData)')) {
+      next = next.replace('telegramCreditsOnlyModelData(runtimeCfg, modelData)', 'telegramBillingModelData(runtimeCfg, modelData)')
+    } else if (next.includes(modelDataMarker)) {
       next = next.replace(
         modelDataMarker,
-        `const restrictedTelegramModelData = telegramCreditsOnlyModelData(runtimeCfg, modelData);\n\t\t\t\tconst { byProvider, providers, modelNames, resolvedDefault: activeResolvedDefault } = restrictedTelegramModelData;`,
+        `const restrictedTelegramModelData = telegramBillingModelData(runtimeCfg, modelData);\n\t\t\t\tconst { byProvider, providers, modelNames, resolvedDefault: activeResolvedDefault } = restrictedTelegramModelData;`,
       )
     } else {
       console.warn('[plugins/telegram] credits-only model data guard skipped: model data marker not found')
@@ -14197,6 +14228,7 @@ function normalizeModelWithFallback(
         ...FALLBACK_MODELS.map((entry) => entry.id),
       )
   const preferredPrimary = canonicalAgentModelId(model?.primary) || canonicalAgentModelId(defaults?.primary) || DEFAULT_AGENT_MODEL_ID
+  const hasExplicitFallbacks = Array.isArray(model?.fallbacks)
   const requestedFallbacks = (model ? model.fallbacks || [] : defaults?.fallbacks || []).map((modelId) =>
     canonicalAgentModelId(modelId),
   )
@@ -14224,7 +14256,10 @@ function normalizeModelWithFallback(
 
   const primary = pickPrimary()
   const fallbackSet = new Set<string>()
-  for (const value of [...requestedFallbacks, ...resilienceFallbacksForModel(primary)]) {
+  for (const value of [
+    ...requestedFallbacks,
+    ...(hasExplicitFallbacks ? [] : resilienceFallbacksForModel(primary)),
+  ]) {
     const trimmed = value?.trim()
     if (!trimmed || trimmed === primary) continue
     if (!isKnownUsableModel(trimmed)) continue

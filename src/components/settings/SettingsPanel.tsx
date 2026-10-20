@@ -86,7 +86,6 @@ type NoticeTone = 'neutral' | 'success' | 'warning' | 'error'
 export type SettingsSectionId = 'account' | 'appearance' | 'workspace' | 'voice' | 'missions' | 'agents' | 'telegram' | 'updates' | 'logs' | 'data'
 type RuntimeTargetScope = 'party' | 'selection'
 type PendingConfirmation = 'reset-all' | 'reset-runtime' | 'clear-workspace' | null
-
 const SETTINGS_SECTIONS: Array<{
   id: SettingsSectionId
   label: string
@@ -941,8 +940,11 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
         setCheckoutBusy(false)
       }
     }
-    const saveUsagePriority = async (nextPriority: 'automnia_only' | 'provider_first' | 'automnia_first_with_provider_fallback') => {
-      if (!usagePriorityManaged || usagePriorityBusy || nextPriority === usagePriority) return
+    const saveUsagePriority = async (
+      nextPriority: 'automnia_only' | 'provider_first' | 'automnia_first_with_provider_fallback',
+    ) => {
+      const priorityChanged = nextPriority !== usagePriority
+      if (!usagePriorityManaged || usagePriorityBusy || !priorityChanged) return
       if (usagePriorityLocked) {
         setUsagePriorityError('Starter and credit refills use Automnia credits. Upgrade to Pro to use your own provider.')
         return
@@ -954,7 +956,10 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
       setUsagePriorityBusy(true)
       setUsagePriorityError('')
       try {
-        await setUsagePriority(nextPriority)
+        // The agent model picker owns the provider model and fallback stack.
+        // Clear the legacy account-level preference so it cannot override a
+        // later per-agent selection.
+        await setUsagePriority(nextPriority, null)
         setNotice({
           tone: 'success',
           text: nextPriority === 'provider_first'
@@ -1151,6 +1156,9 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
                     <option value="automnia_first_with_provider_fallback">Automnia credits, then my provider</option>
                   </select>
                 </label>
+                <small style={{ display: 'block', marginTop: '0.7rem', color: '#94a3b8' }}>
+                  Choose the provider model, Automnia model, and exact fallback order in each agent’s Model selection. This setting only chooses which billing route runs first.
+                </small>
               </div>}
             </Field>
           </div>

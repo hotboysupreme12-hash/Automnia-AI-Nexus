@@ -704,6 +704,23 @@ function telegramCreditsOnlyModelData(config, data) {
         providers: ['automnia-cloud']
     });
 }
+function telegramBillingModelData(config, data) {
+    var vars = config && config.env && config.env.vars;
+    if (!data || !vars) return data;
+    // Starter/refill access remains hard-locked to the non-Frontier credits
+    // set above. Eligible Pro, Enterprise, and Frontier routes may expose the
+    // named Frontier relay even when OpenClaw returned a sparse model catalog.
+    var restricted = telegramCreditsOnlyModelData(config, data);
+    if (restricted !== data) return restricted;
+    if (String(vars.AUTOMNIA_FRONTIER_ALLOWED || '') !== '1') return data;
+    var byProvider = new Map(data.byProvider || []);
+    var automniaModels = new Set(byProvider.get('automnia-cloud') || []);
+    automniaModels.add('gemini-4-argon');
+    byProvider.set('automnia-cloud', automniaModels);
+    var providers = Array.isArray(data.providers) ? data.providers.slice() : [];
+    if (providers.indexOf('automnia-cloud') === -1) providers.push('automnia-cloud');
+    return Object.assign({}, data, { byProvider: byProvider, providers: providers });
+}
 function resolveTelegramAgentRouteMemory() {
     var root = globalThis;
     var state = root[TELEGRAM_AGENT_ROUTE_MEMORY_KEY];

@@ -18,6 +18,7 @@ export type LicenseInfo = {
   permanentAccess: boolean
   subscriptionStatus: string | null
   usagePriority: HostedUsagePriority | null
+  preferredProviderModel?: string | null
   creditBalance: number | null
   creditUsageBaseline?: number | null
   creditBalanceUpdatedAt: string | null
@@ -34,7 +35,7 @@ export type LicenseContextValue = {
   isLicensed: boolean
   activate: (email: string, licenseKey: string) => Promise<void>
   refresh: () => Promise<LicenseInfo>
-  setUsagePriority: (usagePriority: HostedUsagePriority) => Promise<LicenseInfo>
+  setUsagePriority: (usagePriority: HostedUsagePriority, preferredProviderModel?: string | null) => Promise<LicenseInfo>
   openSubscriptionCheckout: () => Promise<void>
   requestLicenseActivation: () => void
   dismissLicenseActivation: () => void

@@ -1,6 +1,7 @@
 import {
   AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS,
   isAutomniaCreditsModelId,
+  isAutomniaRelayModelId,
 } from './creditsOnlyModelPolicy'
 
 export type UsagePriority =
@@ -19,6 +20,8 @@ export type UsagePriorityModelSelection = {
 export type UsagePriorityModelOrderOptions = {
   /** The last confirmed pooled Automnia balance. */
   automniaCreditBalance?: number | null
+  /** A user-selected provider model must win over catalog insertion order. */
+  preferredProviderModel?: string | null
   /** @deprecated Kept for compatibility; Automnia-only never auto-falls back. */
   allowProviderFallbackWhenCreditsExhausted?: boolean
 }
@@ -66,7 +69,7 @@ function automniaHostedFallbacks(automniaModelId: string, selectedPrimary?: stri
 
 function selectedAutomniaModel(selection: UsagePriorityModelSelection | undefined, automniaModelId: string) {
   const requested = typeof selection?.primary === 'string' ? selection.primary.trim() : ''
-  return isAutomniaCreditsModelId(requested) ? requested : automniaModelId
+  return isAutomniaRelayModelId(requested) || isAutomniaCreditsModelId(requested) ? requested : automniaModelId
 }
 
 /**
@@ -84,26 +87,56 @@ export function applyUsagePriorityModelOrder(
   automniaModelId: string,
   options: UsagePriorityModelOrderOptions = {},
 ): UsagePriorityModelSelection | undefined {
-  const providerModel = uniqueStrings(
+  const providerCandidatesInOrder = uniqueStrings(
     selection?.primary,
     ...(Array.isArray(selection?.fallbacks) ? selection.fallbacks : []),
     ...providerCandidates,
+  ).filter((modelId) => !isAutomniaModel(modelId, automniaModelId))
+  const preferredProviderModel = typeof options.preferredProviderModel === 'string'
+    ? options.preferredProviderModel.trim()
+    : ''
+  const preferredProviderModelMatch = preferredProviderModel
+    ? providerCandidatesInOrder.find((modelId) => modelId.toLowerCase() === preferredProviderModel.toLowerCase())
+    : undefined
+  const selectedProviderModel = uniqueStrings(
+    selection?.primary,
+    ...(Array.isArray(selection?.fallbacks) ? selection.fallbacks : []),
   ).find((modelId) => !isAutomniaModel(modelId, automniaModelId))
+  // The model stack selected in the agent editor is the source of truth. Keep
+  // the legacy account preference only as a migration fallback for old
+  // accounts whose saved stack contains no provider model yet.
+  const providerModel = selectedProviderModel || preferredProviderModelMatch || providerCandidatesInOrder[0]
+
+  // A saved preference that disappeared from the configured provider stack is
+  // not safe to replace silently with a different provider model. Returning an
+  // unapplied route lets the caller surface a repairable configuration error.
+  if (preferredProviderModel && !preferredProviderModelMatch && (usagePriority === 'provider_first' || usagePriority === 'byok_only')) {
+    return undefined
+  }
 
   if (usagePriority === 'automnia_only' || usagePriority === 'automnia_first') {
     // Automnia-only is an explicit billing choice. A zero balance must not
     // silently convert it into provider usage; provider fallback is opt-in
     // through the combined Automnia-first route below.
+    const hasExplicitFallbacks = Array.isArray(selection?.fallbacks)
+    const primary = selectedAutomniaModel(selection, automniaModelId)
+    const fallbacks = hasExplicitFallbacks
+      ? uniqueStrings(...(selection?.fallbacks || []))
+        .filter((modelId) => isAutomniaModel(modelId, automniaModelId) && modelId.toLowerCase() !== primary.toLowerCase())
+      : automniaHostedFallbacks(automniaModelId, primary)
     return {
-      primary: selectedAutomniaModel(selection, automniaModelId),
-      fallbacks: automniaHostedFallbacks(automniaModelId, selectedAutomniaModel(selection, automniaModelId)),
+      primary,
+      ...(fallbacks.length ? { fallbacks } : {}),
     }
   }
 
   if (usagePriority === 'automnia_first_with_provider_fallback') {
     const primary = selectedAutomniaModel(selection, automniaModelId)
-    const hostedFallbacks = automniaHostedFallbacks(automniaModelId, primary)
-    const fallbacks = uniqueStrings(...hostedFallbacks, providerModel)
+    const hasExplicitFallbacks = Array.isArray(selection?.fallbacks)
+    const hostedFallbacks = hasExplicitFallbacks ? [] : automniaHostedFallbacks(automniaModelId, primary)
+    const requestedFallbacks = hasExplicitFallbacks ? selection?.fallbacks || [] : []
+    const fallbacks = uniqueStrings(...requestedFallbacks, ...hostedFallbacks, ...(hasExplicitFallbacks ? [] : [providerModel]))
+      .filter((modelId) => modelId.toLowerCase() !== primary.toLowerCase())
     return {
       primary,
       ...(fallbacks.length ? { fallbacks } : {}),
@@ -113,14 +146,20 @@ export function applyUsagePriorityModelOrder(
   if (usagePriority === 'provider_first') {
     // Fail closed when no provider model exists. Falling back to Automnia as
     // the primary here would violate an explicit provider-first choice.
-    return providerModel
-      ? {
-          primary: providerModel,
-          ...(options.automniaCreditBalance === 0
-            ? {}
-            : { fallbacks: uniqueStrings(automniaModelId, ...automniaHostedFallbacks(automniaModelId)) }),
-        }
-      : undefined
+    if (!providerModel) return undefined
+    const hasExplicitFallbacks = Array.isArray(selection?.fallbacks)
+    const requestedFallbacks = hasExplicitFallbacks
+      ? (selection?.fallbacks || [])
+      : options.automniaCreditBalance === 0
+        ? []
+        : [automniaModelId, ...automniaHostedFallbacks(automniaModelId)]
+    const fallbacks = uniqueStrings(...requestedFallbacks)
+      .filter((modelId) => modelId.toLowerCase() !== providerModel.toLowerCase())
+      .filter((modelId) => options.automniaCreditBalance !== 0 || !isAutomniaModel(modelId, automniaModelId))
+    return {
+      primary: providerModel,
+      ...(fallbacks.length ? { fallbacks } : {}),
+    }
   }
 
   if (usagePriority === 'byok_only') {
