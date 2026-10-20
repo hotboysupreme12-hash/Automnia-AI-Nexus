@@ -30,7 +30,7 @@ end-to-end contract for them.
 | Google Gemini API | `google/gemini-3.8-flash`, `google/gemini-3.5-flash-lite`, `google/gemini-3.1-pro-preview` | Uses the Google Generative Language route and Google API-key/OAuth setup. Tool requests use the native Gateway path. |
 | Google Vertex AI | `google-vertex/gemini-3.8-flash`, `google-vertex/gemini-3.5-flash-lite`, `google-vertex/gemini-3.1-pro-preview` | Uses configured Vertex project, location, and application credentials/OAuth. Availability remains account- and region-dependent. |
 | Anthropic | `anthropic/claude-fable-5-1`, `anthropic/claude-fable-5`, `anthropic/claude-opus-5`, `anthropic/claude-opus-4-7`, `anthropic/claude-sonnet-5`, `anthropic/claude-sonnet-4-6`, `anthropic/claude-haiku-4-5` | Uses the native Anthropic/OpenClaw runtime for agent turns. The fallback catalog only exposes Anthropic IDs verified in the bundled runtime and current Anthropic catalog. Newer Anthropic 5.5/Mythos IDs remain gated until the bundled runtime advertises them. |
-| Automnia hosted relay | `automnia-cloud/gemini-4-argon`, `automnia-cloud/gemini-3.8-flash`, `automnia-cloud/gemini-3.7-flash`, `automnia-cloud/gemini-3.6-flash`, `automnia-cloud/gemini-2.5-flash` | The hosted relay is the Automnia billing boundary. `gemini-4-argon` is selectable only for the **Automnia Frontier** tier; Prime and lower tiers retain their existing bounded hosted chain. |
+| Automnia hosted relay | `automnia-cloud/gemini-4-argon`, `automnia-cloud/gemini-3.8-flash`, `automnia-cloud/gemini-3.7-flash`, `automnia-cloud/gemini-3.6-flash`, `automnia-cloud/gemini-2.5-flash` | The hosted relay is the Automnia billing boundary. `gemini-4-argon` is selectable for **Pro**, **Enterprise**, and **Automnia Frontier** entitlements; Starter and credit-refill accounts remain on the bounded Prime/core chain. |
 
 The catalog can also contain earlier provider models and account-specific models
 reported by `openclaw models list`. “Available” means the ID is recognized and
@@ -62,14 +62,14 @@ by the provider and the connected credential.
 
 ### Automnia Frontier and Gemini 4 Argon
 
-Automnia Frontier is the tier above Prime. Its hosted model is
+Automnia Frontier is the hosted model tier above Prime. Its hosted model is
 `automnia-cloud/gemini-4-argon`, backed by Google's stable `gemini-4-argon`
 model. Argon supports low, medium, and high thinking levels, function calling,
 code execution, computer use, and a 1,048,576-token context window. Automnia
 maps **Off/Minimal** to `low` and **XHigh/Max** to `high`, preserving the same
-bounded relay contract used by the other Automnia hosted models. The Frontier
-model is excluded from Starter/credit-only allowlists and from non-Frontier
-account fallbacks.
+bounded relay contract used by the other Automnia hosted models. Pro and
+Enterprise accounts may select Frontier directly; Starter and credit-only
+allowlists exclude it. A dedicated Frontier entitlement is also recognized.
 
 See Google's official [Gemini 4 Argon model guide](https://ai.google.dev/gemini-api/docs/models/gemini-4-argon).
 

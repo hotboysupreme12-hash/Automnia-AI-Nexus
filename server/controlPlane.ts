@@ -9903,7 +9903,7 @@ function isAutomniaOpenClawModel(value: unknown) {
 }
 
 function modelSelectionForActiveBillingRoute(selection: OpenClawModelSelection) {
-  const frontierAllowed = licenseService.isAutomniaFrontierTier()
+  const frontierAllowed = licenseService.isAutomniaFrontierAccessAllowed()
   const creditsOnly = licenseService.isUsagePriorityLocked()
   const requestedPrimary = typeof selection?.primary === 'string' ? selection.primary : ''
   const primary = !frontierAllowed && isAutomniaFrontierModelId(canonicalAgentModelId(requestedPrimary))
@@ -9924,7 +9924,7 @@ function modelSelectionForActiveBillingRoute(selection: OpenClawModelSelection) 
 
 function modelSelectionBlocked(modelId: string) {
   const canonical = canonicalAgentModelId(modelId)
-  if (isAutomniaFrontierModelId(canonical) && !licenseService.isAutomniaFrontierTier()) {
+  if (isAutomniaFrontierModelId(canonical) && !licenseService.isAutomniaFrontierAccessAllowed()) {
     return AUTOMNIA_FRONTIER_MODEL_ACCESS_MESSAGE
   }
   if (!licenseService.isUsagePriorityLocked()) return null

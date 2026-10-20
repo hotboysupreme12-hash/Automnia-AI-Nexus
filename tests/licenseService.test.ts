@@ -196,7 +196,28 @@ test('preserves permanent BYOK and Frontier access for the Automnia Frontier tie
   assert.equal(activated.permanentAccess, true)
   assert.equal(activated.usagePriority, 'provider_first')
   assert.equal(harness.service.isAutomniaFrontierTier(), true)
+  assert.equal(harness.service.isAutomniaFrontierAccessAllowed(), true)
   assert.equal(harness.service.isUsagePriorityLocked(), false)
+})
+
+test('allows Pro and Enterprise accounts to select Automnia Frontier', async () => {
+  for (const tier of ['pro', 'enterprise']) {
+    const harness = createHarness({
+      responses: [{
+        ok: true,
+        active: true,
+        email: 'customer@example.test',
+        tier,
+        mode: 'hosted_credits',
+        byokAllowed: true,
+        permanentAccess: true,
+        creditBalance: 1_000,
+      }],
+    })
+    await harness.service.activate({ email: 'customer@example.test', licenseKey: `AUT-TEST-FRONTIER-${tier.toUpperCase()}` })
+    assert.equal(harness.service.isAutomniaFrontierTier(), false, tier)
+    assert.equal(harness.service.isAutomniaFrontierAccessAllowed(), true, tier)
+  }
 })
 
 test('keeps a managed priority when the account changes between permanent and hosted modes', async () => {

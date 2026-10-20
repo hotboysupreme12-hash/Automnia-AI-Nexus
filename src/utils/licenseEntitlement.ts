@@ -29,10 +29,16 @@ export const AUTOMNIA_CREDITS_MODEL_IDS = [
 ] as const
 
 const FRONTIER_TIER_KEYS = new Set(['frontier', 'frontier_tier', 'automnia_frontier'])
+const FRONTIER_ELIGIBLE_TIER_KEYS = new Set(['pro', 'pro_tier', 'enterprise', 'enterprise_tier'])
 
 export function isAutomniaFrontierTier(value: string | null | undefined) {
   const normalized = value?.trim().toLowerCase().replace(/[\s-]+/g, '_') || ''
   return FRONTIER_TIER_KEYS.has(normalized) || normalized.endsWith('_frontier')
+}
+
+export function isAutomniaFrontierEligibleTier(value: string | null | undefined) {
+  const normalized = value?.trim().toLowerCase().replace(/[\s-]+/g, '_') || ''
+  return isAutomniaFrontierTier(normalized) || FRONTIER_ELIGIBLE_TIER_KEYS.has(normalized)
 }
 
 export function isAutomniaFrontierModelId(value: string | null | undefined) {
@@ -155,7 +161,7 @@ export function resolveLicenseEntitlement(license: LicenseInfo | null | undefine
   const isByok = active && mode === 'byok'
   const tier = normalizedTier(license?.tier)
   const usagePriorityLocked = isCreditsOnlyEntitlement(license)
-  const automniaFrontierAllowed = active && isAutomniaFrontierTier(license?.tier)
+  const automniaFrontierAllowed = active && isAutomniaFrontierEligibleTier(license?.tier)
   const byokAllowed = active && !usagePriorityLocked && (license?.byokAllowed === true || isByok || tierAllowsByok(tier))
   const permanentAccess = active && !usagePriorityLocked && (license?.permanentAccess === true || isByok || isAutomniaFrontierTier(tier) || tier.includes('pro') || tier.includes('enterprise'))
 
