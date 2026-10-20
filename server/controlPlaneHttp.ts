@@ -89,6 +89,7 @@ export type ApiErrorCode =
   | 'shift_command_failed'
   | 'shift_operation_failed'
   | 'skill_command_failed'
+  | 'skill_install_confirmation_required'
   | 'skill_not_found'
   | 'skill_operation_failed'
   | 'speech_transcription_failed'

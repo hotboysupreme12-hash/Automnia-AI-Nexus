@@ -6,6 +6,7 @@ import type { CSSProperties } from 'react'
 import { useDialogFocus } from '../ui/Dialog'
 import { navigateTabList } from '../ui/tabNavigation'
 import { apiErrorMessage, apiRequest, type ApiResult } from '../../api/client'
+import { clawHubInstallConfirmationPrompt, parseClawHubInstallConfirmation } from '../../utils/clawHubInstallConfirmation'
 import type { AgentEditorTab } from '../../store/nexusUiState'
 import {
   authKindForProvider,
@@ -1282,7 +1283,20 @@ export function AgentEditorModal() {
     const skillRef = clawHubSkillReference(skill)
     setClawHubInstalling(skillRef);setClawHubError('');setClawHubStatus('')
     try {
-      const result = await apiRequest<ClawHubInstallPayload>('/api/skills/clawhub/install',{method:'POST',timeoutMs:120_000,body:{skillRef}})
+      const installRequest = (confirmation?: { confirmationId: string }) => apiRequest<ClawHubInstallPayload>('/api/skills/clawhub/install',{method:'POST',timeoutMs:120_000,body:{
+        skillRef,
+        ...(skill.version ? { version: skill.version } : {}),
+        ...(confirmation ? { confirmReview: true, confirmationId: confirmation.confirmationId } : {}),
+      }})
+      let result = await installRequest()
+      if(!result.ok && result.error.code === 'skill_install_confirmation_required'){
+        const confirmation = parseClawHubInstallConfirmation(result.error.detail)
+        if(!confirmation || !window.confirm(clawHubInstallConfirmationPrompt(confirmation))){
+          setClawHubStatus('Install canceled; the ClawHub review was not acknowledged.')
+          return
+        }
+        result = await installRequest(confirmation)
+      }
       if(!result.ok){setClawHubError(apiErrorMessage(result.error));return}
       const d = result.data
       setClawHubStatus(d.alreadyInstalled?`${skill.displayName||skill.slug} is already installed.`:`Installed ${d.skill?.name||skill.displayName||skill.slug} to the shared OpenClaw skills folder.`)
@@ -1300,7 +1314,19 @@ export function AgentEditorModal() {
     const skillRef = clawHubSkillReference(skill)
     setClawHubUpdating(skillRef);setClawHubError('');setClawHubStatus('')
     try {
-      const result = await apiRequest<ClawHubInstallPayload>('/api/skills/clawhub/update',{method:'POST',timeoutMs:180_000,body:{skillRef}})
+      const updateRequest = (confirmation?: { confirmationId: string }) => apiRequest<ClawHubInstallPayload>('/api/skills/clawhub/update',{method:'POST',timeoutMs:180_000,body:{
+        skillRef,
+        ...(confirmation ? { confirmReview: true, confirmationId: confirmation.confirmationId } : {}),
+      }})
+      let result = await updateRequest()
+      if(!result.ok && result.error.code === 'skill_install_confirmation_required'){
+        const confirmation = parseClawHubInstallConfirmation(result.error.detail)
+        if(!confirmation || !window.confirm(clawHubInstallConfirmationPrompt(confirmation))){
+          setClawHubStatus('Update canceled; the ClawHub review was not acknowledged.')
+          return
+        }
+        result = await updateRequest(confirmation)
+      }
       if(!result.ok){setClawHubError(apiErrorMessage(result.error));return}
       const d = result.data
       setClawHubStatus(`Updated ${d.skill?.name||skill.displayName||skill.slug}.`)

@@ -1,4 +1,5 @@
 import type { Express } from 'express'
+import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
 
@@ -18,6 +19,25 @@ type ClawHubInstallResult = {
   result: OpenClawCommandResult
   retried: boolean
   cleanup?: unknown
+}
+
+type ClawHubInstallConfirmation = {
+  confirmationId: string
+  skillRef: string
+  version?: string
+  outcome: string
+  publisher?: string
+  summary: string
+  detailsUrl?: string
+}
+
+type PendingClawHubOperation = {
+  operation: 'install' | 'update'
+  skillRef: string
+  version?: string
+  force: boolean
+  all: boolean
+  expiresAt: number
 }
 
 type SkillRoutesOptions = {
@@ -99,7 +119,104 @@ function clawHubSkillSlug(reference: string) {
   return normalized.slice(normalized.lastIndexOf('/') + 1)
 }
 
+function stripAnsi(text: string) {
+  const ansiCsiPattern = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, 'g')
+  return text.replace(ansiCsiPattern, '')
+}
+
+function clawHubAuditLines(text: string) {
+  return stripAnsi(text)
+    .split(/\r?\n/)
+    .map((line) => line
+      .replace(/^\s*[╭╰│|]\s?/, '')
+      .replace(/\s*[╮╯│|]\s*$/, '')
+      .replace(/[─]+/g, '')
+      .trim())
+    .filter(Boolean)
+}
+
+function parseClawHubSecurityReview(text: string, fallbackSkillRef: string, fallbackVersion?: string) {
+  const normalized = stripAnsi(text)
+  if (!/clawhub\s+security\s+audit|security\.installPolicy/i.test(normalized)) return null
+  const outcome = normalized.match(/Outcome:\s*([^\r\n│|]+)/i)?.[1]?.trim() || ''
+  if (!outcome || !/review|warn|warning|block|reject|fail/i.test(outcome)) return null
+
+  const lines = clawHubAuditLines(normalized)
+  const overviewIndex = lines.findIndex((line) => /^Overview:\s*$/i.test(line))
+  const detailsIndex = lines.findIndex((line, index) => index > overviewIndex && /^Details:\s*/i.test(line))
+  const overviewLines = overviewIndex >= 0
+    ? lines.slice(overviewIndex + 1, detailsIndex >= 0 ? detailsIndex : undefined)
+    : []
+  const summary = overviewLines.join(' ').replace(/\s+/g, ' ').trim()
+  const reportedReference = normalized.match(/(?:^|\n)\s*[│|]\s*(@?[a-z0-9][a-z0-9._-]{0,63}\/[a-z0-9][a-z0-9._-]{0,127}(?:@[^\s│|]+)?)\s*[│|]/i)?.[1]
+  const skillRef = reportedReference?.replace(/@([^/]+\/[^@\s│|]+)@[^@\s│|]+$/, '@$1') || fallbackSkillRef
+  const version = fallbackVersion || reportedReference?.match(/@([^/]+\/[^@\s│|]+)@([^\s│|]+)/)?.[2]
+  const publisher = skillRef.match(/^@?([^/]+)\//)?.[1]
+  const detailsUrl = normalized.match(/\[[^\]]*\]\((https?:\/\/[^)]+)\)/i)?.[1]
+
+  return {
+    skillRef,
+    ...(version ? { version } : {}),
+    outcome,
+    ...(publisher ? { publisher } : {}),
+    summary: summary || 'ClawHub marked this skill for security review before installation.',
+    ...(detailsUrl ? { detailsUrl } : {}),
+  }
+}
+
 export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
+  const pendingClawHubOperations = new Map<string, PendingClawHubOperation>()
+  const pendingOperationTtlMs = 10 * 60 * 1000
+
+  const prunePendingOperations = () => {
+    const now = Date.now()
+    for (const [confirmationId, operation] of pendingClawHubOperations) {
+      if (operation.expiresAt <= now) pendingClawHubOperations.delete(confirmationId)
+    }
+  }
+
+  const issueClawHubConfirmation = (params: {
+    operation: PendingClawHubOperation['operation']
+    skillRef: string
+    version?: string
+    force?: boolean
+    all?: boolean
+    output: string
+  }): ClawHubInstallConfirmation | null => {
+    prunePendingOperations()
+    const review = parseClawHubSecurityReview(params.output, params.skillRef, params.version)
+    if (!review) return null
+    const confirmationId = randomUUID()
+    pendingClawHubOperations.set(confirmationId, {
+      operation: params.operation,
+      skillRef: params.skillRef,
+      ...(params.version ? { version: params.version } : {}),
+      force: Boolean(params.force),
+      all: Boolean(params.all),
+      expiresAt: Date.now() + pendingOperationTtlMs,
+    })
+    return { confirmationId, ...review }
+  }
+
+  const consumeClawHubConfirmation = (params: {
+    confirmationId?: string
+    operation: PendingClawHubOperation['operation']
+    skillRef: string
+    version?: string
+    force?: boolean
+    all?: boolean
+  }) => {
+    prunePendingOperations()
+    const confirmationId = params.confirmationId?.trim() || ''
+    const pending = confirmationId ? pendingClawHubOperations.get(confirmationId) : undefined
+    if (!pending || pending.operation !== params.operation || pending.skillRef !== params.skillRef ||
+      pending.version !== params.version || pending.force !== Boolean(params.force) || pending.all !== Boolean(params.all)) {
+      return false
+    }
+    pendingClawHubOperations.delete(confirmationId)
+    return true
+  }
+
   app.get('/api/skills/check', async (req, res) => {
     try {
       const agentId = queryAgentId(req.query.agentId)
@@ -233,12 +350,25 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
       slug: z.string().trim().min(1).max(196).optional(),
       version: z.string().min(1).max(80).optional(),
       force: z.boolean().default(false),
+      confirmReview: z.boolean().default(false),
+      confirmationId: z.string().uuid().optional(),
     })
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
     const skillRef = resolveClawHubSkillReference(parsed.data)
     if (!skillRef) return apiFailure(res, 400, 'invalid_payload', 'Provide a valid ClawHub skill reference such as @owner/skill')
     const skillSlug = clawHubSkillSlug(skillRef)
+
+    if (parsed.data.confirmReview && !consumeClawHubConfirmation({
+      confirmationId: parsed.data.confirmationId,
+      operation: 'install',
+      skillRef,
+      version: parsed.data.version,
+      force: parsed.data.force,
+      all: false,
+    })) {
+      return apiFailure(res, 400, 'invalid_payload', 'This ClawHub review confirmation is missing, expired, or no longer matches the requested skill. Start the install again.')
+    }
 
     try {
       const existing = await options.readSkillEntryFromDir(options.sharedSkillsRoot, options.slugifySkillId(skillSlug), 'library')
@@ -256,6 +386,7 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
       const args = ['skills', 'install', skillRef, '--global']
       if (parsed.data.version) args.push('--version', parsed.data.version)
       if (parsed.data.force) args.push('--force')
+      if (parsed.data.confirmReview) args.push('--acknowledge-install-policy-warning')
       const install = await options.installClawHubSkillWithRetry(args, skillSlug)
       const { result } = install
       options.invalidateSkillLibraryCache(options.sharedSkillsRoot)
@@ -270,6 +401,23 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
         sharedRoot: options.sharedSkillsRoot,
       }
       if (result.code !== 0) {
+        if (!parsed.data.confirmReview) {
+          const confirmation = issueClawHubConfirmation({
+            operation: 'install',
+            skillRef,
+            version: parsed.data.version,
+            force: parsed.data.force,
+            output: `${result.stdout}\n${result.stderr}`,
+          })
+          if (confirmation) {
+            return apiFailure(res, 409, 'skill_install_confirmation_required', 'ClawHub flagged this skill for review. Confirm the displayed risks to install it anyway.', {
+              output: result.stdout,
+              code: result.code,
+              retried: install.retried,
+              confirmation,
+            })
+          }
+        }
         return apiFailure(res, 500, 'skill_command_failed', 'ClawHub skill install failed', { ...data, error: result.stderr })
       }
       return apiSuccess(res, data)
@@ -284,6 +432,8 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
       // Keep accepting slug while clients migrate to owner-qualified refs.
       slug: z.string().trim().min(1).max(196).optional(),
       all: z.boolean().default(false),
+      confirmReview: z.boolean().default(false),
+      confirmationId: z.string().uuid().optional(),
     })
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
@@ -292,8 +442,20 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
     if (skillRef && parsed.data.all) return apiFailure(res, 400, 'invalid_payload', 'Use either a skill reference or all=true, not both')
     if (!parsed.data.all && !skillRef) return apiFailure(res, 400, 'invalid_payload', 'Provide a valid ClawHub skill reference such as @owner/skill')
 
+    const updateSkillRef = skillRef || '@all'
+    if (parsed.data.confirmReview && !consumeClawHubConfirmation({
+      confirmationId: parsed.data.confirmationId,
+      operation: 'update',
+      skillRef: updateSkillRef,
+      force: false,
+      all: parsed.data.all,
+    })) {
+      return apiFailure(res, 400, 'invalid_payload', 'This ClawHub review confirmation is missing, expired, or no longer matches the requested update. Start the update again.')
+    }
+
     try {
       const args = parsed.data.all ? ['skills', 'update', '--all', '--global'] : ['skills', 'update', skillRef, '--global']
+      if (parsed.data.confirmReview) args.push('--acknowledge-install-policy-warning')
       const result = await options.runOpenClawWithManagedSkillsWorkspace(args, 180000)
       options.invalidateSkillLibraryCache(options.sharedSkillsRoot)
       const shared = await options.listSkillsFromRoot(options.sharedSkillsRoot, 'library')
@@ -305,6 +467,21 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
         sharedRoot: options.sharedSkillsRoot,
       }
       if (result.code !== 0) {
+        if (!parsed.data.confirmReview) {
+          const confirmation = issueClawHubConfirmation({
+            operation: 'update',
+            skillRef: updateSkillRef,
+            all: parsed.data.all,
+            output: `${result.stdout}\n${result.stderr}`,
+          })
+          if (confirmation) {
+            return apiFailure(res, 409, 'skill_install_confirmation_required', 'ClawHub flagged this update for review. Confirm the displayed risks to continue anyway.', {
+              output: result.stdout,
+              code: result.code,
+              confirmation,
+            })
+          }
+        }
         return apiFailure(res, 500, 'skill_command_failed', 'ClawHub skill update failed', { ...data, error: result.stderr })
       }
       return apiSuccess(res, data)
