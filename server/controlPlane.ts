@@ -1051,7 +1051,12 @@ function isManagedOpenClawRuntimePath(value: string | undefined) {
 
 function isUsableOpenClawBin(candidate: string) {
   if (!openClawBinExists(candidate)) return false
-  const spec = openClawSpawnSpecForBin(candidate, ['--help'])
+  // OpenClaw's top-level `--help` command exits with status 2 in the bundled
+  // 2026.9.x CLI even when the runtime is healthy. Using it as a binary
+  // preflight therefore rejects the vendored runtime and falls through to a
+  // stale release copy. `--version` is a side-effect-free contract that exits
+  // successfully for a usable runtime.
+  const spec = openClawSpawnSpecForBin(candidate, ['--version'])
   const result = spawnSync(spec.command, spec.args, {
     cwd: WORKSPACE_ROOT,
     env: {
@@ -1071,18 +1076,23 @@ function embeddedOpenClawBinCandidates() {
   const resourceCandidates = electronResourcesPath
     ? openClawExecutableCandidatesForDir(path.join(electronResourcesPath, 'openclaw'))
     : []
+  const sourceVendorCandidates = sourceRootCandidates().flatMap((root) => (
+    openClawExecutableCandidatesForDir(path.join(root, 'vendor', 'openclaw'))
+  ))
   const candidates = process.platform === 'win32'
     ? [
         path.resolve(process.cwd(), 'vendor', 'openclaw', 'openclaw.cmd'),
         path.resolve(process.cwd(), 'vendor', 'openclaw', 'openclaw.mjs'),
         path.resolve(process.cwd(), 'resources', 'openclaw', 'openclaw.cmd'),
         path.resolve(process.cwd(), 'resources', 'openclaw', 'openclaw.mjs'),
+        ...sourceVendorCandidates,
         ...resourceCandidates,
         ...sourceReleaseOpenClawBinCandidates(),
       ]
     : [
         path.resolve(process.cwd(), 'vendor', 'openclaw', 'openclaw.mjs'),
         path.resolve(process.cwd(), 'resources', 'openclaw', 'openclaw.mjs'),
+        ...sourceVendorCandidates,
         ...resourceCandidates,
         ...sourceReleaseOpenClawBinCandidates(),
       ]
