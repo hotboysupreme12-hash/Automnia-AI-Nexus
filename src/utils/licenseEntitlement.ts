@@ -4,12 +4,15 @@ import { usageBaseline } from './usageRemaining'
 export const LICENSE_STATUS_UPDATED_EVENT = 'automnia-license-updated'
 
 export const AUTOMNIA_CREDITS_MODEL_ID = 'automnia-cloud/gemini-3.7-flash'
+export const AUTOMNIA_FRONTIER_MODEL_ID = 'automnia-cloud/gemini-4-argon'
 export const AUTOMNIA_RELAY_MODEL_IDS = [
+  AUTOMNIA_FRONTIER_MODEL_ID,
   'automnia-cloud/gemini-3.8-flash',
   AUTOMNIA_CREDITS_MODEL_ID,
   'automnia-cloud/gemini-3.6-flash',
 ] as const
 export const AUTOMNIA_RELAY_MODEL_LABELS: Record<string, string> = {
+  [AUTOMNIA_FRONTIER_MODEL_ID]: 'Automnia Frontier',
   'automnia-cloud/gemini-3.8-flash': 'Automnia Prime',
   [AUTOMNIA_CREDITS_MODEL_ID]: 'Automnia Balanced',
   'automnia-cloud/gemini-3.6-flash': 'Automnia Swift',
@@ -24,6 +27,17 @@ export const AUTOMNIA_CREDITS_MODEL_IDS = [
   AUTOMNIA_CREDITS_MODEL_ID,
   ...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS,
 ] as const
+
+const FRONTIER_TIER_KEYS = new Set(['frontier', 'frontier_tier', 'automnia_frontier'])
+
+export function isAutomniaFrontierTier(value: string | null | undefined) {
+  const normalized = value?.trim().toLowerCase().replace(/[\s-]+/g, '_') || ''
+  return FRONTIER_TIER_KEYS.has(normalized) || normalized.endsWith('_frontier')
+}
+
+export function isAutomniaFrontierModelId(value: string | null | undefined) {
+  return value?.trim().toLowerCase() === AUTOMNIA_FRONTIER_MODEL_ID
+}
 
 export function isAutomniaCreditsModelId(value: string | null | undefined) {
   const normalized = value?.trim().toLowerCase()
@@ -53,6 +67,7 @@ export type LicenseEntitlement = {
   usagePriorityLocked: boolean
   permanentAccess: boolean
   offlineByokAvailable: boolean
+  automniaFrontierAllowed: boolean
   tierLabel: string
   billingLabel: string
   defaultRouteLabel: string
@@ -74,6 +89,9 @@ const HOSTED_TIER_LABELS: Record<string, string> = {
   cloud_starter_subscription: 'Starter Legacy Access',
   pro: 'Pro Access',
   pro_tier: 'Pro Access',
+  frontier: 'Automnia Frontier',
+  frontier_tier: 'Automnia Frontier',
+  automnia_frontier: 'Automnia Frontier',
   enterprise: 'Pro Access',
   enterprise_tier: 'Pro Access',
   credit_pack_topup: 'Hosted Credit Refill',
@@ -137,8 +155,9 @@ export function resolveLicenseEntitlement(license: LicenseInfo | null | undefine
   const isByok = active && mode === 'byok'
   const tier = normalizedTier(license?.tier)
   const usagePriorityLocked = isCreditsOnlyEntitlement(license)
+  const automniaFrontierAllowed = active && isAutomniaFrontierTier(license?.tier)
   const byokAllowed = active && !usagePriorityLocked && (license?.byokAllowed === true || isByok || tierAllowsByok(tier))
-  const permanentAccess = active && !usagePriorityLocked && (license?.permanentAccess === true || isByok || tier.includes('pro') || tier.includes('enterprise'))
+  const permanentAccess = active && !usagePriorityLocked && (license?.permanentAccess === true || isByok || isAutomniaFrontierTier(tier) || tier.includes('pro') || tier.includes('enterprise'))
 
   if (isByok) {
     const providerFirst = license?.usagePriority === 'provider_first' || license?.usagePriority === 'byok_only'
@@ -155,6 +174,7 @@ export function resolveLicenseEntitlement(license: LicenseInfo | null | undefine
       byokAllowed: true,
       permanentAccess: true,
       offlineByokAvailable: true,
+      automniaFrontierAllowed,
       usagePriorityLocked: false,
       tierLabel: 'BYOK Access',
       billingLabel: 'Permanent BYOK access — Your Provider Account',
@@ -197,6 +217,7 @@ export function resolveLicenseEntitlement(license: LicenseInfo | null | undefine
       usagePriorityLocked,
       permanentAccess,
       offlineByokAvailable: Boolean(byokAllowed),
+      automniaFrontierAllowed,
       tierLabel,
       billingLabel: isHostedRefill
         ? 'Hosted Credits — Automnia Refill Balance'
@@ -230,6 +251,7 @@ export function resolveLicenseEntitlement(license: LicenseInfo | null | undefine
     usagePriorityLocked: false,
     permanentAccess: false,
     offlineByokAvailable: false,
+    automniaFrontierAllowed: false,
     tierLabel: 'No active license',
     billingLabel: 'Not active',
     defaultRouteLabel: 'Activate a license to choose a billing route',

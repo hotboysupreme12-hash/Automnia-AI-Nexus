@@ -1,6 +1,6 @@
 # Provider model compatibility
 
-**Verified against provider documentation on September 16, 2026.** This guide
+**Verified against provider documentation on October 20, 2026.** This guide
 defines the current-model contract implemented by Automnia's primary and
 fallback model selectors. Provider account entitlements, regional availability,
 and rate limits still decide whether a particular account can make a live call.
@@ -26,10 +26,11 @@ end-to-end contract for them.
 
 | Provider route | Current model IDs in Automnia | Transport and requirements |
 | --- | --- | --- |
-| OpenAI API | `openai/gpt-6-astra` | Direct text turns use the OpenAI Responses API and an `OPENAI_API_KEY`. Tool/workspace turns use the Gateway/OpenClaw runtime so tool approvals, session recovery, and streamed final answers remain consistent. GPT-6 Astra is deliberately **not** presented as a Codex OAuth-only model. |
+| OpenAI API | `openai/gpt-6-astra`, `openai/gpt-6.1-sol`, `openai/gpt-6-luna` | Direct text turns use the OpenAI Responses API and an `OPENAI_API_KEY`. Tool/workspace turns use the Gateway/OpenClaw runtime so tool approvals, session recovery, and streamed final answers remain consistent. These API models are deliberately **not** presented as Codex OAuth-only models. |
 | Google Gemini API | `google/gemini-3.8-flash`, `google/gemini-3.5-flash-lite`, `google/gemini-3.1-pro-preview` | Uses the Google Generative Language route and Google API-key/OAuth setup. Tool requests use the native Gateway path. |
 | Google Vertex AI | `google-vertex/gemini-3.8-flash`, `google-vertex/gemini-3.5-flash-lite`, `google-vertex/gemini-3.1-pro-preview` | Uses configured Vertex project, location, and application credentials/OAuth. Availability remains account- and region-dependent. |
-| Anthropic | `anthropic/claude-fable-5-1`, `anthropic/claude-fable-5`, `anthropic/claude-opus-5`, `anthropic/claude-sonnet-5`, `anthropic/claude-haiku-4-5` | Uses the native Anthropic/OpenClaw runtime for agent turns. The fallback catalog only exposes Anthropic IDs verified in the bundled runtime and current Anthropic catalog. |
+| Anthropic | `anthropic/claude-fable-5-1`, `anthropic/claude-fable-5`, `anthropic/claude-opus-5`, `anthropic/claude-opus-4-7`, `anthropic/claude-sonnet-5`, `anthropic/claude-sonnet-4-6`, `anthropic/claude-haiku-4-5` | Uses the native Anthropic/OpenClaw runtime for agent turns. The fallback catalog only exposes Anthropic IDs verified in the bundled runtime and current Anthropic catalog. Newer Anthropic 5.5/Mythos IDs remain gated until the bundled runtime advertises them. |
+| Automnia hosted relay | `automnia-cloud/gemini-4-argon`, `automnia-cloud/gemini-3.8-flash`, `automnia-cloud/gemini-3.7-flash`, `automnia-cloud/gemini-3.6-flash`, `automnia-cloud/gemini-2.5-flash` | The hosted relay is the Automnia billing boundary. `gemini-4-argon` is selectable only for the **Automnia Frontier** tier; Prime and lower tiers retain their existing bounded hosted chain. |
 
 The catalog can also contain earlier provider models and account-specific models
 reported by `openclaw models list`. “Available” means the ID is recognized and
@@ -54,6 +55,24 @@ This preserves tool approvals and recovery behavior while avoiding unsupported
 `none` or `minimal` effort values for Astra. See the official [GPT-6 Astra model
 page](https://developers.openai.com/api/docs/models/gpt-6-astra).
 
+GPT-6.1 Sol and GPT-6 Luna use the same Responses/Gateway policy surface. Sol is
+the balanced reasoning option and Luna is the high-volume option; both are
+recognized as reasoning-capable models, while account access remains controlled
+by the provider and the connected credential.
+
+### Automnia Frontier and Gemini 4 Argon
+
+Automnia Frontier is the tier above Prime. Its hosted model is
+`automnia-cloud/gemini-4-argon`, backed by Google's stable `gemini-4-argon`
+model. Argon supports low, medium, and high thinking levels, function calling,
+code execution, computer use, and a 1,048,576-token context window. Automnia
+maps **Off/Minimal** to `low` and **XHigh/Max** to `high`, preserving the same
+bounded relay contract used by the other Automnia hosted models. The Frontier
+model is excluded from Starter/credit-only allowlists and from non-Frontier
+account fallbacks.
+
+See Google's official [Gemini 4 Argon model guide](https://ai.google.dev/gemini-api/docs/models/gemini-4-argon).
+
 ### Gemini and Vertex Gemini
 
 Gemini 3.1 Pro Preview, Gemini 3.7 Flash, and Gemini 3.8 Flash accept `LOW`,
@@ -74,8 +93,8 @@ are the source of truth for per-model availability and request restrictions.
 
 ### Anthropic Claude
 
-Claude Fable 5.1 is included as the current frontier Anthropic option alongside
-the supported Opus, Sonnet, Haiku, and prior Fable entries. Anthropic agent
+Claude Fable 5.1 and Claude Opus 4.7 are included alongside the supported Opus,
+Sonnet, Haiku, and prior Fable entries. Anthropic agent
 turns stay on the native Gateway/OpenClaw execution path so adaptive thinking,
 tool loops, approvals, and final-answer recovery remain provider-native rather
 than being approximated by a generic OpenAI-compatible stream. Consult the

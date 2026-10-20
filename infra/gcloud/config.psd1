@@ -2,7 +2,7 @@
   SchemaVersion = '2026-09-12.5'
   Region = 'us-east1'
   FirestoreLocation = 'us-east1'
-  # Automnia's Gemini 3.7 Flash relay is served through Vertex's global endpoint. Keeping this
+  # Automnia's Gemini relay is served through Vertex's global endpoint. Keeping this
   # separate from the Cloud Run and Firestore regions prevents a regional
   # endpoint from rejecting the reference model used for chat and tools.
   VertexLocation = 'global'
@@ -10,7 +10,7 @@
   AutomniaRelayFallbackModels = @('gemini-3.6-flash', 'gemini-2.5-flash')
   # Models exposed to customer clients. The primary/fallback chain above is
   # still the only operational chain used after a request is accepted.
-  AutomniaRelaySelectableModels = @('gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.5-flash')
+  AutomniaRelaySelectableModels = @('gemini-4-argon', 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.5-flash')
   # Customer-facing credits are a compact display unit. The Cloud Run ledger
   # remains authoritative in raw Vertex tokens.
   TokensPerCredit = 1000

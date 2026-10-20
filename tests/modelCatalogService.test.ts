@@ -71,12 +71,16 @@ test('fallback catalog canonicalizes Codex subscription models and suppresses un
   const vertexGemini38Flash = fallback.find((model) => model.id === 'google-vertex/gemini-3.8-flash')
   const vertexGemini35FlashLite = fallback.find((model) => model.id === 'google-vertex/gemini-3.5-flash-lite')
   const astra = fallback.find((model) => model.id === 'openai/gpt-6-astra')
+  const sol = fallback.find((model) => model.id === 'openai/gpt-6.1-sol')
+  const luna = fallback.find((model) => model.id === 'openai/gpt-6-luna')
   const fable51 = fallback.find((model) => model.id === 'anthropic/claude-fable-5-1')
+  const opus47 = fallback.find((model) => model.id === 'anthropic/claude-opus-4-7')
   const codexSpark = fallback.find((model) => model.id === 'openai/gpt-5.3-codex-spark')
   const geminiFlash = fallback.find((model) => model.id === 'google/gemini-3.6-flash')
   const vertexGeminiFlash = fallback.find((model) => model.id === 'google-vertex/gemini-3.6-flash')
   const automniaModel = fallback.find((model) => model.id === 'automnia-cloud/gemini-3.7-flash')
   const automnia38Model = fallback.find((model) => model.id === 'automnia-cloud/gemini-3.8-flash')
+  const automniaFrontier = fallback.find((model) => model.id === 'automnia-cloud/gemini-4-argon')
   const automniaFallback = fallback.find((model) => model.id === 'automnia-cloud/gemini-3.6-flash')
   const metaMuse = fallback.find((model) => model.id === 'meta/muse-spark-1.1')
 
@@ -96,12 +100,17 @@ test('fallback catalog canonicalizes Codex subscription models and suppresses un
   assert.equal(vertexGemini35FlashLite?.streaming.provider, 'google-vertex')
   assert.equal(astra?.alias, 'GPT-6 Astra (flagship)')
   assert.equal(astra?.streaming.provider, 'openai')
+  assert.equal(sol?.alias, 'GPT-6.1 Sol (balanced)')
+  assert.equal(luna?.alias, 'GPT-6 Luna (high-volume)')
   assert.equal(fable51?.alias, 'Claude Fable 5.1 (flagship)')
+  assert.equal(opus47?.alias, 'Claude Opus 4.7')
   assert.equal(vertexGemini37Flash?.streaming.provider, 'google-vertex')
   assert.equal(geminiFlash?.alias, 'Gemini 3.6 Flash (GA)')
   assert.equal(geminiFlash?.streaming.provider, 'google')
   assert.equal(vertexGeminiFlash?.alias, 'Vertex Gemini 3.6 Flash (GA)')
   assert.equal(automnia38Model?.alias, 'Automnia Prime')
+  assert.equal(automniaFrontier?.alias, 'Automnia Frontier')
+  assert.equal(automniaFrontier?.provider, 'automnia-cloud')
   assert.equal(automniaModel?.alias, 'Automnia Balanced')
   assert.equal(automniaModel?.provider, 'automnia-cloud')
   assert.equal(automniaFallback?.alias, 'Automnia Swift')
@@ -140,6 +149,7 @@ test('refresh loads OpenClaw catalog and normalizes OpenRouter allowlist through
   assert.ok(cache.models.some((model) => model.id === 'anthropic/claude-custom'))
   assert.deepEqual(cache.models.filter((model) => model.provider === 'automnia-cloud').map((model) => ({ id: model.id, alias: model.alias, name: model.name })), [
     { id: 'automnia-cloud/gemini-3.6-flash', alias: 'Automnia Swift', name: 'Automnia Swift' },
+    { id: 'automnia-cloud/gemini-4-argon', alias: 'Automnia Frontier', name: 'Automnia Frontier' },
     { id: 'automnia-cloud/gemini-3.8-flash', alias: 'Automnia Prime', name: 'Automnia Prime' },
     { id: 'automnia-cloud/gemini-3.7-flash', alias: 'Automnia Balanced', name: 'Automnia Balanced' },
     { id: 'automnia-cloud/gemini-2.5-flash', alias: 'Automnia Classic', name: 'Automnia Classic' },
@@ -202,6 +212,8 @@ test('configured model allowlist normalizes provider entries and skips unsafe mo
     'anthropic/claude-sonnet-5',
     'anthropic/claude-fable-5-1',
     'openai/gpt-6-astra',
+    'openai/gpt-6.1-sol',
+    'openai/gpt-6-luna',
     'openai/gpt-5.3-chat-latest',
   ])
 
@@ -235,6 +247,8 @@ test('configured model allowlist normalizes provider entries and skips unsafe mo
     'anthropic/claude-fable-5-1',
     'anthropic/claude-sonnet-5',
     'openai/gpt-6-astra',
+    'openai/gpt-6.1-sol',
+    'openai/gpt-6-luna',
     'google-vertex/gemini-3.6-flash',
     'google/gemini-3.6-flash',
   ].sort())

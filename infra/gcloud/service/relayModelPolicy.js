@@ -1,6 +1,6 @@
 const DEFAULT_AUTOMNIA_RELAY_MODEL = 'gemini-3.7-flash';
 const DEFAULT_AUTOMNIA_RELAY_FALLBACK_MODELS = ['gemini-3.6-flash', 'gemini-2.5-flash'];
-const DEFAULT_AUTOMNIA_RELAY_SELECTABLE_MODELS = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash'];
+const DEFAULT_AUTOMNIA_RELAY_SELECTABLE_MODELS = ['gemini-4-argon', 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash'];
 
 function normalizeRelayModel(value) {
   return String(value || '').trim().toLowerCase().replace(/^automnia-cloud\//, '');

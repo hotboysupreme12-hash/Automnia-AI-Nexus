@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import type { LicenseInfo } from '../src/context/licenseContextValue'
-import { isAutomniaCreditsModelSelectionRoute, isStarterSubscriptionOnly, mergeHostedCreditBalance, resolveAgentRoutePresentation, resolveLicenseEntitlement } from '../src/utils/licenseEntitlement'
+import { isAutomniaCreditsModelSelectionRoute, isAutomniaFrontierModelId, isAutomniaFrontierTier, isStarterSubscriptionOnly, mergeHostedCreditBalance, resolveAgentRoutePresentation, resolveLicenseEntitlement } from '../src/utils/licenseEntitlement'
 
 function license(overrides: Partial<LicenseInfo> = {}): LicenseInfo {
   return {
@@ -35,6 +35,20 @@ test('presents permanent hosted tiers as their highest account access and Automn
     assert.equal(entitlement.statusLabel, 'Credits active')
     assert.equal(entitlement.defaultRouteLabel, 'Automnia credits only')
   }
+})
+
+test('exposes Frontier only to the dedicated Automnia Frontier tier', () => {
+  const frontier = resolveLicenseEntitlement(license({ tier: 'frontier', permanentAccess: true, byokAllowed: true }))
+  assert.equal(frontier.tierLabel, 'Automnia Frontier')
+  assert.equal(frontier.automniaFrontierAllowed, true)
+  assert.equal(frontier.permanentAccess, true)
+  assert.equal(isAutomniaFrontierTier('automnia-frontier'), true)
+  assert.equal(isAutomniaFrontierModelId('automnia-cloud/gemini-4-argon'), true)
+
+  const prime = resolveLicenseEntitlement(license({ tier: 'pro', permanentAccess: true, byokAllowed: true }))
+  assert.equal(prime.automniaFrontierAllowed, false)
+  const starter = resolveLicenseEntitlement(license({ tier: 'starter' }))
+  assert.equal(starter.automniaFrontierAllowed, false)
 })
 
 test('presents a hosted member provider-first preference without changing the entitlement', () => {

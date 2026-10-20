@@ -4,8 +4,8 @@ const GEMINI_37_NATIVE_THINKING_LEVELS = new Set(['low', 'medium', 'high']);
 /**
  * Converts OpenAI-compatible reasoning effort to the selected Gemini Flash
  * model's native Vertex setting. Gemini does not provide a complete
- * thinking-off mode: Gemini 3.6 uses MINIMAL, while Gemini 3.7/3.8's lowest
- * supported setting is LOW.
+ * thinking-off mode: Gemini 3.6 uses MINIMAL, while Gemini 3.7/3.8 and
+ * Gemini 4 Argon's lowest supported setting is LOW.
  */
 export function geminiThinkingConfigFromOpenAiRequest(requestBody, model = 'gemini-3.6-flash') {
   const raw = typeof requestBody?.reasoning_effort === 'string'
@@ -16,19 +16,20 @@ export function geminiThinkingConfigFromOpenAiRequest(requestBody, model = 'gemi
 
   const normalizedModel = String(model || '').trim().toLowerCase();
   const isGemini37Or38Flash = /(?:^|\/)gemini-3\.(?:7|8)-flash(?:$|[-@])/.test(normalizedModel);
+  const isGemini4Argon = /(?:^|\/)gemini-4-argon(?:$|[-@])/.test(normalizedModel);
   // Gemini 2.5 Flash uses its own thinking-budget contract rather than the
   // Gemini 3.x thinkingLevel field. Omitting the optional thinking block keeps
   // it usable as the last-resort hosted fallback instead of turning a
   // compounded 429 into a deterministic upstream 400.
   if (/(?:^|\/)gemini-2\.5-flash(?:$|[-@])/.test(normalizedModel)) return undefined;
-  const nativeLevels = isGemini37Or38Flash ? GEMINI_37_NATIVE_THINKING_LEVELS : GEMINI_36_NATIVE_THINKING_LEVELS;
-  const lowestLevel = isGemini37Or38Flash ? 'low' : 'minimal';
+  const nativeLevels = isGemini37Or38Flash || isGemini4Argon ? GEMINI_37_NATIVE_THINKING_LEVELS : GEMINI_36_NATIVE_THINKING_LEVELS;
+  const lowestLevel = isGemini37Or38Flash || isGemini4Argon ? 'low' : 'minimal';
 
   const level = raw === 'off' || raw === 'none'
     ? lowestLevel
     : raw === 'xhigh' || raw === 'max' || raw === 'ultra'
       ? 'high'
-      : raw === 'minimal' && isGemini37Or38Flash
+      : raw === 'minimal' && (isGemini37Or38Flash || isGemini4Argon)
         ? lowestLevel
       : nativeLevels.has(raw)
         ? raw

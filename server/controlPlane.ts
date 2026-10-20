@@ -88,11 +88,15 @@ import {
   AUTOMNIA_CREDITS_MODEL_IDS,
   AUTOMNIA_CREDITS_MODEL_ID,
   AUTOMNIA_CREDITS_PROVIDER_ID,
+  AUTOMNIA_FRONTIER_MODEL_ACCESS_MESSAGE,
   AUTOMNIA_RELAY_MODEL_IDS,
   AUTOMNIA_RELAY_MODEL_LABELS,
+  automniaHostedModelIdsForTier,
   CREDITS_ONLY_MODEL_ACCESS_MESSAGE,
   creditsOnlyModelSelection,
   isAutomniaCreditsModelId,
+  isAutomniaFrontierModelId,
+  isAutomniaRelayModelId,
 } from './services/license/creditsOnlyModelPolicy'
 import { createAccountAuthService } from './services/auth/accountAuthService'
 import { automniaCloudRouteBaseUrl } from './config/automniaCloud'
@@ -9899,17 +9903,32 @@ function isAutomniaOpenClawModel(value: unknown) {
 }
 
 function modelSelectionForActiveBillingRoute(selection: OpenClawModelSelection) {
-  if (!licenseService.isUsagePriorityLocked()) return selection
-  const primary = isAutomniaCreditsModelId(selection?.primary) ? selection.primary : AUTOMNIA_OPENCLAW_MODEL
+  const frontierAllowed = licenseService.isAutomniaFrontierTier()
+  const creditsOnly = licenseService.isUsagePriorityLocked()
+  const requestedPrimary = typeof selection?.primary === 'string' ? selection.primary : ''
+  const primary = !frontierAllowed && isAutomniaFrontierModelId(canonicalAgentModelId(requestedPrimary))
+    ? AUTOMNIA_OPENCLAW_MODEL
+    : creditsOnly && !isAutomniaCreditsModelId(canonicalAgentModelId(requestedPrimary))
+      ? AUTOMNIA_OPENCLAW_MODEL
+      : requestedPrimary
   const fallbacks = uniqueStrings(
     ...(Array.isArray(selection?.fallbacks) ? selection.fallbacks : []),
-  ).filter((modelId) => isAutomniaCreditsModelId(modelId) && modelId !== primary)
-  return { primary, ...(fallbacks.length ? { fallbacks } : {}) }
+  ).filter((modelId) => {
+    const canonical = canonicalAgentModelId(modelId)
+    if (!frontierAllowed && isAutomniaFrontierModelId(canonical)) return false
+    return !creditsOnly || isAutomniaCreditsModelId(canonical)
+  }).filter((modelId) => modelId !== primary)
+  if (!creditsOnly && frontierAllowed && primary === requestedPrimary) return selection
+  return { primary: primary || AUTOMNIA_OPENCLAW_MODEL, ...(fallbacks.length ? { fallbacks } : {}) }
 }
 
 function modelSelectionBlocked(modelId: string) {
+  const canonical = canonicalAgentModelId(modelId)
+  if (isAutomniaFrontierModelId(canonical) && !licenseService.isAutomniaFrontierTier()) {
+    return AUTOMNIA_FRONTIER_MODEL_ACCESS_MESSAGE
+  }
   if (!licenseService.isUsagePriorityLocked()) return null
-  if (modelId === '__provider_auth__' || !isAutomniaCreditsModelId(canonicalAgentModelId(modelId))) {
+  if (modelId === '__provider_auth__' || !isAutomniaCreditsModelId(canonical)) {
     return CREDITS_ONLY_MODEL_ACCESS_MESSAGE
   }
   return null
@@ -9958,7 +9977,8 @@ function applyAutomniaBillingModelOrder(
   providerCandidates: string[] = [],
   automniaCreditBalance?: number | null,
 ) {
-  return applyUsagePriorityModelOrder(selection, usagePriority, [
+  const activeSelection = selection ? modelSelectionForActiveBillingRoute(selection) : selection
+  return applyUsagePriorityModelOrder(activeSelection, usagePriority, [
     ...nonAutomniaOpenClawModels(selection),
     ...providerCandidates,
   ], AUTOMNIA_OPENCLAW_MODEL, {
@@ -10149,6 +10169,7 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
   }
 
   const cloudBaseUrl = configuredAutomniaCloudBaseUrl(config)
+  const allowedAutomniaModelIds = automniaHostedModelIdsForTier(licenseStatus.tier)
   config.models.providers[AUTOMNIA_OPENCLAW_PROVIDER_ID] = {
     baseUrl: `${cloudBaseUrl}/v1`,
     api: 'openai-completions',
@@ -10163,7 +10184,7 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
       'X-Automnia-License-Key': hosted.licenseKey,
     },
     timeoutSeconds: 7200,
-    models: AUTOMNIA_HOSTED_MODEL_IDS.map((modelId) => {
+    models: allowedAutomniaModelIds.map((modelId) => {
       const bareModelId = modelId.slice(`${AUTOMNIA_OPENCLAW_PROVIDER_ID}/`.length)
       return {
         id: bareModelId,
@@ -10196,8 +10217,8 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
   const primaryLocalModel = primaryAgent ? localModels.get(primaryAgent.id) : undefined
   // The hosted gateway default follows the primary agent's durable tier,
   // rather than retaining a generated default from an older release.
-  const gatewaySelection = isAutomniaCreditsModelId(config.agents.defaults.model?.primary)
-    && isAutomniaCreditsModelId(primaryLocalModel?.primary)
+  const gatewaySelection = isAutomniaRelayModelId(config.agents.defaults.model?.primary)
+    && isAutomniaRelayModelId(primaryLocalModel?.primary)
     ? primaryLocalModel
     : config.agents.defaults.model
   const defaultSelection = applyAutomniaBillingModelOrder(
@@ -10220,7 +10241,11 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
   if (!config.agents.defaults.models) config.agents.defaults.models = {}
   const modelIdsForConfig = licenseService.isUsagePriorityLocked()
     ? AUTOMNIA_CREDITS_MODEL_IDS
-    : AUTOMNIA_HOSTED_MODEL_IDS
+    : allowedAutomniaModelIds
+  const modelIdsForConfigSet = new Set<string>(modelIdsForConfig)
+  for (const modelId of AUTOMNIA_HOSTED_MODEL_IDS) {
+    if (!modelIdsForConfigSet.has(modelId)) delete config.agents.defaults.models[modelId]
+  }
   for (const modelId of modelIdsForConfig) {
     config.agents.defaults.models[modelId] = {
       alias: AUTOMNIA_RELAY_MODEL_LABELS[modelId]

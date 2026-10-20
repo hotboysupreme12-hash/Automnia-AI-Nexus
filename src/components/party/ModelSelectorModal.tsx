@@ -22,6 +22,8 @@ import {
   automniaRelayModelLabel,
   isAutomniaCreditsModelId,
   isAutomniaCreditsModelSelectionRoute,
+  isAutomniaFrontierModelId,
+  isAutomniaFrontierTier,
   resolveAgentRoutePresentation,
   resolveLicenseEntitlement,
 } from '../../utils/licenseEntitlement'
@@ -91,8 +93,17 @@ const modelOptionFromId = (modelId: string): AvailableModel | null => {
 
 function modelBrief(modelId: string): { title: string; description: string; tone: string } | null {
   const normalized = modelId.toLowerCase()
+  if (normalized.includes('automnia-cloud/gemini-4-argon')) {
+    return { title: 'Automnia Frontier reasoning', description: 'Automnia’s highest hosted tier, powered by Google Gemini 4 Argon for deep research, software engineering, and long-horizon agent work.', tone: 'cyan' }
+  }
   if (normalized.includes('gpt-6-astra')) {
     return { title: 'Frontier research and agent work', description: 'OpenAI\'s highest-capability API model for complex research, reasoning, and tool-assisted work. Requires an OpenAI API key.', tone: 'cyan' }
+  }
+  if (normalized.includes('gpt-6.1-sol')) {
+    return { title: 'Balanced frontier reasoning', description: 'OpenAI’s near-flagship model for demanding reasoning and coding at a lower cost than Astra.', tone: 'cyan' }
+  }
+  if (normalized.includes('gpt-6-luna')) {
+    return { title: 'High-volume frontier execution', description: 'OpenAI’s efficient model for focused, parallel, and cost-sensitive workloads.', tone: 'amber' }
   }
   if (normalized.includes('gpt-5.6-sol')) {
     return { title: 'Flagship research and coding', description: 'Best fit for complex planning, agentic coding, and difficult research tasks.', tone: 'cyan' }
@@ -115,14 +126,17 @@ function modelBrief(modelId: string): { title: string; description: string; tone
   if (normalized.includes('claude-opus-4-8')) {
     return { title: 'Proven deep reasoning', description: 'A robust Claude option when you need conservative, high-quality outputs.', tone: 'violet' }
   }
+  if (normalized.includes('claude-opus-4-7')) {
+    return { title: 'Anthropic frontier reasoning', description: 'An active Opus model for complex agent work and careful multi-step reasoning.', tone: 'violet' }
+  }
   return null
 }
 
-const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: string[], creditsOnly = false) => {
+const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: string[], creditsOnly = false, frontierAllowed = false) => {
   const merged = new Map<string, AvailableModel>()
   const allowedCatalog = creditsOnly
-    ? [...AUTOMNIA_MODEL_OPTIONS, ...catalog.filter((model) => isAutomniaCreditsModelId(model.id))]
-    : catalog
+    ? [...AUTOMNIA_MODEL_OPTIONS.filter((model) => isAutomniaCreditsModelId(model.id)), ...catalog.filter((model) => isAutomniaCreditsModelId(model.id))]
+    : catalog.filter((model) => frontierAllowed || !isAutomniaFrontierModelId(model.id))
   const seededCatalog = creditsOnly
     ? allowedCatalog
     : catalog.some((model) => model.id === CODEX_5_3_SPARK_MODEL_ID)
@@ -131,7 +145,9 @@ const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: strin
   for (const model of seededCatalog) {
     if (model.id.trim() && isSelectableModelId(model.id)) merged.set(model.id, model)
   }
-  for (const selectedId of creditsOnly ? selectedIds.filter((modelId) => isAutomniaCreditsModelId(modelId)) : selectedIds) {
+  for (const selectedId of creditsOnly
+    ? selectedIds.filter((modelId) => isAutomniaCreditsModelId(modelId))
+    : selectedIds.filter((modelId) => frontierAllowed || !isAutomniaFrontierModelId(modelId))) {
     if (!isSelectableModelId(selectedId)) continue
     const synthetic = modelOptionFromId(selectedId)
     if (synthetic && !merged.has(synthetic.id)) merged.set(synthetic.id, synthetic)
@@ -173,6 +189,7 @@ export function ModelSelectorModal({
 }: ModelSelectorModalProps) {
   const { license } = useLicense()
   const creditsOnly = isAutomniaCreditsModelSelectionRoute(license)
+  const frontierAllowed = isAutomniaFrontierTier(license?.tier)
   const [models, setModels] = useState<AvailableModel[]>([])
   const [loading, setLoading] = useState(false)
   const dialogId = useId()
@@ -202,6 +219,9 @@ export function ModelSelectorModal({
       if (creditsOnly) {
         setSelectedPrimary(isAutomniaCreditsModelId(currentModel) ? currentModel : AUTOMNIA_CREDITS_MODEL_ID)
         setSelectedFallbacks(currentFallbacks.filter((modelId) => isAutomniaCreditsModelId(modelId)))
+      } else if (!frontierAllowed && isAutomniaFrontierModelId(currentModel)) {
+        setSelectedPrimary(AUTOMNIA_CREDITS_MODEL_ID)
+        setSelectedFallbacks(currentFallbacks.filter((modelId) => !isAutomniaFrontierModelId(modelId)))
       } else if (!currentModel && models.length) {
         setSelectedPrimary(models[0].id)
       }
@@ -211,7 +231,7 @@ export function ModelSelectorModal({
     } finally {
       setLoading(false)
     }
-  }, [currentFallbacks, currentModel, creditsOnly])
+  }, [currentFallbacks, currentModel, creditsOnly, frontierAllowed])
 
   const upsertAuthProviderStatus = useCallback((next?: AuthProviderStatus | null) => {
     if (!next) return
@@ -236,18 +256,24 @@ export function ModelSelectorModal({
 
   useEffect(() => {
     if (!isOpen) return
-    setSelectedPrimary(creditsOnly && !isAutomniaCreditsModelId(currentModel) ? AUTOMNIA_CREDITS_MODEL_ID : currentModel)
-    setSelectedFallbacks(creditsOnly ? currentFallbacks.filter((modelId) => isAutomniaCreditsModelId(modelId)) : currentFallbacks)
+    setSelectedPrimary(creditsOnly && !isAutomniaCreditsModelId(currentModel)
+      ? AUTOMNIA_CREDITS_MODEL_ID
+      : !frontierAllowed && isAutomniaFrontierModelId(currentModel)
+        ? AUTOMNIA_CREDITS_MODEL_ID
+        : currentModel)
+    setSelectedFallbacks(creditsOnly
+      ? currentFallbacks.filter((modelId) => isAutomniaCreditsModelId(modelId))
+      : currentFallbacks.filter((modelId) => frontierAllowed || !isAutomniaFrontierModelId(modelId)))
     setThinkingEnabled(currentThinking !== 'off')
     setThinkingLevel(currentThinking === 'off' ? 'minimal' : currentThinking)
     authRefreshKeyRef.current = ''
     void fetchModels()
     void fetchAuthProviders()
-  }, [isOpen, currentModel, currentFallbacks, currentThinking, fetchModels, fetchAuthProviders, creditsOnly])
+  }, [isOpen, currentModel, currentFallbacks, currentThinking, fetchModels, fetchAuthProviders, creditsOnly, frontierAllowed])
 
   const selectableModels = useMemo(
-    () => mergeSelectedModelOptions(models, [selectedPrimary, ...selectedFallbacks].filter(Boolean), creditsOnly),
-    [models, selectedPrimary, selectedFallbacks, creditsOnly],
+    () => mergeSelectedModelOptions(models, [selectedPrimary, ...selectedFallbacks].filter(Boolean), creditsOnly, frontierAllowed),
+    [models, selectedPrimary, selectedFallbacks, creditsOnly, frontierAllowed],
   )
 
   const providerForModel = (modelId: string) =>
@@ -267,6 +293,12 @@ export function ModelSelectorModal({
       setSelectedPrimary(AUTOMNIA_CREDITS_MODEL_ID)
       setSelectedFallbacks([])
       setStatus('Starter subscriptions can use Automnia credits only.')
+      return
+    }
+    if (!frontierAllowed && isAutomniaFrontierModelId(selectedPrimary)) {
+      setSelectedPrimary(AUTOMNIA_CREDITS_MODEL_ID)
+      setSelectedFallbacks((current) => current.filter((modelId) => !isAutomniaFrontierModelId(modelId)))
+      setStatus('Automnia Frontier requires the Automnia Frontier tier.')
       return
     }
     const primaryProvider = providerForModel(selectedPrimary)

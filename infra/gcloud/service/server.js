@@ -213,8 +213,9 @@ function byokAllowedForTier(tier) {
 
 function tierRank(tier) {
   const normalized = String(tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
-  // Pro is the top sellable tier. Keep Enterprise records at this rank so
-  // existing customers retain their access after the catalog consolidation.
+  if (normalized === 'frontier' || normalized === 'frontier_tier' || normalized === 'automnia_frontier' || normalized.endsWith('_frontier')) return 4;
+  // Pro remains below the dedicated Automnia Frontier tier. Keep Enterprise
+  // records at this rank so existing customers retain their access.
   if (normalized.includes('enterprise') || normalized.includes('pro')) return 3;
   if (normalized === 'starter' || normalized.includes('starter') || normalized === 'byok' || normalized.includes('byok')) return 1;
   if (normalized.includes('credit') || normalized.includes('refill') || normalized.includes('topup')) return 0;

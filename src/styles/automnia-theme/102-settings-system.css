@@ -804,7 +804,7 @@ html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-billing-sum
 }
 
 /* A compact comparison keeps the commercial decision legible: credits are the
- * customer-facing unit and Pro is visibly the complete, highest tier. */
+ * customer-facing unit and Frontier is visibly the highest hosted tier. */
 html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-plan-catalog {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
