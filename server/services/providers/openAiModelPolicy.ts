@@ -17,6 +17,16 @@ export function isOpenAiAstraModel(model: string) {
   return /^gpt-6-astra(?:$|[-@])/.test(normalizedOpenAiModel(model))
 }
 
+/**
+ * GPT-5.6 Luna is exposed by the current Gateway runtime as an off-only
+ * reasoning model. Keep that compatibility fact in the shared policy so the
+ * Gateway, direct provider calls, and UI-triggered agent turns cannot send a
+ * product-wide `low`/`minimal` value that the runtime rejects.
+ */
+export function isOpenAiLunaModel(model: string) {
+  return /^gpt-5\.6-luna(?:$|[-@])/.test(normalizedOpenAiModel(model))
+}
+
 export function isOpenAiReasoningModel(model: string) {
   const normalized = normalizedOpenAiModel(model)
   return isOpenAiAstraModel(normalized) || /^gpt-6(?:\.|-)/.test(normalized) || /^(gpt-5|o[1-9]|gpt-oss)/.test(normalized)
@@ -45,6 +55,7 @@ function openAiSupportsMinimalReasoning(model: string) {
  */
 export function openAiReasoningEffortForModel(model: string, thinking: OpenAiThinkingLevel) {
   if (!isOpenAiReasoningModel(model)) return undefined
+  if (isOpenAiLunaModel(model)) return openAiSupportsReasoningNone(model) ? 'none' : undefined
   if (isOpenAiAstraModel(model)) return openAiThinkingForRuntime(model, thinking)
   if (thinking === 'off') return openAiSupportsReasoningNone(model) ? 'none' : undefined
   if (thinking === 'minimal') return openAiSupportsMinimalReasoning(model) ? 'minimal' : 'low'
@@ -57,6 +68,7 @@ export function openAiReasoningEffortForModel(model: string, thinking: OpenAiThi
  * as the direct Responses and Chat Completions paths.
  */
 export function openAiThinkingForRuntime(model: string, thinking: OpenAiThinkingLevel): OpenAiThinkingLevel {
+  if (isOpenAiLunaModel(model)) return 'off'
   if (isOpenAiAstraModel(model) && (thinking === 'off' || thinking === 'minimal')) return 'low'
   return thinking
 }

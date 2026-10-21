@@ -33,6 +33,7 @@ export type PartyOverviewAgent = {
   }
   sandbox?: OpenClawAgent['sandbox']
   model?: OpenClawAgent['model']
+  effectiveModel?: OpenClawAgent['effectiveModel']
   heartbeat?: Partial<HeartbeatConfig>
   mds?: Partial<AgentMDS>
   runtime?: AgentRuntimePolicy

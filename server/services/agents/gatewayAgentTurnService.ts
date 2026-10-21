@@ -30,6 +30,8 @@ export type GatewayAgentTurnServiceOptions = {
   isRetiredAgentId: (agentId: string) => boolean
   streamObserver: (id?: string) => { emit: AgentTurnStreamEmitter } | null | undefined
   ensureOpenclawAgentRunConfigDefaults: () => Promise<void>
+  /** Reconcile the Agent Editor's durable model into OpenClaw before dispatch. */
+  synchronizeAgentModelSelectionForRuntime?: (agentId: string) => Promise<void>
   readOpenclawConfig: () => Promise<unknown>
   ensureAgentRuntimeHealthPreflight: (agentId: string, runtimeConfig: unknown) => Promise<unknown>
   ensureAgentSandboxCompatibleWithHost: (agentId: string) => Promise<unknown>
@@ -176,6 +178,7 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
     const isClawTalkRoute = /\bclawtalk\b/i.test(routeOptions.route)
     emitGatewayStage(isClawTalkRoute ? 'Checking ClawTalk runtime requirements.' : 'Checking Gateway runtime configuration.')
     await options.ensureOpenclawAgentRunConfigDefaults()
+    await options.synchronizeAgentModelSelectionForRuntime?.(agent)
     // Resolve the agent's persisted sandbox policy before the first Gateway
     // dispatch on every route. Without this check, a newly created agent can
     // reach OpenClaw with its default Docker-backed sandbox, fail its first

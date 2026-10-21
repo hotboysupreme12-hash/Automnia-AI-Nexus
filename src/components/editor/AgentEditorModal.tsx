@@ -794,6 +794,10 @@ export function AgentEditorModal() {
         && JSON.stringify(pendingModelSave.fallbacks)===JSON.stringify(nextFallbacks)
       if (!requestIsCurrent) return
       updateAgentModel(agent.id, savedModel)
+      // Re-read the server's effective route after a model edit. The saved
+      // model is the user's durable selection; the overview supplies the
+      // active provider/billing projection shown on the registry card.
+      void useNexusStore.getState().syncPartyOverview()
       setPrimary(savedModel.primary || nextPrimary)
       setFallbacks(savedModel.fallbacks || [])
       pendingModelSaveRef.current=null

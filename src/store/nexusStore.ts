@@ -989,6 +989,7 @@ function mapOverviewAgentToLocal(entry: PartyOverviewAgent, existing: OpenClawAg
     name: (entry.name || existing?.name || entry.id).trim(),
     workspace: entry.workspace || existing?.workspace || seed.workspace || '',
     model: entry.model || existing?.model || seed.model,
+    effectiveModel: entry.effectiveModel || existing?.effectiveModel,
     heartbeat: { ...seed.heartbeat, ...(existing?.heartbeat || {}), ...(entry.heartbeat || {}) },
     runtimePolicy: runtimePolicyFromOverview(entry, existing),
     sandbox: entry.sandbox || existing?.sandbox,
@@ -3790,7 +3791,7 @@ export const useNexusStore = create<NexusState>()(
           }
         },
         updateAgentMeta: (aid, p) => set((s) => ({ agents: updateAgentInList(s.agents, aid, (a) => ({ ...a, ...p })) })),
-        updateAgentModel: (aid, model) => set((s) => ({ agents: updateAgentInList(s.agents, aid, (a) => ({ ...a, model: { ...(a.model || {}), ...(model || {}) } })) })),
+        updateAgentModel: (aid, model) => set((s) => ({ agents: updateAgentInList(s.agents, aid, (a) => ({ ...a, model: { ...(a.model || {}), ...(model || {}) }, effectiveModel: undefined })) })),
         updateAgentRuntimePolicy: (aid, p, options) => {
           set((s) => ({ agents: updateAgentInList(s.agents, aid, (a) => ({ ...a, runtimePolicy: { ...(a.runtimePolicy || {}), ...p } })) }))
           if (options?.persist === false) return

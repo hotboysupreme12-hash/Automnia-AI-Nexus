@@ -69,6 +69,36 @@ test('Automnia credits preserve a user-selected hosted model', () => {
   assert.equal(selection?.primary, 'automnia-cloud/gemini-3.8-flash')
 })
 
+test('Automnia Frontier preserves Argon as the selected hosted route', () => {
+  const argon = 'automnia-cloud/gemini-4-argon'
+  const prime = 'automnia-cloud/gemini-3.8-flash'
+  const selection = applyUsagePriorityModelOrder(
+    { primary: argon, fallbacks: [prime] },
+    'automnia_only',
+    [],
+    AUTOMNIA,
+    { automniaCreditBalance: 250 },
+  )
+
+  assert.deepEqual(selection, { primary: argon, fallbacks: [prime] })
+})
+
+test('provider-first keeps selected Automnia Frontier fallbacks behind the provider model', () => {
+  const argon = 'automnia-cloud/gemini-4-argon'
+  const prime = 'automnia-cloud/gemini-3.8-flash'
+  const selection = applyUsagePriorityModelOrder(
+    { primary: 'openai/gpt-5.6-luna', fallbacks: [argon, prime] },
+    'provider_first',
+    ['openai/gpt-5.6-luna'],
+    AUTOMNIA,
+  )
+
+  assert.deepEqual(selection, {
+    primary: 'openai/gpt-5.6-luna',
+    fallbacks: [argon, prime],
+  })
+})
+
 test('credits-only entitlements do not gain a provider fallback at zero balance', () => {
   const selection = applyUsagePriorityModelOrder(
     { primary: 'google/gemini-2.5-pro', fallbacks: [AUTOMNIA] },

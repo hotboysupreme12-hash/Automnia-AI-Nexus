@@ -1536,6 +1536,7 @@ type OpenClawConfigFile = {
   }
   agents?: {
     list?: AgentConfigEntry[]
+    entries?: Record<string, AgentConfigEntry>
     defaults?: {
       workspace?: string
       timeoutSeconds?: number
@@ -8851,6 +8852,18 @@ function hydrateOpenClawAgentEntries(config: OpenClawConfigFile) {
   return config
 }
 
+function agentEntriesFromLooseConfig(config: OpenClawConfigFile | null) {
+  if (!config?.agents) return [] as AgentConfigEntry[]
+  if (Array.isArray(config.agents.list)) return config.agents.list
+  if (!isLooseRecord(config.agents.entries)) return [] as AgentConfigEntry[]
+  return Object.entries(config.agents.entries)
+    .filter(([, entry]) => isLooseRecord(entry))
+    .map(([id, entry]) => {
+      const typed = entry as AgentConfigEntry
+      return { ...typed, id: typed.id || id }
+    })
+}
+
 async function readOpenclawConfig() {
   let raw: string
   try {
@@ -14271,7 +14284,7 @@ function normalizeModelWithFallback(
 function readAgentPrimaryModelIdSync(agentId: string) {
   const normalizedAgentId = agentId.trim().toLowerCase()
   const config = readJsonFileSyncLoose(OPENCLAW_CONFIG_PATH) as OpenClawConfigFile | null
-  const configPrimary = (config?.agents?.list || [])
+  const configPrimary = agentEntriesFromLooseConfig(config)
     .find((entry) => entry.id?.trim().toLowerCase() === normalizedAgentId)
     ?.model?.primary
     ?.trim()
@@ -14992,6 +15005,29 @@ function applyLocalConfigToGlobal(
   })
   target.tools = normalizeAgentToolsConfig(local.tools)
   applyNoBootstrapAgentConfig(target)
+}
+
+/**
+ * The local agent config is the durable source of the model selected in the
+ * Agent Editor. OpenClaw reads its own projected `agents.entries` snapshot,
+ * so reconcile that projection immediately before a Gateway turn. This is
+ * intentionally allowed during an existing turn: a model can be changed in
+ * the UI while another request is still finishing, and suppressing the write
+ * leaves the next request on a stale model (the Luna/Frontier mismatch).
+ */
+async function synchronizeAgentModelSelectionForRuntime(agentId: string) {
+  const local = await readAgentLocalConfigIfPresent(agentId)
+  if (!local?.model?.primary) return
+
+  const config = await readOpenclawConfig()
+  const openclawConfig = config as OpenClawConfigFile
+  const target = (openclawConfig.agents?.list || []).find((entry) => entry.id === agentId)
+  if (!target) return
+
+  const previousModel = JSON.stringify(target.model || null)
+  applyLocalConfigToGlobal(agentId, local, openclawConfig)
+  if (JSON.stringify(target.model || null) === previousModel) return
+  await writeOpenclawConfig(openclawConfig, { allowDuringAgentTurn: true })
 }
 
 async function syncAgentProjectionToGlobal(agentId: string) {
@@ -17026,6 +17062,16 @@ async function getPartyMembers() {
       })
       const profile = sanitizeProfile(local.profile)
     const activeMission = listMissions().find((mission) => mission.status === 'active' && mission.party.includes(agent.id))
+      const licenseStatus = licenseService.getStatus()
+      const effectiveModel = licenseStatus.active && licenseStatus.usagePriority
+        ? applyAutomniaBillingModelOrder(
+          local.model,
+          licenseStatus.usagePriority,
+          configuredOpenClawProviderModels(config),
+          licenseStatus.creditBalance,
+          licenseStatus.preferredProviderModel,
+        ) || local.model
+        : local.model
 
       return {
         id: agent.id,
@@ -17050,6 +17096,7 @@ async function getPartyMembers() {
         sandbox: local.sandbox,
         toolsPolicy: local.tools,
         model: local.model,
+        effectiveModel,
         heartbeat: local.heartbeat,
         mds: local.mds,
         runtime: local.runtime,
@@ -18811,6 +18858,7 @@ const gatewayAgentTurnService = createGatewayAgentTurnService({
   isRetiredAgentId,
   streamObserver: gatewayChatStreamObserver,
   ensureOpenclawAgentRunConfigDefaults,
+  synchronizeAgentModelSelectionForRuntime,
   readOpenclawConfig,
   ensureAgentRuntimeHealthPreflight: async (agentId, runtimeConfig) => {
     await ensureAgentRuntimeHealthPreflight(agentId, runtimeConfig as OpenClawConfigFile)

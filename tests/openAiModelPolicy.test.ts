@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import {
   isOpenAiAstraModel,
+  isOpenAiLunaModel,
   isOpenAiReasoningModel,
   openAiChatCompletionsReasoningPatch,
   openAiReasoningEffortForModel,
@@ -32,4 +33,12 @@ test('GPT-6 Astra maps broad app thinking choices to supported reasoning efforts
   assert.deepEqual(openAiChatCompletionsReasoningPatch('openai/gpt-6-astra', 'high'), {
     reasoning_effort: 'high',
   })
+})
+
+test('GPT-5.6 Luna is clamped to its Gateway-supported off-only reasoning mode', () => {
+  assert.equal(isOpenAiLunaModel('openai/gpt-5.6-luna'), true)
+  assert.equal(isOpenAiLunaModel('openai/gpt-6-luna'), false)
+  assert.equal(openAiThinkingForRuntime('openai/gpt-5.6-luna', 'low'), 'off')
+  assert.equal(openAiThinkingForRuntime('openai/gpt-5.6-luna', 'high'), 'off')
+  assert.equal(openAiReasoningEffortForModel('openai/gpt-5.6-luna', 'low'), 'none')
 })

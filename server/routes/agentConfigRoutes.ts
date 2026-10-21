@@ -452,7 +452,7 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
     }
 
     applyLocalConfigToGlobal(target.id, local, config)
-    await writeOpenclawConfig(config, { allowDuringAgentTurn: Boolean(patch.tools || patch.sandbox) })
+    await writeOpenclawConfig(config, { allowDuringAgentTurn: Boolean(patch.model || patch.tools || patch.sandbox) })
     const shouldResetContextSession = Boolean(
       needsDerivedFileSync ||
       patch.tools ||
@@ -568,7 +568,11 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
 
       applyLocalConfigToGlobal(agentId, local, config)
 
-      await writeOpenclawConfig(config)
+      // A model can be changed while another Agent Chat turn is still
+      // finishing. Do not let the active-turn write guard acknowledge the
+      // local save while leaving OpenClaw's runtime projection on its old
+      // provider model.
+      await writeOpenclawConfig(config, { allowDuringAgentTurn: true })
       const modelSessionReset = resetAgentTurnSessionsForModelChange(agentId)
       const modelOverrideCleanup = await clearDisallowedAutoModelOverridesForAgent(agentId, nextModel, { clearManualOverrides: true })
       return apiSuccess(res, { ok: true, model: nextModel, modelOverrideCleanup, modelSessionReset })

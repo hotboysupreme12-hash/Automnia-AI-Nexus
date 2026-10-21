@@ -104,7 +104,16 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
   const cardMinHeight = listMode ? 'min-h-[124px]' : denseMode ? 'min-h-[360px]' : compactMode ? 'min-h-[310px]' : 'min-h-[390px]'
   const skillCount = agent.unlockedSkills.length
   const heartbeatSeconds = Math.round((agent.heartbeat.tickIntervalMs || 0) / 1_000)
-  const modelDisplay = describeAgentModel(agent.model?.primary)
+  const configuredModelDisplay = describeAgentModel(agent.model?.primary)
+  const modelDisplay = describeAgentModel(agent.effectiveModel?.primary || agent.model?.primary)
+  const routeDiffersFromConfigured = Boolean(
+    agent.effectiveModel?.primary
+    && agent.model?.primary
+    && agent.effectiveModel.primary.trim().toLowerCase() !== agent.model.primary.trim().toLowerCase(),
+  )
+  const modelTitle = routeDiffersFromConfigured
+    ? `${modelDisplay.cardLabel} · active route (configured: ${configuredModelDisplay.cardLabel})`
+    : modelDisplay.title
   const listDetailItems = [
     { label: 'Provider', value: modelDisplay.providerLabel },
     { label: 'Model', value: modelDisplay.modelLabel },
@@ -133,9 +142,10 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
       data-agent-activity={activityStatus?.kind || (busy ? 'working' : 'idle')}
       data-agent-selected={isSelected ? 'true' : 'false'}
       data-agent-model-label={modelDisplay.cardLabel}
+      data-agent-configured-model-label={configuredModelDisplay.cardLabel}
       data-agent-model-provider={modelDisplay.providerLabel}
       role="group"
-      aria-label={`${agent.name}, ${agent.role}. ${modelDisplay.cardLabel}. ${inP ? `In party slot ${displaySlot}.` : 'Not in party.'} ${isSelected ? 'Selected for Agent Chat.' : 'Not selected for Agent Chat.'}`}
+      aria-label={`${agent.name}, ${agent.role}. ${modelDisplay.cardLabel}${routeDiffersFromConfigured ? ` active route; configured model is ${configuredModelDisplay.cardLabel}` : ''}. ${inP ? `In party slot ${displaySlot}.` : 'Not in party.'} ${isSelected ? 'Selected for Agent Chat.' : 'Not selected for Agent Chat.'}`}
       draggable={!missionRunning}
       onDragStart={handleDragStart}
       onClick={handleCardClick}
@@ -218,9 +228,14 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
 
         {simpleMode && (
           <div className="agent-card-simple-meta" aria-label="Agent model and runtime summary">
-            <div className="agent-card-simple-meta__model" title={modelDisplay.title}>
+            <div className="agent-card-simple-meta__model" title={modelTitle}>
               <span>Model</span>
               <strong className="agent-card-model-value">{modelDisplay.cardLabel}</strong>
+              {routeDiffersFromConfigured && (
+                <small className="mt-0.5 block truncate text-[9px] font-semibold text-white/55" title={`Configured model: ${configuredModelDisplay.cardLabel}`}>
+                  Selected: {configuredModelDisplay.cardLabel}
+                </small>
+              )}
             </div>
             <div className="agent-card-simple-meta__tools" title={`${skillCount} enabled skills`}>
               <span>Skills</span>

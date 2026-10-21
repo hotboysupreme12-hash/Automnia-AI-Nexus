@@ -116,6 +116,11 @@ export interface OpenClawAgent {
     primary?: string
     fallbacks?: string[]
   }
+  /** The route selected by the active billing/provider policy for display only. */
+  effectiveModel?: {
+    primary?: string
+    fallbacks?: string[]
+  }
   runtimePolicy?: AgentRuntimePolicy
   toolsPolicy?: {
     profile?: string
