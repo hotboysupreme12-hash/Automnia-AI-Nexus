@@ -26,7 +26,7 @@
     "build:server": "esbuild server/index.ts --bundle --platform=node --format=cjs --outfile=dist-server/index.cjs --define:import.meta.url=__filename",
     "build:standalone": "npm run build:client && npm run build:server",
     "check:bundle-budgets": "node scripts/check-bundle-budgets.mjs",
-    "smoke:openclaw": "node scripts/smoke-openclaw-contracts.mjs && tsx scripts/smoke-diagnostic-redaction.ts && tsx scripts/smoke-sse-parser.ts && tsx scripts/smoke-agent-turn-stream.ts",
+    "smoke:openclaw": "node scripts/smoke-openclaw-contracts.mjs && node scripts/smoke-settled-turn-finalization.mjs && tsx scripts/smoke-diagnostic-redaction.ts && tsx scripts/smoke-sse-parser.ts && tsx scripts/smoke-agent-turn-stream.ts",
     "smoke:ledger": "tsx scripts/smoke-runtime-ledger-jsonl-tail.ts",
     "smoke:control-center-state": "tsx scripts/smoke-control-center-sqlite-state.ts",
     "smoke:config-save": "tsx scripts/smoke-config-save-lifecycle.ts",

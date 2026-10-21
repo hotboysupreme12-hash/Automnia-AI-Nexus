@@ -621,6 +621,69 @@ function compactAutomniaRelayToolSchemas(tools) {
   if (!patched) throw new Error('[openclaw-vendor] Could not install Automnia Relay provider payload compaction patch')
 }
 
+function ensureAutomniaSettledTurnFinalizationSupport() {
+  const distRoot = path.join(vendorRoot, 'dist')
+  if (!fs.existsSync(distRoot)) throw new Error('[openclaw-vendor] Missing OpenClaw dist directory for settled-turn finalization patch')
+
+  // A tool turn can finish with a valid result while the provider emits one
+  // more tool-shaped response during the isolated, tool-disabled recovery
+  // pass. OpenClaw records those rejected calls as capability activity and
+  // currently discards the recovery answer as a result. Keep the strict
+  // guard for real side effects, but allow rejected calls that are explicitly
+  // marked as errors and have no replay/delivery evidence.
+  const capabilityCondition = 'result.toolMetas.length > 0 || result.itemLifecycle.startedCount > 0 || result.itemLifecycle.completedCount > 0 || result.itemLifecycle.activeCount > 0 || result.replayMetadata.hadPotentialSideEffects || !result.replayMetadata.replaySafe || result.currentAttemptReplayMetadata?.hadPotentialSideEffects || result.currentAttemptReplayMetadata && !result.currentAttemptReplayMetadata.replaySafe || (result.clientToolCalls?.length ?? 0) > 0 || (result.acceptedSessionSpawns?.length ?? 0) > 0 || result.didSendViaMessagingTool || result.didDeliverSourceReplyViaMessageTool || result.didSendDeterministicApprovalPrompt || result.messagingToolSentTexts.length > 0 || result.messagingToolSentMediaUrls.length > 0 || result.messagingToolSentTargets.length > 0 || (result.messagingToolSourceReplyPayloads?.length ?? 0) > 0 || result.heartbeatToolResponse || (result.toolMediaUrls?.length ?? 0) > 0 || (result.hostOwnedToolMediaUrls?.length ?? 0) > 0 || result.toolAudioAsVoice || result.toolTrustedLocalMedia || result.hasToolMediaBlockReply || result.lastToolError || (result.successfulCronAdds ?? 0) > 0 || result.yieldDetected'
+  const strictGuard = `if (${capabilityCondition}) throw new Error("Settled-turn finalization attempt reported capability activity");`
+  const safeRecoveryHelper = String.raw`function isSafeRejectedToolOnlyFinalization(result) {
+	const toolMetas = Array.isArray(result.toolMetas) ? result.toolMetas : [];
+	if (toolMetas.length === 0 || toolMetas.some((meta) => meta?.isError !== true || meta?.replaySafe === false || meta?.asyncStarted === true)) return false;
+	if (result.itemLifecycle?.activeCount > 0 || result.replayMetadata?.hadPotentialSideEffects || result.replayMetadata?.replaySafe === false || result.currentAttemptReplayMetadata?.hadPotentialSideEffects || result.currentAttemptReplayMetadata?.replaySafe === false) return false;
+	if ((result.clientToolCalls?.length ?? 0) > 0 || (result.acceptedSessionSpawns?.length ?? 0) > 0 || result.didSendViaMessagingTool || result.didDeliverSourceReplyViaMessageTool || result.didSendDeterministicApprovalPrompt || (result.messagingToolSentTexts?.length ?? 0) > 0 || (result.messagingToolSentMediaUrls?.length ?? 0) > 0 || (result.messagingToolSentTargets?.length ?? 0) > 0 || (result.messagingToolSourceReplyPayloads?.length ?? 0) > 0 || result.heartbeatToolResponse || (result.toolMediaUrls?.length ?? 0) > 0 || (result.hostOwnedToolMediaUrls?.length ?? 0) > 0 || result.toolAudioAsVoice || result.toolTrustedLocalMedia || result.hasToolMediaBlockReply || (result.successfulCronAdds ?? 0) > 0 || result.yieldDetected) return false;
+	return true;
+}`
+  const guardedReplacement = `${safeRecoveryHelper}
+	if ((${capabilityCondition}) && !isSafeRejectedToolOnlyFinalization(result)) throw new Error("Settled-turn finalization attempt reported capability activity");`
+
+  let resultPatched = false
+  for (const name of fs.readdirSync(distRoot)) {
+    if (!/^settled-turn-finalization-result-.*\.js$/.test(name)) continue
+    const filePath = path.join(distRoot, name)
+    const source = fs.readFileSync(filePath, 'utf8')
+    let next = source
+    if (next.includes('function isSafeRejectedToolOnlyFinalization(result)')) {
+      const legacyGuardedReplacement = `if (${capabilityCondition} && !isSafeRejectedToolOnlyFinalization(result)) throw new Error("Settled-turn finalization attempt reported capability activity");`
+      if (next.includes(legacyGuardedReplacement)) next = next.replace(legacyGuardedReplacement, `if ((${capabilityCondition}) && !isSafeRejectedToolOnlyFinalization(result)) throw new Error("Settled-turn finalization attempt reported capability activity");`)
+      resultPatched = true
+    } else if (next.includes(strictGuard)) {
+      next = next.replace(strictGuard, guardedReplacement)
+      resultPatched = true
+    } else {
+      throw new Error(`[openclaw-vendor] Settled-turn finalization guard changed; cannot patch ${name}`)
+    }
+    if (next !== source) fs.writeFileSync(filePath, next)
+  }
+  if (!resultPatched) throw new Error('[openclaw-vendor] Missing OpenClaw settled-turn finalization result bundle')
+
+  const continuationInstruction = 'const SETTLED_TOOL_TERMINAL_CONTINUATION_INSTRUCTION = "The previous assistant turn completed its tool calls but did not produce a user-visible answer. Continue from the current transcript and produce the final user-visible answer now. Do not repeat completed tool calls or restart from scratch.";'
+  const patchedContinuationInstruction = 'const SETTLED_TOOL_TERMINAL_CONTINUATION_INSTRUCTION = "The previous assistant turn completed its tool calls but did not produce a user-visible answer. Continue from the current transcript and produce the final user-visible answer now. Do not repeat completed tool calls or restart from scratch. This is a tool-disabled recovery pass: return plain user-visible text only; never emit tool calls, exec, tool_call, or any new action. Use only evidence already present in the transcript.";'
+  let continuationPatched = false
+  for (const name of fs.readdirSync(distRoot)) {
+    if (!/^builtin-openclaw-.*\.js$/.test(name)) continue
+    const filePath = path.join(distRoot, name)
+    const source = fs.readFileSync(filePath, 'utf8')
+    let next = source
+    if (next.includes(patchedContinuationInstruction)) {
+      continuationPatched = true
+    } else if (next.includes(continuationInstruction)) {
+      next = next.replace(continuationInstruction, patchedContinuationInstruction)
+      continuationPatched = true
+    } else {
+      continue
+    }
+    if (next !== source) fs.writeFileSync(filePath, next)
+  }
+  if (!continuationPatched) throw new Error('[openclaw-vendor] Missing OpenClaw built-in harness bundle for settled-turn continuation patch')
+}
+
 function packageJsonFor(packageName) {
   return path.join(nodeModulesRoot, ...packageName.split('/'), 'package.json')
 }
@@ -724,6 +787,7 @@ async function main() {
   ensureAutomniaRelayRetrySafetySupport()
   ensureAutomniaRelayCompactContextSupport()
   ensureAutomniaRelayPayloadCompactionSupport()
+  ensureAutomniaSettledTurnFinalizationSupport()
   ensureRestartRecoveryClaimStartupRepair(vendorRoot)
 
   if (!refresh && fs.existsSync(nodeModulesRoot)) {
