@@ -19,8 +19,19 @@ export function createTextEventBatcher<T extends TextEvent>(
     push(frame: T) {
       const key = keyFor(frame)
       if (frame.event !== 'delta' || !key) {
-        const previous = pending.get(key)
-        if (previous) { pending.delete(key); publish(previous) }
+        if (!key && pending.size > 0) {
+          flush()
+        } else if (key) {
+          const previous = pending.get(key)
+          if (previous) {
+            pending.delete(key)
+            if (pending.size === 0 && timer !== undefined) {
+              clearTimeout(timer)
+              timer = undefined
+            }
+            publish(previous)
+          }
+        }
         publish(frame)
         return
       }

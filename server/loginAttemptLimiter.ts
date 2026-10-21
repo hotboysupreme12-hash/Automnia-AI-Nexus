@@ -61,9 +61,16 @@ export function createLoginAttemptLimiter(options: LoginAttemptLimiterOptions = 
       if (inactive || (expiredWindow && record.blockedUntil <= current)) attempts.delete(key)
     }
     while (attempts.size > maxEntries) {
-      const oldest = [...attempts.entries()].sort((left, right) => left[1].lastSeenAt - right[1].lastSeenAt)[0]
-      if (!oldest) break
-      attempts.delete(oldest[0])
+      let oldestKey: string | undefined
+      let oldestTime = Infinity
+      for (const [key, record] of attempts.entries()) {
+        if (record.lastSeenAt < oldestTime) {
+          oldestTime = record.lastSeenAt
+          oldestKey = key
+        }
+      }
+      if (oldestKey === undefined) break
+      attempts.delete(oldestKey)
     }
   }
 

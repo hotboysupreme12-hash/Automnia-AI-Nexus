@@ -70,7 +70,12 @@ export function registerStaticUi(app: Express, options: StaticUiOptions) {
 
   const staticRootRealPath = async () => {
     if (!staticRoot) return ''
-    staticRootRealPathPromise ||= fs.realpath(staticRoot)
+    if (!staticRootRealPathPromise) {
+      staticRootRealPathPromise = fs.realpath(staticRoot).catch((error) => {
+        staticRootRealPathPromise = null
+        throw error
+      })
+    }
     return staticRootRealPathPromise
   }
 

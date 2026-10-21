@@ -1,7 +1,9 @@
 export type UpstreamSseFrame = { event?: string; data: string }
 
-function parseFrames(buffer: string): { frames: UpstreamSseFrame[]; rest: string } {
-  const normalized = buffer.replace(/\r\n/g, '\n')
+function parseFrames(buffer: string, flush = false): { frames: UpstreamSseFrame[]; rest: string } {
+  const hasTrailingCr = !flush && buffer.endsWith('\r')
+  const slice = hasTrailingCr ? buffer.slice(0, -1) : buffer
+  const normalized = slice.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
   const frames: UpstreamSseFrame[] = []
   let cursor = 0
   while (true) {
@@ -17,7 +19,7 @@ function parseFrames(buffer: string): { frames: UpstreamSseFrame[]; rest: string
     }
     if (dataLines.length) frames.push({ event, data: dataLines.join('\n') })
   }
-  return { frames, rest: normalized.slice(cursor) }
+  return { frames, rest: `${normalized.slice(cursor)}${hasTrailingCr ? '\r' : ''}` }
 }
 
 export async function readUpstreamSse(
@@ -58,7 +60,7 @@ export async function readUpstreamSse(
       if (terminal !== true) return terminal
     }
     buffer += decoder.decode()
-    const terminal = deliver(parseFrames(`${buffer}\n\n`).frames)
+    const terminal = deliver(parseFrames(`${buffer}\n\n`, true).frames)
     return terminal === true ? 'eof' as const : terminal
   } finally {
     try {

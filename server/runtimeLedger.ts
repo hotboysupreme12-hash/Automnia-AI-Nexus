@@ -78,6 +78,7 @@ let legacyImportTimer: NodeJS.Timeout | null = null
 let legacyImportScheduled = false
 const preparedStatements = new WeakMap<SqliteDatabase, Map<string, SqliteStatement>>()
 const appendQueues = new Map<string, Promise<void>>()
+const ensuredJsonlDirs = new Set<string>()
 
 function preparedStatement(db: SqliteDatabase, sql: string) {
   let cache = preparedStatements.get(db)
@@ -98,6 +99,7 @@ export function configureRuntimeLedger(input: Omit<LedgerPaths, 'sqlite'> & { sq
   sqliteWriteWarning = ''
   legacyImportWarning = ''
   jsonlTailDiagnostic = null
+  ensuredJsonlDirs.clear()
   if (legacyImportTimer) clearTimeout(legacyImportTimer)
   legacyImportTimer = null
   legacyImportScheduled = false
@@ -109,7 +111,11 @@ function configuredPaths() {
 }
 
 async function appendJsonlLedger(filePath: string, value: Record<string, unknown>) {
-  await fs.mkdir(path.dirname(filePath), { recursive: true })
+  const dir = path.dirname(filePath)
+  if (!ensuredJsonlDirs.has(dir)) {
+    await fs.mkdir(dir, { recursive: true })
+    ensuredJsonlDirs.add(dir)
+  }
   await fs.appendFile(filePath, `${JSON.stringify(value)}\n`, { encoding: 'utf-8', mode: 0o600 })
   await fs.chmod(filePath, 0o600).catch(() => undefined)
 }
@@ -132,7 +138,7 @@ async function readJsonlLedgerTail<T>(ledger: string, filePath: string, limit: n
     const start = Math.max(0, stat.size - LEDGER_TAIL_MAX_BYTES)
     const handle = await fs.open(filePath, 'r')
     try {
-      const buffer = Buffer.alloc(stat.size - start)
+      const buffer = Buffer.allocUnsafe(stat.size - start)
       let bytesRead = 0
       while (bytesRead < buffer.length) {
         const read = await handle.read(buffer, bytesRead, buffer.length - bytesRead, start + bytesRead)
@@ -230,10 +236,11 @@ async function readMissionJsonlLedgerTail<T>(ledger: string, filePath: string, l
     }
     // Search backwards in bounded chunks. A busy unrelated mission must not
     // displace this mission's history from either the row or byte tail limit.
+    const chunk = Buffer.allocUnsafe(Math.min(LEDGER_TAIL_MAX_BYTES, Math.max(1, offset)))
     while (offset > 0 && newest.length < normalizedLimit) {
       const start = Math.max(0, offset - LEDGER_TAIL_MAX_BYTES)
-      const chunk = Buffer.alloc(offset - start)
-      const { bytesRead } = await handle.read(chunk, 0, chunk.length, start)
+      const readLength = offset - start
+      const { bytesRead } = await handle.read(chunk, 0, readLength, start)
       const data = Buffer.concat([chunk.subarray(0, bytesRead), partialLine])
       let end = data.length
       while (end > 0 && newest.length < normalizedLimit) {

@@ -18,13 +18,15 @@ export function writeAtomicControlFile(file: string, content: string, expectedRe
     const existing = await fs.lstat(destination).catch((error: NodeJS.ErrnoException) => { if (error.code === 'ENOENT') return null; throw error })
     if (existing && !existing.isFile()) throw new Error('Control file must be a regular file.')
     const temporary = path.join(path.dirname(destination), `.${path.basename(destination)}.${randomUUID()}.tmp`)
+    let renamed = false
     try {
       const handle = await fs.open(temporary, 'wx', existing ? existing.mode & 0o777 : 0o600)
       try { await handle.writeFile(content, 'utf8'); await handle.sync() } finally { await handle.close() }
       if (expectedRevision !== undefined && controlFileRevision(await readCurrent()) !== expectedRevision) throw new ControlFileConflict()
       await fs.rename(temporary, destination)
+      renamed = true
       return controlFileRevision(content)
-    } finally { await fs.unlink(temporary).catch(() => undefined) }
+    } finally { if (!renamed) await fs.unlink(temporary).catch(() => undefined) }
   })
   writes.set(destination, write)
   void write.finally(() => { if (writes.get(destination) === write) writes.delete(destination) }).catch(() => undefined)
