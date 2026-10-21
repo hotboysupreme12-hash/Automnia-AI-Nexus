@@ -322,12 +322,16 @@ assertIncludes(agentRuntimeTurn, "throw Object.assign(new Error('gateway agent r
 
 assertOrderedIncludes(sseStream, [
   'export function createSseFrameParser()',
-  "buffer = `${buffer}${chunk}`.replace(/\\r\\n/g, '\\n').replace(/\\r/g, '\\n')",
-  "const boundary = buffer.indexOf('\\n\\n')",
+  'const consume = (chunk: string, flush = false) =>',
+  'const combined = pendingCr ? `\\r${chunk}` : chunk',
+  "buffer += ready.replace(/\\r\\n/g, '\\n').replace(/\\r/g, '\\n')",
+  "const boundary = buffer.indexOf('\\n\\n', cursor)",
+  "const raw = buffer.slice(cursor, boundary)",
   "if (line.startsWith('event:')) event = line.slice(6).trim() || 'message'",
   "if (line.startsWith('data:')) data.push(line.slice(5).trimStart())",
   "if (data.length) frames.push({ event, data: data.join('\\n') })",
-  "flush: () => push('\\n\\n')",
+  "if (cursor > 0) buffer = buffer.slice(cursor)",
+  "flush: () => consume('\\n\\n', true)",
 ], 'Command Console shared SSE parser')
 
 assertOrderedIncludes(agentTurnsApi, [

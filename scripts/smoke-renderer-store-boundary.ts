@@ -31,6 +31,7 @@ const nexusPersistence = readWorkspaceFile('src/store/nexusPersistence.ts')
 const stateSplitTest = readWorkspaceFile('tests/nexusStoreStateSplit.test.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 const lines = store.split(/\r?\n/)
+if (lines.at(-1) === '') lines.pop()
 const apiRequestCallLines = lines.filter((line) => /\bapiRequest(?:<|\s*\()/.test(line))
 const apiPathLines = lines.filter((line) => /['"`]\/api\//.test(line))
 const directFetchMatches = [...store.matchAll(/\bfetch\s*\(/g)]
