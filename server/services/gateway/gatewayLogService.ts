@@ -643,7 +643,7 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
   }
 
   function gatewayLogEntryId(source: string, line: string) {
-    const digest = createHash('sha1').update(`${source}\n${line}`).digest('hex').slice(0, 7)
+    const digest = createHash('sha1').update(`${source}\n${line}`).digest('hex').slice(0, 12)
     return -Number.parseInt(digest, 16)
   }
 

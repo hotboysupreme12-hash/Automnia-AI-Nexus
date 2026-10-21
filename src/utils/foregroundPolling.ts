@@ -16,17 +16,23 @@ export function startForegroundPolling(
     } catch {
       // A failed poll must not terminate future refreshes. The caller owns its UI error.
     } finally {
-      inFlight = undefined
-      if (!stopped && !visibility.hidden) {
-        timer = setTimeout(() => { timer = undefined; void run() }, Math.max(1000, intervalMs))
+      if (inFlight === controller) {
+        inFlight = undefined
+        if (!stopped && !visibility.hidden && timer === undefined) {
+          timer = setTimeout(() => { timer = undefined; void run() }, Math.max(1000, intervalMs))
+        }
       }
     }
   }
   const onVisibilityChange = () => {
     clearTimeout(timer)
     timer = undefined
-    if (visibility.hidden) inFlight?.abort()
-    else void run()
+    if (visibility.hidden) {
+      inFlight?.abort()
+      inFlight = undefined
+    } else {
+      void run()
+    }
   }
   visibility.addEventListener('visibilitychange', onVisibilityChange)
   void run()

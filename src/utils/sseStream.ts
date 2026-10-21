@@ -10,16 +10,21 @@ export type SseFrameParser = {
 
 export function createSseFrameParser(): SseFrameParser {
   let buffer = ''
+  let pendingCr = false
 
-  const push = (chunk: string) => {
-    buffer = `${buffer}${chunk}`.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  const consume = (chunk: string, flush = false) => {
+    const combined = pendingCr ? `\r${chunk}` : chunk
+    pendingCr = !flush && combined.endsWith('\r')
+    const ready = pendingCr ? combined.slice(0, -1) : combined
+    buffer += ready.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
     const frames: SseFrame[] = []
+    let cursor = 0
 
     while (true) {
-      const boundary = buffer.indexOf('\n\n')
+      const boundary = buffer.indexOf('\n\n', cursor)
       if (boundary === -1) break
-      const raw = buffer.slice(0, boundary)
-      buffer = buffer.slice(boundary + 2)
+      const raw = buffer.slice(cursor, boundary)
+      cursor = boundary + 2
       let event = 'message'
       const data: string[] = []
 
@@ -31,12 +36,13 @@ export function createSseFrameParser(): SseFrameParser {
       if (data.length) frames.push({ event, data: data.join('\n') })
     }
 
+    if (cursor > 0) buffer = buffer.slice(cursor)
     return frames
   }
 
   return {
-    push,
-    flush: () => push('\n\n'),
+    push: (chunk: string) => consume(chunk, false),
+    flush: () => consume('\n\n', true),
   }
 }
 

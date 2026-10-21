@@ -34,9 +34,12 @@ export class ConsoleRunSnapshots {
       startedAt: previous?.startedAt || frame.timestamp,
       label: typeof frame.label === 'string' ? frame.label : previous?.label || 'Working',
     }
+    if ( previous !== undefined && terminal ) this.runs.delete(key)
     this.runs.set(key, snapshot)
-    const completed = [...this.runs.entries()].filter(([, run]) => run.event === 'final' || run.event === 'error')
-    for (const [id] of completed.slice(0, Math.max(0, completed.length - this.completedLimit))) this.runs.delete(id)
+    if (terminal && this.runs.size > this.completedLimit) {
+      const completed = [...this.runs.entries()].filter(([, run]) => run.event === 'final' || run.event === 'error')
+      for (const [id] of completed.slice(0, Math.max(0, completed.length - this.completedLimit))) this.runs.delete(id)
+    }
     // Recoverable UI turns use absolute text, making replay and simultaneous streams idempotent.
     return frame.responseId ? snapshot : frame
   }
