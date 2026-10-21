@@ -87,32 +87,21 @@ export function applyUsagePriorityModelOrder(
   automniaModelId: string,
   options: UsagePriorityModelOrderOptions = {},
 ): UsagePriorityModelSelection | undefined {
-  const providerCandidatesInOrder = uniqueStrings(
-    selection?.primary,
-    ...(Array.isArray(selection?.fallbacks) ? selection.fallbacks : []),
-    ...providerCandidates,
-  ).filter((modelId) => !isAutomniaModel(modelId, automniaModelId))
-  const preferredProviderModel = typeof options.preferredProviderModel === 'string'
-    ? options.preferredProviderModel.trim()
-    : ''
-  const preferredProviderModelMatch = preferredProviderModel
-    ? providerCandidatesInOrder.find((modelId) => modelId.toLowerCase() === preferredProviderModel.toLowerCase())
-    : undefined
+  // Keep the configured provider list available for compatibility with
+  // callers, but do not use it to invent a model for this agent's stack.
+  void providerCandidates
   const selectedProviderModel = uniqueStrings(
     selection?.primary,
     ...(Array.isArray(selection?.fallbacks) ? selection.fallbacks : []),
   ).find((modelId) => !isAutomniaModel(modelId, automniaModelId))
-  // The model stack selected in the agent editor is the source of truth. Keep
-  // the legacy account preference only as a migration fallback for old
-  // accounts whose saved stack contains no provider model yet.
-  const providerModel = selectedProviderModel || preferredProviderModelMatch || providerCandidatesInOrder[0]
-
-  // A saved preference that disappeared from the configured provider stack is
-  // not safe to replace silently with a different provider model. Returning an
-  // unapplied route lets the caller surface a repairable configuration error.
-  if (preferredProviderModel && !preferredProviderModelMatch && (usagePriority === 'provider_first' || usagePriority === 'byok_only')) {
-    return undefined
-  }
+  // The model stack selected in the agent editor is the source of truth.
+  // `preferredProviderModel` is retained in the options type for persisted
+  // account compatibility, but it must never inject a provider model that the
+  // user did not select for this agent. In particular, an old Luna preference
+  // must not replace a selected Automnia Frontier primary and make the UI and
+  // the actual Gateway turn disagree.
+  void options.preferredProviderModel
+  const providerModel = selectedProviderModel
 
   if (usagePriority === 'automnia_only' || usagePriority === 'automnia_first') {
     // Automnia-only is an explicit billing choice. A zero balance must not
@@ -144,9 +133,18 @@ export function applyUsagePriorityModelOrder(
   }
 
   if (usagePriority === 'provider_first') {
-    // Fail closed when no provider model exists. Falling back to Automnia as
-    // the primary here would violate an explicit provider-first choice.
-    if (!providerModel) return undefined
+    // A provider-first preference changes the order only when the agent stack
+    // contains a provider model. If the stack contains only Automnia models,
+    // preserve the explicit selection instead of silently injecting the first
+    // configured provider (historically gpt-5.6-luna).
+    if (!providerModel) {
+      return selection ? {
+        primary: selectedAutomniaModel(selection, automniaModelId),
+        ...(Array.isArray(selection.fallbacks) && selection.fallbacks.length
+          ? { fallbacks: uniqueStrings(...selection.fallbacks).filter((modelId) => !isAutomniaModel(modelId, automniaModelId) || modelId.toLowerCase() !== selectedAutomniaModel(selection, automniaModelId).toLowerCase()) }
+          : {}),
+      } : undefined
+    }
     const hasExplicitFallbacks = Array.isArray(selection?.fallbacks)
     const requestedFallbacks = hasExplicitFallbacks
       ? (selection?.fallbacks || [])

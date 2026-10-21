@@ -151,29 +151,29 @@ test('provider-first keeps an explicitly empty fallback stack empty', () => {
   )
 })
 
-test('provider-first uses the legacy preference only when the agent stack has no provider model', () => {
+test('provider-first never injects a legacy provider preference into an Automnia-only agent stack', () => {
   assert.deepEqual(
     applyUsagePriorityModelOrder(
-      { primary: AUTOMNIA, fallbacks: [] },
+      { primary: 'automnia-cloud/gemini-4-argon', fallbacks: ['automnia-cloud/gemini-3.8-flash'] },
       'provider_first',
       ['openai/gpt-5.6-luna', 'openai/gpt-5.6-sol'],
       AUTOMNIA,
       { preferredProviderModel: 'openai/gpt-5.6-sol' },
     ),
-    { primary: 'openai/gpt-5.6-sol' },
+    { primary: 'automnia-cloud/gemini-4-argon', fallbacks: ['automnia-cloud/gemini-3.8-flash'] },
   )
 })
 
-test('provider-first refuses a saved provider model that is no longer configured', () => {
+test('provider-first preserves an explicit provider model even when the catalog is stale', () => {
   assert.equal(
     applyUsagePriorityModelOrder(
-      { primary: 'automnia-cloud/gemini-3.8-flash', fallbacks: ['openai/gpt-5.6-luna'] },
+      { primary: 'openai/gpt-5.6-sol', fallbacks: ['automnia-cloud/gemini-3.8-flash'] },
       'provider_first',
       ['openai/gpt-5.6-luna'],
       AUTOMNIA,
       { preferredProviderModel: 'anthropic/claude-opus-5' },
-    ),
-    undefined,
+    )?.primary,
+    'openai/gpt-5.6-sol',
   )
 })
 
@@ -215,9 +215,9 @@ test('BYOK-only contains one provider model and never Automnia or old retries', 
 })
 
 test('provider-plus-Automnia policies fail closed when no provider model is available', () => {
-  assert.equal(
+  assert.deepEqual(
     applyUsagePriorityModelOrder({ primary: AUTOMNIA }, 'provider_first', [], AUTOMNIA),
-    undefined,
+    { primary: AUTOMNIA },
   )
   assert.equal(
     applyUsagePriorityModelOrder({ primary: AUTOMNIA }, 'byok_only', [], AUTOMNIA),

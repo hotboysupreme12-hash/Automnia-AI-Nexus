@@ -10043,6 +10043,20 @@ function setTelegramBillingDefaultModel(config: OpenClawConfigFile, model: strin
   }
 }
 
+function telegramBillingModelForConfig(config: OpenClawConfigFile, fallbackModel?: string) {
+  const boundAgentIds = uniqueStrings(
+    ...(config.bindings || [])
+      .filter((binding) => binding.match?.channel === 'telegram')
+      .map((binding) => binding.agentId),
+  )
+  if (boundAgentIds.length === 1) {
+    const boundAgent = (config.agents?.list || []).find((agent) => agent.id === boundAgentIds[0])
+    const boundModel = boundAgent?.model?.primary
+    if (typeof boundModel === 'string' && boundModel.trim()) return boundModel.trim()
+  }
+  return fallbackModel
+}
+
 function clearAutomniaTelegramBillingDefaultModel(config: OpenClawConfigFile) {
   if (telegramBillingDefaultModel(config) !== AUTOMNIA_OPENCLAW_MODEL) return
   const channels = config.channels
@@ -10092,13 +10106,13 @@ function enforceActiveBillingRouteModelOrder(config: OpenClawConfigFile) {
     throw new Error(`The selected provider model is not configured: ${status.preferredProviderModel}. Reconnect that provider or choose another model.`)
   }
   config.agents.defaults.model = defaultSelection
-  setTelegramBillingDefaultModel(config, defaultSelection?.primary)
   for (const agent of config.agents.list || []) {
     delete agent.modelOverride
     const nextSelection = applyAutomniaBillingModelOrder(agent.model, priority, providerCandidates, status.creditBalance, status.preferredProviderModel)
     if (nextSelection) agent.model = nextSelection
     else delete agent.model
   }
+  setTelegramBillingDefaultModel(config, telegramBillingModelForConfig(config, defaultSelection?.primary))
 
   // A BYOK policy must not leave an Automnia alias or provider definition in
   // the live config for a later generic config write to resurrect.
@@ -10280,7 +10294,6 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
     throw new Error(`The selected provider model is not configured: ${licenseStatus.preferredProviderModel}. Reconnect that provider or choose another model.`)
   }
   config.agents.defaults.model = defaultSelection
-  setTelegramBillingDefaultModel(config, defaultSelection?.primary)
   for (const agent of config.agents.list || []) {
     // Agent-local settings are authoritative. The global agent entry is a
     // projection and may still contain the previous hosted tier (for example
@@ -10290,6 +10303,7 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
       ...allProviderModels,
     ), licenseStatus.creditBalance, licenseStatus.preferredProviderModel)
   }
+  setTelegramBillingDefaultModel(config, telegramBillingModelForConfig(config, defaultSelection?.primary))
   if (!config.agents.defaults.models) config.agents.defaults.models = {}
   const modelIdsForConfig = licenseService.isUsagePriorityLocked()
     ? AUTOMNIA_CREDITS_MODEL_IDS
