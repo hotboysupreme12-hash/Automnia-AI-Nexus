@@ -1,5 +1,14 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 
+export const DEFAULT_TELEGRAM_SPOOLED_HANDLER_TIMEOUT_MS = 2 * 60 * 60 * 1000
+
+export function resolveTelegramSpooledHandlerTimeoutMs(configured = process.env.OPENCLAW_TELEGRAM_SPOOLED_HANDLER_TIMEOUT_MS) {
+  const timeoutMs = Number(configured)
+  return Number.isSafeInteger(timeoutMs) && timeoutMs > 0
+    ? timeoutMs
+    : DEFAULT_TELEGRAM_SPOOLED_HANDLER_TIMEOUT_MS
+}
+
 export type GatewayRestartOutcome = 'scheduled' | 'started' | 'succeeded' | 'failed' | 'skipped'
 
 export type GatewayRestartLifecycleSnapshot = {
@@ -534,6 +543,11 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
       }
       const spec = options.openClawSpawnSpec(buildGatewayRunArgs(options.gatewayHttpPort))
       const env = options.openClawProcessEnv({
+        // Telegram's default 5-minute claim→adoption watchdog was shorter than
+        // the hosted model route's 2-hour request deadline. Keep durable turns
+        // claimed until the configured model route can finish, but preserve an
+        // explicit operator override.
+        OPENCLAW_TELEGRAM_SPOOLED_HANDLER_TIMEOUT_MS: String(resolveTelegramSpooledHandlerTimeoutMs()),
         // The Gateway is a local untrusted boundary from the billing point
         // of view. Give injected channel runtimes the same bearer credential
         // used by the Control Center so traffic-gate checks cannot be spoofed
@@ -699,6 +713,17 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
         markGatewayRestartOutcome('succeeded')
       }
       return
+    }
+
+    const existingGatewayPid = gatewayProcess?.pid
+    if (existingGatewayPid && options.isPidAlive(existingGatewayPid)) {
+      if (await waitForGatewayStartupHealth()) return
+      if (gatewayProcess?.pid === existingGatewayPid && options.isPidAlive(existingGatewayPid)) {
+        const detail = `managed Gateway pid=${existingGatewayPid} is still running without confirmed health; refusing to spawn a duplicate`
+        log.warn(`[gateway] ${detail}`)
+        options.pushGatewayLog('lifecycle', detail)
+        return
+      }
     }
 
     const [clawTalkRepairResult, telegramRepairResult] = await Promise.all([

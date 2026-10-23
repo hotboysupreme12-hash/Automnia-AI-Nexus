@@ -6,6 +6,8 @@ import type { ChildProcess } from 'node:child_process'
 import {
   buildGatewayRunArgs,
   createGatewayLifecycleService,
+  DEFAULT_TELEGRAM_SPOOLED_HANDLER_TIMEOUT_MS,
+  resolveTelegramSpooledHandlerTimeoutMs,
   type GatewayLifecycleServiceOptions,
   type GatewayLogEntry,
   type GatewaySpawnSpec,
@@ -342,6 +344,22 @@ test('ensureGatewayRunning starts independent plugin repairs in parallel', async
   assert.equal(harness.spawnCalls, 1)
 })
 
+test('ensureGatewayRunning never spawns a second gateway while the owned startup process is still alive', async () => {
+  const harness = createHarness({
+    healthSequence: [false],
+    delayMs: (ms) => new Promise((resolve) => setTimeout(resolve, Math.min(ms, 5))),
+  })
+
+  await harness.service.ensureGatewayRunning()
+  assert.equal(harness.spawnCalls, 1)
+
+  await harness.service.ensureGatewayRunning()
+  harness.service.stopGatewayHealthMonitor()
+
+  assert.equal(harness.spawnCalls, 1)
+  assert.ok(harness.logs.some((entry) => entry.message.includes('refusing to spawn a duplicate')))
+})
+
 test('ensureGatewayRunning passes startup repair results into defaults without duplicate registry refresh', async () => {
   const harness = createHarness({
     healthSequence: [false, false, true],
@@ -400,7 +418,19 @@ test('forced restart releases the port and starts the gateway with Control Cente
   assert.equal(harness.envOverrides[0]?.CONTROL_CENTER_AGENT_TURN_STREAM_URL, 'http://127.0.0.1:13337/api/openclaw/agent-turn/stream')
   assert.equal(harness.envOverrides[0]?.CLAWTALK_CONTROL_CENTER_AGENT_TURN_STREAM_URL, 'http://127.0.0.1:13337/api/openclaw/agent-turn/stream')
   assert.equal(harness.envOverrides[0]?.CLAWTALK_CONTROL_CENTER_CONSOLE_FINAL_URL, 'http://127.0.0.1:13337/api/openclaw/clawtalk-console/final')
+  assert.equal(
+    harness.envOverrides[0]?.OPENCLAW_TELEGRAM_SPOOLED_HANDLER_TIMEOUT_MS,
+    String(resolveTelegramSpooledHandlerTimeoutMs()),
+  )
   assert.equal(harness.service.lifecycleSnapshot().lastRestartOutcome, 'succeeded')
+})
+
+test('Telegram ingress handler timeout matches long hosted turns and preserves valid overrides', () => {
+  assert.equal(DEFAULT_TELEGRAM_SPOOLED_HANDLER_TIMEOUT_MS, 7_200_000)
+  assert.equal(resolveTelegramSpooledHandlerTimeoutMs(undefined), 7_200_000)
+  assert.equal(resolveTelegramSpooledHandlerTimeoutMs('900000'), 900_000)
+  assert.equal(resolveTelegramSpooledHandlerTimeoutMs('0'), 7_200_000)
+  assert.equal(resolveTelegramSpooledHandlerTimeoutMs('invalid'), 7_200_000)
 })
 
 test('forced restart waits for an active startup before replacing the gateway', async () => {

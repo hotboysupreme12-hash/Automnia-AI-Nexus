@@ -156,6 +156,8 @@ import { createOAuthCallbackService, type OAuthCallbackService } from './service
 import {
   CLAWTALK_CORE_BRIDGE_ROUTING_HELPER,
   TELEGRAM_AGENT_ROUTING_HELPER,
+  TELEGRAM_PROGRESS_STATUS_HELPER,
+  dedupeTelegramProgressHooks,
 } from './integrations/agentRoutingHelpers'
 import { registerBrowserRoutes } from './routes/browserRoutes'
 import { registerShiftRoutes } from './routes/shiftRoutes'
@@ -3710,8 +3712,10 @@ const GATEWAY_STARTUP_HEALTH_GRACE_MS = (() => {
   return Number.isFinite(configured) ? Math.max(15_000, Math.min(180_000, configured)) : 75_000
 })()
 const GATEWAY_STARTUP_HEALTH_CONFIRM_TIMEOUT_MS = (() => {
-  const configured = Number(process.env.CONTROL_CENTER_GATEWAY_STARTUP_HEALTH_CONFIRM_TIMEOUT_MS || 45_000)
-  return Number.isFinite(configured) ? Math.max(10_000, Math.min(180_000, configured)) : 45_000
+  // Bundled Gateway cold starts can take over a minute while loading channel
+  // plugins and durable stores; do not declare them failed before they bind HTTP.
+  const configured = Number(process.env.CONTROL_CENTER_GATEWAY_STARTUP_HEALTH_CONFIRM_TIMEOUT_MS || 120_000)
+  return Number.isFinite(configured) ? Math.max(10_000, Math.min(180_000, configured)) : 120_000
 })()
 const GATEWAY_STARTUP_HEALTH_POLL_MS = (() => {
   const configured = Number(process.env.CONTROL_CENTER_GATEWAY_STARTUP_HEALTH_POLL_MS || 1_500)
@@ -11090,7 +11094,7 @@ function patchedClawTalkRuntimeSource(source: string) {
 
 
 const CLAWTALK_REPAIR_SIGNATURE_VERSION = 'clawtalk-repair:v13'
-const TELEGRAM_REPAIR_SIGNATURE_VERSION = 'telegram-routing-repair:v13'
+const TELEGRAM_REPAIR_SIGNATURE_VERSION = 'telegram-routing-repair:v14'
 const clawTalkRepairSignatureCache = new Map<string, string>()
 const telegramRepairSignatureCache = new Map<string, string>()
 
@@ -11294,7 +11298,7 @@ async function sendClawTalkSmsWithRetry(client, logger, params) {
 
 function patchedTelegramBotRuntimeSource(source: string) {
   let next = source
-  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 17;'
+  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 19;'
   const routingHelperPattern = /var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = \d+;[\s\S]*?\/\/#endregion telegram-agent-routing-patch/
   if (routingHelperPattern.test(next)) {
     next = next.replace(routingHelperPattern, TELEGRAM_AGENT_ROUTING_HELPER)
@@ -11310,6 +11314,21 @@ function patchedTelegramBotRuntimeSource(source: string) {
       next = next.replace(helperMarker, `${TELEGRAM_AGENT_ROUTING_HELPER}\n${helperMarker}`)
     } else {
       console.warn('[plugins/telegram] agent route helper insertion skipped: no stable Telegram bundle marker found')
+    }
+  }
+  const hasMessageRoutingShape = next.includes('const buildTelegramMessageContext = async') && next.includes('function resolveTelegramInboundBody')
+  if (hasMessageRoutingShape) {
+    const progressStatusPatchVersion = 'var AUTOMNIA_TELEGRAM_PROGRESS_STATUS_PATCH = 1;'
+    const progressStatusPattern = /var AUTOMNIA_TELEGRAM_PROGRESS_STATUS_PATCH = \d+;[\s\S]*?\/\/#endregion automnia-telegram-progress-status-patch/
+    if (progressStatusPattern.test(next)) {
+      next = next.replace(progressStatusPattern, TELEGRAM_PROGRESS_STATUS_HELPER)
+    } else if (!next.includes(progressStatusPatchVersion)) {
+      const progressStatusMarker = '//#region extensions/telegram/src/bot-message-dispatch-status.ts'
+      if (next.includes(progressStatusMarker)) {
+        next = next.replace(progressStatusMarker, `${TELEGRAM_PROGRESS_STATUS_HELPER}\n${progressStatusMarker}`)
+      } else {
+        console.warn('[plugins/telegram] progress status patch skipped: no stable Telegram dispatch marker found')
+      }
     }
   }
   next = next.replace(
@@ -11412,14 +11431,139 @@ function patchedTelegramBotRuntimeSource(source: string) {
     ].join('\n\t')
     next = next.replace(noVisibleResponseMarker, `${noVisibleResponseBlock}\n\t${noVisibleResponseMarker}`)
   }
+  const currentUnsafeNoVisibleResponseBlock = /\tif \(!sentFallback && !isRoomEvent && !turn\.suppressSilentReplyFallback && !turn\.queuedFinal && !deliverySummary\.delivered\) \{\n\tsentFallback = \(await deliverFallback\(turn, \[\{ text: "No response was generated for this Telegram message\. Please try again; Automnia kept the request on the active route\." \}\], false\)\)\.delivered;\n\t\}/
+  if (currentUnsafeNoVisibleResponseBlock.test(next)) {
+    next = next.replace(currentUnsafeNoVisibleResponseBlock, [
+      '\tconst telegramNoResponseTerminal = Boolean(turn.dispatchError || turn.agentRunFailed || turn.noVisibleReplyFallbackEligible || turn.deliveryState.snapshot().failedNonSilent > 0 || turn.deliveryState.snapshot().skippedNonSilent > 0);',
+      '\tif (!sentFallback && !isRoomEvent && telegramNoResponseTerminal && !turn.suppressSilentReplyFallback && !turn.queuedFinal && !turn.deferredToActiveRun && !turn.finalAnswerDelivered) {',
+      '\t\tsentFallback = (await deliverFallback(turn, [{ text: "Automnia finished this Telegram turn without a final answer. Please retry; completed tool work was not replayed automatically." }], false)).delivered;',
+      '\t}',
+    ].join('\n'))
+  }
   const currentNoVisibleResponseMarker = 'const hasFinalResponse = turn.finalAnswerDelivered || sentFallback || turn.suppressSilentReplyFallback || turn.queuedFinal;'
-  if (next.includes(currentNoVisibleResponseMarker) && !next.includes('No response was generated for this Telegram message.')) {
+  if (next.includes(currentNoVisibleResponseMarker) && !next.includes('telegramNoResponseTerminal')) {
     const currentNoVisibleResponseBlock = [
-      'if (!sentFallback && !isRoomEvent && !turn.suppressSilentReplyFallback && !turn.queuedFinal && !deliverySummary.delivered) {',
-      'sentFallback = (await deliverFallback(turn, [{ text: "No response was generated for this Telegram message. Please try again; Automnia kept the request on the active route." }], false)).delivered;',
-      '}',
-    ].join('\n\t')
+      '\tconst telegramNoResponseTerminal = Boolean(turn.dispatchError || turn.agentRunFailed || turn.noVisibleReplyFallbackEligible || deliverySummary.failedNonSilent > 0 || deliverySummary.skippedNonSilent > 0);',
+      '\tif (!sentFallback && !isRoomEvent && telegramNoResponseTerminal && !turn.suppressSilentReplyFallback && !turn.queuedFinal && !turn.deferredToActiveRun && !turn.finalAnswerDelivered) {',
+      '\t\tsentFallback = (await deliverFallback(turn, [{ text: "Automnia finished this Telegram turn without a final answer. Please retry; completed tool work was not replayed automatically." }], false)).delivered;',
+      '\t}',
+    ].join('\n')
     next = next.replace(currentNoVisibleResponseMarker, `${currentNoVisibleResponseBlock}\n\t${currentNoVisibleResponseMarker}`)
+  }
+  next = next.replace(
+    'if (!sentFallback && !turn.dispatchError && !deliverySummary.delivered && !turn.suppressSilentReplyFallback && !turn.queuedFinal && turn.noVisibleReplyFallbackEligible) {',
+    'if (!sentFallback && !turn.dispatchError && !deliverySummary.delivered && !turn.suppressSilentReplyFallback && !turn.queuedFinal && !turn.deferredToActiveRun && turn.noVisibleReplyFallbackEligible) {',
+  )
+  next = next.replace(
+    'const hasFinalResponse = turn.finalAnswerDelivered || sentFallback || turn.suppressSilentReplyFallback || turn.queuedFinal;',
+    'const hasFinalResponse = turn.finalAnswerDelivered || sentFallback || turn.suppressSilentReplyFallback || turn.queuedFinal || turn.deferredToActiveRun;',
+  )
+  next = next.replace(
+    'const hasVisibleResponse = deliverySummary.delivered || sentFallback || turn.suppressSilentReplyFallback || turn.queuedFinal;',
+    'const hasVisibleResponse = deliverySummary.delivered || sentFallback || turn.suppressSilentReplyFallback || turn.queuedFinal || turn.deferredToActiveRun;',
+  )
+  next = next.replace(
+    'const deliveryFailureWithoutFinalResponse = !turn.finalAnswerDelivered && (deliverySummary.skippedNonSilent > 0 || deliverySummary.failedNonSilent > 0);',
+    'const deliveryFailureWithoutFinalResponse = !turn.deferredToActiveRun && !turn.finalAnswerDelivered && (deliverySummary.skippedNonSilent > 0 || deliverySummary.failedNonSilent > 0);',
+  )
+  const turnStatusPropertyMarker = '\t\t...createReplyState(),\n\t\tqueuedFinal: false,'
+  if (next.includes(turnStatusPropertyMarker) && !next.includes('telegramProgressStatus: createAutomniaTelegramProgressStatus')) {
+    next = next.replace(turnStatusPropertyMarker, [
+      '\t\t...createReplyState(),',
+      '\t\ttelegramProgressStatus: createAutomniaTelegramProgressStatus({',
+      '\t\t\tcontext: dispatchContext,',
+      '\t\t\tbot,',
+      '\t\t\ttelegramCfg,',
+      '\t\t\treplyToMode,',
+      '\t\t\truntime',
+      '\t\t}),',
+      '\t\tdispatchAdmission: void 0,',
+      '\t\tdeferredToActiveRun: void 0,',
+      '\t\tqueuedFinal: false,',
+    ].join('\n'))
+  }
+  if (next.includes('\tlet isFirstTurnInSession = false;') && !next.includes('turn.telegramProgressStatus?.start();')) {
+    next = next.replace('\tlet isFirstTurnInSession = false;', '\tturn.telegramProgressStatus?.start();\n\tlet isFirstTurnInSession = false;')
+  }
+  if (!next.includes('turn.deferredToActiveRun = turnResult.dispatchResult.deferredToActiveRun;')) {
+    next = next.replace(
+      'turn.suppressSilentReplyFallback = turnResult.dispatchResult.sourceReplyDeliveryMode === "message_tool_only";',
+      'turn.suppressSilentReplyFallback = turnResult.dispatchResult.sourceReplyDeliveryMode === "message_tool_only";\n\t\tturn.deferredToActiveRun = turnResult.dispatchResult.deferredToActiveRun;\n\t\tif (turn.deferredToActiveRun) turn.telegramProgressStatus?.queued("Waiting behind an active Telegram turn. The active run owns the final reply.");',
+    )
+  }
+  if (!next.includes('turn.dispatchAdmission = turnResult.admission;')) {
+    next = next.replace(
+      'if (!turnResult.dispatched) return false;',
+      'if (!turnResult.dispatched) { turn.dispatchAdmission = turnResult.admission; return false; }',
+    )
+  }
+  if (!next.includes('const duplicate = /duplicate|already[-_ ]?handled/i')) {
+    next = next.replace(
+      'if (turnDispatched === false) return { kind: "completed" };',
+      'if (turnDispatched === false) { const duplicate = /duplicate|already[-_ ]?handled/i.test(String(turn.dispatchAdmission?.reason || "")); const detail = duplicate ? "This Telegram update was already accepted. Automnia avoided starting duplicate work; if the original turn does not deliver an answer, resend the request." : turn.dispatchAdmission?.kind === "drop" ? "Telegram policy did not admit this message to the agent. Check bot access and group settings." : turn.dispatchAdmission?.kind === "observeOnly" ? "Telegram recorded this as room activity, but current group policy does not start an agent turn for it." : turn.dispatchAdmission?.kind === "handled" ? "Telegram already handled this command or update; no agent turn was required." : "Telegram did not admit this message to an agent turn. If no answer arrives, resend the request."; await turn.telegramProgressStatus?.finalize("skipped", detail); return { kind: "completed" }; }',
+    )
+  }
+  next = next.replace(
+    'if (dispatchWasSuperseded) {\n\t\tif (status.controller) status.finalizeInBackground({ outcome: "done" }, "finalize");',
+    'if (dispatchWasSuperseded) {\n\t\tawait turn.telegramProgressStatus?.finalize("queued", "This turn was handed to the active Telegram run; its final answer will be delivered there.");\n\t\tif (status.controller) status.finalizeInBackground({ outcome: "done" }, "finalize");',
+  )
+  const statusFinalizeMarker = '\tif (status.controller && !hasVisibleResponse) status.finalizeInBackground({ outcome: "error" }, "error finalize");'
+  if (next.includes(statusFinalizeMarker) && !next.includes('const telegramStatusOutcome =')) {
+    next = next.replace(statusFinalizeMarker, [
+      '\tconst telegramStatusOutcome = turn.deferredToActiveRun ? "queued" : turn.finalAnswerDelivered ? "done" : "error";',
+      '\tconst telegramStatusDetail = turn.deferredToActiveRun',
+      '? "Waiting behind an active Telegram turn. The active run owns the final reply."',
+      ': turn.finalAnswerDelivered ? "Final answer delivered below." : turn.dispatchError ? "The Telegram turn failed before a final answer was delivered; retrying is safe." : "The Telegram turn ended without a final answer; retrying is safe.";',
+      '\tawait turn.telegramProgressStatus?.finalize(telegramStatusOutcome, telegramStatusDetail);',
+      statusFinalizeMarker,
+    ].join('\n'))
+  }
+  if (!next.includes('turn.telegramProgressStatus?.toolStart(toolName);')) {
+    next = next.replace(
+      'async function handleToolStart(turn, payload) {\n\tconst toolName = payload.name?.trim();',
+      'async function handleToolStart(turn, payload) {\n\tconst toolName = payload.name?.trim();\n\tturn.telegramProgressStatus?.toolStart(toolName);',
+    )
+  }
+  if (!next.includes('turn.telegramProgressStatus?.compaction(true);')) {
+    next = next.replace(
+      'async function handleCompactionStart(turn) {\n\tconst progress =',
+      'async function handleCompactionStart(turn) {\n\tturn.telegramProgressStatus?.compaction(true);\n\tconst progress =',
+    )
+  }
+  if (!next.includes('turn.telegramProgressStatus?.compaction(false);')) {
+    next = next.replace(
+      'async function handleCompactionEnd(turn, payload) {\n\tconst progress =',
+      'async function handleCompactionEnd(turn, payload) {\n\tturn.telegramProgressStatus?.compaction(false);\n\tconst progress =',
+    )
+  }
+  if (!next.includes('turn.telegramProgressStatus?.item(payload.progressText);')) {
+    next = next.replace(
+      'async function handleItemEvent(turn, payload) {\n\tif (payload.kind === "preamble") {',
+      'async function handleItemEvent(turn, payload) {\n\tif (payload.progressText) turn.telegramProgressStatus?.item(payload.progressText);\n\tif (payload.kind === "preamble") {',
+    )
+  }
+  if (!next.includes('turn.telegramProgressStatus?.commandOutput();')) {
+    next = next.replace(
+      'async function handleCommandOutput(turn, payload) {\n\treturn await pushProgressEvent',
+      'async function handleCommandOutput(turn, payload) {\n\tturn.telegramProgressStatus?.commandOutput();\n\treturn await pushProgressEvent',
+    )
+  }
+  if (!next.includes('turn.telegramProgressStatus?.thinking();')) {
+    next = next.replace(
+      'onAssistantMessageStart: turn.answerLane.stream ? () => {\n\t\t\t\t\t\t\treturn enqueueDraftEvent(turn, async () => {\n\t\t\t\t\t\t\t\tresetReasoningStepState(turn);',
+      'onAssistantMessageStart: turn.answerLane.stream ? () => {\n\t\t\t\t\t\t\treturn enqueueDraftEvent(turn, async () => {\n\t\t\t\t\t\t\t\tturn.telegramProgressStatus?.thinking();\n\t\t\t\t\t\t\t\tresetReasoningStepState(turn);',
+    )
+  }
+  if (next.includes('const { onModelSelected, ...replyPipeline }') && !next.includes('const telegramModelSelected =')) {
+    next = next.replace(
+      'const { onModelSelected, ...replyPipeline } = (turn.telegramDeps.createChannelMessageReplyPipeline ?? createChannelReplyPipeline)({',
+      'const { onModelSelected, ...replyPipeline } = (turn.telegramDeps.createChannelMessageReplyPipeline ?? createChannelReplyPipeline)({',
+    )
+    next = next.replace(
+      '\t\tconst handleDeliveryError = async (err, info) => {',
+      '\t\tconst telegramModelSelected = typeof onModelSelected === "function" ? (...args) => {\n\t\t\tturn.telegramProgressStatus?.thinking("Waiting for the selected model to return the next step.");\n\t\t\treturn onModelSelected(...args);\n\t\t} : onModelSelected;\n\t\tconst handleDeliveryError = async (err, info) => {',
+    )
+    next = next.replace('\n\t\t\t\t\t\tonModelSelected\n', '\n\t\t\t\t\t\ttelegramModelSelected\n')
   }
   const nativeAgentsCommandMarker = 'const commandDefinition = findCommandByNativeName(command.name, "telegram");\n\t\t\t\tconst rawText = ctx.match?.trim() ?? "";'
   if (!next.includes('const telegramAgentsCommandText = resolveTelegramAgentsCommandResponse({')) {
@@ -11535,7 +11679,7 @@ function patchedTelegramBotRuntimeSource(source: string) {
       console.warn('[plugins/telegram] credits-only model guard skipped: model selection marker not found')
     }
   }
-  return next
+  return dedupeTelegramProgressHooks(next)
 }
 
 function openClawPackageRootCandidates() {

@@ -618,7 +618,7 @@ async function runClawTalkControlCenterOrEmbeddedAgentTurn(options) {
 `.trim()
 
 export const TELEGRAM_AGENT_ROUTING_HELPER = String.raw`
-var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 17;
+var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 19;
 var TELEGRAM_AGENT_ROUTE_MEMORY_KEY = '__openclawTelegramAgentRoutes';
 var TELEGRAM_AGENT_ROUTE_MEMORY_MAX_ENTRIES = 256;
 var TELEGRAM_AGENT_ROUTE_MEMORY_FILE_NAME = 'telegram-agent-routes.json';
@@ -1471,3 +1471,155 @@ function resolveTelegramAgentRouteForMessage(params) {
 }
 //#endregion telegram-agent-routing-patch
 `.trim()
+
+export const TELEGRAM_PROGRESS_STATUS_HELPER = String.raw`
+var AUTOMNIA_TELEGRAM_PROGRESS_STATUS_PATCH = 1;
+function automniaTelegramStatusText(value, max) {
+    var text = String(value == null ? '' : value).replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+    return text ? text.slice(0, max || 180) : '';
+}
+function automniaTelegramStatusToolSubject(name) {
+    var tool = automniaTelegramStatusText(name, 80).toLowerCase();
+    if (!tool) return 'the next agent step';
+    if (/(^|[._-])(exec|shell|command)([._-]|$)/.test(tool)) return 'a command';
+    if (/(^|[._-])(read|search|find|glob|list)([._-]|$)/.test(tool)) return 'workspace files';
+    if (/(^|[._-])(browser|navigate|web)([._-]|$)/.test(tool)) return 'the browser';
+    if (/(^|[._-])(edit|write|apply|patch)([._-]|$)/.test(tool)) return 'a workspace change';
+    return tool;
+}
+function createAutomniaTelegramProgressStatus(params) {
+    var context = params && params.context;
+    var bot = params && params.bot;
+    if (!context || !bot || !bot.api || context.ctxPayload && context.ctxPayload.InboundEventKind === 'room_event') return null;
+    var startedAt = Date.now();
+    var stopped = false;
+    var phase = 'Queued';
+    var detail = 'Telegram received your message and is preparing the agent turn.';
+    var lastRendered = '';
+    var queue = Promise.resolve();
+    var agentName = automniaTelegramStatusText(params.agentName || context.route && context.route.agentId || 'Automnia agent', 100) || 'Automnia agent';
+    var stream = null;
+    try {
+        if (typeof createTelegramDraftStream === 'function') stream = createTelegramDraftStream({
+            api: bot.api,
+            chatId: context.chatId,
+            maxChars: 1200,
+            minInitialChars: 0,
+            thread: context.threadSpec,
+            replyToMessageId: context.ctxPayload && context.ctxPayload.MessageSid,
+            replyToMode: params.replyToMode,
+            richMessages: false,
+            linkPreview: false,
+            log: function() {},
+            warn: function(message) { try { params.runtime && params.runtime.error && params.runtime.error(message); } catch (_) {} }
+        });
+    } catch (_) {
+        stream = null;
+    }
+    function render() {
+        var elapsed = Math.max(0, Math.round((Date.now() - startedAt) / 1000));
+        return 'Automnia status: ' + phase + '\nAgent: ' + agentName + '\nElapsed: ' + String(elapsed) + 's\nCurrent action: ' + detail;
+    }
+    function runStatusOperation(task) {
+        return new Promise(function(resolve) {
+            var timeoutMs = Math.max(1, Number(params.statusOperationTimeoutMs) || 2000);
+            var settled = false;
+            var timer = setTimeout(function() {
+                if (settled) return;
+                settled = true;
+                resolve(false);
+            }, timeoutMs);
+            Promise.resolve().then(task).then(function() {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                resolve(true);
+            }, function() {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                resolve(false);
+            });
+        });
+    }
+    function enqueue(task) {
+        queue = queue.then(task).catch(function(error) {
+            try { params.runtime && params.runtime.error && params.runtime.error('telegram status update failed: ' + String(error)); } catch (_) {}
+            return false;
+        });
+        return queue;
+    }
+    function publish(nextPhase, nextDetail, flush) {
+        return enqueue(async function() {
+            if (stopped) return false;
+            phase = automniaTelegramStatusText(nextPhase, 80) || phase;
+            detail = automniaTelegramStatusText(nextDetail, 240) || detail;
+            var text = render();
+            if (text === lastRendered) return true;
+            lastRendered = text;
+            if (!stream) return false;
+            stream.updatePreview({ text: text });
+            if (flush === true && !await runStatusOperation(function() { return stream.flush(); })) {
+                try { params.runtime && params.runtime.error && params.runtime.error('telegram status update failed or timed out'); } catch (_) {}
+                return false;
+            }
+            return true;
+        });
+    }
+    var keepAlive = setInterval(function() {
+        if (!stopped) publish(phase, detail, false);
+    }, 10000);
+    if (keepAlive && typeof keepAlive.unref === 'function') keepAlive.unref();
+    return {
+        start: function() { return publish('Queued', 'Telegram received your message and is preparing the agent turn.', true); },
+        thinking: function(message) { return publish('Thinking', message || 'Waiting for the model response or next tool step.', false); },
+        queued: function(message) { return publish('Queued', message || 'Waiting behind an active Telegram turn. The active run owns the final reply.', true); },
+        toolStart: function(name) { return publish('Working', 'Running ' + automniaTelegramStatusToolSubject(name) + '.', false); },
+        toolEnd: function(name) { return publish('Working', 'Finished ' + automniaTelegramStatusToolSubject(name) + '; waiting for the next step.', false); },
+        commandOutput: function() { return publish('Working', 'Received command output and continuing the agent turn.', false); },
+        compaction: function(starting) { return publish('Working', starting ? 'Shortening the conversation context before continuing.' : 'Conversation context is ready; continuing the agent turn.', true); },
+        item: function(message) { return publish('Working', message || 'The agent is processing the current step.', false); },
+        finalize: function(outcome, message) {
+            return enqueue(async function() {
+                if (stopped) return false;
+                clearInterval(keepAlive);
+                stopped = true;
+                phase = outcome === 'done' ? 'Completed' : outcome === 'queued' ? 'Queued' : outcome === 'skipped' ? 'Skipped' : 'Error';
+                detail = automniaTelegramStatusText(message, 240) || (phase === 'Completed' ? 'Final answer delivered below.' : phase === 'Queued' ? 'The active Telegram run will deliver the final answer.' : 'The turn ended before a final answer was delivered.');
+                var text = render();
+                var delivered = true;
+                if (stream) {
+                    delivered = await runStatusOperation(async function() {
+                        stream.updatePreview({ text: text });
+                        await stream.flush();
+                        await stream.stop();
+                    });
+                    if (!delivered) {
+                        try { params.runtime && params.runtime.error && params.runtime.error('telegram status final update failed or timed out'); } catch (_) {}
+                    }
+                }
+                lastRendered = text;
+                return delivered;
+            });
+        }
+    };
+}
+//#endregion automnia-telegram-progress-status-patch
+`.trim()
+
+export function dedupeTelegramProgressHooks(source: string) {
+  let next = source
+  const duplicateTelegramToolStart = 'turn.telegramProgressStatus?.toolStart(toolName);\n\tturn.telegramProgressStatus?.toolStart(toolName);'
+  while (next.includes(duplicateTelegramToolStart)) {
+    next = next.replace(duplicateTelegramToolStart, 'turn.telegramProgressStatus?.toolStart(toolName);')
+  }
+  const deferredTurnPatch = [
+    'turn.deferredToActiveRun = turnResult.dispatchResult.deferredToActiveRun;',
+    'if (turn.deferredToActiveRun) turn.telegramProgressStatus?.queued("Waiting behind an active Telegram turn. The active run owns the final reply.");',
+  ].join('\n\t\t')
+  const duplicateDeferredTurnPatch = `${deferredTurnPatch}\n\t\t${deferredTurnPatch}`
+  while (next.includes(duplicateDeferredTurnPatch)) {
+    next = next.replace(duplicateDeferredTurnPatch, deferredTurnPatch)
+  }
+  return next
+}
