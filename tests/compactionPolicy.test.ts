@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS,
+  AUTOMNIA_MAX_ACTIVE_TRANSCRIPT_BYTES,
   AUTOMNIA_OPENCLAW_CONTEXT_TOKENS_DEFAULT,
   AUTOMNIA_COMPACTION_RESERVE_TOKENS,
   enforceAutomniaCompactionPolicy,
@@ -58,6 +59,22 @@ test('migrates the prior token-efficient 12k baseline to the native recovery res
   assert.equal(migrateAutomniaCompactBaseline(settings), true)
   assert.equal(settings.reserveTokensFloor, AUTOMNIA_COMPACTION_RESERVE_TOKENS)
   assert.equal(settings.keepRecentTokens, AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS)
+  assert.equal(settings.maxActiveTranscriptBytes, AUTOMNIA_MAX_ACTIVE_TRANSCRIPT_BYTES)
+  assert.equal(settings.notifyUser, true)
+})
+
+test('tightens the generated 8mb limit when the retired truncation key is absent on disk', () => {
+  const settings = {
+    keepRecentTokens: AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS,
+    midTurnPrecheck: { enabled: true },
+    maxActiveTranscriptBytes: '8mb',
+    notifyUser: false,
+    memoryFlush: { enabled: false },
+  }
+
+  assert.equal(migrateAutomniaCompactBaseline(settings), true)
+  assert.equal(settings.maxActiveTranscriptBytes, AUTOMNIA_MAX_ACTIVE_TRANSCRIPT_BYTES)
+  assert.equal(settings.notifyUser, true)
 })
 
 test('migrates the older compact-but-unbounded baseline', () => {
@@ -74,8 +91,8 @@ test('migrates the older compact-but-unbounded baseline', () => {
   assert.equal(migrateAutomniaCompactBaseline(settings), true)
   assert.equal(settings.midTurnPrecheck.enabled, true)
   assert.equal(settings.truncateAfterCompaction, true)
-  assert.equal(settings.maxActiveTranscriptBytes, '8mb')
-  assert.equal(settings.notifyUser, false)
+  assert.equal(settings.maxActiveTranscriptBytes, AUTOMNIA_MAX_ACTIVE_TRANSCRIPT_BYTES)
+  assert.equal(settings.notifyUser, true)
 })
 
 test('does not migrate a custom compaction choice that differs from the old baseline', () => {

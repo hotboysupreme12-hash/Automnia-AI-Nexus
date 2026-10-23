@@ -11,6 +11,11 @@
 export const AUTOMNIA_OPENCLAW_CONTEXT_TOKENS_DEFAULT = 1_048_576
 export const AUTOMNIA_COMPACTION_RESERVE_TOKENS = 20_000
 export const AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS = 20_000
+// Keep the active transcript comfortably below hosted model context limits.
+// OpenClaw's transcript byte estimate can understate token pressure when a
+// session contains dense tool output, so 1 MiB is a deliberately conservative
+// preflight trigger (the previous 8 MiB baseline could exceed a 1.03M budget).
+export const AUTOMNIA_MAX_ACTIVE_TRANSCRIPT_BYTES = '1mb'
 
 export type AutomniaCompactionSettings = {
   reserveTokens?: unknown
@@ -27,6 +32,22 @@ export type AutomniaCompactionSettings = {
 export function migrateAutomniaCompactBaseline(settings: AutomniaCompactionSettings) {
   const midTurnPrecheck = settings.midTurnPrecheck
   const memoryFlush = settings.memoryFlush
+  const legacyEightMegabyteBaseline = (settings.reserveTokensFloor === undefined
+      || settings.reserveTokensFloor === AUTOMNIA_COMPACTION_RESERVE_TOKENS)
+    && settings.keepRecentTokens === AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS
+    && midTurnPrecheck && typeof midTurnPrecheck === 'object'
+    && (midTurnPrecheck as { enabled?: unknown }).enabled === true
+    && (settings.truncateAfterCompaction === undefined || settings.truncateAfterCompaction === true)
+    && settings.maxActiveTranscriptBytes === '8mb'
+    && settings.notifyUser === false
+    && memoryFlush && typeof memoryFlush === 'object'
+    && (memoryFlush as { enabled?: unknown }).enabled === false
+  if (legacyEightMegabyteBaseline) {
+    settings.maxActiveTranscriptBytes = AUTOMNIA_MAX_ACTIVE_TRANSCRIPT_BYTES
+    settings.notifyUser = true
+    return true
+  }
+
   const legacyTokenEfficientBaseline = settings.reserveTokensFloor === 12_000
     && settings.keepRecentTokens === 12_000
     && midTurnPrecheck && typeof midTurnPrecheck === 'object'
@@ -39,6 +60,8 @@ export function migrateAutomniaCompactBaseline(settings: AutomniaCompactionSetti
   if (legacyTokenEfficientBaseline) {
     settings.reserveTokensFloor = AUTOMNIA_COMPACTION_RESERVE_TOKENS
     settings.keepRecentTokens = AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS
+    settings.maxActiveTranscriptBytes = AUTOMNIA_MAX_ACTIVE_TRANSCRIPT_BYTES
+    settings.notifyUser = true
     return true
   }
 
@@ -59,8 +82,8 @@ export function migrateAutomniaCompactBaseline(settings: AutomniaCompactionSetti
   mutableMidTurnPrecheck.enabled = true
   mutableMemoryFlush.enabled = false
   settings.truncateAfterCompaction = true
-  settings.maxActiveTranscriptBytes = '8mb'
-  settings.notifyUser = false
+  settings.maxActiveTranscriptBytes = AUTOMNIA_MAX_ACTIVE_TRANSCRIPT_BYTES
+  settings.notifyUser = true
   return true
 }
 

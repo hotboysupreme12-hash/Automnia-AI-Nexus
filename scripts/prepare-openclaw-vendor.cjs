@@ -552,6 +552,38 @@ function ensureAutomniaRelayCompactContextSupport() {
   if (!compactHistoryPatched) throw new Error('[openclaw-vendor] Could not cap token-efficient compaction history')
 }
 
+function ensureAutomniaRelayToolResultBudgetSupport() {
+  const distRoot = path.join(vendorRoot, 'dist')
+  if (!fs.existsSync(distRoot)) throw new Error('[openclaw-vendor] Missing OpenClaw dist directory for bounded prompt tool-result patch')
+
+  // A 1M-token model must not replay half a million tokens of old tool output
+  // alongside the conversation. Keep this projection budget near 5% of the
+  // context window; the full tool results remain persisted in the transcript.
+  const aggregateMarker = 'function resolveLiveToolResultAggregateMaxChars(params) {'
+  const legacyBudgetPattern = /const PROMPT_TOOL_RESULT_AGGREGATE_CAP_MULTIPLIER = 4;\r?\nconst AGGREGATE_TOOL_RESULT_CONTEXT_SHARE = \.5;/
+  const boundedBudgetPattern = /const PROMPT_TOOL_RESULT_AGGREGATE_CAP_MULTIPLIER = 2;\r?\nconst AGGREGATE_TOOL_RESULT_CONTEXT_SHARE = \.05;/
+  let patched = false
+
+  for (const name of fs.readdirSync(distRoot)) {
+    if (!name.endsWith('.js')) continue
+    const filePath = path.join(distRoot, name)
+    const source = fs.readFileSync(filePath, 'utf8')
+    if (!source.includes(aggregateMarker)) continue
+
+    let next = source
+    if (legacyBudgetPattern.test(next)) {
+      next = next.replace(legacyBudgetPattern, 'const PROMPT_TOOL_RESULT_AGGREGATE_CAP_MULTIPLIER = 2;\nconst AGGREGATE_TOOL_RESULT_CONTEXT_SHARE = .05;')
+    }
+    if (boundedBudgetPattern.test(next)) {
+      patched = true
+      if (next !== source) fs.writeFileSync(filePath, next)
+      break
+    }
+  }
+
+  if (!patched) throw new Error('[openclaw-vendor] Could not install bounded prompt tool-result budget')
+}
+
 function ensureAutomniaRelayPayloadCompactionSupport() {
   const distRoot = path.join(vendorRoot, 'dist')
   if (!fs.existsSync(distRoot)) throw new Error('[openclaw-vendor] Missing OpenClaw dist directory for token-efficient provider payload patch')
@@ -786,6 +818,7 @@ async function main() {
   ensureAutomniaRelayThoughtSignatureSupport()
   ensureAutomniaRelayRetrySafetySupport()
   ensureAutomniaRelayCompactContextSupport()
+  ensureAutomniaRelayToolResultBudgetSupport()
   ensureAutomniaRelayPayloadCompactionSupport()
   ensureAutomniaSettledTurnFinalizationSupport()
   ensureRestartRecoveryClaimStartupRepair(vendorRoot)
