@@ -12,11 +12,11 @@ const downloadsRoot = path.join(bundleRoot, '.downloads')
 const installWorkRoot = path.join(bundleRoot, '.work')
 
 const RUNTIME_BUNDLE_METADATA_FILE = '.automnia-runtime-bundle.json'
-const DEFAULT_BUNDLED_NODE_VERSION = 'v24.16.0'
-const DEFAULT_BUNDLED_CODEX_VERSION = '2026.9.2'
+const DEFAULT_BUNDLED_NODE_VERSION = 'v24.22.1'
+const DEFAULT_BUNDLED_CODEX_VERSION = '2026.10.6'
 const DEFAULT_BUNDLED_CODEX_SPEC = `@openclaw/codex@${DEFAULT_BUNDLED_CODEX_VERSION}`
-const DEFAULT_BUNDLED_CODEX_INTEGRITY = 'sha512-4eviHXQGkpvZSk9uXjnO37wbwv7MJ9hE7NjZut4oNSpC1hDFY62LfUcRG7ZcfVghUV8YAs+8sfqEys6oW8dClQ=='
-const DEFAULT_BUNDLED_CODEX_TARBALL = 'https://registry.npmjs.org/@openclaw/codex/-/codex-2026.9.2.tgz'
+const DEFAULT_BUNDLED_CODEX_INTEGRITY = 'sha512-TxcJYkPQyjPOa+/nrx/2LsAlHKNgE7PpI13HM1CZiDmpqO7aJYWeIjjgpkl8Z9nHcJ6OV4ChTM4qnoHkFPotqg=='
+const DEFAULT_BUNDLED_CODEX_TARBALL = 'https://registry.npmjs.org/@openclaw/codex/-/codex-2026.10.6.tgz'
 const targetArch = String(process.env.AUTOMNIA_TARGET_ARCH || process.arch).trim().toLowerCase()
 
 if (!['x64', 'arm64'].includes(targetArch)) {
@@ -26,7 +26,7 @@ if (!['x64', 'arm64'].includes(targetArch)) {
 function normalizeExactNodeVersion(value) {
   const raw = String(value || '').trim().replace(/^node-/, '')
   if (!/^v\d+\.\d+\.\d+$/.test(raw)) {
-    throw new Error(`AUTOMNIA_BUNDLED_NODE_VERSION must be an exact Node.js version like v24.16.0; received ${JSON.stringify(value)}`)
+    throw new Error(`AUTOMNIA_BUNDLED_NODE_VERSION must be an exact Node.js version like v24.22.1; received ${JSON.stringify(value)}`)
   }
   return raw
 }

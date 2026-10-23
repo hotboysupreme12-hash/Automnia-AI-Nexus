@@ -8,6 +8,7 @@ const freshnessGuard = 'if (updatedBeforeMs !== void 0 && updatedAt !== void 0 &
 const patchedFreshnessGuard = 'if (updatedBeforeMs !== void 0 && updatedAt !== void 0 && updatedAt > updatedBeforeMs && !isAutomniaPreStartupRestartRecoveryClaim(entry, updatedBeforeMs)) return;'
 const recoveryPlan = 'return isMainRestartRecoveryAggregateTerminalOnly(entry) ? { action: "retire_terminal" } : { action: "mark" };'
 const patchedRecoveryPlan = 'return isMainRestartRecoveryAggregateTerminalOnly(entry) ? { action: "retire_terminal" } : isAutomniaPreStartupRestartRecoveryClaim(entry, updatedBeforeMs) ? { action: "mark", forceRestartSafeTools: true } : { action: "mark" };'
+const currentRecoveryPlan = 'return completed || isMainRestartRecoveryTerminalOnly(entry) ? { action: "retire_terminal" } : { action: "mark" };'
 
 function patchRestartRecoveryStaleClaimSource(source) {
   if (source.includes(marker)) return source
@@ -17,7 +18,8 @@ function patchRestartRecoveryStaleClaimSource(source) {
   if (!source.includes(freshnessGuard)) {
     throw new Error('OpenClaw startup recovery freshness guard changed; cannot apply stale-claim repair')
   }
-  if (!source.includes(recoveryPlan)) {
+  const hasLegacyRecoveryPlan = source.includes(recoveryPlan)
+  if (!hasLegacyRecoveryPlan && !source.includes(currentRecoveryPlan)) {
     throw new Error('OpenClaw startup recovery plan changed; cannot apply stale-claim repair')
   }
 
@@ -33,16 +35,16 @@ function isAutomniaPreStartupRestartRecoveryClaim(entry, startupAt) {
 }
 `
 
-  return source
+  const patched = source
     .replace(startupAnchor, `${helper}${startupAnchor}`)
     .replace(freshnessGuard, patchedFreshnessGuard)
-    .replace(recoveryPlan, patchedRecoveryPlan)
+  return hasLegacyRecoveryPlan ? patched.replace(recoveryPlan, patchedRecoveryPlan) : patched
 }
 
 function ensureRestartRecoveryClaimStartupRepair(vendorRoot) {
   const dist = path.join(vendorRoot, 'dist')
   const candidates = fs.readdirSync(dist)
-    .filter((name) => /^main-session-restart-recovery-marking-.*\.js$/.test(name))
+    .filter((name) => /^main-session-restart-recovery-marking-.*\.(?:m?js)$/.test(name))
   if (!candidates.length) {
     throw new Error('Missing OpenClaw startup restart-recovery marker runtime for stale-claim repair')
   }

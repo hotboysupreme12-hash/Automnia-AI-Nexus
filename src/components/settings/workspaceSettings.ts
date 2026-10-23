@@ -12,6 +12,7 @@ export type RegistryPreferences = {
   rarityColorsEnabled: boolean
   rarityFilter: AgentRarity | 'all'
   sortKey: RegistrySortKey
+  pinnedAgentIds: string[]
 }
 
 export type ConsolePreferences = {
@@ -49,6 +50,7 @@ export const DEFAULT_REGISTRY_PREFERENCES: RegistryPreferences = {
   rarityColorsEnabled: true,
   rarityFilter: 'all',
   sortKey: 'party',
+  pinnedAgentIds: [],
 }
 
 export const AGENT_CARD_RARITY_THEMES: Record<AgentRarity, AgentCardTheme> = {
@@ -102,6 +104,23 @@ function normalizeDisplayMode(value: unknown): AgentDisplayMode | null {
   return null
 }
 
+function normalizePinnedAgentIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  const seen = new Set<string>()
+  const pinned: string[] = []
+  for (const candidate of value) {
+    if (typeof candidate !== 'string') continue
+    const id = candidate.trim()
+    if (!/^[a-z0-9][a-z0-9_-]{0,127}$/i.test(id)) continue
+    const key = id.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    pinned.push(id)
+    if (pinned.length >= 1_000) break
+  }
+  return pinned
+}
+
 export function readRegistryPreferences(): RegistryPreferences {
   try {
     const parsed = JSON.parse(readPreferenceValue(REGISTRY_PREFS_KEY) || '{}') as Partial<RegistryPreferences> & { overlayPresetVersion?: number }
@@ -117,6 +136,7 @@ export function readRegistryPreferences(): RegistryPreferences {
       rarityColorsEnabled: typeof parsed.rarityColorsEnabled === 'boolean' ? parsed.rarityColorsEnabled : parsed.overlayPreset ? storedOverlayPreset === 'rarity' : DEFAULT_REGISTRY_PREFERENCES.rarityColorsEnabled,
       rarityFilter: parsed.rarityFilter && RARITIES.has(parsed.rarityFilter) ? parsed.rarityFilter : DEFAULT_REGISTRY_PREFERENCES.rarityFilter,
       sortKey: parsed.sortKey && SORT_KEYS.has(parsed.sortKey) ? parsed.sortKey : DEFAULT_REGISTRY_PREFERENCES.sortKey,
+      pinnedAgentIds: normalizePinnedAgentIds(parsed.pinnedAgentIds),
     }
   } catch {
     return DEFAULT_REGISTRY_PREFERENCES
@@ -128,6 +148,7 @@ export function saveRegistryPreferences(preferences: RegistryPreferences): void 
     ...preferences,
     overlayPreset: preferences.overlayPreset === 'rarity' ? 'original' : preferences.overlayPreset,
     rarityColorsEnabled: Boolean(preferences.rarityColorsEnabled),
+    pinnedAgentIds: normalizePinnedAgentIds(preferences.pinnedAgentIds),
   }
   savePreferenceEntries([[REGISTRY_PREFS_KEY, JSON.stringify({ ...normalized, overlayPresetVersion: REGISTRY_PREFS_VERSION })]])
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent<RegistryPreferences>(REGISTRY_PREFS_CHANGED_EVENT, { detail: normalized }))

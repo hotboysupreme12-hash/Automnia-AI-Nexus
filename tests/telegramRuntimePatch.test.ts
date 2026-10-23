@@ -11,19 +11,20 @@ import {
 const workspace = process.cwd()
 const controlPlane = fs.readFileSync(path.join(workspace, 'server', 'controlPlane.ts'), 'utf8')
 const distRoot = path.join(workspace, 'vendor', 'openclaw', 'dist')
-const bundleText = (pattern: RegExp) => {
-  const name = fs.readdirSync(distRoot).find((entry) => pattern.test(entry))
-  assert.ok(name, `missing OpenClaw bundle matching ${pattern}`)
-  return fs.readFileSync(path.join(distRoot, name), 'utf8')
-}
-const botMessageBundle = bundleText(/^bot-message-[^/]+\.js$/)
-const telegramIngressBundle = bundleText(/^telegram-ingress-[^/]+\.js$/)
+const botMessageBundle = fs.readdirSync(distRoot)
+  .filter((entry) => /^bot-message-[^.]+\.mjs$/.test(entry))
+  .map((entry) => fs.readFileSync(path.join(distRoot, entry), 'utf8'))
+  .find((source) => source.includes('const buildTelegramMessageContext = async') && source.includes('function resolveTelegramInboundBody') && source.includes('const hasFinalResponse =')) || ''
+const telegramCommandBundle = fs.readdirSync(distRoot)
+  .filter((entry) => entry.endsWith('.mjs'))
+  .map((entry) => fs.readFileSync(path.join(distRoot, entry), 'utf8'))
+  .find((source) => source.includes('const registerTelegramNativeCommands =') && source.includes('for (const pluginCommand of pluginCatalog.selectedCommands)')) || ''
 
 test('Telegram runtime repair targets OpenClaw split message and ingress bundles', () => {
   assert.match(controlPlane, /startsWith\('bot-message-'\)/)
   assert.match(controlPlane, /hasMessageRoutingShape/)
   assert.match(controlPlane, /hasNativeCommandShape/)
-  assert.match(controlPlane, /TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 19/)
+  assert.match(controlPlane, /TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 20/)
   assert.match(controlPlane, /TELEGRAM_PROGRESS_STATUS_HELPER/)
   assert.match(controlPlane, /turn\.dispatchAdmission = turnResult\.admission/)
   assert.match(controlPlane, /const duplicate = \/duplicate\|already\[-_ \]\?handled\/i/)
@@ -35,14 +36,13 @@ test('Telegram runtime repair targets OpenClaw split message and ingress bundles
 test('the bundled OpenClaw shape exposes the routing and native-command insertion contracts', () => {
   assert.match(botMessageBundle, /const buildTelegramMessageContext = async/)
   assert.match(botMessageBundle, /function resolveTelegramInboundBody/)
-  assert.match(botMessageBundle, /const hasFinalResponse = turn\.finalAnswerDelivered/)
+  assert.match(botMessageBundle, /const hasFinalResponse = intentionalNoResponse \|\| turn\.previewLifecycle\.finalDelivered/)
   assert.doesNotMatch(botMessageBundle, /No response was generated for this Telegram message\./)
-  assert.match(botMessageBundle, /telegramNoResponseTerminal/)
-  assert.match(botMessageBundle, /deferredToActiveRun/)
+  assert.match(botMessageBundle, /const telegramModelSelected = typeof onModelSelected === "function"/)
+  assert.ok(botMessageBundle.indexOf('const telegramModelSelected =') < botMessageBundle.indexOf('telegramModelSelected\n'))
   assert.match(botMessageBundle, /createAutomniaTelegramProgressStatus/)
-  assert.match(telegramIngressBundle, /const registerTelegramNativeCommands =/)
-  assert.match(telegramIngressBundle, /const nativeCommandsToHandle =/)
-  assert.match(telegramIngressBundle, /for \(const pluginCommand of pluginCatalog\.selectedCommands\)/)
+  assert.match(telegramCommandBundle, /const registerTelegramNativeCommands =/)
+  assert.match(telegramCommandBundle, /for \(const pluginCommand of pluginCatalog\.selectedCommands\)/)
 })
 
 test('Telegram status helper serializes safe phase updates and leaves a final status message', async () => {

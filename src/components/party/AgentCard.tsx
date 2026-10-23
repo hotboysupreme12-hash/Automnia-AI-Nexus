@@ -36,9 +36,11 @@ interface AgentCardProps {
     detail: string
     kind: 'working' | 'queued' | 'approval' | 'reply'
   }
+  isPinned?: boolean
+  onTogglePinned?: (agentId: string) => void
 }
 
-export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber, partyIndex, inParty, isBusy = false, missionRunning, cardTheme, displayMode = 'grid8', activityStatus }: AgentCardProps) {
+export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber, partyIndex, inParty, isBusy = false, missionRunning, cardTheme, displayMode = 'grid8', activityStatus, isPinned = false, onTogglePinned }: AgentCardProps) {
   const voice = useAgentVoiceStore()
   const voiceActive = voice.agentId === agent.id && voice.phase !== 'idle'
   const voiceListening = voiceActive && voice.phase === 'recording'
@@ -140,12 +142,13 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
       data-agent-in-party={inP ? 'true' : 'false'}
       data-agent-running={busy ? 'true' : 'false'}
       data-agent-activity={activityStatus?.kind || (busy ? 'working' : 'idle')}
+      data-agent-pinned={isPinned ? 'true' : 'false'}
       data-agent-selected={isSelected ? 'true' : 'false'}
       data-agent-model-label={modelDisplay.cardLabel}
       data-agent-configured-model-label={configuredModelDisplay.cardLabel}
       data-agent-model-provider={modelDisplay.providerLabel}
       role="group"
-      aria-label={`${agent.name}, ${agent.role}. ${modelDisplay.cardLabel}${routeDiffersFromConfigured ? ` active route; configured model is ${configuredModelDisplay.cardLabel}` : ''}. ${inP ? `In party slot ${displaySlot}.` : 'Not in party.'} ${isSelected ? 'Selected for Agent Chat.' : 'Not selected for Agent Chat.'}`}
+      aria-label={`${agent.name}, ${agent.role}. ${modelDisplay.cardLabel}${routeDiffersFromConfigured ? ` active route; configured model is ${configuredModelDisplay.cardLabel}` : ''}. ${isPinned ? 'Pinned favorite.' : ''} ${inP ? `In party slot ${displaySlot}.` : 'Not in party.'} ${isSelected ? 'Selected for Agent Chat.' : 'Not selected for Agent Chat.'}`}
       draggable={!missionRunning}
       onDragStart={handleDragStart}
       onClick={handleCardClick}
@@ -182,7 +185,22 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
           )}
 
           <div className="agent-card-portrait-shade" aria-hidden="true" />
-          <div className="agent-card-media-top absolute left-3 right-3 top-3 z-20 flex items-start justify-end gap-2">
+          <div className="agent-card-media-top absolute left-3 right-3 top-3 z-20 flex items-start justify-between gap-2">
+            {onTogglePinned && (
+              <button
+                type="button"
+                data-agent-pin-toggle={agent.id}
+                aria-label={isPinned ? `Unpin ${agent.name}` : `Pin ${agent.name}`}
+                aria-pressed={isPinned}
+                title={isPinned ? 'Remove from pinned agents' : 'Pin this agent'}
+                onClick={(event) => { event.stopPropagation(); onTogglePinned(agent.id) }}
+                className={`inline-flex size-8 shrink-0 items-center justify-center rounded-lg border backdrop-blur-md transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200 ${isPinned ? 'border-amber-200/45 bg-slate-950/85 text-amber-100' : 'border-white/20 bg-slate-950/55 text-white/75 hover:border-amber-200/40 hover:text-amber-100'}`}
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill={isPinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="size-4">
+                  <path d="m12 3 2.75 5.58 6.16.9-4.45 4.34 1.05 6.13L12 17.06l-5.51 2.9 1.05-6.14L3.1 9.48l6.15-.9L12 3Z" />
+                </svg>
+              </button>
+            )}
             {busy && (
               <span
                 className="agent-card-status-pill is-live shrink-0"

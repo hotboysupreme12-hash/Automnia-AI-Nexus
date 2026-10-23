@@ -15,16 +15,16 @@ async function createRuntimeFixture(t: test.TestContext) {
   t.after(() => rm(root, { recursive: true, force: true }))
 
   const packagedOpenClawRoot = path.join(root, 'resources', 'openclaw')
-  const managedRuntimeRoot = path.join(root, '.automnia-control-center', 'runtimes', 'openclaw', '2026.9.2')
+  const managedRuntimeRoot = path.join(root, '.automnia-control-center', 'runtimes', 'openclaw', '2026.10.6')
   const bundledPluginRoot = path.join(packagedOpenClawRoot, 'dist', 'extensions', 'telegram')
   const managedPluginRoot = path.join(managedRuntimeRoot, 'dist', 'extensions', 'telegram')
 
-  await writeJson(path.join(packagedOpenClawRoot, 'package.json'), { name: 'openclaw', version: '2026.9.2' })
-  await writeJson(path.join(managedRuntimeRoot, 'package.json'), { name: 'openclaw', version: '2026.9.2' })
+  await writeJson(path.join(packagedOpenClawRoot, 'package.json'), { name: 'openclaw', version: '2026.10.6' })
+  await writeJson(path.join(managedRuntimeRoot, 'package.json'), { name: 'openclaw', version: '2026.10.6' })
   await writeJson(path.join(bundledPluginRoot, 'openclaw.plugin.json'), { id: 'telegram' })
-  await writeJson(path.join(bundledPluginRoot, 'package.json'), { name: '@openclaw/telegram', version: '2026.9.2' })
+  await writeJson(path.join(bundledPluginRoot, 'package.json'), { name: '@openclaw/telegram', version: '2026.10.6' })
   await writeJson(path.join(managedPluginRoot, 'openclaw.plugin.json'), { id: 'telegram' })
-  await writeJson(path.join(managedPluginRoot, 'package.json'), { name: '@openclaw/telegram', version: '2026.9.2' })
+  await writeJson(path.join(managedPluginRoot, 'package.json'), { name: '@openclaw/telegram', version: '2026.10.6' })
 
   return { root, packagedOpenClawRoot, managedRuntimeRoot, managedPluginRoot, bundledPluginRoot }
 }
@@ -50,7 +50,7 @@ test('recognizes a bundled plugin when a staged OpenClaw runtime has a different
 
 test('keeps a staged plugin path when its package identity differs', async (t) => {
   const fixture = await createRuntimeFixture(t)
-  await writeJson(path.join(fixture.managedPluginRoot, 'package.json'), { name: '@community/telegram', version: '2026.9.2' })
+  await writeJson(path.join(fixture.managedPluginRoot, 'package.json'), { name: '@community/telegram', version: '2026.10.6' })
 
   assert.equal(
     isEquivalentManagedRuntimeBundledPluginPath(fixture.managedPluginRoot, 'telegram', fixture.packagedOpenClawRoot),
@@ -64,7 +64,7 @@ test('keeps paths outside the managed OpenClaw runtime and malformed plugin iden
   const externalPluginRoot = path.join(fixture.root, 'plugins', 'telegram')
   await mkdir(externalPluginRoot, { recursive: true })
   await writeJson(path.join(externalPluginRoot, 'openclaw.plugin.json'), { id: 'telegram' })
-  await writeJson(path.join(externalPluginRoot, 'package.json'), { name: '@openclaw/telegram', version: '2026.9.2' })
+  await writeJson(path.join(externalPluginRoot, 'package.json'), { name: '@openclaw/telegram', version: '2026.10.6' })
 
   assert.equal(
     isEquivalentManagedRuntimeBundledPluginPath(externalPluginRoot, 'telegram', fixture.packagedOpenClawRoot),

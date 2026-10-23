@@ -3,10 +3,15 @@ import test from 'node:test'
 import { parsePreferencesBackup, serializePreferencesBackup } from '../src/components/settings/preferencesBackup'
 import { DEFAULT_UI_SETTINGS, UI_SETTINGS_STORAGE_KEY } from '../src/components/settings/uiSettings'
 import { DEFAULT_SPEECH_SETTINGS } from '../src/speech/speechSettings'
-import { DEFAULT_CONSOLE_PREFERENCES } from '../src/components/settings/workspaceSettings'
+import { DEFAULT_CONSOLE_PREFERENCES, DEFAULT_REGISTRY_PREFERENCES } from '../src/components/settings/workspaceSettings'
 
 test('preference backups round trip recognized groups and reject corrupt or future data', () => {
-  const values = { appearance: DEFAULT_UI_SETTINGS, voice: { ...DEFAULT_SPEECH_SETTINGS, microphoneDeviceId: 'external-mic' }, console: DEFAULT_CONSOLE_PREFERENCES }
+  const values = {
+    appearance: DEFAULT_UI_SETTINGS,
+    voice: { ...DEFAULT_SPEECH_SETTINGS, microphoneDeviceId: 'external-mic' },
+    registry: { ...DEFAULT_REGISTRY_PREFERENCES, pinnedAgentIds: ['researcher', 'architect'] },
+    console: DEFAULT_CONSOLE_PREFERENCES,
+  }
   assert.deepEqual(parsePreferencesBackup(serializePreferencesBackup(values)), values)
   for (const content of ['null', '[]', '{', '{"version":99}', '{"version":2,"format":"automnia-preferences","preferences":{"console":{"visible":"yes"}}}']) {
     assert.throws(() => parsePreferencesBackup(content))

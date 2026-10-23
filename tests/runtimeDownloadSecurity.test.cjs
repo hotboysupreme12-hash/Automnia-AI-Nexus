@@ -11,7 +11,7 @@ test('runtime downloads require trusted HTTPS hosts', () => {
 
 test('Node checksum manifests are parsed strictly', () => {
   const digest = 'a'.repeat(64)
-  const entries = parseSha256Manifest(`${digest}  node-v24.16.0-win-x64.zip\ninvalid row\n`)
-  assert.equal(entries.get('node-v24.16.0-win-x64.zip'), digest)
+  const entries = parseSha256Manifest(`${digest}  node-v24.22.1-win-x64.zip\ninvalid row\n`)
+  assert.equal(entries.get('node-v24.22.1-win-x64.zip'), digest)
   assert.equal(entries.size, 1)
 })

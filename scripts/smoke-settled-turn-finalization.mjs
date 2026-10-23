@@ -4,7 +4,7 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const distRoot = path.resolve('vendor/openclaw/dist')
-const bundles = readdirSync(distRoot).filter((name) => /^settled-turn-finalization-result-.*\.js$/.test(name))
+const bundles = readdirSync(distRoot).filter((name) => /^settled-turn-finalization-result-.*\.(?:m?js)$/.test(name))
 assert.equal(bundles.length, 1, 'OpenClaw must expose one settled-turn finalization result bundle')
 
 const { n: projectSettledTurnFinalizationAttemptResult } = await import(pathToFileURL(path.join(distRoot, bundles[0])).href)

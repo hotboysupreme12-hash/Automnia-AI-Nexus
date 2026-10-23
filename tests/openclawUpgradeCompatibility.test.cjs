@@ -13,8 +13,9 @@ function load(name, context = {}) {
   return vm.runInNewContext(ts.transpile(source.slice(start, end)) + `\n${name}`, context)
 }
 test('projection removes retired per-agent limits on repeated saves without losing supported limits', () => {
-  const project = load('projectConfigForOpenClaw2026_9_2', {
-    resolvedOpenClawRuntimeInfo: () => ({ version: '2026.9.2' }),
+  const project = load('projectConfigForOpenClaw2026_10_6', {
+    RECOMMENDED_OPENCLAW_VERSION: '2026.10.6',
+    resolvedOpenClawRuntimeInfo: () => ({ version: '2026.10.6' }),
     isLooseRecord: x => x !== null && typeof x === 'object' && !Array.isArray(x),
   })
   const config = { agents: { entries: { existing: { contextLimits: { memoryGetDefaultLines: 20, toolResultMaxChars: 1000, memoryGetMaxChars: 500 } } }, list: [{ id: 'new', contextLimits: { toolResultMaxChars: 1000, postCompactionMaxChars: 800 } }] } }
@@ -30,11 +31,12 @@ test('projection removes retired per-agent limits on repeated saves without losi
 })
 test('canonical agents hydrate for billing sync and round-trip selected tiers and deletions', () => {
   const context = {
-    resolvedOpenClawRuntimeInfo: () => ({ version: '2026.9.2' }),
+    RECOMMENDED_OPENCLAW_VERSION: '2026.10.6',
+    resolvedOpenClawRuntimeInfo: () => ({ version: '2026.10.6' }),
     isLooseRecord: x => x !== null && typeof x === 'object' && !Array.isArray(x),
   }
   const hydrate = load('hydrateOpenClawAgentEntries', context)
-  const project = load('projectConfigForOpenClaw2026_9_2', context)
+  const project = load('projectConfigForOpenClaw2026_10_6', context)
   const config = { agents: { entries: { architect: { model: { primary: 'automnia-cloud/gemini-3.8-flash' } }, removed: {} } } }
   hydrate(config)
   assert.equal(config.agents.list[0].id, 'architect')
@@ -46,6 +48,71 @@ test('canonical agents hydrate for billing sync and round-trip selected tiers an
   hydrate(config)
   hydrate(config)
   assert.equal(config.agents.list.length, 1)
+})
+test('Telegram 10.6 bundle patch handles authorized /agents and resilient delivery hook markers', () => {
+  const warnings = []
+  const patchTelegram = load('patchedTelegramBotRuntimeSource', {
+    TELEGRAM_AGENT_ROUTING_HELPER: 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 20;\n//#endregion telegram-agent-routing-patch',
+    TELEGRAM_PROGRESS_STATUS_HELPER: 'var AUTOMNIA_TELEGRAM_PROGRESS_STATUS_PATCH = 1;',
+    dedupeTelegramProgressHooks: value => value,
+    console: { warn: value => warnings.push(value) },
+  })
+  const source = [
+    '//#region extensions/telegram/src/bot-message-context.body.ts',
+    'const buildTelegramMessageContext = async () => {',
+    'function resolveTelegramInboundBody() {}',
+    '//#region extensions/telegram/src/bot-message-dispatch-status.ts',
+    'if (!bodyResult) return null;',
+    'const telegramAgentRoute = resolveTelegramAgentRouteForMessage({',
+    'dispatcherOptions: {',
+    '\t\t\t\t\t\tbeforeDeliver: async (payload) => payload,',
+    '\t\t\t\t\t\tonBeforeDeliverCancelled: (payload, info) => {',
+    '}',
+  ].join('\n')
+
+  const patched = patchTelegram(source)
+  assert.match(patched, /bodyResult\.commandAuthorized && telegramAgentsCommandMatch/)
+  assert.match(patched, /beforeDeliver: async \(payload, info\) => applyTelegramVerifiedIdentityDeliveryGuard/)
+  assert.doesNotMatch(warnings.join('\n'), /agents command patch skipped|identity delivery guard skipped|credits-only model .* skipped/)
+})
+test('Telegram 10.6 patch declares the model-selection callback before dispatch uses it', () => {
+  const patchTelegram = load('patchedTelegramBotRuntimeSource', {
+    TELEGRAM_AGENT_ROUTING_HELPER: 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 20;\n//#endregion telegram-agent-routing-patch',
+    TELEGRAM_PROGRESS_STATUS_HELPER: 'var AUTOMNIA_TELEGRAM_PROGRESS_STATUS_PATCH = 1;',
+    dedupeTelegramProgressHooks: value => value,
+    console: { warn() {} },
+  })
+  const source = [
+    'const { onModelSelected, ...replyPipeline } = (turn.telegramDeps.createChannelMessageReplyPipeline ?? createChannelReplyPipeline)({',
+    '\t\t});',
+    '\t\tconst turnResult = await runChannelInboundEvent({',
+    '\t\t\t\t\t\ttelegramModelSelected',
+    'const telegramAgentRoute = resolveTelegramAgentRouteForMessage({',
+  ].join('\n')
+  const patched = patchTelegram(source)
+  const declaration = patched.indexOf('const telegramModelSelected = typeof onModelSelected === "function"')
+  const callbackUse = patched.indexOf('telegramModelSelected', declaration + 1)
+  assert.ok(declaration >= 0, 'model-selection wrapper declaration is present')
+  assert.ok(callbackUse > declaration, 'model-selection wrapper is declared before dispatch use')
+  assert.match(patched, /return onModelSelected\(\.\.\.args\);/)
+})
+test('Telegram runtime repair produces a declaration in the actual bundled dispatch shape', () => {
+  const patchTelegram = load('patchedTelegramBotRuntimeSource', {
+    TELEGRAM_AGENT_ROUTING_HELPER: 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 20;\n//#endregion telegram-agent-routing-patch',
+    TELEGRAM_PROGRESS_STATUS_HELPER: 'var AUTOMNIA_TELEGRAM_PROGRESS_STATUS_PATCH = 1;',
+    dedupeTelegramProgressHooks: value => value,
+    console: { warn() {} },
+  })
+  const dist = require('node:path').join(__dirname, '../vendor/openclaw/dist')
+  const bundle = fs.readdirSync(dist).find(name => /^bot-message-[^/]+\.mjs$/.test(name))
+  assert.ok(bundle, 'Telegram message bundle exists')
+  const patched = patchTelegram(fs.readFileSync(require('node:path').join(dist, bundle), 'utf8'))
+  const declaration = patched.indexOf('const telegramModelSelected = typeof onModelSelected === "function"')
+  const dispatch = patched.indexOf('\n\t\tconst turnResult = await runChannelInboundEvent({', declaration)
+  const callbackUse = patched.indexOf('telegramModelSelected', dispatch)
+  assert.ok(declaration >= 0, 'actual bundle receives the callback declaration')
+  assert.ok(dispatch > declaration, 'declaration is inside the dispatch function before the turn begins')
+  assert.ok(callbackUse > dispatch, 'dispatch callback use follows its declaration')
 })
 test('cron projection reads runtime state from schema-15 JSON and supports legacy columns', () => {
   const project = load('cronJobsCompatibleSource')

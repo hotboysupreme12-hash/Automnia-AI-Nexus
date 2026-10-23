@@ -377,7 +377,7 @@ const CODEX_LEGACY_AGENT_PROFILE_ROOT = path.join(HOME_DIR, '.codex', 'agent-pro
 const LOCAL_AUTH_PATH = path.join(OPENCLAW_STATE_ROOT, 'local-auth.json')
 const CONTROL_CENTER_LEDGER_PATHS = runtimeLedgerPathsForStateRoot(OPENCLAW_STATE_ROOT)
 const RUNTIME_MONITOR_CLEAR_MARKER_PATH = runtimeMonitorClearMarkerPath(CONTROL_CENTER_LEDGER_PATHS)
-const RECOMMENDED_OPENCLAW_VERSION = '2026.9.2'
+const RECOMMENDED_OPENCLAW_VERSION = '2026.10.6'
 const DEFAULT_OPENCLAW_FAST_MODE = 'auto'
 const DEFAULT_OPENCLAW_FAST_AUTO_ON_SECONDS = 60
 const FAST_MODE_MODEL_PARAM_PROVIDERS = new Set(['openai', 'openai-codex', 'anthropic', 'xai', 'minimax'])
@@ -830,6 +830,26 @@ function nodeToolchainDirMatchesCurrentPlatform(name: string) {
   return new RegExp(`^node-v\\d+\\.\\d+\\.\\d+-${platform}-${arch}$`, 'i').test(name)
 }
 
+function nodeToolchainVersion(name: string) {
+  const match = /^node-v(\d+)\.(\d+)\.(\d+)-/.exec(name)
+  if (!match) return null
+  return { major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]) }
+}
+
+function nodeToolchainVersionSupportsOpenClaw(name: string) {
+  const version = nodeToolchainVersion(name)
+  if (!version) return false
+  return (version.major === 24 && (version.minor > 22 || (version.minor === 22 && version.patch >= 1))) ||
+    (version.major === 26 && (version.minor > 12 || (version.minor === 12 && version.patch >= 1)))
+}
+
+function compareNodeToolchainVersions(left: string, right: string) {
+  const a = nodeToolchainVersion(left)
+  const b = nodeToolchainVersion(right)
+  if (!a || !b) return 0
+  return a.major - b.major || a.minor - b.minor || a.patch - b.patch
+}
+
 function nodeBinInToolchainDir(nodeDir: string) {
   return process.platform === 'win32' ? path.join(nodeDir, 'node.exe') : path.join(nodeDir, 'bin', 'node')
 }
@@ -838,7 +858,8 @@ function nodeRuntimeCandidatesFromToolchainRoot(root: string) {
   if (!root || !existsSync(root)) return []
   try {
     return readdirSync(root, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory() && nodeToolchainDirMatchesCurrentPlatform(entry.name))
+      .filter((entry) => entry.isDirectory() && nodeToolchainDirMatchesCurrentPlatform(entry.name) && nodeToolchainVersionSupportsOpenClaw(entry.name))
+      .sort((a, b) => compareNodeToolchainVersions(b.name, a.name))
       .map((entry) => nodeBinInToolchainDir(path.join(root, entry.name)))
   } catch {
     return []
@@ -3975,12 +3996,12 @@ function isOpenClawNodeRuntimeUnavailableText(value: string) {
 
 /**
  * Keep Automnia's richer runtime policy in memory while projecting only the
- * fields understood by the bundled OpenClaw schema to disk. OpenClaw 2026.9
+ * fields understood by the bundled OpenClaw schema to disk. OpenClaw 2026.10
  * retired several older tuning knobs and renamed agents.list to entries;
  * persisting those knobs makes every later Gateway restart fail validation.
  */
-function projectConfigForOpenClaw2026_9_2(config: OpenClawConfigFile) {
-  if (resolvedOpenClawRuntimeInfo().version !== '2026.9.2') return
+function projectConfigForOpenClaw2026_10_6(config: OpenClawConfigFile) {
+  if (resolvedOpenClawRuntimeInfo().version !== RECOMMENDED_OPENCLAW_VERSION) return
   const gateway = config.gateway as Record<string, unknown> | undefined
   if (gateway) {
     for (const key of ['handshakeTimeoutMs', 'channelHealthCheckMinutes', 'channelStaleEventThresholdMinutes', 'channelMaxRestartsPerHour']) delete gateway[key]
@@ -9859,7 +9880,7 @@ async function writeOpenclawConfig(config: unknown, options: { allowDuringAgentT
             }
           : parsed.agents,
       }
-      projectConfigForOpenClaw2026_9_2(next as unknown as OpenClawConfigFile)
+      projectConfigForOpenClaw2026_10_6(next as unknown as OpenClawConfigFile)
       // Create a version of the config for comparison that excludes dynamic metadata fields
       // (like lastTouchedAt, lastTouchedVersion, updatedAt) using a true deep clone to prevent unnecessary restarts.
       const stripDynamicConfigFieldsForComparison = (cfg: unknown) => {
@@ -11105,7 +11126,7 @@ function patchedClawTalkRuntimeSource(source: string) {
 
 
 const CLAWTALK_REPAIR_SIGNATURE_VERSION = 'clawtalk-repair:v13'
-const TELEGRAM_REPAIR_SIGNATURE_VERSION = 'telegram-routing-repair:v14'
+const TELEGRAM_REPAIR_SIGNATURE_VERSION = 'telegram-routing-repair:v15'
 const clawTalkRepairSignatureCache = new Map<string, string>()
 const telegramRepairSignatureCache = new Map<string, string>()
 
@@ -11309,7 +11330,7 @@ async function sendClawTalkSmsWithRetry(client, logger, params) {
 
 function patchedTelegramBotRuntimeSource(source: string) {
   let next = source
-  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 19;'
+  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 20;'
   const routingHelperPattern = /var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = \d+;[\s\S]*?\/\/#endregion telegram-agent-routing-patch/
   if (routingHelperPattern.test(next)) {
     next = next.replace(routingHelperPattern, TELEGRAM_AGENT_ROUTING_HELPER)
@@ -11367,10 +11388,29 @@ function patchedTelegramBotRuntimeSource(source: string) {
     '}',
   ]
   const trafficGateRecoveryBlock = trafficGateRecoveryLines.join('\n\t')
+  const telegramAgentsCommandGuard = [
+    'const telegramAgentsCommandBody = String(bodyResult.rawBody || "").trim();',
+    'const telegramAgentsCommandMatch = /^\\/agents(?:@[A-Za-z0-9_]+)?(?:\\s+([\\s\\S]*))?$/i.exec(telegramAgentsCommandBody);',
+    'if (bodyResult.commandAuthorized && telegramAgentsCommandMatch) {',
+    'const telegramAgentsCommandText = resolveTelegramAgentsCommandResponse({',
+    'cfg,',
+    'accountId: account.accountId,',
+    'chatId,',
+    'isGroup,',
+    'resolvedThreadId,',
+    'dmThreadId,',
+    'routeAgentId: route.agentId,',
+    'rawText: telegramAgentsCommandMatch[1] || ""',
+    '});',
+    'await sendTelegramRecoveryMessage({ bot, runtime, chatId, messageId: msg.message_id, text: telegramAgentsCommandText });',
+    'return null;',
+    '}',
+  ]
   if (!next.includes(routeApplicationMarker)) {
     const bodyResultMarker = 'if (!bodyResult) return null;'
     const routeApplicationBlock = [
       ...trafficGateRecoveryLines,
+      ...telegramAgentsCommandGuard,
       'const telegramAgentRoute = resolveTelegramAgentRouteForMessage({',
       'cfg,',
       'route,',
@@ -11403,6 +11443,10 @@ function patchedTelegramBotRuntimeSource(source: string) {
     } else {
       console.warn('[plugins/telegram] agent route patch skipped: inbound body marker not found')
     }
+  }
+  const telegramAgentsCommandGuardMarker = 'const telegramAgentsCommandBody = String(bodyResult.rawBody || "").trim();'
+  if (next.includes(routeApplicationMarker) && !next.includes(telegramAgentsCommandGuardMarker)) {
+    next = next.replace(routeApplicationMarker, `${telegramAgentsCommandGuard.join('\n\t')}\n\t${routeApplicationMarker}`)
   }
   const legacyTrafficGateGuard = 'if (!(await automniaTrafficGateAllowsMessages())) return null;'
   if (next.includes(legacyTrafficGateGuard)) {
@@ -11566,14 +11610,18 @@ function patchedTelegramBotRuntimeSource(source: string) {
     )
   }
   if (next.includes('const { onModelSelected, ...replyPipeline }') && !next.includes('const telegramModelSelected =')) {
-    next = next.replace(
-      'const { onModelSelected, ...replyPipeline } = (turn.telegramDeps.createChannelMessageReplyPipeline ?? createChannelReplyPipeline)({',
-      'const { onModelSelected, ...replyPipeline } = (turn.telegramDeps.createChannelMessageReplyPipeline ?? createChannelReplyPipeline)({',
-    )
-    next = next.replace(
-      '\t\tconst handleDeliveryError = async (err, info) => {',
-      '\t\tconst telegramModelSelected = typeof onModelSelected === "function" ? (...args) => {\n\t\t\tturn.telegramProgressStatus?.thinking("Waiting for the selected model to return the next step.");\n\t\t\treturn onModelSelected(...args);\n\t\t} : onModelSelected;\n\t\tconst handleDeliveryError = async (err, info) => {',
-    )
+    const modelSelectedDeclaration = [
+      'const telegramModelSelected = typeof onModelSelected === "function" ? (...args) => {',
+      '\tturn.telegramProgressStatus?.thinking("Waiting for the selected model to return the next step.");',
+      '\treturn onModelSelected(...args);',
+      '} : onModelSelected;',
+    ].join('\n\t\t')
+    const pipelineInitializationEnd = '\n\t\t});\n\t\tconst turnResult = await runChannelInboundEvent({'
+    if (next.includes(pipelineInitializationEnd)) {
+      next = next.replace(pipelineInitializationEnd, `\n\t\t});\n\t\t${modelSelectedDeclaration}\n\t\tconst turnResult = await runChannelInboundEvent({`)
+    } else {
+      console.warn('[plugins/telegram] model-selection callback wrapper skipped: reply-pipeline completion marker not found')
+    }
     next = next.replace('\n\t\t\t\t\t\tonModelSelected\n', '\n\t\t\t\t\t\ttelegramModelSelected\n')
   }
   const nativeAgentsCommandMarker = 'const commandDefinition = findCommandByNativeName(command.name, "telegram");\n\t\t\t\tconst rawText = ctx.match?.trim() ?? "";'
@@ -11601,7 +11649,7 @@ function patchedTelegramBotRuntimeSource(source: string) {
     ].join('\n\t\t\t\t');
     if (next.includes(nativeAgentsCommandMarker)) {
       next = next.replace(nativeAgentsCommandMarker, nativeAgentsCommandBlock);
-    } else {
+    } else if (source.includes(nativeAgentsCommandMarker) || source.includes(currentNativeAgentsCommandMarker) || source.includes('bot.command(')) {
       console.warn('[plugins/telegram] agents command patch skipped: native command marker not found');
     }
   }
@@ -11645,22 +11693,25 @@ function patchedTelegramBotRuntimeSource(source: string) {
     console.warn('[plugins/telegram] agent route patch skipped: no current routing or native-command insertion point was patched')
     return source
   }
-  const identityDeliveryMarker = 'beforeDeliver: async (payload) => payload,\n\t\t\t\t\t\t\t\t\tonBeforeDeliverCancelled: (payload, info) => {'
-  if (next.includes(identityDeliveryMarker)) {
+  const identityDeliveryMarker = /([ \t]*)beforeDeliver: async \(payload\) => payload,\r?\n[ \t]*onBeforeDeliverCancelled: \(payload, info\) => \{/u
+  const identityDeliveryMatch = next.match(identityDeliveryMarker)
+  if (identityDeliveryMatch) {
+    const indent = identityDeliveryMatch[1]
+    const nestedIndent = `${indent}\t`
     next = next.replace(
       identityDeliveryMarker,
       [
-        'beforeDeliver: async (payload, info) => applyTelegramVerifiedIdentityDeliveryGuard({',
-        'payload,',
-        'info,',
-        'config: cfg,',
-        'agentId: route.agentId,',
-        'prompt: ctxPayload.RawBody',
-        '}),',
-        'onBeforeDeliverCancelled: (payload, info) => {',
-      ].join('\n\t\t\t\t\t\t\t\t\t'),
+        `${indent}beforeDeliver: async (payload, info) => applyTelegramVerifiedIdentityDeliveryGuard({`,
+        `${nestedIndent}payload,`,
+        `${nestedIndent}info,`,
+        `${nestedIndent}config: cfg,`,
+        `${nestedIndent}agentId: route.agentId,`,
+        `${nestedIndent}prompt: ctxPayload.RawBody`,
+        `${indent}}),`,
+        `${indent}onBeforeDeliverCancelled: (payload, info) => {`,
+      ].join('\n'),
     )
-  } else if (!next.includes('applyTelegramVerifiedIdentityDeliveryGuard({')) {
+  } else if (!next.includes('applyTelegramVerifiedIdentityDeliveryGuard({') && source.includes('beforeDeliver: async (payload) => payload,')) {
     console.warn('[plugins/telegram] identity delivery guard skipped: reply delivery marker not found')
   }
   const modelDataMarker = 'const { byProvider, providers, modelNames, resolvedDefault: activeResolvedDefault } = modelData;'
@@ -11672,7 +11723,7 @@ function patchedTelegramBotRuntimeSource(source: string) {
         modelDataMarker,
         `const restrictedTelegramModelData = telegramBillingModelData(runtimeCfg, modelData);\n\t\t\t\tconst { byProvider, providers, modelNames, resolvedDefault: activeResolvedDefault } = restrictedTelegramModelData;`,
       )
-    } else {
+    } else if (source.includes(modelDataMarker)) {
       console.warn('[plugins/telegram] credits-only model data guard skipped: model data marker not found')
     }
   }
@@ -11686,7 +11737,7 @@ function patchedTelegramBotRuntimeSource(source: string) {
     ].join('\n\t\t\t\t\t')
     if (next.includes(modelSelectionMarker)) {
       next = next.replace(modelSelectionMarker, `${modelSelectionGuard}\n\t\t\t\t\t${modelSelectionMarker}`)
-    } else {
+    } else if (source.includes(modelSelectionMarker)) {
       console.warn('[plugins/telegram] credits-only model guard skipped: model selection marker not found')
     }
   }
@@ -13530,7 +13581,7 @@ async function runOpenClawWithManagedSkillsWorkspace(args: string[], timeoutMs =
   const model = defaults?.model || defaultAgentModelSelection()
   // Managed skill commands run against a standalone config. Keep that config
   // on OpenClaw's current schema even while Automnia retains compatibility
-  // fields in its in-memory config model. OpenClaw 2026.9.2 rejects
+  // fields in its in-memory config model. OpenClaw 2026.10.6 rejects
   // skills.load.watchDebounceMs and agents.list before it can run an install.
   const skillsLoad = { ...(config.skills?.load || {}) }
   delete skillsLoad.watchDebounceMs

@@ -1,7 +1,7 @@
 import { useRememberedState } from '../../hooks/useRememberedState'
 import { createAgentActivitySelector } from '../../store/agentActivitySelector'
 import { boundedEditDistance } from '../../utils/searchDistance'
-import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AgentCard } from './AgentCard'
 import { Panel } from '../common/Panel'
 import { useNexusStore } from '../../store/nexusStore'
@@ -194,6 +194,8 @@ export function PartySelector() {
   const [searchQuery, setSearchQuery] = useRememberedState('roster-search', '')
   const deferredSearchQuery = useDeferredValue(searchQuery)
   const [sortKey, setSortKey] = useState<SortKey>(prefs.sortKey || 'party')
+  const [pinnedAgentIds, setPinnedAgentIds] = useState<string[]>(prefs.pinnedAgentIds)
+  const [pinnedOnly, setPinnedOnly] = useState(false)
   const [rarityFilter, setRarityFilter] = useState<AgentRarity | 'all'>(prefs.rarityFilter || 'all')
   const [displayMode, setDisplayMode] = useState<AgentDisplayMode>(prefs.displayMode || 'grid8')
   const [overlayPreset, setOverlayPreset] = useState<AgentOverlayPreset>(prefs.overlayPreset)
@@ -214,6 +216,8 @@ export function PartySelector() {
     [activePartyIds],
   )
   const selectedAgentSet = useMemo(() => new Set(selectedAgentIds), [selectedAgentIds])
+  const pinnedAgentSet = useMemo(() => new Set(pinnedAgentIds), [pinnedAgentIds])
+  const pinnedAgentCount = useMemo(() => agents.filter((agent) => pinnedAgentSet.has(agent.id)).length, [agents, pinnedAgentSet])
   const validSelectedAgentCount = useMemo(
     () => selectedAgentIds.filter((agentId) => agents.some((agent) => agent.id === agentId)).length,
     [agents, selectedAgentIds],
@@ -254,6 +258,8 @@ export function PartySelector() {
       list = list.filter((a) => (a.rarity ?? 'common') === rarityFilter)
     }
 
+    if (pinnedOnly) list = list.filter((agent) => pinnedAgentSet.has(agent.id))
+
     // Sort
     list.sort((a, b) => {
       const aPartySlot = activePartyOrder.get(a.id)
@@ -268,6 +274,8 @@ export function PartySelector() {
         const scoreDelta = (searchScores.get(b.id) || 0) - (searchScores.get(a.id) || 0)
         if (scoreDelta !== 0) return scoreDelta
       }
+      const pinnedDelta = Number(pinnedAgentSet.has(b.id)) - Number(pinnedAgentSet.has(a.id))
+      if (pinnedDelta !== 0) return pinnedDelta
       switch (sortKey) {
         case 'party':
           return (b.level || 1) - (a.level || 1)
@@ -282,7 +290,7 @@ export function PartySelector() {
       }
     })
     return list
-  }, [activePartyOrder, agents, deferredSearchQuery, rarityFilter, searchIndex, sortKey])
+  }, [activePartyOrder, agents, deferredSearchQuery, pinnedAgentSet, pinnedOnly, rarityFilter, searchIndex, sortKey])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const safePage = Math.min(pageIndex, totalPages - 1)
@@ -295,8 +303,16 @@ export function PartySelector() {
     : `${filtered.length}/${agents.length} agents`
 
   useEffect(() => {
-    saveRegistryPreferences({ displayMode, overlayPreset, rarityColorsEnabled, rarityFilter, sortKey })
-  }, [displayMode, overlayPreset, rarityColorsEnabled, rarityFilter, sortKey])
+    saveRegistryPreferences({ displayMode, overlayPreset, rarityColorsEnabled, rarityFilter, sortKey, pinnedAgentIds })
+  }, [displayMode, overlayPreset, pinnedAgentIds, rarityColorsEnabled, rarityFilter, sortKey])
+
+  const togglePinnedAgent = useCallback((agentId: string) => {
+    const next = pinnedAgentSet.has(agentId)
+      ? pinnedAgentIds.filter((id) => id !== agentId)
+      : [...pinnedAgentIds, agentId]
+    setPinnedAgentIds(next)
+    saveRegistryPreferences({ displayMode, overlayPreset, rarityColorsEnabled, rarityFilter, sortKey, pinnedAgentIds: next })
+  }, [displayMode, overlayPreset, pinnedAgentIds, pinnedAgentSet, rarityColorsEnabled, rarityFilter, sortKey])
 
   useEffect(() => {
     const syncPreferences = (event?: Event) => {
@@ -308,6 +324,7 @@ export function PartySelector() {
       setRarityColorsEnabled(next.rarityColorsEnabled ?? DEFAULT_REGISTRY_PREFERENCES.rarityColorsEnabled)
       setRarityFilter(next.rarityFilter || DEFAULT_REGISTRY_PREFERENCES.rarityFilter)
       setSortKey(next.sortKey || DEFAULT_REGISTRY_PREFERENCES.sortKey)
+      setPinnedAgentIds(next.pinnedAgentIds || [])
     }
     window.addEventListener(REGISTRY_PREFS_CHANGED_EVENT, syncPreferences)
     window.addEventListener('storage', syncPreferences)
@@ -360,18 +377,18 @@ export function PartySelector() {
     }
   }, [displayMode, filtered.length])
 
-  const previousSearchOptions = useRef([searchQuery, sortKey, rarityFilter].join('|'))
+  const previousSearchOptions = useRef([searchQuery, sortKey, rarityFilter, pinnedOnly].join('|'))
   // Reset to page 0 when the result set changes; display-size changes keep the current page.
   useEffect(() => {
-    const key = [searchQuery, sortKey, rarityFilter].join('|')
+    const key = [searchQuery, sortKey, rarityFilter, pinnedOnly].join('|')
     if (previousSearchOptions.current === key) return
     previousSearchOptions.current = key
     const timer = window.setTimeout(() => setPageIndex(0), 0)
     return () => window.clearTimeout(timer)
-  }, [searchQuery, sortKey, rarityFilter, setPageIndex])
+  }, [searchQuery, sortKey, rarityFilter, pinnedOnly, setPageIndex])
   useEffect(() => {
     if (registryScrollRef.current) registryScrollRef.current.scrollTop = 0
-  }, [safePage, searchQuery, sortKey, rarityFilter, displayMode])
+  }, [safePage, searchQuery, sortKey, rarityFilter, pinnedOnly, displayMode])
   useEffect(() => {
     if (pageIndex < totalPages) return
     const timer = window.setTimeout(() => setPageIndex(Math.max(0, totalPages - 1)), 0)
@@ -450,6 +467,21 @@ export function PartySelector() {
 
           {/* Sort + Rarity filter row */}
           <div data-agent-filter-controls className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              data-agent-filter-pinned
+              aria-pressed={pinnedOnly}
+              aria-label={`${pinnedOnly ? 'Show all agents' : 'Show pinned agents'} (${pinnedAgentCount} pinned)`}
+              title={pinnedAgentCount ? 'Show only pinned agents' : 'Pin an agent with the star on its card'}
+              disabled={pinnedAgentCount === 0}
+              onClick={() => setPinnedOnly((value) => !value)}
+              className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${pinnedOnly ? 'border-amber-200/40 bg-amber-200/10 text-amber-100' : 'border-white/10 bg-white/[0.02] text-slate-300 hover:border-amber-200/30 hover:text-amber-100'}`}
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill={pinnedOnly ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="size-3.5">
+                <path d="m12 3 2.75 5.58 6.16.9-4.45 4.34 1.05 6.13L12 17.06l-5.51 2.9 1.05-6.14L3.1 9.48l6.15-.9L12 3Z" />
+              </svg>
+              Pinned{pinnedAgentCount ? ` · ${pinnedAgentCount}` : ''}
+            </button>
             <select
               data-agent-filter-select
               aria-label="Sort agents"
@@ -514,6 +546,7 @@ export function PartySelector() {
               {rarityFilter !== 'all' && <>{filtered.length}/{agents.length} shown · </>}
             </>
           )}
+          {pinnedOnly && <span className="ml-2 text-amber-100/75">Pinned favorites</span>}
           {validSelectedAgentCount > 0 && (
             <span data-agent-selection-status className="ml-2 text-cyan-100/60">
               {validSelectedAgentCount} selected for Agent Chat
@@ -524,7 +557,7 @@ export function PartySelector() {
         {/* Empty state */}
         {filtered.length === 0 ? (
           <div className="grid h-32 place-items-center rounded-xl border border-dashed border-white/[0.06] bg-white/[0.01]">
-            <p className="text-[11px] font-medium text-slate-600">No agents match your search</p>
+            <p className="text-center text-[11px] font-medium text-slate-500">{pinnedOnly ? 'No pinned agents match these filters. Use the star on an agent card to pin a favorite.' : 'No agents match your search'}</p>
           </div>
         ) : (
           <div
@@ -558,6 +591,8 @@ export function PartySelector() {
                       missionRunning={missionRunning}
                       cardTheme={resolveAgentCardTheme(agent.rarity, { overlayPreset, rarityColorsEnabled })}
                       displayMode={displayMode}
+                      isPinned={pinnedAgentSet.has(agent.id)}
+                      onTogglePinned={togglePinnedAgent}
                     />
                   </div>
                 )

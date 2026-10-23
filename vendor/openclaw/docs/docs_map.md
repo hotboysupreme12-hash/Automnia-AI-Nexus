@@ -17,6 +17,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Boundaries
   - H2: Manifests
   - H2: Runtime Selection
+  - H2: Model Runtime Generations
+  - H2: Compute workers
   - H2: Related
 
 ## announcements/bluebubbles-imessage.md
@@ -33,29 +35,22 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /auth-credential-semantics
 - Headings:
-  - H2: Stable probe reason codes
+  - H2: Stable check reason codes
   - H2: Token credentials
   - H3: Eligibility rules
   - H3: Resolution rules
+  - H2: Manual API keys
+  - H2: Setup replacements
   - H2: Agent copy portability
+  - H2: Plugin SDK OAuth validation
+  - H2: Personal model accounts
   - H2: Config-only auth routes
   - H2: Explicit auth order filtering
-  - H2: Probe target resolution
+  - H2: Model catalog discovery
+  - H2: Check target resolution
   - H2: External CLI credential discovery
   - H2: OAuth SecretRef Policy Guard
   - H2: Legacy-Compatible Messaging
-  - H2: Related
-
-## automation/auth-monitoring.md
-
-- Route: /automation/auth-monitoring
-- Headings:
-  - H2: Related
-
-## automation/clawflow.md
-
-- Route: /automation/clawflow
-- Headings:
   - H2: Related
 
 ## automation/cron-jobs.md
@@ -63,71 +58,168 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /automation/cron-jobs
 - Headings:
   - H2: Quick start
-  - H2: How cron works
-  - H2: Schedule types
-  - H3: Day-of-month and day-of-week use OR logic
-  - H2: Event triggers (condition watchers)
-  - H2: Payloads
-  - H3: Agent-turn options
-  - H3: Command payloads
-  - H2: Execution styles
+  - H2: Where each section moved
+  - H3: Runtime model and promotion
+  - H3: Schedule and trigger sections
+  - H3: Payload and execution sections
+  - H3: Delivery sections
+  - H3: Management and configuration sections
+  - H3: Inbound webhook sections
+  - H3: Gmail sections
+  - H3: Troubleshooting sections
+  - H2: Related
+
+## automation/cron-jobs/delivery.md
+
+- Route: /automation/cron-jobs/delivery
+- Headings:
   - H2: Delivery and output
   - H3: Failure notifications
+  - H4: Owner-conversation repair
   - H3: Output language
-  - H2: CLI examples
-  - H2: Managing jobs
-  - H2: Webhooks
-  - H3: Authentication
+
+## automation/cron-jobs/gmail.md
+
+- Route: /automation/cron-jobs/gmail
+- Headings:
   - H2: Gmail PubSub integration
-  - H3: Wizard setup (recommended)
+  - H3: Configure a restricted Gmail reader (recommended)
+  - H3: Authenticate the reader model
+  - H3: Connect Gmail transport
+  - H3: Verify the reader boundary
   - H3: Gateway auto-start
   - H3: Manual one-time setup
   - H3: Gmail model override
+
+## automation/cron-jobs/how-it-works.md
+
+- Route: /automation/cron-jobs/how-it-works
+- Headings:
+  - H2: How automations work
+  - H2: Promoting a repeated job into an automation
+
+## automation/cron-jobs/managing-jobs.md
+
+- Route: /automation/cron-jobs/managing-jobs
+- Headings:
+  - H2: CLI examples
+  - H2: Managing jobs
+  - H3: Conversational management
+  - H3: CLI management
   - H2: Configuration
+
+## automation/cron-jobs/payloads.md
+
+- Route: /automation/cron-jobs/payloads
+- Headings:
+  - H2: Payloads
+  - H3: Agent-turn options
+  - H3: Command payloads
+  - H3: Script payloads
+  - H2: Authoring recurring jobs
+  - H2: Execution styles
+  - H3: Codex apps in scheduled automations
+
+## automation/cron-jobs/schedules.md
+
+- Route: /automation/cron-jobs/schedules
+- Headings:
+  - H2: Schedule types
+  - H3: Heartbeat task migration
+  - H3: Stream sources
+  - H3: Dynamic cadence (pacing)
+  - H3: /loop chat shortcut
+  - H3: Day-of-month and day-of-week use OR logic
+  - H2: Event triggers (condition watchers)
+
+## automation/cron-jobs/troubleshooting.md
+
+- Route: /automation/cron-jobs/troubleshooting
+- Headings:
   - H2: Troubleshooting
   - H3: Command ladder
-  - H2: Related
 
-## automation/cron-vs-heartbeat.md
+## automation/cron-jobs/webhooks.md
 
-- Route: /automation/cron-vs-heartbeat
+- Route: /automation/cron-jobs/webhooks
 - Headings:
-  - H2: Related
-
-## automation/gmail-pubsub.md
-
-- Route: /automation/gmail-pubsub
-- Headings:
-  - H2: Related
+  - H2: Webhooks
+  - H3: Enable and test an agent hook
+  - H3: Authentication
+  - H3: Verify and troubleshoot hook requests
 
 ## automation/hooks.md
 
 - Route: /automation/hooks
 - Headings:
+  - H1: Hooks
   - H2: Choose the right surface
   - H2: Quick start
-  - H2: Event types
-  - H2: Writing hooks
-  - H3: Hook structure
-  - H3: HOOK.md format
-  - H3: Handler implementation
-  - H3: Event context highlights
-  - H2: Hook discovery
-  - H3: Hook packs
+  - H3: Eligible, enabled, and loaded
+  - H3: Local, remote, and agent scope
+  - H2: Plugin hooks
+  - H2: Best practices
+  - H2: CLI reference
+  - H2: Detailed topics
+  - H2: Where each section moved
+  - H2: Related
+
+## automation/hooks/bundled-hooks.md
+
+- Route: /automation/hooks/bundled-hooks
+- Headings:
   - H2: Bundled hooks
-  - H3: session-memory details
+  - H3: boot-md details
   - H3: bootstrap-extra-files config
   - H3: command-logger details
   - H3: compaction-notifier details
-  - H3: boot-md details
-  - H2: Plugin hooks
+  - H3: session-memory details
+
+## automation/hooks/configuration.md
+
+- Route: /automation/hooks/configuration
+- Headings:
   - H2: Configuration
-  - H2: CLI reference
-  - H2: Best practices
+  - H2: Hook discovery
+  - H3: Hook packs
+
+## automation/hooks/event-types.md
+
+- Route: /automation/hooks/event-types
+- Headings:
+  - H2: Event types
+  - H3: Event context highlights
+  - H4: Message context
+
+## automation/hooks/troubleshooting.md
+
+- Route: /automation/hooks/troubleshooting
+- Headings:
   - H2: Troubleshooting
   - H3: Hook not discovered
   - H3: Hook not eligible
   - H3: Hook not executing
+
+## automation/hooks/writing-hooks.md
+
+- Route: /automation/hooks/writing-hooks
+- Headings:
+  - H2: Writing hooks
+  - H3: Hook structure
+  - H3: Handler implementation
+  - H3: Reply delivery
+  - H3: HOOK.md format
+
+## automation/imap.md
+
+- Route: /automation/imap
+- Headings:
+  - H2: Configure a restricted reader
+  - H2: Sender authentication
+  - H3: Sender-bound tokens and freshness
+  - H2: Verify the security boundary
+  - H2: Watcher runtime behavior
+  - H2: Troubleshooting
   - H2: Related
 
 ## automation/index.md
@@ -135,22 +227,15 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /automation
 - Headings:
   - H2: Quick decision guide
-  - H3: Scheduled Tasks (Cron) vs Heartbeat
+  - H3: Automations vs Heartbeat
   - H2: Core concepts
-  - H3: Scheduled tasks (cron)
-  - H3: Tasks
-  - H3: Inferred commitments
-  - H3: Task Flow
+  - H3: Automations
+  - H3: Background execution and workflows
   - H3: Standing orders
   - H3: Hooks
   - H3: Heartbeat
   - H2: How they work together
-  - H2: Related
-
-## automation/poll.md
-
-- Route: /automation/poll
-- Headings:
+  - H2: Retired inferred commitments
   - H2: Related
 
 ## automation/standing-orders.md
@@ -160,7 +245,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Why standing orders
   - H2: How they work
   - H2: Anatomy of a standing order
-  - H2: Standing orders plus cron jobs
+  - H2: Standing orders plus automations
   - H2: Examples
   - H3: Example 1: content and social media (weekly cycle)
   - H3: Example 2: finance operations (event-triggered)
@@ -172,58 +257,19 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Avoid
   - H2: Related
 
-## automation/taskflow.md
+## channels/a2a.md
 
-- Route: /automation/taskflow
+- Route: /channels/a2a
 - Headings:
-  - H2: When to use Task Flow
-  - H2: Sync modes
-  - H3: Managed mode
-  - H3: Mirrored mode
-  - H2: Flow statuses
-  - H2: Durable state and revision tracking
-  - H2: Cancel behavior
-  - H2: CLI commands
-  - H2: Reliable scheduled workflow pattern
-  - H2: How flows relate to tasks
-  - H2: Related
-
-## automation/tasks.md
-
-- Route: /automation/tasks
-- Headings:
-  - H2: TL;DR
-  - H2: Quick start
-  - H2: What creates a task
-  - H2: Task lifecycle
-  - H2: Delivery and notifications
-  - H3: Notification policies
-  - H2: CLI reference
-  - H2: Chat task board (/tasks)
-  - H3: Control UI
-  - H2: Status integration (task pressure)
-  - H2: Storage and maintenance
-  - H3: Where tasks live
-  - H3: Automatic maintenance
-  - H2: How tasks relate to other systems
-  - H2: Related
-
-## automation/troubleshooting.md
-
-- Route: /automation/troubleshooting
-- Headings:
-  - H2: Related
-
-## automation/webhook.md
-
-- Route: /automation/webhook
-- Headings:
-  - H2: Related
-
-## brave-search.md
-
-- Route: /brave-search
-- Headings:
+  - H2: Quick setup
+  - H2: Discover the Agent Card
+  - H2: Send a task
+  - H2: Poll a task
+  - H2: Configure outbound peers
+  - H2: Configuration reference
+  - H2: Session isolation
+  - H2: Security
+  - H2: A2A 1.0 limitations
   - H2: Related
 
 ## channels/access-groups.md
@@ -237,12 +283,14 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Plugin diagnostics
   - H2: Security notes
   - H2: Troubleshooting
+  - H2: Related
 
 ## channels/ambient-room-events.md
 
 - Route: /channels/ambient-room-events
 - Headings:
   - H2: Recommended setup
+  - H2: Prerequisites
   - H2: What changes
   - H2: Discord example
   - H2: Slack example
@@ -261,6 +309,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Configure shared defaults
   - H2: Override per channel, account, or room
   - H2: Channel support
+  - H2: Internal agent group rounds
 
 ## channels/broadcast-groups.md
 
@@ -268,6 +317,10 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Overview
   - H2: Configuration
+  - H3: Agent group threads
+  - H3: Mention selection
+  - H3: Bounded follow-up rounds
+  - H3: Participant labels
   - H3: Basic setup
   - H3: Processing strategy
   - H3: Complete example
@@ -286,6 +339,35 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Config schema
   - H3: Fields
   - H2: Limitations
+  - H2: Related
+
+## channels/buzz.md
+
+- Route: /channels/buzz
+- Headings:
+  - H2: What it does
+  - H2: Buzz identity and room model
+  - H2: Before you start
+  - H2: Install
+  - H2: Guided setup
+  - H3: Bot approval
+  - H2: Agent tools and messaging
+  - H3: Native mentions
+  - H3: Directory and sender labels
+  - H3: Route rooms to different agents
+  - H2: Access control
+  - H3: Bot conversations
+  - H3: Passive room context
+  - H3: Reply placement
+  - H2: Manual configuration
+  - H3: Reply prefix
+  - H3: Multiple bot identities
+  - H3: Bot key storage
+  - H2: Verify the connection
+  - H3: QA Lab round trip
+  - H2: Rotate the bot identity
+  - H2: Current limits and roadmap
+  - H2: Troubleshooting
   - H2: Related
 
 ## channels/channel-routing.md
@@ -311,60 +393,159 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /channels/clickclack
 - Headings:
   - H2: Quick setup
+  - H3: Alternative: manual token
+  - H3: Alternative: env-based token
+  - H2: Configuration
+  - H3: JSON5 reference
   - H3: Account config keys
+  - H3: Keep an auth-gated public hostname
+  - H3: Plugin allowlist behavior
   - H2: Multiple bots
+  - H2: Session discussions
   - H2: Reply modes
-  - H2: Agent activity rows
+  - H2: Command menu
+  - H2: Durable media delivery
+  - H2: Native progress and agent activity rows
+  - H2: Group mention gating
+  - H3: Bot-created threads
+  - H3: Mention detection
+  - H3: Bot-to-bot messages
+  - H3: Configuration example
+  - H3: Migration warning
   - H2: Targets
   - H2: Permissions
   - H2: Troubleshooting
+  - H2: Related
+
+## channels/discord-activities.md
+
+- Route: /channels/discord-activities
+- Headings:
+  - H2: Prerequisites
+  - H2: Setup
+  - H2: Security model
+  - H2: Troubleshooting
+  - H3: The Activity says “Gateway offline”
+  - H3: Discord opens a blank page or reports blocked:csp
+  - H3: “Widget unavailable”
+  - H3: “You cannot launch Activities in this channel”
 
 ## channels/discord.md
 
 - Route: /channels/discord
 - Headings:
-  - H2: Quick setup
-  - H2: Recommended: Set up a guild workspace
-  - H2: Runtime model
-  - H2: Forum channels
-  - H2: Interactive components
-  - H2: Access control and routing
-  - H3: Role-based agent routing
-  - H2: Native commands and command auth
-  - H2: Feature details
-  - H2: Tools and action gates
-  - H2: Components v2 UI
-  - H2: Voice
-  - H3: Voice channels
-  - H3: Follow users in voice
-  - H3: Voice messages
-  - H2: Troubleshooting
+  - H2: What each page covers
+  - H2: Where each section moved
   - H2: Configuration reference
+  - H3: Discord Activities
   - H2: Safety and operations
   - H2: Related
+
+## channels/discord/access-control.md
+
+- Route: /channels/discord/access-control
+- Headings:
+  - H2: Access control and routing
+  - H3: Guild channel maps are allowlists
+  - H3: Applying access-policy changes
+  - H3: Role-based agent routing
+  - H2: Native commands and command auth
+  - H2: Tools and action gates
+
+## channels/discord/events.md
+
+- Route: /channels/discord/events
+- Headings:
+  - H2: Events and operations
+
+## channels/discord/messaging.md
+
+- Route: /channels/discord/messaging
+- Headings:
+  - H2: Runtime model
+  - H2: Message behavior
+
+## channels/discord/rich-messages.md
+
+- Route: /channels/discord/rich-messages
+- Headings:
+  - H2: Interactive components
+  - H2: Components v2 UI
+  - H2: Approvals
+
+## channels/discord/setup.md
+
+- Route: /channels/discord/setup
+- Headings:
+  - H2: Quick setup
+  - H2: Recommended: Set up a guild workspace
+
+## channels/discord/threads-and-sessions.md
+
+- Route: /channels/discord/threads-and-sessions
+- Headings:
+  - H2: Forum channels
+  - H2: Session and thread behavior
+
+## channels/discord/troubleshooting.md
+
+- Route: /channels/discord/troubleshooting
+- Headings:
+  - H2: Troubleshooting
+
+## channels/discord/voice-channels.md
+
+- Route: /channels/discord/voice-channels
+- Headings:
+  - H2: Voice
+  - H2: Voice channels
+  - H3: GPT-Live in Discord
+  - H2: Voice messages
+
+## channels/discord/voice-follow.md
+
+- Route: /channels/discord/voice-follow
+- Headings:
+  - H2: Follow users in voice
+
+## channels/discord/voice-transcripts.md
+
+- Route: /channels/discord/voice-transcripts
+- Headings:
+  - H2: Capture voice transcripts
+  - H2: Meeting notes
 
 ## channels/feishu.md
 
 - Route: /channels/feishu
 - Headings:
-  - H2: Quick start
+  - H2: What each page covers
+  - H2: Where each section moved
+  - H2: Common commands
+  - H2: Related
+
+## channels/feishu/access-control.md
+
+- Route: /channels/feishu/access-control
+- Headings:
   - H2: Access control
   - H3: Direct messages
   - H3: Group chats
+  - H3: Mentions in bot-started threads
   - H2: Group configuration examples
   - H3: Allow all groups, no @mention required
   - H3: Allow all groups, still require @mention
   - H3: Allow specific groups only
   - H3: Restrict senders within a group
+  - H3: Bot-authored messages
   - H2: Get group/user IDs
-  - H3: Group IDs (chatid, format: ocxxx)
-  - H3: User IDs (openid, format: ouxxx)
-  - H2: Common commands
-  - H2: Troubleshooting
-  - H3: Bot does not respond in group chats
-  - H3: Bot does not receive messages
-  - H3: QR setup does not react in the Feishu mobile app
-  - H3: App Secret leaked
+  - H3: Group IDs (`chat_id`, format: `oc_xxx`)
+  - H3: User IDs (`open_id`, format: `ou_xxx`)
+
+## channels/feishu/advanced-configuration.md
+
+- Route: /channels/feishu/advanced-configuration
+- Headings:
   - H2: Advanced configuration
   - H3: Multiple accounts
   - H3: Message limits
@@ -376,6 +557,18 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H4: Persistent ACP binding
   - H4: Spawn ACP from chat
   - H3: Multi-agent routing
+
+## channels/feishu/configuration-reference.md
+
+- Route: /channels/feishu/configuration-reference
+- Headings:
+  - H2: Configuration reference
+  - H2: Gateway webhook route
+
+## channels/feishu/dynamic-agents.md
+
+- Route: /channels/feishu/dynamic-agents
+- Headings:
   - H2: Per-user agent isolation (Dynamic Agent Creation)
   - H3: Quick setup
   - H3: How it works
@@ -384,12 +577,37 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Typical multi-user deployment
   - H3: Verification
   - H3: Notes
-  - H2: Configuration reference
+
+## channels/feishu/messaging.md
+
+- Route: /channels/feishu/messaging
+- Headings:
+  - H2: Reading messages and chat information
   - H2: Supported message types
   - H3: Receive
   - H3: Send
+  - H3: Sticker replies
+  - H3: Sticker keyword search
   - H3: Threads and replies
-  - H2: Related
+
+## channels/feishu/setup.md
+
+- Route: /channels/feishu/setup
+- Headings:
+  - H2: Quick start
+  - H2: Inbound durability
+  - H2: Webhook delivery window
+
+## channels/feishu/troubleshooting.md
+
+- Route: /channels/feishu/troubleshooting
+- Headings:
+  - H2: Troubleshooting
+  - H3: Bot does not respond in group chats
+  - H3: Bot does not receive messages
+  - H3: Webhook callbacks rejected with 401 Invalid signature
+  - H3: QR setup does not react in the Feishu mobile app
+  - H3: App Secret leaked
 
 ## channels/googlechat.md
 
@@ -403,6 +621,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Option B: Reverse Proxy (Caddy)
   - H3: Option C: Cloudflare Tunnel
   - H2: How it works
+  - H3: Inbound durability
   - H2: Targets
   - H2: Config highlights
   - H2: Troubleshooting
@@ -427,6 +646,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /channels/groups
 - Headings:
   - H2: Beginner intro (2 minutes)
+  - H2: Bot-created threads
   - H2: Visible replies
   - H2: Context visibility and allowlists
   - H2: Session keys
@@ -440,8 +660,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Activation (owner-only)
   - H2: Context fields
   - H2: iMessage specifics
-  - H2: WhatsApp system prompts
-  - H2: WhatsApp specifics
   - H2: Related
 
 ## channels/imessage-from-bluebubbles.md
@@ -463,22 +681,65 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /channels/imessage
 - Headings:
-  - H2: Quick setup
-  - H2: Requirements and permissions (macOS)
-  - H2: Enabling the imsg private API
-  - H3: Setup
-  - H3: When SIP stays enabled
+  - H2: What each page covers
+  - H2: Where each section moved
+  - H2: Related
+
+## channels/imessage/access-control.md
+
+- Route: /channels/imessage/access-control
+- Headings:
   - H2: Access control and routing
   - H2: ACP conversation bindings
-  - H2: Deployment patterns
-  - H2: Media, chunking, and delivery targets
-  - H2: Private API actions
   - H2: Config writes
+
+## channels/imessage/deployment.md
+
+- Route: /channels/imessage/deployment
+- Headings:
+  - H2: Deployment patterns
+
+## channels/imessage/media.md
+
+- Route: /channels/imessage/media
+- Headings:
+  - H2: Media, chunking, and delivery targets
+
+## channels/imessage/messaging.md
+
+- Route: /channels/imessage/messaging
+- Headings:
   - H2: Coalescing split-send DMs (command + URL in one composition)
-  - H3: Scenarios and what the agent sees
   - H2: Inbound recovery after a bridge or gateway restart
   - H3: Operator-visible signal
   - H3: Migration
+
+## channels/imessage/private-api.md
+
+- Route: /channels/imessage/private-api
+- Headings:
+  - H2: Enabling the imsg private API
+  - H3: Setup
+  - H3: When SIP stays enabled
+
+## channels/imessage/rich-messages.md
+
+- Route: /channels/imessage/rich-messages
+- Headings:
+  - H2: Private API actions
+
+## channels/imessage/setup.md
+
+- Route: /channels/imessage/setup
+- Headings:
+  - H2: Install the plugin
+  - H2: Quick setup
+  - H2: Requirements and permissions (macOS)
+
+## channels/imessage/troubleshooting.md
+
+- Route: /channels/imessage/troubleshooting
+- Headings:
   - H2: Troubleshooting
   - H2: Configuration reference pointers
   - H2: Related
@@ -487,7 +748,10 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /channels
 - Headings:
+  - H2: Which channel should I connect first?
   - H2: Supported channels
+  - H3: Related communication plugins
+  - H2: Group join introductions
   - H2: Delivery notes
   - H2: Notes
 
@@ -496,7 +760,9 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /channels/irc
 - Headings:
   - H2: Quick start
+  - H2: Inbound durability
   - H2: Connection settings
+  - H2: Outbound text
   - H2: Security defaults
   - H2: Access control
   - H3: Common gotcha: allowFrom is for DMs, not channels
@@ -515,10 +781,15 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Install
   - H2: Setup
+  - H2: Inbound durability
   - H2: Configure
   - H2: Access control
+  - H2: Directory
+  - H2: Group join introductions
   - H2: Message behavior
-  - H2: Channel data (rich messages)
+  - H2: Reply quoting
+  - H2: Block streaming
+  - H2: Structured rich messages
   - H2: ACP support
   - H2: Outbound media
   - H2: Troubleshooting
@@ -530,6 +801,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Text formatting
   - H2: Context fields
+  - H2: Outbound payloads
   - H2: Channel notes
   - H2: Related
 
@@ -538,14 +810,11 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /channels/matrix-migration
 - Headings:
   - H2: What the migration does automatically
-  - H2: What the migration cannot do automatically
+  - H2: Retired pre-July state files
+  - H2: Upgrading from OpenClaw releases older than 2026.4
   - H2: Recommended upgrade flow
-  - H2: How encrypted migration works
   - H2: Common messages and what they mean
-  - H3: Upgrade and detection messages
-  - H3: Encrypted-state recovery messages
   - H3: Manual recovery messages
-  - H3: Custom plugin install messages
   - H2: If encrypted history still does not come back
   - H2: If you want to start fresh for future messages
   - H2: Related
@@ -575,47 +844,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /channels/matrix
 - Headings:
-  - H2: Install
-  - H2: Setup
-  - H3: Interactive setup
-  - H3: Minimal config
-  - H3: Auto-join
-  - H3: Allowlist target formats
-  - H3: Account ID normalization
-  - H3: Cached credentials
-  - H3: Environment variables
-  - H2: Configuration example
-  - H2: Streaming previews
-  - H2: Voice messages
-  - H2: Approval metadata
-  - H3: Self-hosted push rules for quiet finalized previews
-  - H2: Bot-to-bot rooms
-  - H2: Encryption and verification
-  - H3: Enable encryption
-  - H3: Status and trust signals
-  - H3: Verify this device with a recovery key
-  - H3: Bootstrap or repair cross-signing
-  - H3: Room-key backup
-  - H3: Listing, requesting, and responding to verifications
-  - H3: Multi-account notes
-  - H2: Profile management
-  - H2: Threads
-  - H3: Session routing (sessionScope)
-  - H3: Reply threading (threadReplies)
-  - H3: Thread inheritance and slash commands
-  - H2: ACP conversation bindings
-  - H3: Thread binding config
-  - H2: Reactions
-  - H2: History context
-  - H2: Context visibility
-  - H2: DM and room policy
-  - H2: Direct room repair
-  - H2: Exec approvals
-  - H2: Slash commands
-  - H2: Multi-account
-  - H2: Private/LAN homeservers
-  - H2: Proxying Matrix traffic
-  - H2: Target resolution
+  - H2: What each page covers
+  - H2: Where each section moved
   - H2: Configuration reference
   - H3: Account and connection
   - H3: Encryption
@@ -625,6 +855,86 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Tooling and per-room overrides
   - H3: Exec approval settings
   - H2: Related
+
+## channels/matrix/access-control.md
+
+- Route: /channels/matrix/access-control
+- Headings:
+  - H2: Bot-to-bot rooms
+  - H2: Context visibility
+  - H2: Tool context reads
+  - H2: DM and room policy
+  - H2: Slash commands
+
+## channels/matrix/accounts-and-homeservers.md
+
+- Route: /channels/matrix/accounts-and-homeservers
+- Headings:
+  - H2: Profile management
+  - H2: Direct room repair
+  - H2: Multi-account
+  - H2: Private/LAN homeservers
+  - H2: Proxying Matrix traffic
+  - H2: Target resolution
+
+## channels/matrix/encryption.md
+
+- Route: /channels/matrix/encryption
+- Headings:
+  - H2: Encryption and verification
+  - H3: Enable encryption
+  - H3: Status and trust signals
+  - H3: Verify this device with a recovery key
+  - H3: Bootstrap or repair cross-signing
+  - H3: Room-key backup
+  - H3: Listing, requesting, and responding to verifications
+  - H3: Multi-account notes
+
+## channels/matrix/messaging.md
+
+- Route: /channels/matrix/messaging
+- Headings:
+  - H2: Streaming previews
+  - H2: Voice messages
+  - H2: Reactions
+
+## channels/matrix/rich-messages.md
+
+- Route: /channels/matrix/rich-messages
+- Headings:
+  - H2: Reply controls and presentations
+  - H2: Approval metadata
+  - H3: Self-hosted push rules for quiet finalized previews
+  - H2: Exec approvals
+
+## channels/matrix/setup.md
+
+- Route: /channels/matrix/setup
+- Headings:
+  - H2: Install
+  - H2: Setup
+  - H3: Interactive setup
+  - H3: Minimal config
+  - H3: Auto-join
+  - H3: Group join introductions
+  - H3: Allowlist target formats
+  - H3: Account ID normalization
+  - H3: Cached credentials
+  - H3: Environment variables
+  - H2: Configuration example
+
+## channels/matrix/threads-and-sessions.md
+
+- Route: /channels/matrix/threads-and-sessions
+- Headings:
+  - H2: Threads
+  - H3: Session routing (sessionScope)
+  - H3: Reply threading (threadReplies)
+  - H3: Mentions in bot-created threads
+  - H3: Thread inheritance and slash commands
+  - H2: ACP conversation bindings
+  - H3: Thread binding config
+  - H2: History context
 
 ## channels/mattermost.md
 
@@ -641,6 +951,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Targets for outbound delivery
   - H2: DM channel retry
   - H2: Preview streaming
+  - H2: Read channel history (message tool)
   - H2: Reactions (message tool)
   - H2: Interactive buttons (message tool)
   - H3: Direct API integration (external scripts)
@@ -653,29 +964,54 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /channels/msteams
 - Headings:
-  - H2: Bundled plugin
-  - H2: Quick setup
-  - H2: Goals
+  - H2: What each page covers
+  - H2: Where each section moved
+  - H2: Related
+
+## channels/msteams/access-control.md
+
+- Route: /channels/msteams/access-control
+- Headings:
   - H2: Config writes
   - H2: Access control (DMs + groups)
-  - H3: How it works
-  - H3: Step 1: Create Azure Bot
-  - H3: Step 2: Get credentials
-  - H3: Step 3: Configure messaging endpoint
-  - H3: Step 4: Enable Teams channel
-  - H3: Step 5: Build Teams app manifest
-  - H3: Step 6: Configure OpenClaw
-  - H3: Step 7: Run the gateway
+  - H3: Mentions in bot-created threads
+  - H2: Team and Channel IDs (Common Gotcha)
+  - H2: Private channels
+
+## channels/msteams/authentication.md
+
+- Route: /channels/msteams/authentication
+- Headings:
   - H2: Federated authentication (certificate plus managed identity)
   - H3: Option A: Certificate-based authentication
   - H3: Option B: Azure Managed Identity
   - H3: AKS Workload Identity setup
   - H3: Auth type comparison
-  - H2: Local development (tunneling)
-  - H2: Testing the bot
-  - H2: Environment variables
+
+## channels/msteams/cards-and-actions.md
+
+- Route: /channels/msteams/cards-and-actions
+- Headings:
   - H2: Member info action
+  - H2: Native approval cards
+  - H2: Polls (Adaptive Cards)
+  - H2: Presentation cards
+  - H2: Target formats
+  - H2: Proactive messaging
+
+## channels/msteams/configuration.md
+
+- Route: /channels/msteams/configuration
+- Headings:
+  - H2: Environment variables
   - H2: History context
+  - H2: Configuration
+  - H2: Migrating an existing webhook endpoint
+
+## channels/msteams/manifest-and-permissions.md
+
+- Route: /channels/msteams/manifest-and-permissions
+- Headings:
   - H2: Current Teams RSC permissions (manifest)
   - H2: Example Teams manifest (redacted)
   - H3: Manifest caveats (must-have fields)
@@ -684,16 +1020,21 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: With Teams RSC only (app installed, no Graph API permissions)
   - H3: With Teams RSC + Microsoft Graph Application permissions
   - H3: RSC vs Graph API
-  - H2: Graph-enabled media + history (required for channels)
-  - H2: Known limitations
-  - H3: Webhook timeouts
-  - H3: Teams cloud and service URL support
-  - H3: Formatting
-  - H2: Configuration
+  - H2: Graph-enabled media + history
+  - H3: Channel/group file recovery (graphMediaFallback)
+
+## channels/msteams/messaging.md
+
+- Route: /channels/msteams/messaging
+- Headings:
   - H2: Routing and sessions
+  - H2: Channel metadata
+  - H2: Graph actions
   - H2: Reply style: threads vs posts
   - H3: Resolution precedence
   - H3: Thread context preservation
+  - H2: Delivery cancellation and retries
+  - H2: Outbound mentions
   - H2: Attachments and images
   - H2: Sending files in group chats
   - H3: Why group chats need SharePoint
@@ -701,12 +1042,33 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Sharing behavior
   - H3: Fallback behavior
   - H3: Files stored location
-  - H2: Polls (Adaptive Cards)
-  - H2: Presentation cards
-  - H2: Target formats
-  - H2: Proactive messaging
-  - H2: Team and Channel IDs (Common Gotcha)
-  - H2: Private channels
+
+## channels/msteams/setup.md
+
+- Route: /channels/msteams/setup
+- Headings:
+  - H2: Bundled plugin
+  - H2: Quick setup
+  - H2: Goals
+  - H3: How it works
+  - H3: Step 1: Create Azure Bot
+  - H3: Step 2: Get credentials
+  - H3: Step 3: Configure messaging endpoint
+  - H3: Step 4: Enable Teams channel
+  - H3: Step 5: Build Teams app manifest
+  - H3: Step 6: Configure OpenClaw
+  - H3: Step 7: Run the gateway
+  - H2: Local development (tunneling)
+  - H2: Testing the bot
+
+## channels/msteams/troubleshooting.md
+
+- Route: /channels/msteams/troubleshooting
+- Headings:
+  - H2: Known limitations
+  - H3: Webhook timeouts
+  - H3: Teams cloud and service URL support
+  - H3: Formatting
   - H2: Troubleshooting
   - H3: Common issues
   - H3: Manifest upload errors
@@ -719,8 +1081,10 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /channels/nextcloud-talk
 - Headings:
   - H2: Install
+  - H2: How messages reach the agent
   - H2: Quick setup (beginner)
   - H2: Notes
+  - H2: Moving existing webhook endpoints to the Gateway
   - H2: Access control (DMs)
   - H2: Rooms (groups)
   - H2: Capabilities
@@ -758,7 +1122,9 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /channels/pairing
 - Headings:
   - H2: 1) DM pairing (inbound chat access)
-  - H3: Approve a sender
+  - H3: Approve from the Control UI
+  - H3: Approve from the CLI
+  - H3: Set up an owner without DM pairing
   - H3: Reusable sender groups
   - H3: Where the state lives
   - H2: 2) Node device pairing (iOS/Android/macOS/headless nodes)
@@ -777,6 +1143,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: What it does
   - H2: Config
   - H2: Runners
+  - H2: Installed-candidate fixtures
   - H2: Related
 
 ## channels/qqbot.md
@@ -785,7 +1152,9 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Install
   - H2: Setup
+  - H2: Inbound durability
   - H2: Configure
+  - H3: Streaming
   - H3: Access policy
   - H3: Multi-account setup
   - H3: Group chats
@@ -808,6 +1177,20 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Troubleshooting
   - H2: References
 
+## channels/reef.md
+
+- Route: /channels/reef
+- Headings:
+  - H2: Quick start
+  - H2: Agent-driven setup
+  - H2: Configuration
+  - H3: OpenAI OAuth
+  - H3: API key
+  - H2: Adding a friend
+  - H2: Sending and receiving
+  - H2: Guards and owner review
+  - H2: Troubleshooting
+
 ## channels/signal.md
 
 - Route: /channels/signal
@@ -818,8 +1201,9 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: What it is
   - H2: Setup path A: link existing Signal account (QR)
   - H2: Setup path B: register dedicated bot number (SMS, Linux)
-  - H2: External daemon mode (httpUrl)
+  - H2: External native daemon mode
   - H2: Container mode (bbernhard/signal-cli-rest-api)
+  - H2: Opt-in private UNIX socket
   - H2: Access control (DMs + groups)
   - H2: How it works (behavior)
   - H2: Media + limits
@@ -827,6 +1211,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Lifecycle status reactions
   - H2: Reactions (message tool)
   - H2: Approval reactions
+  - H2: Question reactions
   - H2: Delivery targets (CLI/cron)
   - H2: Aliases
   - H2: Troubleshooting
@@ -838,31 +1223,52 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /channels/slack
 - Headings:
-  - H2: Choosing a transport
-  - H3: Relay mode
-  - H2: Install
-  - H2: Quick setup
-  - H2: Socket Mode transport tuning
+  - H2: What each page covers
+  - H2: Huddles
+  - H2: Where each section moved
+  - H2: Configuration reference
+  - H2: Related
+
+## channels/slack/access-control.md
+
+- Route: /channels/slack/access-control
+- Headings:
+  - H2: Linked requester identity
+  - H2: Actions and gates
+  - H2: Live policy changes
+  - H2: Access control and routing
+  - H3: Group DMs (MPDMs) and bots
+
+## channels/slack/enterprise-grid.md
+
+- Route: /channels/slack/enterprise-grid
+- Headings:
+  - H2: Enterprise Grid org-wide installs
+  - H3: Socket Mode
+  - H3: HTTP Request URLs
+
+## channels/slack/events.md
+
+- Route: /channels/slack/events
+- Headings:
+  - H2: Events and operational behavior
+  - H3: Presence events
+
+## channels/slack/manifest-and-scopes.md
+
+- Route: /channels/slack/manifest-and-scopes
+- Headings:
   - H2: Manifest and scope checklist
   - H3: Additional manifest settings
-  - H2: Token model
-  - H2: Actions and gates
-  - H2: Access control and routing
-  - H2: Threading, sessions, and reply tags
-  - H2: Ack reactions
-  - H3: Emoji (ackReaction)
-  - H3: Scope (messages.ackReactionScope)
-  - H2: Text streaming
-  - H2: Typing reaction fallback
+
+## channels/slack/media.md
+
+- Route: /channels/slack/media
+- Headings:
+  - H2: Voice input
   - H2: Media, chunking, and delivery
-  - H2: Commands and slash behavior
-  - H2: Interactive replies
-  - H3: Plugin-owned modal submissions
-  - H2: Native approvals in Slack
-  - H2: Events and operational behavior
-  - H2: Configuration reference
-  - H2: Troubleshooting
-  - H2: Attachment vision reference
+  - H2: Attachment media reference
+  - H3: Downloading an attachment by file ID
   - H3: Supported media types
   - H3: Inbound pipeline
   - H3: Thread-root attachment inheritance
@@ -870,13 +1276,64 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Size, download, and model limits
   - H3: Known limits
   - H3: Related documentation
-  - H2: Related
+
+## channels/slack/messaging.md
+
+- Route: /channels/slack/messaging
+- Headings:
+  - H2: Ack reactions
+  - H3: Emoji (ackReaction)
+  - H3: Scope (messages.ackReactionScope)
+  - H2: Text streaming
+  - H2: Typing reaction fallback
+  - H2: Commands and slash behavior
+
+## channels/slack/rich-messages.md
+
+- Route: /channels/slack/rich-messages
+- Headings:
+  - H2: Native charts
+  - H2: Native tables
+  - H2: Plugin-owned modal submissions
+  - H2: Native approvals in Slack
+
+## channels/slack/setup.md
+
+- Route: /channels/slack/setup
+- Headings:
+  - H2: Install
+  - H2: Quick setup
+  - H2: User identity (post as a real person)
+  - H2: Token model
+
+## channels/slack/threads-and-sessions.md
+
+- Route: /channels/slack/threads-and-sessions
+- Headings:
+  - H2: Threading, sessions, and reply tags
+  - H3: Agent View DMs
+  - H2: Recent room history
+
+## channels/slack/transports.md
+
+- Route: /channels/slack/transports
+- Headings:
+  - H2: Choosing a transport
+  - H3: Relay mode
+  - H2: Socket Mode transport tuning
+
+## channels/slack/troubleshooting.md
+
+- Route: /channels/slack/troubleshooting
+- Headings:
+  - H2: Troubleshooting
 
 ## channels/sms.md
 
 - Route: /channels/sms
 - Headings:
   - H2: Before you begin
+  - H2: US A2P / 10DLC delivery
   - H2: Quick Setup
   - H2: Configuration Examples
   - H3: Config file
@@ -886,6 +1343,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Default outbound target
   - H2: Access control
   - H2: Sending SMS
+  - H3: Sending MMS
+  - H3: Delivery status
   - H2: Verify Setup
   - H3: End-to-end test from macOS iMessage/SMS
   - H2: Webhook security
@@ -894,7 +1353,9 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Twilio returns 403 or OpenClaw rejects the webhook
   - H3: No pairing request appears
   - H3: Outbound sends fail
+  - H3: Twilio accepts the send but delivery later fails
   - H3: Messages arrive but the agent does not answer
+  - H2: Related
 
 ## channels/synology-chat.md
 
@@ -902,6 +1363,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Install
   - H2: Quick setup
+  - H2: Inbound durability
   - H2: Environment variables
   - H2: DM policy and access control
   - H2: Outbound delivery
@@ -914,16 +1376,83 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /channels/telegram
 - Headings:
-  - H2: Quick setup
-  - H2: Telegram side settings
+  - H2: What each page covers
+  - H2: Where each section moved
+  - H2: Configuration reference
+  - H2: Multi-agent account ownership
+  - H2: Related
+
+## channels/telegram/access-control.md
+
+- Route: /channels/telegram/access-control
+- Headings:
   - H2: Access control and activation
   - H3: Group bot identity
-  - H2: Runtime behavior
-  - H2: Feature reference
+
+## channels/telegram/events.md
+
+- Route: /channels/telegram/events
+- Headings:
+  - H2: Events and operations
   - H2: Error reply controls
+
+## channels/telegram/media.md
+
+- Route: /channels/telegram/media
+- Headings:
+  - H2: Media and attachments
+
+## channels/telegram/messaging.md
+
+- Route: /channels/telegram/messaging
+- Headings:
+  - H2: Runtime behavior
+  - H2: Inbound text batching
+  - H2: Message behavior
+
+## channels/telegram/mini-app.md
+
+- Route: /channels/telegram/mini-app
+- Headings:
+  - H2: Control UI Mini App
+  - H2: Upgrading from /dashboard
+  - H2: Publish the Mini App
+
+## channels/telegram/rich-messages.md
+
+- Route: /channels/telegram/rich-messages
+- Headings:
+  - H2: Rich messages and approvals
+
+## channels/telegram/setup.md
+
+- Route: /channels/telegram/setup
+- Headings:
+  - H2: Quick setup
+  - H2: Telegram side settings
+
+## channels/telegram/threads-and-sessions.md
+
+- Route: /channels/telegram/threads-and-sessions
+- Headings:
+  - H2: Forum topics and sessions
+  - H2: Bot-created forum topics
+
+## channels/telegram/transports.md
+
+- Route: /channels/telegram/transports
+- Headings:
+  - H2: Long polling and webhooks
+  - H2: Ingress acknowledgment boundary
+  - H3: Replay limits
+  - H3: Shutdown
+  - H3: Plugin hooks
+
+## channels/telegram/troubleshooting.md
+
+- Route: /channels/telegram/troubleshooting
+- Headings:
   - H2: Troubleshooting
-  - H2: Configuration reference
-  - H2: Related
 
 ## channels/tlon.md
 
@@ -931,6 +1460,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Bundled plugin
   - H2: Setup
+  - H2: Inbound durability
   - H2: Private/LAN ships
   - H2: Group channels
   - H2: Access control
@@ -967,6 +1497,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: QQ Bot failure signatures
   - H2: Matrix
   - H3: Matrix failure signatures
+  - H2: Gateway up but channel never connects
   - H2: Related
 
 ## channels/twitch.md
@@ -976,10 +1507,13 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Install
   - H2: Quick setup
   - H2: What it is
+  - H2: Inbound durability
   - H2: Token refresh (optional)
   - H2: Multi-account support
   - H2: Access control
   - H2: Troubleshooting
+  - H3: Execution identity audit
+  - H3: Connection and replies
   - H2: Config
   - H3: Account config
   - H3: Provider options
@@ -1002,31 +1536,64 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Troubleshooting
   - H2: Related docs
 
+## channels/wecom.md
+
+- Route: /channels/wecom
+- Headings:
+  - H2: Install
+  - H2: Configure
+
 ## channels/whatsapp.md
 
 - Route: /channels/whatsapp
 - Headings:
-  - H2: Install
-  - H2: Quick setup
-  - H2: Deployment patterns
+  - H2: Setup
+  - H3: Install
+  - H3: Quick setup
+  - H3: Deployment patterns
   - H2: Runtime model
   - H2: Call the current requester with MeowCaller (experimental)
   - H2: Approval prompts
+  - H2: Question reactions
   - H2: Plugin hooks and privacy
-  - H2: Access control and activation
-  - H2: Configured ACP bindings
-  - H2: Personal-number and self-chat behavior
-  - H2: Message normalization and context
-  - H2: Delivery, chunking, and media
-  - H2: Reply quoting
-  - H2: Reaction level
-  - H2: Acknowledgment reactions
-  - H2: Lifecycle status reactions
+  - H2: Access control
+  - H3: Access control and activation
+  - H3: Configured ACP bindings
+  - H3: Personal-number and self-chat behavior
+  - H2: Messaging and delivery
+  - H3: Message normalization and context
+  - H3: Delivery, chunking, and media
+  - H3: Reply quoting
+  - H2: Reactions and typing
+  - H3: Reaction level
+  - H3: Acknowledgment reactions
+  - H3: Lifecycle status reactions
+  - H3: Active-turn typing
   - H2: Multi-account and credentials
   - H2: Tools, actions, and config writes
   - H2: Troubleshooting
   - H2: System prompts
   - H2: Configuration reference pointers
+  - H2: Related
+
+## channels/x.md
+
+- Route: /channels/x
+- Headings:
+  - H2: Setup
+  - H2: Public work sessions
+  - H2: Manage the allowlist
+  - H2: Verify GitHub collaborators
+  - H3: Trust model
+  - H3: Enable yourself
+  - H2: Guest mode
+  - H3: Repository containment
+  - H3: Limits and identity
+  - H2: Event modes
+  - H2: Thread context and replies
+  - H2: Costs and limits
+  - H2: Configuration reference
+  - H2: Troubleshooting
   - H2: Related
 
 ## channels/yuanbao.md
@@ -1083,9 +1650,9 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Install with onboard (recommended)
   - H2: Manual installation
   - H3: 1. Install the plugin
-  - H3: 2. Enable the plugin in config
+  - H3: 2. Enable the plugin
   - H3: 3. Generate a QR code and log in
-  - H3: 4. Restart the gateway
+  - H3: 4. Verify the channel
   - H2: How it works
   - H2: Under the hood
   - H2: Troubleshooting
@@ -1101,6 +1668,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Naming
   - H2: Finding IDs (directory)
   - H2: Limits
+  - H2: Inbound durability
   - H2: Access control (DMs)
   - H2: Group access (optional)
   - H3: Group mention gating
@@ -1114,64 +1682,209 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /ci
 - Headings:
-  - H2: Pipeline overview
-  - H2: Fail-fast order
-  - H2: PR context and evidence
-  - H2: Scope and routing
-  - H2: ClawSweeper activity forwarding
-  - H2: Manual dispatches
-  - H2: Runners
+  - H2: Where each section moved
+  - H2: Related
+
+## ci/capacity.md
+
+- Route: /ci/capacity
+- Headings:
   - H2: Runner registration budget
+  - H2: Vitest worker sizing
+  - H3: Fixed job preparation
+  - H3: Worker ceilings
+  - H2: Owner-path and release coverage
+  - H2: Measured shard weights
+  - H2: Bounded hybrid hosted offload
+  - H2: Related
+
+## ci/checkout.md
+
+- Route: /ci/checkout
+- Headings:
+  - H2: Checkout ownership
+  - H2: Related
+
+## ci/local-proof.md
+
+- Route: /ci/local-proof
+- Headings:
   - H2: Local equivalents
-  - H2: OpenClaw Performance
+  - H3: Opt-in compiler evidence
+  - H2: Workflow lint tools
+  - H2: Surface ratchets
+  - H2: Local check gates and changed routing
+  - H3: Assertion inventory reports
+  - H3: Config baseline count ratchet
+  - H2: Testbox validation
+  - H2: Related
+
+## ci/pipeline.md
+
+- Route: /ci/pipeline
+- Headings:
+  - H2: Pipeline overview
+  - H3: Test runtime selection
+  - H3: Node execution and runtime compatibility
+  - H3: iOS simulator evidence
+  - H3: macOS Swift phases
+  - H2: Security review checks
+  - H3: Enable enforcement after deployment
+  - H2: Job ordering and failure reporting
+  - H2: Control UI size budgets
+  - H2: Related
+
+## ci/release-validation.md
+
+- Route: /ci/release-validation
+- Headings:
+  - H2: Where each section moved
+  - H2: Related
+
+## ci/release-validation/full-release-validation.md
+
+- Route: /ci/release-validation/full-release-validation
+- Headings:
+  - H2: Mobile store releases
   - H2: Full Release Validation
-  - H2: Live and E2E shards
-  - H2: Package Acceptance
-  - H3: Jobs
-  - H3: Candidate sources
-  - H3: Suite profiles
-  - H3: Legacy compatibility windows
-  - H3: Examples
+
+## ci/release-validation/install-smoke-and-docker-e2e.md
+
+- Route: /ci/release-validation/install-smoke-and-docker-e2e
+- Headings:
   - H2: Install smoke
   - H2: Local Docker E2E
   - H3: Tunables
   - H3: Reusable live/E2E workflow
   - H3: Release-path chunks
+
+## ci/release-validation/live-and-e2e-shards.md
+
+- Route: /ci/release-validation/live-and-e2e-shards
+- Headings:
+  - H2: Live and E2E shards
+
+## ci/release-validation/package-acceptance.md
+
+- Route: /ci/release-validation/package-acceptance
+- Headings:
+  - H2: Package Acceptance
+  - H3: Jobs
+  - H3: Installed package tree budget
+  - H3: Candidate sources
+  - H3: Suite profiles
+  - H3: Legacy compatibility windows
+  - H3: Examples
+
+## ci/release-validation/plugin-prerelease.md
+
+- Route: /ci/release-validation/plugin-prerelease
+- Headings:
   - H2: Plugin Prerelease
+
+## ci/routing-costs.md
+
+- Route: /ci/routing-costs
+- Headings:
+  - H2: Routing from measured wall time
+  - H3: Telegram process overlap
+  - H2: Hosted assignment on the critical path
+  - H2: Ratchet admission and Node tests
+  - H2: RunsOn remains unqualified
+  - H2: Packing and cost arithmetic
+  - H2: Measured compact packing
+  - H3: Native calibration
+  - H3: Current inventory
+  - H2: Whole-run acceptance
+
+## ci/runners.md
+
+- Route: /ci/runners
+- Headings:
+  - H2: Runners
+  - H3: Testbox spending limits
+  - H3: CI runner routing
+  - H3: Windows dependency-cache experiment
+  - H3: Blacksmith runner capacity
+  - H3: Runner backend modes
+  - H3: RunsOn qualification
+  - H3: Hybrid hosted assignment guard
+  - H2: Related
+
+## ci/scheduled-workflows.md
+
+- Route: /ci/scheduled-workflows
+- Headings:
+  - H2: PR vs hourly vs release
+  - H2: Hourly main CI
+  - H3: Restore per-push CI
+  - H3: What stays on pushes
+  - H2: Nightly Full Release Validation
+  - H2: OpenClaw Performance
+  - H3: Gateway concurrency benchmark
+  - H3: Vitest paired benchmark
+  - H2: Security Review reconciler
   - H2: QA Lab
   - H2: CodeQL
   - H3: Security categories
   - H3: Platform-specific security shards
   - H3: Critical Quality categories
   - H2: Maintenance workflows
+  - H3: PR CI Sweeper
+  - H3: Comment automation
+  - H3: Dependency Audit
+  - H3: Docs Sync Publish Repo
   - H3: Docs Agent
-  - H3: Test Performance Agent
   - H3: Duplicate PRs After Merge
-  - H2: Local check gates and changed routing
-  - H2: Testbox validation
+  - H3: Update Migration
+  - H2: ClawSweeper activity forwarding
   - H2: Related
 
-## clawhub/cli.md
+## ci/scope-and-routing.md
 
-- Route: /clawhub/cli
+- Route: /ci/scope-and-routing
 - Headings:
-  - H1: ClawHub CLI
-  - H2: Discover and install
-  - H3: Release trust
-  - H2: Publish and maintain
+  - H2: Where each section moved
   - H2: Related
 
-## clawhub/publishing.md
+## ci/scope-and-routing/job-budgets.md
 
-- Route: /clawhub/publishing
+- Route: /ci/scope-and-routing/job-budgets
+- Headings: none
+
+## ci/scope-and-routing/manual-dispatches.md
+
+- Route: /ci/scope-and-routing/manual-dispatches
 - Headings:
-  - H1: Publishing on ClawHub
-  - H2: Owners
-  - H2: Skills
-  - H2: Plugins
-  - H2: Release flow
-  - H2: FAQ
-  - H3: Package scope must match selected owner
+  - H2: Manual dispatches
+  - H3: Windows Testbox Check
+  - H4: Installed Scheduled Task upgrades
+  - H4: Exact Windows test replay
+  - H4: Installed repair-worker compatibility and cleanup
+  - H4: Installed Gateway startup measurements
+
+## ci/scope-and-routing/node-test-lanes.md
+
+- Route: /ci/scope-and-routing/node-test-lanes
+- Headings: none
+
+## ci/scope-and-routing/selection.md
+
+- Route: /ci/scope-and-routing/selection
+- Headings:
+  - H2: Scope and routing
+  - H3: PR vs hourly vs release
+  - H3: Published-driver update cell
+  - H2: Process proof tier
+
+## ci/watching-runs.md
+
+- Route: /ci/watching-runs
+- Headings:
+  - H2: Watching pull request CI
+  - H3: Recover an existing PR run first
+  - H2: PR context and evidence
+  - H2: Related
 
 ## cli/acp.md
 
@@ -1197,9 +1910,15 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /cli/agent
 - Headings:
   - H1: openclaw agent
+  - H2: agent exec
+  - H3: Code Mode model matrix
+  - H4: Paired performance workloads
+  - H4: Gateway tasks and follow-up interviews
+  - H3: agent exec options
   - H2: Options
   - H2: Examples
   - H2: Notes
+  - H2: JSON failures
   - H2: JSON delivery status
   - H2: Related
 
@@ -1211,7 +1930,9 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Examples
   - H2: Command surface
   - H3: agents list
-  - H3: agents add [name]
+  - H3: `agents add [name]`
+  - H4: Role templates
+  - H3: agents team create
   - H3: agents bindings
   - H3: agents bind
   - H3: agents unbind
@@ -1229,12 +1950,16 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /cli/approvals
 - Headings:
   - H1: openclaw approvals
-  - H2: openclaw exec-policy
   - H2: Common commands
+  - H2: Pending approvals
+  - H2: Standing grants
   - H2: Replace approvals from a file
   - H2: "Never prompt" / YOLO example
   - H2: Allowlist helpers
   - H2: Common options
+  - H2: openclaw exec-policy
+  - H3: Inspect terminal access
+  - H3: Synchronize local command approvals
   - H2: Notes
   - H2: Related
 
@@ -1249,6 +1974,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H1: openclaw audit
   - H2: Filters
+  - H2: Discover and explain executions
   - H2: Recorded events
   - H2: Gateway RPC
   - H2: Related
@@ -1259,6 +1985,17 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H1: openclaw backup
   - H2: Notes
+  - H2: Offsite archives
+  - H3: Offsite retention
+  - H3: List and verify remote archives
+  - H2: Restore a full archive
+  - H2: Private update captures
+  - H2: SQLite snapshots
+  - H3: Verify and restore
+  - H2: Versioned Git backups
+  - H2: Schedule backups
+  - H2: Recorded runs and freshness
+  - H3: Record external backup jobs
   - H2: What gets backed up
   - H2: Invalid config behavior
   - H2: Size and performance
@@ -1275,6 +2012,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Lifecycle
   - H2: If the command is missing
   - H2: Profiles
+  - H3: Cookie sync to a remote Gateway
+  - H2: Chrome extension relay
   - H2: Tabs
   - H2: Snapshot / screenshot / actions
   - H2: State and storage
@@ -1290,10 +2029,12 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H1: openclaw channels
   - H2: Common commands
   - H2: Status / capabilities / resolve / logs
+  - H2: Inbound dead letters
   - H2: Add / remove accounts
   - H2: Login and logout (interactive)
+  - H2: Per-account recovery (non-destructive)
   - H2: Troubleshooting
-  - H2: Capabilities probe
+  - H2: Capabilities check
   - H2: Resolve names to IDs
   - H2: Related
 
@@ -1305,15 +2046,22 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Migration
   - H2: Related
 
-## cli/commitments.md
+## cli/claws.md
 
-- Route: /cli/commitments
+- Route: /cli/claws
 - Headings:
-  - H2: Usage
-  - H2: Options
-  - H2: Examples
-  - H2: Output
-  - H2: Related
+  - H1: openclaw claws
+  - H2: Bundled role Claws
+  - H2: Create a Claw package
+  - H2: Author locally
+  - H2: Inspect and preview
+  - H2: Inspect installed state
+  - H2: Migrate an existing agent
+  - H2: Update an installed Claw
+  - H2: Remove an installed Claw
+  - H2: Export an installed agent
+  - H2: Command reference
+  - H2: See also
 
 ## cli/completion.md
 
@@ -1323,6 +2071,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Usage
   - H2: Options
   - H2: Install flow
+  - H2: Permission failures
   - H2: Notes
   - H2: Related
 
@@ -1330,6 +2079,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /cli/config
 - Headings:
+  - H2: Externally managed config
   - H2: Root options
   - H2: Examples
   - H3: Paths
@@ -1338,6 +2088,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: config schema
   - H3: config validate
   - H2: Values
+  - H3: Conditional writes
   - H2: config set modes
   - H3: Provider builder flags
   - H2: config patch
@@ -1354,33 +2105,33 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H1: openclaw configure
   - H2: Options
+  - H2: Gateway section
   - H2: Model section
   - H2: Web section
   - H2: Other notes
   - H2: Related
 
-## cli/crestodian.md
+## cli/connect.md
 
-- Route: /cli/crestodian
+- Route: /cli/connect
 - Headings:
-  - H1: openclaw crestodian
-  - H2: When it starts
-  - H2: What Crestodian shows
-  - H2: Examples
-  - H2: Operations and approval
-  - H2: Setup bootstrap
-  - H2: AI conversation
-  - H3: CLI harness trust model
-  - H2: Switching to an agent
-  - H2: Message rescue mode
-  - H2: Related
+  - H1: openclaw connect
+  - H2: Create a join command
+  - H2: Connect in the foreground
+  - H2: Reconnect a paired node
+  - H2: Environment-managed cloud nodes
+  - H2: Install as a service
+  - H2: Accepted targets
+  - H2: Revocation behavior
+  - H2: Troubleshooting
 
 ## cli/cron.md
 
 - Route: /cli/cron
 - Headings:
-  - H1: openclaw cron
+  - H1: openclaw automations
   - H2: Create jobs quickly
+  - H2: Schedule types
   - H2: Sessions
   - H2: Delivery
   - H3: Delivery ownership
@@ -1390,7 +2141,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Recurring jobs
   - H3: Manual runs
   - H2: Models
-  - H3: Isolated cron model precedence
+  - H3: Isolated automation model precedence
   - H3: Fast mode
   - H3: Live model switch retries
   - H2: Run output and denials
@@ -1401,6 +2152,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Migrating older jobs
   - H2: Common edits
   - H2: Common admin commands
+  - H3: History across automations
   - H2: Related
 
 ## cli/daemon.md
@@ -1418,6 +2170,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /cli/dashboard
 - Headings:
   - H1: openclaw dashboard
+  - H2: Gateway service and state compatibility
+  - H2: Machine-readable output
   - H2: Related
 
 ## cli/devices.md
@@ -1428,15 +2182,17 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Common options
   - H2: Commands
   - H3: openclaw devices list
-  - H3: openclaw devices approve [requestId] [--latest]
+  - H3: `openclaw devices approve [requestId] [--latest]`
   - H3: openclaw devices reject &lt;requestId&gt;
+  - H3: openclaw devices join-code
   - H3: openclaw devices remove &lt;deviceId&gt;
-  - H3: openclaw devices clear --yes [--pending]
-  - H3: openclaw devices rotate --device &lt;id&gt; --role &lt;role&gt; [--scope &lt;scope...&gt;]
+  - H3: openclaw devices rename --device &lt;id&gt; --name &lt;label&gt;
+  - H3: `openclaw devices clear --yes [--pending]`
+  - H3: `openclaw devices rotate --device &lt;id&gt; --role &lt;role&gt; [--scope &lt;scope...&gt;]`
   - H3: openclaw devices revoke --device &lt;id&gt; --role &lt;role&gt;
   - H2: Notes
   - H2: Token drift recovery checklist
-  - H2: Paperclip / openclawgateway first-run approval
+  - H2: Paperclip / `openclaw_gateway` first-run approval
   - H2: Related
 
 ## cli/directory.md
@@ -1478,35 +2234,105 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /cli/doctor
 - Headings:
   - H1: openclaw doctor
+  - H2: Doctor pages
+  - H2: Where each section moved
+  - H2: Related
+
+## cli/doctor/checks.md
+
+- Route: /cli/doctor/checks
+- Headings:
+  - H2: Modes and prompting
+  - H2: Config writes and backups
+  - H2: Gateway and service repairs
+  - H2: Session state and cron
+  - H2: Tool and channel policy
+  - H2: Models and auth
+  - H2: Plugins and skills
+  - H2: Sandbox
+  - H2: Secrets and channel credentials
+
+## cli/doctor/health-contract.md
+
+- Route: /cli/doctor/health-contract
+- Headings:
+  - H2: Structured health checks
+
+## cli/doctor/lint.md
+
+- Route: /cli/doctor/lint
+- Headings:
+  - H2: Lint mode
+  - H2: Check selection
+  - H2: Post-upgrade mode
+
+## cli/doctor/recovery.md
+
+- Route: /cli/doctor/recovery
+- Headings:
+  - H2: Gateway service recovery
+  - H2: Remote Gateway recovery
+  - H2: Control UI assets
+  - H2: Invalid Gateway tokens
+  - H2: macOS: launchctl env overrides
+
+## cli/doctor/running.md
+
+- Route: /cli/doctor/running
+- Headings:
   - H2: Postures
   - H2: Examples
   - H2: Options
-  - H2: Lint mode
-  - H2: Structured health checks
-  - H2: Check selection
-  - H2: Post-upgrade mode
-  - H2: Notes
-  - H2: macOS: launchctl env overrides
-  - H2: Related
 
-## cli/flows.md
+## cli/doctor/sqlite-maintenance.md
 
-- Route: /cli/flows
+- Route: /cli/doctor/sqlite-maintenance
 - Headings:
-  - H1: openclaw tasks flow
-  - H2: Subcommands
-  - H3: Status filter values
-  - H2: Examples
+  - H2: Shared state SQLite compaction
+  - H2: Session SQLite migration
+  - H3: Changed archived registry
+  - H3: Import staging and validation
+  - H3: Hard-linked legacy artifacts
+  - H3: Downgrading after session SQLite migration
+
+## cli/doctor/state-migrations.md
+
+- Route: /cli/doctor/state-migrations
+- Headings:
+  - H2: Legacy state migration
+  - H2: Pending plugin migrations
+  - H2: Plugin migration recovery coverage
+
+## cli/file-transfer.md
+
+- Route: /cli/file-transfer
+- Headings:
+  - H1: openclaw file-transfer
+  - H2: file-transfer approvals migrate
+  - H3: Where it runs
+  - H3: What the interactive run asks
+  - H3: Scripted and non-interactive use
   - H2: Related
 
 ## cli/gateway.md
 
 - Route: /cli/gateway
 - Headings:
-  - H2: Run the Gateway
-  - H3: Options
-  - H2: Restart the Gateway
-  - H3: Gateway profiling
+  - H2: Gateway CLI pages
+  - H2: Where each section moved
+  - H2: Related
+
+## cli/gateway/discovery.md
+
+- Route: /cli/gateway/discovery
+- Headings:
+  - H2: Discover gateways (Bonjour)
+  - H3: gateway discover
+
+## cli/gateway/query.md
+
+- Route: /cli/gateway/query
+- Headings:
   - H2: Query a running Gateway
   - H3: gateway health
   - H3: gateway usage-cost
@@ -1516,11 +2342,37 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: gateway probe
   - H4: Remote over SSH (Mac app parity)
   - H3: gateway call &lt;method&gt;
+  - H3: gateway suspend
+  - H3: gateway resume &lt;suspensionId&gt;
+
+## cli/gateway/restart-and-supervision.md
+
+- Route: /cli/gateway/restart-and-supervision
+- Headings:
+  - H2: Restart the Gateway
+  - H3: Install identity
+  - H3: External supervisors
+  - H3: Gateway profiling
+
+## cli/gateway/running.md
+
+- Route: /cli/gateway/running
+- Headings:
+  - H2: Run the Gateway
+  - H3: Options
+  - H2: Reveal the configured token
+
+## cli/gateway/service.md
+
+- Route: /cli/gateway/service
+- Headings:
   - H2: Manage the Gateway service
+  - H3: Linux maintenance holds
+  - H3: Recover an unreadable native service definition
+  - H3: Lifecycle requests from Gateway chat
+  - H3: Pin the service runtime
+  - H3: Repair a LaunchAgent environment wrapper
   - H3: Install with a wrapper
-  - H2: Discover gateways (Bonjour)
-  - H3: gateway discover
-  - H2: Related
 
 ## cli/health.md
 
@@ -1536,12 +2388,17 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /cli/hooks
 - Headings:
   - H1: openclaw hooks
+  - H2: Target and scope
   - H2: List hooks
+  - H3: List JSON
   - H2: Get hook info
   - H2: Check eligibility
   - H2: Enable a hook
   - H2: Disable a hook
   - H2: Install and update hook packs
+  - H3: Install options and trust
+  - H3: Update behavior
+  - H3: Deprecated aliases
   - H2: Bundled hooks
   - H3: command-logger log file
   - H2: Notes
@@ -1554,6 +2411,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Command pages
   - H2: Global flags
   - H2: Output modes
+  - H3: JSON failures
   - H2: Color palette
   - H2: Command tree
   - H2: Chat slash commands
@@ -1564,7 +2422,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /cli/infer
 - Headings:
-  - H2: Turn infer into a skill
   - H2: Command tree
   - H2: Common tasks
   - H2: Behavior
@@ -1577,6 +2434,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Embedding
   - H2: JSON output
   - H2: Common pitfalls
+  - H2: Turn infer into a skill
   - H2: Related
 
 ## cli/logs.md
@@ -1595,6 +2453,44 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /cli/mcp
 - Headings:
   - H2: Choose the right MCP path
+  - H2: MCP pages
+  - H2: Where each section moved
+  - H2: Related
+
+## cli/mcp/apps.md
+
+- Route: /cli/mcp/apps
+- Headings:
+  - H2: MCP Apps
+  - H2: Plugin extensions
+  - H2: Tool approvals
+  - H2: Behavior and security boundaries
+
+## cli/mcp/control-ui.md
+
+- Route: /cli/mcp/control-ui
+- Headings:
+  - H2: Control UI
+
+## cli/mcp/json-output.md
+
+- Route: /cli/mcp/json-output
+- Headings:
+  - H2: JSON output shapes
+
+## cli/mcp/registry.md
+
+- Route: /cli/mcp/registry
+- Headings:
+  - H2: OpenClaw as an MCP client registry
+  - H3: Saved MCP server definitions
+  - H3: Codex tool approvals
+  - H3: Common server recipes
+
+## cli/mcp/serve.md
+
+- Route: /cli/mcp/serve
+- Headings:
   - H2: OpenClaw as an MCP server
   - H3: When to use serve
   - H3: How it works
@@ -1609,30 +2505,38 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Security and trust boundary
   - H3: Testing
   - H3: Troubleshooting
-  - H2: OpenClaw as an MCP client registry
-  - H3: Saved MCP server definitions
-  - H3: Common server recipes
-  - H3: JSON output shapes
-  - H3: Stdio transport
-  - H3: SSE / HTTP transport
-  - H3: OAuth workflow
-  - H3: Streamable HTTP transport
-  - H2: Control UI
   - H2: Current limits
-  - H2: Related
+
+## cli/mcp/transports.md
+
+- Route: /cli/mcp/transports
+- Headings:
+  - H2: Stdio transport
+  - H2: SSE / HTTP transport
+  - H2: OAuth workflow
+  - H2: Streamable HTTP transport
 
 ## cli/memory.md
 
 - Route: /cli/memory
 - Headings:
   - H1: openclaw memory
+  - H2: JSON availability
   - H2: memory status
   - H2: memory index
+  - H2: memory reset
   - H2: memory search
+  - H2: memory forget
+  - H3: Session selection
+  - H3: Read the report
+  - H3: If deletion fails
+  - H3: Artifacts removed
+  - H3: Readmission and retained data
   - H2: memory promote
   - H2: memory promote-explain
   - H2: memory rem-harness
   - H2: memory rem-backfill
+  - H2: memory session-backfill
   - H2: Dreaming
   - H2: SecretRef gateway dependency
   - H2: Related
@@ -1643,11 +2547,13 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H1: openclaw message
   - H2: Channel selection
+  - H2: Agent ownership
   - H2: Target formats (-t, --target)
   - H2: Common flags
   - H2: SecretRef resolution
   - H2: Actions
   - H3: Core
+  - H3: Member info
   - H3: Send
   - H3: Poll
   - H3: Threads
@@ -1687,11 +2593,14 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H1: openclaw models
   - H2: Common commands
   - H3: Status
+  - H4: Read status correctly
   - H3: List
+  - H3: Refresh the hosted catalog
   - H3: Set default / image model
   - H3: Scan
   - H2: Aliases
   - H2: Fallbacks
+  - H2: Personal model accounts
   - H2: Auth profiles
   - H2: Related
 
@@ -1705,7 +2614,9 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Run (foreground)
   - H2: Gateway auth for node host
   - H2: Service (background)
+  - H2: Automatic updates
   - H2: Pairing
+  - H3: Identity and pairing state
   - H2: Exec approvals
   - H2: Related
 
@@ -1726,18 +2637,41 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H1: openclaw onboard
   - H2: Examples
+  - H2: Flags
+  - H2: Guided flow
   - H2: Reset
   - H2: Locale
   - H2: Non-interactive setup
+  - H3: Required external plugins
+  - H3: Provider setup examples
   - H3: Gateway auth (non-interactive)
   - H3: Local gateway health
   - H3: Interactive ref mode
   - H3: Z.AI endpoint choices
-  - H2: Additional non-interactive flags
+  - H3: Additional non-interactive flags
   - H2: Provider prefiltering
   - H2: Web-search follow-ups
   - H2: Other behaviors
   - H2: Common follow-up commands
+  - H2: Related
+
+## cli/openclaw.md
+
+- Route: /cli/openclaw
+- Headings:
+  - H1: openclaw setup
+  - H2: When it starts
+  - H2: What OpenClaw shows
+  - H2: Examples
+  - H2: Operations and approval
+  - H3: Change history
+  - H3: Switching to a masked terminal wizard
+  - H2: Setup bootstrap
+  - H2: AI conversation
+  - H3: CLI harness trust model
+  - H2: Switching to an agent
+  - H2: Message rescue mode
+  - H2: Related
 
 ## cli/pairing.md
 
@@ -1784,50 +2718,128 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /cli/plugins
 - Headings:
+  - H1: openclaw plugins
   - H2: Commands
+  - H2: Plugins pages
+  - H2: Where each section moved
+  - H2: Related
+
+## cli/plugins/authoring.md
+
+- Route: /cli/plugins/authoring
+- Headings:
   - H2: Author
+  - H3: Feature scaffold and artifacts
   - H3: Provider scaffold
-  - H2: Install
-  - H3: Marketplace shorthand
-  - H2: List
-  - H3: Plugin index
-  - H2: Uninstall
-  - H2: Update
+
+## cli/plugins/inspect-and-diagnose.md
+
+- Route: /cli/plugins/inspect-and-diagnose
+- Headings:
   - H2: Inspect
   - H2: Doctor
   - H2: Registry
+
+## cli/plugins/install.md
+
+- Route: /cli/plugins/install
+- Headings:
+  - H2: Install
+  - H3: Sources and locators
+  - H3: Config includes and invalid-config repair
+  - H3: --force confirmation and reinstall vs update
+  - H3: --pin scope
+  - H3: --acknowledge-install-policy-warning
+  - H3: ClawHub security audit
+  - H3: Hook packs and npm specs
+  - H3: Git repositories
+  - H3: Archives
+  - H3: Marketplace shorthand
+  - H3: Local paths and bundle formats
+  - H2: Enable installed plugins
+
+## cli/plugins/list.md
+
+- Route: /cli/plugins/list
+- Headings:
+  - H2: List
+  - H3: Plugin index
+
+## cli/plugins/marketplace.md
+
+- Route: /cli/plugins/marketplace
+- Headings:
   - H2: Marketplace
-  - H2: Related
+
+## cli/plugins/uninstall-and-update.md
+
+- Route: /cli/plugins/uninstall-and-update
+- Headings:
+  - H2: Uninstall
+  - H2: Update
+  - H2: Reload
 
 ## cli/policy.md
 
 - Route: /cli/policy
 - Headings:
   - H1: openclaw policy
-  - H2: Quick start
-  - H3: Policy rule reference
-  - H4: Scoped overlays
-  - H4: Channels
-  - H4: MCP servers
-  - H4: Model providers
-  - H4: Network
-  - H4: Ingress and channel access
-  - H4: Gateway
-  - H4: Agent workspace
-  - H4: Sandbox posture
-  - H4: Data Handling
-  - H4: Secrets
-  - H4: Exec approvals
-  - H4: Auth profiles
-  - H4: Tool metadata
-  - H4: Tool posture
-  - H2: Run checks
-  - H2: Configure policy
+  - H2: Detailed topics
+  - H2: Related
+
+## cli/policy/attestation.md
+
+- Route: /cli/policy/attestation
+- Headings:
   - H2: Accept policy state
+
+## cli/policy/authoring.md
+
+- Route: /cli/policy/authoring
+- Headings:
+  - H2: Quick start
+
+## cli/policy/findings.md
+
+- Route: /cli/policy/findings
+- Headings:
   - H2: Findings
   - H2: Repair
   - H2: Exit codes
-  - H2: Related
+
+## cli/policy/rules.md
+
+- Route: /cli/policy/rules
+- Headings:
+  - H2: Policy rule reference
+  - H3: Channels
+  - H3: MCP servers
+  - H3: Model providers
+  - H3: Network
+  - H3: Message routing
+  - H3: Ingress and channel access
+  - H3: Gateway
+  - H3: Agent workspace
+  - H3: Sandbox posture
+  - H3: Data Handling
+  - H3: Secrets
+  - H3: Exec approvals
+  - H3: Auth profiles
+  - H3: Tool metadata
+  - H3: Tool posture
+
+## cli/policy/running-checks.md
+
+- Route: /cli/policy/running-checks
+- Headings:
+  - H2: Run checks
+  - H2: Configure policy
+
+## cli/policy/scopes.md
+
+- Route: /cli/policy/scopes
+- Headings:
+  - H2: Scoped overlays
 
 ## cli/promos.md
 
@@ -1837,7 +2849,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Commands
   - H2: openclaw promos list
   - H2: openclaw promos claim &lt;slug&gt;
-  - H2: Passive discovery in models list
+  - H2: Model inventory and offers
+  - H2: Related
 
 ## cli/proxy.md
 
@@ -1871,6 +2884,16 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Notes
   - H2: Related
 
+## cli/resume.md
+
+- Route: /cli/resume
+- Headings:
+  - H1: openclaw resume
+  - H2: Options
+  - H2: Continue from the Control UI
+  - H2: Examples
+  - H2: Related
+
 ## cli/sandbox.md
 
 - Route: /cli/sandbox
@@ -1890,13 +2913,17 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /cli/secrets
 - Headings:
   - H1: openclaw secrets
+  - H2: Shared secret store
+  - H3: Set values safely
+  - H3: Read values
+  - H3: Remove values
+  - H3: Import dotenv files
   - H2: Reload runtime snapshot
   - H2: Audit
   - H2: Configure (interactive helper)
   - H3: Exec provider safety
   - H2: Apply a saved plan
   - H3: Why no rollback backups
-  - H2: Example
   - H2: Related
 
 ## cli/security.md
@@ -1906,6 +2933,13 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H1: openclaw security
   - H2: Audit modes
   - H2: What it checks
+  - H3: DM/trust model
+  - H3: Webhook/hooks
+  - H3: Sandbox/tools
+  - H3: Sandbox browser
+  - H3: Network/discovery
+  - H3: Plugins/channels
+  - H3: Dangerous flags
   - H2: SecretRef behavior
   - H2: Suppressions
   - H2: JSON output
@@ -1917,9 +2951,13 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /cli/sessions
 - Headings:
   - H1: openclaw sessions
+  - H2: Import transcripts
+  - H2: Archive sessions
+  - H2: Delete sessions
   - H2: Tail trajectory progress
   - H2: Export a trajectory bundle
   - H2: Cleanup maintenance
+  - H3: Test cleanup on a copy
   - H2: Compact a session
   - H3: sessions.compact RPC
   - H2: Related
@@ -1941,6 +2979,9 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H1: openclaw skills
   - H2: Commands
+  - H2: Release trust
+  - H2: Remove a ClawHub skill
+  - H2: Personal skill library
   - H2: Skill Workshop
   - H2: Related
 
@@ -1948,12 +2989,23 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /cli/status
 - Headings:
+  - H2: Status timing
+  - H2: Skills diagnosis
   - H2: Session and model resolution
   - H2: Usage and quota
   - H2: Overview and update status
   - H2: Secrets
   - H2: Memory
   - H2: Related
+
+## cli/storage.md
+
+- Route: /cli/storage
+- Headings:
+  - H1: openclaw storage
+  - H2: List
+  - H2: Initialize
+  - H2: Test
 
 ## cli/system.md
 
@@ -1967,32 +3019,36 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Notes
   - H2: Related
 
-## cli/tasks.md
-
-- Route: /cli/tasks
-- Headings:
-  - H2: Usage
-  - H2: Root Options
-  - H2: Subcommands
-  - H3: list
-  - H3: show
-  - H3: notify
-  - H3: cancel
-  - H3: audit
-  - H3: maintenance
-  - H3: flow
-  - H2: Related
-
 ## cli/transcripts.md
 
 - Route: /cli/transcripts
 - Headings:
   - H1: openclaw transcripts
+  - H2: Read transcripts in the Control UI
   - H2: Commands
   - H2: Output
+  - H2: Tool selectors
+  - H3: Reading notes from any session
+  - H3: Selecting a capture
+  - H2: Gateway and Control UI reads
+  - H2: JSON output
   - H2: Many sessions per day
   - H2: Missing summaries
+  - H2: Upgrading the legacy file store
   - H2: Configuration
+  - H2: Related
+
+## cli/triage.md
+
+- Route: /cli/triage
+- Headings:
+  - H1: openclaw triage
+  - H2: Failed update recovery
+  - H2: Installation target and embedded handoff
+  - H2: Manual handoff
+  - H2: Automatic failure handoff
+  - H2: Output and exit codes
+  - H2: Options
 
 ## cli/tui.md
 
@@ -2001,6 +3057,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H1: openclaw tui
   - H2: Options
   - H2: Notes
+  - H2: Session target errors
   - H2: Examples
   - H2: Config repair loop
   - H2: Related
@@ -2021,18 +3078,69 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H1: openclaw update
   - H2: Usage
+  - H2: Immutable release installations
+  - H2: Candidate-owned admission
+  - H2: Runtime retention failures
+  - H2: Gateway recovery verification failures
+  - H2: Automation and SSH
+  - H2: Native service commands during updates
   - H2: Options
-  - H2: update status
-  - H2: update repair
   - H2: update wizard
+  - H2: Detailed topics
+  - H2: Related
+
+## cli/update/how-updates-run.md
+
+- Route: /cli/update/how-updates-run
+- Headings:
   - H2: What it does
+  - H3: Validation and activation
+  - H3: Recovery limits
+  - H3: Compatibility-checked package rollback
   - H3: Restart handoff
+  - H4: Update validation and service definitions
+  - H4: Shell installers
+  - H4: Linux without a service manager
+  - H4: Node runtime for package-manager updates
+  - H4: macOS LaunchAgent verification
+  - H4: When restart is skipped or fails
   - H3: Control-plane response shape
   - H2: Git checkout flow
   - H3: Channel selection
   - H3: Update steps
-  - H3: Plugin sync details
-  - H2: Related
+  - H2: Plugin sync details
+  - H2: Package-manager installs
+  - H3: Local packaged overrides
+
+## cli/update/repair-and-recovery.md
+
+- Route: /cli/update/repair-and-recovery
+- Headings:
+  - H2: Recover a failed update
+  - H3: Original state captures
+  - H3: Retained updater runtime
+  - H2: Candidate Doctor stack overflow
+  - H2: Docker image-layer package updates
+  - H2: update repair
+  - H3: Skipped legacy audit recovery
+  - H2: update cleanup
+
+## cli/update/status-and-history.md
+
+- Route: /cli/update/status-and-history
+- Headings:
+  - H2: update status
+  - H2: Run history and reports
+
+## cli/users.md
+
+- Route: /cli/users
+- Headings:
+  - H1: openclaw users
+  - H2: Common options
+  - H2: List profiles
+  - H2: Link an email alias
+  - H2: Merge duplicate profiles
 
 ## cli/voicecall.md
 
@@ -2048,6 +3156,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: start
   - H3: continue
   - H3: speak
+  - H3: steer
   - H3: dtmf
   - H3: end
   - H3: status
@@ -2068,10 +3177,11 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Required
   - H3: Pub/Sub options
   - H3: OpenClaw delivery options
-  - H3: gog watch serve options
+  - H3: gog gmail watch serve options
   - H3: Tailscale exposure
   - H3: Output
   - H2: webhooks gmail run
+  - H2: Verify forwarding
   - H2: Related
 
 ## cli/wiki.md
@@ -2080,6 +3190,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H1: openclaw wiki
   - H2: Common commands
+  - H2: Agent selection
   - H2: Commands
   - H3: wiki status
   - H3: wiki doctor
@@ -2108,6 +3219,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: list
   - H2: create
   - H2: show
+  - H2: move
   - H2: dispatch
   - H2: Slash command parity
   - H2: Permissions
@@ -2117,33 +3229,102 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Dispatch starts nothing
   - H2: Related
 
+## cli/worker.md
+
+- Route: /cli/worker
+- Headings:
+  - H1: openclaw worker
+  - H2: Launch contract
+  - H2: Runtime boundary
+
 ## concepts/active-memory.md
 
 - Route: /concepts/active-memory
 - Headings:
-  - H2: Quick start
+  - H2: Where each section moved
+  - H2: Related pages
+
+## concepts/active-memory/advanced-options.md
+
+- Route: /concepts/active-memory/advanced-options
+- Headings:
+  - H2: Advanced escape hatches
+  - H2: Transcript persistence
+
+## concepts/active-memory/configuration.md
+
+- Route: /concepts/active-memory/configuration
+- Headings:
+  - H2: Configuration
+
+## concepts/active-memory/enabling.md
+
+- Route: /concepts/active-memory/enabling
+- Headings:
+  - H2: Remember across conversations
+  - H2: Advanced Active Memory quick start
+
+## concepts/active-memory/how-it-works.md
+
+- Route: /concepts/active-memory/how-it-works
+- Headings:
   - H2: How it works
   - H2: When it runs
   - H3: Session types
+
+## concepts/active-memory/memory-tools.md
+
+- Route: /concepts/active-memory/memory-tools
+- Headings:
+  - H2: Memory tools
+  - H3: Built-in memory
+  - H3: LanceDB memory
+  - H3: Lossless Claw
+
+## concepts/active-memory/recommended-setup.md
+
+- Route: /concepts/active-memory/recommended-setup
+- Headings:
+  - H2: Recommended setup
+  - H3: Cold-start grace
+
+## concepts/active-memory/session-controls.md
+
+- Route: /concepts/active-memory/session-controls
+- Headings:
   - H2: Session toggle
   - H2: How to see it
+
+## concepts/active-memory/troubleshooting.md
+
+- Route: /concepts/active-memory/troubleshooting
+- Headings:
+  - H2: Debugging
+  - H2: Common issues
+
+## concepts/active-memory/tuning.md
+
+- Route: /concepts/active-memory/tuning
+- Headings:
   - H2: Query modes
   - H2: Prompt styles
   - H2: Model fallback policy
   - H3: Speed recommendations
   - H4: Cerebras setup
-  - H2: Memory tools
-  - H3: Built-in memory-core
-  - H3: LanceDB memory
-  - H3: Lossless Claw
-  - H2: Advanced escape hatches
-  - H2: Transcript persistence
-  - H2: Configuration
-  - H2: Recommended setup
-  - H3: Cold-start grace
-  - H2: Debugging
-  - H2: Common issues
-  - H2: Related pages
+
+## concepts/agent-bindings.md
+
+- Route: /concepts/agent-bindings
+- Headings:
+  - H2: When to use a binding
+  - H2: Route an account to an agent
+  - H2: Match a specific conversation
+  - H2: Match fields and precedence
+  - H2: Common mistakes
+  - H3: Omitting accountId to mean every account
+  - H3: Binding to an unknown agent
+  - H3: Treating bindings as access control
+  - H2: Related
 
 ## concepts/agent-loop.md
 
@@ -2225,32 +3406,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Protocol typing and codegen
   - H2: Remote access
   - H2: Operations snapshot
+  - H3: Timed work and shutdown
   - H2: Invariants
-  - H2: Related
-
-## concepts/channel-docking.md
-
-- Route: /concepts/channel-docking
-- Headings:
-  - H2: Example
-  - H2: Why use it
-  - H2: Required config
-  - H2: Commands
-  - H2: What changes
-  - H2: What does not change
-  - H2: Troubleshooting
-
-## concepts/commitments.md
-
-- Route: /concepts/commitments
-- Headings:
-  - H2: Enable commitments
-  - H2: How it works
-  - H2: Scope
-  - H2: Commitments vs reminders
-  - H2: Manage commitments
-  - H2: Privacy and cost
-  - H2: Troubleshooting
   - H2: Related
 
 ## concepts/compaction.md
@@ -2264,9 +3421,11 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Using a different model
   - H3: Identifier preservation
   - H3: Active transcript byte guard
-  - H3: Successor transcripts
   - H3: Compaction notices
   - H3: Memory flush
+  - H2: Provider and engine behavior
+  - H3: Provider checkpoints
+  - H3: Successor transcripts
   - H2: Pluggable compaction providers
   - H2: Compaction vs pruning
   - H2: Troubleshooting
@@ -2308,8 +3467,22 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Tools: there are two costs
   - H2: Commands, directives, and "inline shortcuts"
   - H2: Sessions, compaction, and pruning (what persists)
+  - H3: Runtime context and provider roles
   - H2: What /context actually reports
   - H2: Related
+
+## concepts/decision-models.md
+
+- Route: /concepts/decision-models
+- Headings:
+  - H1: Decision models
+  - H2: Choose a provider and model
+  - H2: Define a decision
+  - H2: Agent evaluation tool
+  - H2: Call from a plugin
+  - H2: Interpret scores and probabilities
+  - H2: Limits and unavailable results
+  - H2: Provide models from a plugin
 
 ## concepts/delegate-architecture.md
 
@@ -2344,9 +3517,9 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: What dreaming writes
   - H2: Phase model
   - H2: Session transcript ingestion
+  - H2: Consolidation safety
   - H2: Dream Diary
   - H2: Deep ranking signals
-  - H3: QA shadow trial report coverage
   - H2: Scheduling
   - H2: Quick start
   - H2: Slash command
@@ -2360,11 +3533,11 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /concepts/experimental-features
 - Headings:
   - H2: Currently documented flags
+  - H2: Control UI Labs
+  - H2: Decision assistance
+  - H3: Core consumer contract
+  - H3: Conversational tool filtering
   - H2: Local model lean mode
-  - H3: Why these tools
-  - H3: When to turn it on
-  - H3: When to leave it off
-  - H3: Enable
   - H2: Experimental does not mean hidden
   - H2: Related
 
@@ -2376,23 +3549,46 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Full list
   - H2: Related
 
+## concepts/main-session.md
+
+- Route: /concepts/main-session
+- Headings:
+  - H2: Home
+  - H3: Talk to Home while working
+  - H2: What flows into the main session
+  - H2: Memory across resets and conversations
+  - H2: A rolling session with durable history
+  - H2: When you want isolation instead
+  - H2: Related
+
 ## concepts/managed-worktrees.md
 
 - Route: /concepts/managed-worktrees
 - Headings:
+  - H2: Sandboxed sessions
+  - H2: Choose where worktrees are stored
+  - H2: Capacity and eviction
+  - H2: Filesystem acceleration
+  - H2: Repository source profiles
   - H2: Layout and names
+  - H2: Capacity and disk space
   - H2: Provision ignored files
   - H2: Run repository setup
   - H2: Session worktrees
+  - H2: Troubleshoot creation
   - H2: Snapshots, cleanup, and restore
+  - H2: Retire an already removed snapshot early
+  - H2: Exact-state detached retirement
   - H2: CLI
   - H2: Gateway methods
   - H2: Workboard workspaces
+  - H2: Related
 
 ## concepts/mantis-slack-desktop-runbook.md
 
 - Route: /concepts/mantis-slack-desktop-runbook
 - Headings:
+  - H2: Terms
   - H2: Storage model
   - H2: GitHub dispatch
   - H2: Local CLI
@@ -2412,9 +3608,10 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: run
   - H3: desktop-browser-smoke
   - H3: slack-desktop-smoke
-  - H3: telegram-desktop-builder
   - H2: Evidence manifest
   - H2: GitHub automation
+  - H3: Telegram proof is a separate QA entrypoint
+  - H3: Selected proof inside a ClawSweeper review
   - H2: Machines and secrets
   - H2: Run outcomes
   - H2: Adding a scenario
@@ -2430,8 +3627,30 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Chunking rules
   - H2: Link policy
   - H2: Spoilers
+  - H2: Collapsible details
   - H2: Adding or updating a channel formatter
   - H2: Common gotchas
+  - H2: Related
+
+## concepts/memory-architecture.md
+
+- Route: /concepts/memory-architecture
+- Headings:
+  - H2: Design principles
+  - H2: The tier model
+  - H2: Provenance: every memory knows where it came from
+  - H2: Trust boundaries and limits
+  - H2: The write path
+  - H2: Dreaming: consolidation with gates
+  - H2: Recall: two lanes
+  - H3: Lane 1: always on, zero model calls
+  - H3: Lane 2: escalation
+  - H2: Project-scoped memory
+  - H2: The user model
+  - H2: Standing intents: prospective memory
+  - H2: The security model
+  - H2: A day in the life
+  - H2: Configuration map
   - H2: Related
 
 ## concepts/memory-builtin.md
@@ -2439,11 +3658,14 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /concepts/memory-builtin
 - Headings:
   - H2: What it provides
+  - H2: When to use
   - H2: Getting started
   - H2: Supported embedding providers
   - H2: How indexing works
-  - H2: When to use
+  - H2: Migrating from QMD
   - H2: Troubleshooting
+  - H3: Safe index recovery
+  - H3: Reclaim disk space
   - H2: Configuration
   - H2: Related
 
@@ -2462,24 +3684,18 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Further reading
   - H2: Related
 
-## concepts/memory-qmd.md
+## concepts/memory-provenance.md
 
-- Route: /concepts/memory-qmd
+- Route: /concepts/memory-provenance
 - Headings:
-  - H2: What it adds over builtin
-  - H2: Getting started
-  - H3: Prerequisites
-  - H3: Enable
-  - H2: How the sidecar works
-  - H2: Search performance and compatibility
-  - H2: Model overrides
-  - H2: Indexing extra paths
-  - H2: Indexing session transcripts
-  - H2: Search scope
-  - H2: Citations
-  - H2: When to use
-  - H2: Troubleshooting
-  - H2: Configuration
+  - H2: Preview and forget a session
+  - H2: What lineage is recorded
+  - H2: Admission: keeping sources out of memory
+  - H3: The admission boundary
+  - H2: Deletion: purging what a session produced
+  - H3: Purged sessions stay purged
+  - H2: What deletion does not cover
+  - H2: Purging a person or a source end to end
   - H2: Related
 
 ## concepts/memory-search.md
@@ -2489,10 +3705,10 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Quick start
   - H2: Supported providers
   - H2: How search works
+  - H2: Deterministic trigger recall
   - H2: Improving search quality
-  - H3: Temporal decay
+  - H3: Recency decay
   - H3: MMR (diversity)
-  - H3: Enable both
   - H2: Multimodal memory
   - H2: Session memory search
   - H2: Troubleshooting
@@ -2504,33 +3720,17 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: How it works
   - H2: What goes where
+  - H2: Import from coding assistants
   - H2: Action-sensitive memories
-  - H2: Inferred commitments
   - H2: Memory tools
   - H2: Memory search
-  - H2: Memory backends
+  - H2: Memory engines
   - H2: Knowledge wiki layer
   - H2: Automatic memory flush
   - H2: Dreaming
   - H2: Grounded backfill and live promotion
   - H2: CLI
   - H2: Further reading
-
-## concepts/message-lifecycle-refactor.md
-
-- Route: /concepts/message-lifecycle-refactor
-- Headings:
-  - H2: Why this refactor happened
-  - H2: What shipped
-  - H3: Send context
-  - H3: Receive context
-  - H3: Live preview
-  - H3: Durable receipts
-  - H3: Public SDK reduction
-  - H2: Where the implementation diverged from the original design
-  - H2: Concrete migration hazards (still relevant)
-  - H2: Failure classification
-  - H2: Open questions
   - H2: Related
 
 ## concepts/messages.md
@@ -2555,21 +3755,23 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /concepts/model-failover
 - Headings:
   - H2: Runtime flow
+  - H2: Automatic cyber-policy escalation
   - H2: Selection source policy
-  - H2: Auth failure skip cache
-  - H2: User-visible fallback notices
   - H2: Auth storage (keys + OAuth)
   - H2: Profile IDs
   - H2: Rotation order
   - H3: Session stickiness (cache-friendly)
   - H3: OpenAI Codex subscription plus API-key backup
   - H2: Cooldowns
+  - H2: Auth failure skip cache
   - H2: Billing disables
   - H2: Model fallback
   - H3: Candidate chain rules
   - H3: Which errors advance fallback
-  - H3: Cooldown skip vs probe behavior
+  - H3: Misalignment precautions
+  - H3: Cooldown skip vs check behavior
   - H2: Session overrides and live model switching
+  - H2: User-visible fallback notices
   - H2: Observability and failure summaries
   - H2: Related config
 
@@ -2577,21 +3779,22 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /concepts/model-providers
 - Headings:
-  - H2: Quick rules
+  - H2: Where each section moved
+  - H2: CLI examples
+  - H2: Related
+
+## concepts/model-providers/control-ui-and-keys.md
+
+- Route: /concepts/model-providers/control-ui-and-keys
+- Headings:
+  - H2: Configure providers in the Control UI
   - H2: Plugin-owned provider behavior
   - H2: API key rotation
-  - H2: Official provider plugins
-  - H3: OpenAI
-  - H3: Anthropic
-  - H3: OpenAI ChatGPT/Codex OAuth
-  - H3: Other subscription-style hosted options
-  - H3: OpenCode
-  - H3: Google Gemini (API key)
-  - H3: Google Vertex and Gemini CLI
-  - H3: Z.AI (GLM)
-  - H3: Vercel AI Gateway
-  - H3: Other bundled provider plugins
-  - H4: Quirks worth knowing
+
+## concepts/model-providers/custom-providers.md
+
+- Route: /concepts/model-providers/custom-providers
+- Headings:
   - H2: Providers via models.providers (custom/base URL)
   - H3: Moonshot AI (Kimi)
   - H3: Kimi Coding
@@ -2599,13 +3802,36 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: BytePlus (International)
   - H3: Synthetic
   - H3: MiniMax
+  - H3: llama.cpp
+  - H3: llmman
   - H3: LM Studio
   - H3: Ollama
   - H3: vLLM
   - H3: SGLang
   - H3: Local proxies (LM Studio, vLLM, LiteLLM, etc.)
-  - H2: CLI examples
-  - H2: Related
+
+## concepts/model-providers/official-provider-plugins.md
+
+- Route: /concepts/model-providers/official-provider-plugins
+- Headings:
+  - H2: Official provider plugins
+  - H3: OpenAI
+  - H3: Anthropic
+  - H3: OpenAI ChatGPT/Codex OAuth
+  - H3: Other subscription-style hosted options
+  - H3: OpenCode
+  - H3: Google Gemini (API key)
+  - H3: Google Vertex and Gemini CLI runtime
+  - H3: Z.AI (GLM)
+  - H3: Vercel AI Gateway
+  - H3: Other bundled provider plugins
+  - H4: Quirks worth knowing
+
+## concepts/model-providers/quick-rules.md
+
+- Route: /concepts/model-providers/quick-rules
+- Headings:
+  - H2: Quick rules
 
 ## concepts/models.md
 
@@ -2616,9 +3842,12 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Quick model policy
   - H2: Onboarding
   - H2: "Model is not allowed" (and why replies stop)
+  - H3: Choose the same model with different runtimes
+  - H2: Choose a model for a session
   - H2: /model in chat
   - H2: CLI
   - H2: Models registry (models.json)
+  - H3: Hosted catalog updates
   - H2: Related
 
 ## concepts/multi-agent.md
@@ -2629,9 +3858,12 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Paths
   - H3: Single-agent mode (default)
   - H2: Agent helper
+  - H3: Agent provenance
+  - H2: Team preset
   - H2: Quick start
   - H2: Multiple agents, multiple personas
-  - H2: Cross-agent QMD memory search
+  - H2: Per-agent Memory Wiki vaults
+  - H2: Cross-agent memory search
   - H2: One WhatsApp number, multiple people (DM split)
   - H2: Routing rules
   - H2: Multiple accounts / phone numbers
@@ -2639,6 +3871,33 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Platform examples
   - H2: Common patterns
   - H2: Per-agent sandbox and tool configuration
+  - H2: Related
+
+## concepts/multi-user.md
+
+- Route: /concepts/multi-user
+- Headings:
+  - H2: Trust boundary
+  - H2: World-readable session links
+  - H2: The three ownership layers
+  - H2: Assigning an owner
+  - H2: Per-person model accounts
+  - H3: Account concepts
+  - H3: Adding an account
+  - H3: Choosing an account for a chat
+  - H3: CLI and Custodian
+  - H3: Where credentials are stored
+  - H3: Pin and default rules
+  - H2: Finding sessions by owner
+  - H2: Reading the avatars
+  - H2: People cards
+  - H2: Reactions
+  - H2: Mentioning people
+  - H2: Mentions Inbox
+  - H2: Agent-spawned sessions
+  - H2: Identity-scoped convenience state
+  - H2: Drafts
+  - H2: Turn attribution
   - H2: Related
 
 ## concepts/oauth.md
@@ -2649,12 +3908,14 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Storage (where tokens live)
   - H2: Anthropic Claude CLI reuse
   - H2: OAuth exchange (how login works)
+  - H3: Restarting sign-in in Model Setup
   - H3: Anthropic setup-token
   - H3: OpenAI Codex (ChatGPT OAuth)
   - H2: Refresh + expiry
   - H2: Multiple accounts (profiles) + routing
   - H3: 1) Preferred: separate agents
   - H3: 2) Advanced: multiple profiles in one agent
+  - H3: 3) Multi-user: personal accounts
   - H2: Related
 
 ## concepts/parallel-specialist-lanes.md
@@ -2676,22 +3937,27 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Scenarios
   - H2: Privacy Model
   - H2: Extending the pack
+  - H2: Related
 
 ## concepts/presence.md
 
 - Route: /concepts/presence
 - Headings:
+  - H2: Ask the agent about presence
   - H2: Presence fields (what shows up)
+  - H2: Who can see presence
   - H2: Producers (where presence comes from)
   - H3: 1) Gateway self entry
   - H3: 2) WebSocket connect
-  - H4: Why one-off CLI commands do not show up
+  - H4: Why ephemeral control-plane connections do not show up
   - H3: 3) system-event beacons
   - H3: 4) Node connects (role: node)
-  - H2: Merge + dedupe rules (why instanceId matters)
+  - H2: Connection rows and beacon deduplication
+  - H2: Online and recent activity
   - H2: TTL and bounded size
   - H2: Remote/tunnel caveat (loopback IPs)
   - H2: Consumers
+  - H3: Control UI Devices page
   - H3: macOS Instances tab
   - H2: Debugging tips
   - H2: Related
@@ -2708,9 +3974,9 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Detail mode
   - H3: Command/exec text
   - H3: Commentary lane
+  - H3: Status headline
   - H3: Line limits
-  - H3: Rich rendering (Slack)
-  - H3: Hide tool/task lines
+  - H3: Show the tool log
   - H2: Channel behavior
   - H2: Finalization
   - H2: Troubleshooting
@@ -2720,56 +3986,91 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /concepts/qa-e2e-automation
 - Headings:
+  - H2: Where each section moved
+  - H2: Related docs
+
+## concepts/qa-e2e-automation/channel-qa-reference.md
+
+- Route: /concepts/qa-e2e-automation/channel-qa-reference
+- Headings:
+  - H2: Buzz, Discord, Slack, Telegram, and WhatsApp QA reference
+  - H3: Shared CLI flags
+  - H3: Buzz QA
+  - H3: Telegram QA
+  - H3: Discord QA
+
+## concepts/qa-e2e-automation/command-surface.md
+
+- Route: /concepts/qa-e2e-automation/command-surface
+- Headings:
   - H2: Command surface
   - H3: Profile-backed qa run
+
+## concepts/qa-e2e-automation/extending-the-stack.md
+
+- Route: /concepts/qa-e2e-automation/extending-the-stack
+- Headings:
+  - H2: Repo-backed seeds
+  - H3: Native tool discovery proof
+  - H2: Provider mock lanes
+  - H2: Transport adapters
+  - H3: Adapter shutdown and failure hooks
+  - H3: Adding a channel
+  - H3: Scenario helper names
+
+## concepts/qa-e2e-automation/operator-flow.md
+
+- Route: /concepts/qa-e2e-automation/operator-flow
+- Headings:
   - H2: Operator flow
   - H3: Observability smokes
-  - H3: Matrix smoke lanes
+  - H3: Matrix live lane
   - H3: Discord Mantis scenarios
   - H3: Mantis Slack desktop and visual-task runners
   - H3: Credential pool health check
-  - H2: Live transport coverage
-  - H2: Discord, Slack, Telegram, and WhatsApp QA reference
-  - H3: Shared CLI flags
-  - H3: Telegram QA
-  - H3: Discord QA
-  - H3: Slack QA
-  - H4: Setting up the Slack workspace
-  - H3: WhatsApp QA
-  - H3: Convex credential pool
-  - H2: Repo-backed seeds
-  - H2: Provider mock lanes
-  - H2: Transport adapters
-  - H3: Adding a channel
-  - H3: Scenario helper names
-  - H2: Reporting
-  - H2: Related docs
 
-## concepts/qa-matrix.md
+## concepts/qa-e2e-automation/qa-reporting.md
 
-- Route: /concepts/qa-matrix
+- Route: /concepts/qa-e2e-automation/qa-reporting
 - Headings:
-  - H2: Quick start
-  - H2: What the lane does
-  - H2: CLI
-  - H3: Common flags
-  - H3: Provider flags
-  - H2: Profiles
-  - H2: Scenarios
-  - H2: Environment variables
-  - H2: Output artifacts
-  - H2: Triage tips
-  - H2: Live transport contract
-  - H2: Related
+  - H2: Reporting
+  - H3: Scheduled instances and retained observations
+  - H3: Explicit proof requirements
+  - H3: Evidence previews
+  - H3: Character and style evaluation
+
+## concepts/qa-e2e-automation/scenario-coverage.md
+
+- Route: /concepts/qa-e2e-automation/scenario-coverage
+- Headings:
+  - H2: Canonical scenario coverage
+
+## concepts/qa-e2e-automation/slack-qa.md
+
+- Route: /concepts/qa-e2e-automation/slack-qa
+- Headings:
+  - H2: Slack QA
+  - H3: Agent E2E recipes
+  - H3: Direct credential setup
+  - H3: Setting up the Slack workspace
+
+## concepts/qa-e2e-automation/whatsapp-and-credentials.md
+
+- Route: /concepts/qa-e2e-automation/whatsapp-and-credentials
+- Headings:
+  - H2: WhatsApp QA
+  - H2: Convex credential pool
 
 ## concepts/queue-steering.md
 
 - Route: /concepts/queue-steering
 - Headings:
   - H2: Runtime boundary
+  - H2: Tool launch boundaries
   - H2: Modes
   - H2: Burst example
   - H2: Scope
+  - H2: Canceling a pending steer
   - H2: Debounce
   - H2: Related
 
@@ -2783,12 +4084,24 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Queue modes
   - H2: Queue options
   - H2: Steer and streaming
+  - H2: Answering a pending question
   - H2: Precedence
   - H2: Per-session overrides
   - H2: Queued-turn cancellation
-  - H2: Scope and guarantees
+  - H2: Input durability
+  - H2: Lanes and scope
+  - H2: Background work
   - H2: Troubleshooting
   - H2: Related
+
+## concepts/recommended-models.md
+
+- Route: /concepts/recommended-models
+- Headings:
+  - H1: Recommended models
+  - H2: Provider featured lists
+  - H2: Entry format
+  - H2: Review rules
 
 ## concepts/retry.md
 
@@ -2798,11 +4111,27 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Defaults
   - H2: Behavior
   - H3: Model providers
+  - H3: Managed Git operations
   - H3: Discord
   - H3: Telegram
   - H2: Configuration
   - H2: Notes
+  - H3: Durable outbound delivery
   - H2: Related
+
+## concepts/session-attachment.md
+
+- Route: /concepts/session-attachment
+- Headings:
+  - H2: One Gateway, many clients
+  - H2: Session URLs and short links
+  - H3: Gateway version requirement
+  - H2: Choose how to continue
+  - H3: Continue in the terminal
+  - H3: Attach a coding harness
+  - H2: Pair once per Gateway origin
+  - H2: Failure taxonomy
+  - H2: Related pages
 
 ## concepts/session-pruning.md
 
@@ -2810,11 +4139,35 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Why it matters
   - H2: How it works
+  - H3: Direct Anthropic API-key requests
+  - H3: Client-side pruning
   - H2: Legacy image cleanup
   - H2: Smart defaults
   - H2: Enable or disable
   - H2: Pruning vs compaction
   - H2: Further reading
+  - H2: Related
+
+## concepts/session-search.md
+
+- Route: /concepts/session-search
+- Headings:
+  - H1: Session search
+  - H2: Visibility and output
+  - H2: Control UI search
+  - H2: Index lifecycle
+  - H2: Session search vs. memory search
+  - H2: Related
+
+## concepts/session-state.md
+
+- Route: /concepts/session-state
+- Headings:
+  - H2: The signal log
+  - H2: Watchers
+  - H2: Notices: one, not many
+  - H2: Reconciling
+  - H2: Storage and limits
   - H2: Related
 
 ## concepts/session-tool.md
@@ -2823,11 +4176,13 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Available tools
   - H2: Listing and reading sessions
+  - H2: Managing session settings and groups
+  - H2: Sessions versus conversations
   - H2: Sending cross-session messages
   - H2: Status and orchestration helpers
+  - H2: Session state changes
   - H2: Spawning sub-agents
   - H2: Visibility
-  - H2: Further reading
   - H2: Related
 
 ## concepts/session.md
@@ -2836,12 +4191,15 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: How messages are routed
   - H2: DM isolation
-  - H3: Dock linked channels
+  - H2: Retired channel docking
+  - H2: Group and room routing
+  - H2: Incognito sessions
+  - H2: Remember across conversations
   - H2: Session lifecycle
+  - H2: Gateway restart recovery
   - H2: Where state lives
   - H2: Session maintenance
   - H2: Inspecting sessions
-  - H2: Further reading
   - H2: Related
 
 ## concepts/soul.md
@@ -2855,11 +4213,35 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: One warning
   - H2: Related
 
+## concepts/standing-intents.md
+
+- Route: /concepts/standing-intents
+- Headings:
+  - H2: Choose the right intention tier
+  - H2: Create an event-based intent
+  - H2: How matching works
+  - H2: List and cancel
+  - H2: Lifecycle states
+  - H2: Related
+
+## concepts/storage-locations.md
+
+- Route: /concepts/storage-locations
+- Headings:
+  - H1: Storage locations
+  - H2: Configure and initialize a directory
+  - H2: Configuration reference
+  - H2: Choose encryption deliberately
+  - H2: Share a location across installations
+  - H2: Diagnose a location
+
 ## concepts/streaming.md
 
 - Route: /concepts/streaming
 - Headings:
+  - H2: Control UI startup status
   - H2: Block streaming (channel messages)
+  - H3: Pending text phases
   - H3: Media delivery with block streaming
   - H2: Chunking algorithm (low/high bounds)
   - H2: Coalescing (merge streamed blocks)
@@ -2878,6 +4260,15 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Progress draft rendering
   - H3: Commentary progress lane
   - H2: Related
+
+## concepts/subagent-yield-handoff.md
+
+- Route: /concepts/subagent-yield-handoff
+- Headings:
+  - H1: Subagent yield handoff
+  - H2: Ownership through the handoff
+  - H2: Invariants
+  - H2: Progress after yield
 
 ## concepts/system-prompt.md
 
@@ -2898,8 +4289,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Three timezone surfaces
   - H2: Setting the user timezone
-  - H2: Envelope timezone values
-  - H2: When to override
   - H2: Related
 
 ## concepts/typebox.md
@@ -2936,6 +4325,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: What it is
   - H2: Where it shows up
+  - H2: Usage date ranges
   - H2: Anthropic and OpenAI cost history
   - H2: Default usage footer mode
   - H3: Three distinct session states
@@ -2952,31 +4342,37 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Providers + credentials
   - H2: Related
 
+## concepts/user-model.md
+
+- Route: /concepts/user-model
+- Headings:
+  - H2: Personal USER files on a shared Gateway
+  - H2: Gateway profile and GitHub credit
+  - H2: Merging duplicate profiles
+  - H2: Channel identity links
+  - H3: Assign to me from a channel
+  - H2: GitHub connections
+  - H3: Publish with your account
+  - H3: Disconnect and reconnect
+  - H2: Profile appearance preferences
+  - H2: Write directives, not observations
+  - H2: Supersede in place
+  - H2: Choose the right file
+  - H2: Keep it compact
+  - H2: Related
+
 ## date-time.md
 
 - Route: /date-time
 - Headings:
   - H2: Message envelopes (local by default)
   - H3: Examples
-  - H2: System prompt: current date and time
+  - H2: System prompt: temporal context
   - H2: System event lines (local by default)
-  - H3: Configure user timezone + format
-  - H2: Time format detection (auto)
+  - H3: Configure user timezone
+  - H2: Time format detection
   - H2: Tool payloads + connectors (raw provider time + normalized fields)
   - H2: Related docs
-
-## debug/node-issue.md
-
-- Route: /debug/node-issue
-- Headings:
-  - H1: Node + tsx "\\name is not a function" crash
-  - H2: Status
-  - H2: Original symptom
-  - H2: Cause
-  - H2: Current repro check
-  - H2: Workarounds (if the crash returns)
-  - H2: References
-  - H2: Related
 
 ## diagnostics/flags.md
 
@@ -2993,12 +4389,42 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Notes
   - H2: Related
 
+## gateway/1password.md
+
+- Route: /gateway/1password
+- Headings:
+  - H2: Requirements
+  - H2: Resolve config secrets with the plugin
+  - H2: The 1password skill for agents
+  - H2: Official 1Password MCP server
+  - H2: Browser sign-in with 1Password for Claude
+  - H2: Security notes
+  - H2: Troubleshooting
+  - H3: Homebrew command symlinks
+
+## gateway/audit.md
+
+- Route: /gateway/audit
+- Headings:
+  - H1: Audit history
+  - H2: Run identity inspection
+  - H2: Record families
+  - H2: Message lifecycle events
+  - H3: Conversation-kind classification
+  - H2: Privacy model
+  - H2: Coverage and proof limits
+  - H2: Storage, retention, and migration
+  - H2: Querying
+  - H2: Maintainer invariants
+  - H2: Related
+
 ## gateway/authentication.md
 
 - Route: /gateway/authentication
 - Headings:
   - H2: Recommended setup: API key (any provider)
   - H2: Anthropic: Claude CLI reuse
+  - H3: Anthropic setup-token
   - H2: Manual token entry
   - H3: SecretRef-backed credentials
   - H2: Checking model auth status
@@ -3021,6 +4447,9 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: exec tool
   - H3: Env overrides
   - H3: Config (preferred over env overrides)
+  - H3: Disable automatic completion turns
+  - H2: Worker environments
+  - H2: Control UI
   - H2: Child process bridging
   - H2: process tool
   - H2: Examples
@@ -3050,19 +4479,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Enabling / disabling / configuration
   - H2: Related docs
 
-## gateway/bridge-protocol.md
-
-- Route: /gateway/bridge-protocol
-- Headings:
-  - H2: Why it existed
-  - H2: Transport
-  - H2: Handshake and pairing
-  - H2: Frames
-  - H2: Exec lifecycle events
-  - H2: Historical tailnet usage
-  - H2: Versioning
-  - H2: Related
-
 ## gateway/cli-backends.md
 
 - Route: /gateway/cli-backends
@@ -3071,8 +4487,12 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Using it as a fallback
   - H2: Configuration
   - H2: How it works
+  - H2: Timeouts and long-running work
   - H3: Claude CLI specifics
+  - H3: Native Bash and the exec allowlist
+  - H3: Claude browser tools and 1Password sign-in
   - H2: Sessions
+  - H3: History account boundaries
   - H2: Fallback prelude from claude-cli sessions
   - H2: Images
   - H2: Inputs and outputs
@@ -3085,47 +4505,193 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Troubleshooting
   - H2: Related
 
+## gateway/clients.md
+
+- Route: /gateway/clients
+- Headings:
+  - H2: Install the packages
+  - H2: Choose scopes and pair the device
+  - H2: Advertise client capabilities
+  - H2: Validate attachments before sending
+  - H2: Recover state after reconnect
+  - H3: Active-run cache matrix
+  - H2: Render generated image artifacts
+  - H2: Download inline artifacts over HTTPS
+  - H2: Use history metadata and stable anchors
+  - H2: Subscribe instead of polling usage
+  - H2: Backfill exec approvals
+  - H2: Track protocol versions
+  - H2: Related
+
+## gateway/cloud-sessions.md
+
+- Route: /gateway/cloud-sessions
+- Headings:
+  - H2: Start without a Gateway checkout
+  - H2: Images and attachments
+  - H2: Paired devices: your own hardware as session hosts
+  - H2: Cloud workers: rented machines through Crabbox
+  - H2: Viewing the session desktop
+  - H2: Desktop and computer control
+  - H2: Automatic load balancing across devices
+  - H2: Sleeping and waking: idle suspension and warm images
+  - H2: What stays with the Gateway
+  - H2: Related
+
+## gateway/cloud-workers.md
+
+- Route: /gateway/cloud-workers
+- Headings:
+  - H2: What each page covers
+  - H2: What runs where
+  - H2: Requirements
+  - H3: Crabbox provider support
+  - H2: Configuration
+  - H2: Where each section moved
+  - H2: Related
+
+## gateway/cloud-workers/desktop.md
+
+- Route: /gateway/cloud-workers/desktop
+- Headings:
+  - H2: Ask the agent to open an app
+  - H2: Desktop (interactive)
+  - H2: macOS image prerequisites
+  - H2: Native Windows prerequisites
+  - H2: Desktop size
+
+## gateway/cloud-workers/dispatching-a-session.md
+
+- Route: /gateway/cloud-workers/dispatching-a-session
+- Headings:
+  - H2: Dispatching a session
+  - H3: Cloud child sessions
+  - H3: Runtime support
+
+## gateway/cloud-workers/native-inference.md
+
+- Route: /gateway/cloud-workers/native-inference
+- Headings:
+  - H1: Worker-local inference
+  - H2: Deployment and credential trust contract
+  - H2: Provision the node
+  - H2: Select the placement on the Gateway
+  - H3: Create and dispatch with worker proxy authentication
+  - H2: Troubleshooting
+  - H2: Upgrade and downgrade
+  - H2: Behavior and limits
+  - H2: Verification
+
+## gateway/cloud-workers/per-project-default-profiles.md
+
+- Route: /gateway/cloud-workers/per-project-default-profiles
+- Headings:
+  - H2: Per-project default profiles
+
+## gateway/cloud-workers/placement-and-machine-selection.md
+
+- Route: /gateway/cloud-workers/placement-and-machine-selection
+- Headings:
+  - H2: Codex on a paired device
+  - H2: Codex or OpenClaw on a cloud profile
+  - H2: Provider identity in the picker
+  - H2: Choose an operating system and machine class per session
+
+## gateway/cloud-workers/security-model.md
+
+- Route: /gateway/cloud-workers/security-model
+- Headings:
+  - H2: Security model
+
+## gateway/cloud-workers/session-lifecycle.md
+
+- Route: /gateway/cloud-workers/session-lifecycle
+- Headings:
+  - H2: What survives a dead machine
+
+## gateway/cloud-workers/setup-and-bundle-installation.md
+
+- Route: /gateway/cloud-workers/setup-and-bundle-installation
+- Headings:
+  - H2: The setup command
+  - H3: Native Windows prerequisites
+  - H2: Bundle installation
+  - H3: Reuse a node runtime archive after Gateway restart
+  - H2: Build a complete custom node package
+
+## gateway/cloud-workers/troubleshooting.md
+
+- Route: /gateway/cloud-workers/troubleshooting
+- Headings:
+  - H2: Troubleshooting
+
+## gateway/cloud-workers/verify-the-profile.md
+
+- Route: /gateway/cloud-workers/verify-the-profile
+- Headings:
+  - H2: Verify the profile
+
+## gateway/cloud-workers/warm-images.md
+
+- Route: /gateway/cloud-workers/warm-images
+- Headings:
+  - H2: Warm images
+  - H3: Retention policy
+  - H3: Ready workers
+  - H3: Inspect snapshots in the Control UI
+  - H3: Recover a paused capture
+  - H3: Upgrade warm-image state
+
+## gateway/cloudflare-access.md
+
+- Route: /gateway/cloudflare-access
+- Headings:
+  - H2: Before you begin
+  - H2: How the pieces fit
+  - H2: Step 1: Route the tunnel to loopback
+  - H2: Step 2: Protect the hostname with Access
+  - H3: OIDC sign-in and existing people
+  - H3: Verified GitHub credit through OIDC
+  - H2: Step 3: Trust those headers in the Gateway
+  - H2: Step 4: Decide how nodes and workers get in
+  - H2: Step 5: Connect each client
+  - H2: Verify
+  - H2: Production readiness
+  - H2: Troubleshooting
+  - H2: Related
+
 ## gateway/config-agents.md
 
 - Route: /gateway/config-agents
 - Headings:
-  - H2: Agent defaults
-  - H3: agents.defaults.workspace
-  - H3: agents.defaults.repoRoot
-  - H3: agents.defaults.skills
-  - H3: agents.defaults.skipBootstrap
-  - H3: agents.defaults.skipOptionalBootstrapFiles
-  - H3: agents.defaults.contextInjection
-  - H3: agents.defaults.bootstrapMaxChars
-  - H3: agents.defaults.bootstrapTotalMaxChars
-  - H3: Per-agent bootstrap profile overrides
-  - H3: agents.defaults.bootstrapPromptTruncationWarning
-  - H3: Context budget ownership map
-  - H4: agents.defaults.startupContext
-  - H4: agents.defaults.contextLimits
-  - H4: agents.list[].contextLimits
-  - H4: skills.limits.maxSkillsPromptChars
-  - H4: agents.list[].skillsLimits.maxSkillsPromptChars
-  - H3: agents.defaults.imageMaxDimensionPx
-  - H3: agents.defaults.imageQuality
-  - H3: agents.defaults.userTimezone
-  - H3: agents.defaults.timeFormat
-  - H3: agents.defaults.model
-  - H3: Runtime policy
-  - H3: agents.defaults.cliBackends
-  - H3: agents.defaults.promptOverlays
-  - H3: agents.defaults.heartbeat
-  - H3: agents.defaults.compaction
-  - H3: agents.defaults.runRetries
-  - H3: agents.defaults.contextPruning
-  - H3: Block streaming
-  - H3: Typing indicators
-  - H3: agents.defaults.sandbox
-  - H3: agents.list (per-agent overrides)
+  - H2: What each page covers
+  - H2: Where each section moved
+  - H2: Related
+
+## gateway/config-agents/entries-and-multi-agent.md
+
+- Route: /gateway/config-agents/entries-and-multi-agent
+- Headings:
+  - H2: agents.entries (per-agent overrides)
   - H2: Multi-agent routing
   - H3: Binding match fields
   - H3: Per-agent access profiles
-  - H2: Session
+
+## gateway/config-agents/heartbeat-compaction-and-streaming.md
+
+- Route: /gateway/config-agents/heartbeat-compaction-and-streaming
+- Headings:
+  - H2: agents.defaults.heartbeat
+  - H2: agents.defaults.systemAgent
+  - H2: agents.defaults.compaction
+  - H2: agents.defaults.contextPruning
+  - H2: Block streaming
+  - H2: Typing indicators
+
+## gateway/config-agents/messages-and-talk.md
+
+- Route: /gateway/config-agents/messages-and-talk
+- Headings:
   - H2: Messages
   - H3: Response prefix
   - H3: Ack reaction
@@ -3134,61 +4700,281 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Other message keys
   - H3: TTS (text-to-speech)
   - H2: Talk
-  - H2: Related
+
+## gateway/config-agents/models.md
+
+- Route: /gateway/config-agents/models
+- Headings:
+  - H2: agents.defaults.model
+  - H2: agents.defaults.modelSelectionScope
+
+## gateway/config-agents/runtime-and-cli-backends.md
+
+- Route: /gateway/config-agents/runtime-and-cli-backends
+- Headings:
+  - H2: Runtime policy
+  - H2: CLI backend selection
+  - H2: OpenAI GPT-5 personality
+
+## gateway/config-agents/sandbox.md
+
+- Route: /gateway/config-agents/sandbox
+- Headings:
+  - H2: agents.defaults.sandbox
+
+## gateway/config-agents/sessions.md
+
+- Route: /gateway/config-agents/sessions
+- Headings:
+  - H2: Session
+  - H2: Cold storage
+
+## gateway/config-agents/workspace-and-bootstrap.md
+
+- Route: /gateway/config-agents/workspace-and-bootstrap
+- Headings:
+  - H2: agents.defaults.workspace
+  - H2: agents.defaults.cwd
+  - H2: agents.defaults.repoRoot
+  - H2: agents.defaults.skills
+  - H2: agents.defaults.skipBootstrap
+  - H2: agents.defaults.skipOptionalBootstrapFiles
+  - H2: agents.defaults.contextInjection
+  - H2: agents.defaults.bootstrapMaxChars
+  - H2: agents.defaults.bootstrapTotalMaxChars
+  - H2: Per-agent bootstrap profile overrides
+  - H2: Bootstrap truncation notice
+  - H2: Context budget ownership map
+  - H3: agents.defaults.startupContext
+  - H3: agents.defaults.contextLimits
+  - H3: `agents.entries.*.contextLimits`
+  - H3: skills.limits.maxSkillsPromptChars
+  - H3: `agents.entries.*.skillsLimits.maxSkillsPromptChars`
+  - H2: agents.defaults.imageMaxDimensionPx
+  - H2: agents.defaults.imageQuality
+  - H2: agents.defaults.userTimezone
+
+## gateway/config-automation.md
+
+- Route: /gateway/config-automation
+- Headings:
+  - H2: Automations (cron)
+  - H3: cron.failureAlert
+  - H2: Media model template variables
+
+## gateway/config-browser-ui-desktop.md
+
+- Route: /gateway/config-browser-ui-desktop
+- Headings:
+  - H2: Browser
+  - H2: UI
+  - H2: Desktop
+  - H3: Desktop audio
+  - H3: Paired node desktops
 
 ## gateway/config-channels.md
 
 - Route: /gateway/config-channels
 - Headings:
   - H2: Channels
-  - H3: DM and group access
-  - H3: Channel model overrides
-  - H3: Channel defaults and heartbeat
-  - H3: WhatsApp
-  - H3: Telegram
-  - H3: Discord
-  - H3: Google Chat
-  - H3: Slack
-  - H3: Mattermost
-  - H3: Signal
-  - H3: iMessage
-  - H3: Matrix
-  - H3: Microsoft Teams
-  - H3: IRC
-  - H3: Multi-account (all channels)
-  - H3: Other plugin channels
-  - H3: Group chat mention gating
-  - H4: DM history limits
-  - H4: Self-chat mode
-  - H3: Commands (chat command handling)
+  - H2: Other plugin channels
+  - H2: What each page covers
+  - H2: Where each section moved
   - H2: Related
+
+## gateway/config-channels/commands.md
+
+- Route: /gateway/config-channels/commands
+- Headings:
+  - H2: Commands (chat command handling)
+
+## gateway/config-channels/community-chat.md
+
+- Route: /gateway/config-channels/community-chat
+- Headings:
+  - H2: Discord
+  - H2: Matrix
+  - H2: IRC
+
+## gateway/config-channels/mention-gating-and-history.md
+
+- Route: /gateway/config-channels/mention-gating-and-history
+- Headings:
+  - H2: Group chat mention gating
+  - H3: DM history limits
+  - H3: Self-chat mode
+
+## gateway/config-channels/personal-messaging.md
+
+- Route: /gateway/config-channels/personal-messaging
+- Headings:
+  - H2: WhatsApp
+  - H2: Telegram
+  - H2: Signal
+  - H2: iMessage
+  - H2: LINE
+
+## gateway/config-channels/shared-policies.md
+
+- Route: /gateway/config-channels/shared-policies
+- Headings:
+  - H2: DM and group access
+  - H2: Channel model overrides
+  - H2: Channel defaults and heartbeat
+  - H2: Multi-account (all channels)
+
+## gateway/config-channels/workplace-chat.md
+
+- Route: /gateway/config-channels/workplace-chat
+- Headings:
+  - H2: Google Chat
+  - H2: Slack
+  - H2: Mattermost
+  - H2: Microsoft Teams
+
+## gateway/config-cloud-workers.md
+
+- Route: /gateway/config-cloud-workers
+- Headings:
+  - H2: Cloud worker environments
+  - H3: Crabbox profile
+  - H3: Static SSH development profile
+
+## gateway/config-extensions.md
+
+- Route: /gateway/config-extensions
+- Headings:
+  - H2: MCP
+  - H2: Skills
+  - H2: Plugins
+  - H3: Codex harness plugin config
+  - H2: Canvas widget presenter
+
+## gateway/config-gateway.md
+
+- Route: /gateway/config-gateway
+- Headings:
+  - H2: Gateway
+  - H3: Disable file and image uploads
+  - H3: OpenAI-compatible endpoints
+  - H3: Multi-instance isolation
+  - H3: gateway.tls
+  - H3: gateway.reload
+
+## gateway/config-hooks.md
+
+- Route: /gateway/config-hooks
+- Headings:
+  - H2: Hooks
+  - H3: Hook HTTP contract
+  - H3: Hook agent payload
+  - H3: Hook session and agent policy
+  - H3: Mapping details
+  - H3: Hook retries and fan-out
+  - H3: Gmail integration
+
+## gateway/config-observability.md
+
+- Route: /gateway/config-observability
+- Headings:
+  - H2: Audit
+  - H2: Logging
+  - H2: Diagnostics
+  - H2: Telemetry
+
+## gateway/config-runtime.md
+
+- Route: /gateway/config-runtime
+- Headings:
+  - H2: worktreeRoot
+  - H2: worktreeAcceleration
+  - H2: worktreeMaxCount
+  - H2: Models
+  - H2: Discovery
+  - H3: mDNS (Bonjour)
+  - H3: Wide-area (DNS-SD)
+  - H2: Update
+  - H2: ACP
+  - H2: Wizard
+  - H2: Bridge (legacy, removed)
+
+## gateway/config-secrets-env.md
+
+- Route: /gateway/config-secrets-env
+- Headings:
+  - H2: Environment
+  - H3: env (inline env vars)
+  - H3: Env var substitution
+  - H4: Default values
+  - H2: Secrets
+  - H3: secrets.egressProxy
+  - H3: SecretRef
+  - H3: Supported credential surface
+  - H3: Secret providers config
+  - H2: Auth storage
+  - H2: Config includes ($include)
 
 ## gateway/config-tools.md
 
 - Route: /gateway/config-tools
 - Headings:
-  - H2: Tools
-  - H3: Tool profiles
-  - H3: Tool groups
-  - H3: MCP and plugin tools inside sandbox tool policy
-  - H3: tools.codeMode
-  - H3: tools.allow / tools.deny
-  - H3: tools.byProvider
-  - H3: tools.toolsBySender
-  - H3: tools.elevated
-  - H3: tools.exec
-  - H3: tools.loopDetection
-  - H3: tools.web
-  - H3: tools.media
-  - H3: tools.agentToAgent
-  - H3: tools.sessions
-  - H3: tools.sessionsspawn
-  - H3: tools.experimental
-  - H3: agents.defaults.subagents
-  - H2: Custom providers and base URLs
-  - H3: Provider field details
-  - H3: Provider examples
+  - H2: What each page covers
+  - H2: Where each section moved
   - H2: Related
+
+## gateway/config-tools/built-in-tools.md
+
+- Route: /gateway/config-tools/built-in-tools
+- Headings:
+  - H2: tools.exec
+  - H2: tools.loopDetection
+  - H2: tools.web
+  - H2: tools.media
+  - H2: tools.updatePlan
+
+## gateway/config-tools/custom-providers.md
+
+- Route: /gateway/config-tools/custom-providers
+- Headings:
+  - H2: Custom providers and base URLs
+  - H2: Provider field details
+
+## gateway/config-tools/github-identity.md
+
+- Route: /gateway/config-tools/github-identity
+- Headings:
+  - H2: tools.github
+  - H2: Sandbox opt-in
+
+## gateway/config-tools/provider-examples.md
+
+- Route: /gateway/config-tools/provider-examples
+- Headings:
+  - H2: Provider examples
+
+## gateway/config-tools/sessions-and-subagents.md
+
+- Route: /gateway/config-tools/sessions-and-subagents
+- Headings:
+  - H2: tools.agentToAgent
+  - H3: Per-agent send-only access
+  - H2: tools.sessions
+  - H2: `tools.sessions_spawn`
+  - H2: agents.defaults.subagents
+  - H2: tools.swarm
+
+## gateway/config-tools/tool-policy.md
+
+- Route: /gateway/config-tools/tool-policy
+- Headings:
+  - H2: Tool profiles
+  - H2: Tool groups
+  - H2: MCP and plugin tools inside sandbox tool policy
+  - H2: tools.codeMode
+  - H2: tools.allow / tools.deny
+  - H2: tools.byProvider
+  - H2: tools.toolsBySender
+  - H2: tools.elevated
 
 ## gateway/configuration-examples.md
 
@@ -3214,50 +5000,36 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /gateway/configuration-reference
 - Headings:
+  - H2: Pages in this reference set
   - H2: Channels
   - H2: Agent defaults, multi-agent, sessions, and messages
+  - H2: worktreeRoot
   - H2: Tools and custom providers
   - H2: Models
   - H2: MCP
   - H2: Skills
   - H2: Plugins
-  - H3: Codex harness plugin config
-  - H2: Commitments
   - H2: Browser
   - H2: UI
+  - H2: Desktop
   - H2: Gateway
-  - H3: OpenAI-compatible endpoints
-  - H3: Multi-instance isolation
-  - H3: gateway.tls
-  - H3: gateway.reload
+  - H2: Cloud worker environments
   - H2: Hooks
-  - H3: Gmail integration
-  - H2: Canvas plugin host
+  - H2: Canvas widget presenter
   - H2: Discovery
-  - H3: mDNS (Bonjour)
-  - H3: Wide-area (DNS-SD)
   - H2: Environment
-  - H3: env (inline env vars)
-  - H3: Env var substitution
   - H2: Secrets
-  - H3: SecretRef
-  - H3: Supported credential surface
-  - H3: Secret providers config
   - H2: Auth storage
-  - H3: auth.cooldowns
   - H2: Audit
   - H2: Logging
   - H2: Diagnostics
+  - H2: Telemetry
   - H2: Update
   - H2: ACP
-  - H2: CLI
   - H2: Wizard
   - H2: Identity
   - H2: Bridge (legacy, removed)
-  - H2: Cron
-  - H3: cron.retry
-  - H3: cron.failureAlert
-  - H3: cron.failureDestination
+  - H2: Automations (cron)
   - H2: Media model template variables
   - H2: Config includes ($include)
   - H2: Related
@@ -3269,15 +5041,37 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Minimal config
   - H2: Editing config
   - H2: Strict validation
+  - H2: Configuration pages
+  - H2: Where each section moved
+  - H2: Full reference
+  - H2: Related
+
+## gateway/configuration/common-tasks.md
+
+- Route: /gateway/configuration/common-tasks
+- Headings:
   - H2: Common tasks
+
+## gateway/configuration/config-rpc.md
+
+- Route: /gateway/configuration/config-rpc
+- Headings:
+  - H2: Config RPC (programmatic updates)
+
+## gateway/configuration/environment-variables.md
+
+- Route: /gateway/configuration/environment-variables
+- Headings:
+  - H2: Environment variables
+
+## gateway/configuration/hot-reload.md
+
+- Route: /gateway/configuration/hot-reload
+- Headings:
   - H2: Config hot reload
   - H3: Reload modes
   - H3: What hot-applies vs what needs a restart
   - H3: Reload planning
-  - H2: Config RPC (programmatic updates)
-  - H2: Environment variables
-  - H2: Full reference
-  - H2: Related
 
 ## gateway/diagnostics.md
 
@@ -3287,9 +5081,15 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Chat command
   - H2: What the export contains
   - H2: Privacy model
+  - H2: WebSocket disconnect logs
+  - H2: Command-lane diagnostics
   - H2: Stability recorder
+  - H2: CPU profile
+  - H2: Full heap snapshot
+  - H2: Sampling heap profile
   - H2: Useful options
   - H2: Disable diagnostics
+  - H2: RPC response size and heap changes
   - H2: Related
 
 ## gateway/discovery.md
@@ -3312,12 +5112,94 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /gateway/doctor
 - Headings:
+  - H2: Doctor pages
+  - H2: Where each section moved
+  - H2: Related
+
+## gateway/doctor/checks.md
+
+- Route: /gateway/doctor/checks
+- Headings:
+  - H2: What it does (summary)
+
+## gateway/doctor/config-migrations.md
+
+- Route: /gateway/doctor/config-migrations
+- Headings:
+  - H2: Runtime config migration
+  - H2: Claude CLI model routing
+  - H2: Command-owner target kinds
+  - H2: Retention policy
+  - H3: Deferred compaction checkpoints
+  - H3: Workspace setup
+  - H3: Session settings
+  - H3: Retired state and config formats
+  - H2: Cron ownership before roster migration
+  - H2: Legacy cron delivery settings
+  - H2: Exec approval policy
+  - H2: Claw provenance schema
+  - H2: Channel account routing during an update
+  - H2: Channel ownership during an update
+  - H2: Sender tool policies
+  - H2: Agent roster migration
+  - H2: Channel private-network opt-ins
+  - H2: Channel webhook listeners
+  - H2: Talk realtime inheritance
+  - H2: ACP session metadata
+  - H2: ACP agents' model precedence
+  - H2: Missing plugins during migration
+  - H2: Blocked local plugins
+  - H2: Retired TaskFlow Webhooks plugin
+  - H2: Schema publication during a 2026.9.2 update
+  - H2: Native Codex recovery after Tasks removal
+  - H2: Replay a July 2026 config upgrade
+  - H2: Auth credential fields
+  - H2: Checks 0-2
+
+## gateway/doctor/gateway-and-services.md
+
+- Route: /gateway/doctor/gateway-and-services
+- Headings:
+  - H2: Checks 8-17
+
+## gateway/doctor/provider-repairs.md
+
+- Route: /gateway/doctor/provider-repairs
+- Headings:
+  - H2: Checks 2b-2g
+
+## gateway/doctor/running.md
+
+- Route: /gateway/doctor/running
+- Headings:
   - H2: Quick start
   - H3: Headless and automation modes
   - H2: Read-only lint mode
-  - H2: What it does (summary)
+
+## gateway/doctor/state-and-sessions.md
+
+- Route: /gateway/doctor/state-and-sessions
+- Headings:
+  - H2: Checks 3-7b
+
+## gateway/doctor/workspace-and-dreams.md
+
+- Route: /gateway/doctor/workspace-and-dreams
+- Headings:
+  - H2: Checks 18-20
   - H2: Dreams UI backfill and reset
-  - H2: Detailed behavior and rationale
+
+## gateway/embedding.md
+
+- Route: /gateway/embedding
+- Headings:
+  - H2: Start the child with an embedding preset
+  - H3: Electron shell snapshot warning
+  - H2: Handle invalid config by exit code
+  - H2: Wait for protocol readiness
+  - H2: Interpret restart and shutdown
+  - H2: Use RPC instead of state files
+  - H2: Install; do not flatten
   - H2: Related
 
 ## gateway/external-apps.md
@@ -3326,6 +5208,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: What is available today
   - H2: Recommended path
+  - H2: Cooperative host suspension
   - H2: App code vs plugin code
   - H2: Related
 
@@ -3334,8 +5217,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /gateway/gateway-lock
 - Headings:
   - H2: Why
-  - H2: Two layers
-  - H3: File lock
+  - H2: Three layers
+  - H3: State and config locks
   - H3: Socket bind
   - H2: Operational notes
   - H2: Related
@@ -3347,10 +5230,16 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Quick checks
   - H2: Deep diagnostics
   - H2: Health monitor config
+  - H2: Inbound ingress health
+  - H2: HTTP checks
+  - H3: Shared-state integrity failure
+  - H3: Plugin replacement recovery
+  - H3: CPU pressure and event-loop delay
   - H2: Uptime monitoring
   - H3: Monitoring service setup examples
   - H2: When something fails
   - H2: Dedicated "health" command
+  - H3: Queue warnings
   - H2: Related
 
 ## gateway/heartbeat.md
@@ -3360,6 +5249,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Quick start (beginner)
   - H2: Defaults
   - H2: What the heartbeat prompt is for
+  - H2: Immediate session events
   - H2: Response contract
   - H2: Config
   - H3: Scope and precedence
@@ -3373,11 +5263,10 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: What each flag does
   - H3: Per-channel vs per-account examples
   - H3: Common patterns
-  - H2: HEARTBEAT.md (optional)
-  - H3: tasks: blocks
-  - H3: Can the agent update HEARTBEAT.md?
+  - H2: Monitor scratch (optional)
+  - H3: Schedule recurring checks with automations
+  - H3: Can the agent update its scratch?
   - H2: Manual wake (on-demand)
-  - H2: Reasoning delivery (optional)
   - H2: Cost awareness
   - H2: Context overflow after heartbeat
   - H2: Related
@@ -3395,6 +5284,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Multiple gateways (same host)
   - H2: Remote access
   - H2: Supervision and service lifecycle
+  - H3: Existing system LaunchDaemons
   - H2: Dev profile quick path
   - H2: Protocol quick reference (operator view)
   - H2: Operational checks
@@ -3410,9 +5300,10 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /gateway/local-model-services
 - Headings:
   - H2: How it works
+  - H2: Managed llama.cpp
   - H2: Config shape
   - H2: Fields
-  - H2: Inferrs example
+  - H2: llmman example
   - H2: ds4 example
   - H2: Related
 
@@ -3428,15 +5319,25 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Other OpenAI-compatible local proxies
   - H2: Smaller or stricter backends
   - H2: Troubleshooting
+  - H3: Local model lean mode
+  - H4: Why these tools
+  - H4: When to turn it on
+  - H4: When to leave it off
+  - H4: Enable
   - H2: Related
 
 ## gateway/logging.md
 
 - Route: /gateway/logging
 - Headings:
-  - H1: Logging
   - H2: File-based logger
   - H3: Verbose vs. log levels
+  - H3: SQLite session writes
+  - H3: SQLite snapshot cleanup
+  - H3: Slow agent database opens
+  - H3: Slow cron list pages
+  - H3: Slow cron list requests
+  - H3: Slow Codex catalog pages
   - H2: Console capture
   - H2: Redaction
   - H2: Gateway WebSocket logs
@@ -3458,12 +5359,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Quick checks
   - H2: Related
 
-## gateway/network-model.md
-
-- Route: /gateway/network-model
-- Headings:
-  - H2: Related
-
 ## gateway/openai-http-api.md
 
 - Route: /gateway/openai-http-api
@@ -3474,7 +5369,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: When to use this endpoint
   - H2: Agent-first model contract
   - H2: Session behavior
-  - H2: Request limits (config)
+  - H3: Explicit incognito session continuation
+  - H2: Request limits
   - H2: Chat tool contract
   - H3: Supported request fields
   - H3: Unsupported variants
@@ -3492,15 +5388,16 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Authentication, security, and routing
   - H2: Session behavior
+  - H3: Explicit incognito session continuation
   - H2: Request shape
   - H2: Items (input)
   - H3: message
-  - H3: functioncalloutput (turn-based tools)
-  - H3: reasoning and itemreference
+  - H3: `function_call_output` (turn-based tools)
+  - H3: reasoning and `item_reference`
   - H2: Tools (client-side function tools)
-  - H2: Images (inputimage)
-  - H2: Files (inputfile)
-  - H2: File + image limits (config)
+  - H2: Images (`input_image`)
+  - H2: Files (`input_file`)
+  - H2: File + image limits
   - H2: Streaming (SSE)
   - H2: Usage
   - H2: Errors
@@ -3524,7 +5421,9 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Per-agent OpenShell with custom gateway
   - H2: Lifecycle management
   - H2: Security hardening
+  - H2: Custom image contract
   - H2: Current limitations
+  - H2: Troubleshooting
   - H2: How it works
   - H2: Related
 
@@ -3532,51 +5431,92 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /gateway/opentelemetry
 - Headings:
-  - H2: Quick start
+  - H2: Where each section moved
+  - H2: Related
+
+## gateway/opentelemetry/configuration.md
+
+- Route: /gateway/opentelemetry/configuration
+- Headings:
   - H2: Signals exported
   - H2: Configuration reference
   - H3: Environment variables
-  - H2: Privacy and content capture
   - H2: Sampling and flushing
+
+## gateway/opentelemetry/model-calls-and-metrics.md
+
+- Route: /gateway/opentelemetry/model-calls-and-metrics
+- Headings:
+  - H2: Model-call observation units
+  - H2: Claude Code CLI model-call fidelity
   - H2: Exported metrics
+  - H3: Gateway RPC
   - H3: Model usage
   - H3: Message flow
   - H3: Talk
   - H3: Queues and sessions
   - H3: Session liveness telemetry
+  - H3: Gateway event-loop observation windows
   - H3: Harness lifecycle
   - H3: Tool execution and loop detection
   - H3: Exec
   - H3: Diagnostics internals (memory, payloads, exporter health)
-  - H2: Exported spans
-  - H2: Diagnostic event catalog
+
+## gateway/opentelemetry/privacy-and-trace-context.md
+
+- Route: /gateway/opentelemetry/privacy-and-trace-context
+- Headings:
+  - H2: Continue an upstream WebSocket trace
+  - H2: Privacy and content capture
+
+## gateway/opentelemetry/setup.md
+
+- Route: /gateway/opentelemetry/setup
+- Headings:
+  - H2: Quick start
+  - H2: Which processes export
+  - H2: Exporter health
   - H2: Without an exporter
   - H2: Disable
-  - H2: Related
+
+## gateway/opentelemetry/spans-and-events.md
+
+- Route: /gateway/opentelemetry/spans-and-events
+- Headings:
+  - H2: Exported spans
+  - H2: Diagnostic event catalog
 
 ## gateway/operator-scopes.md
 
 - Route: /gateway/operator-scopes
 - Headings:
-  - H2: Roles
+  - H2: Connection roles
   - H2: Scope levels
+  - H2: Named operator roles
+  - H2: Identity scope grants
   - H2: Method scope is only the first gate
   - H2: Device pairing approvals
   - H2: Node pairing approvals
   - H2: Shared-secret auth
+  - H2: Related
 
 ## gateway/pairing.md
 
 - Route: /gateway/pairing
 - Headings:
-  - H2: Concepts
-  - H2: How pairing works
+  - H2: How capability approval works
+  - H3: Upgrades and older writers
+  - H2: One-paste node pairing
   - H2: CLI workflow (headless friendly)
   - H2: API surface (gateway protocol)
   - H2: Node command gating (2026.3.31+)
   - H2: Node event trust boundaries (2026.3.31+)
+  - H2: Silent local pairing
+  - H2: SSH-verified device auto-approval (default)
+  - H2: Manual approval (macOS app)
   - H2: Auto-approval (macOS app)
   - H2: Trusted-CIDR device auto-approval
+  - H2: Silent pairing supersede cleanup
   - H2: Metadata-upgrade auto-approval
   - H2: QR pairing helpers
   - H2: Locality and forwarded headers
@@ -3584,12 +5524,49 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Transport behavior
   - H2: Related
 
+## gateway/permission-modes.md
+
+- Route: /gateway/permission-modes
+- Headings:
+  - H2: Session root and defaults
+  - H2: Delegated setup and repair
+  - H2: Change permissions during a task
+  - H2: Policy precedence and clamping
+
+## gateway/portals.md
+
+- Route: /gateway/portals
+- Headings:
+  - H2: Quick start
+  - H2: Remote access
+  - H3: Managed private Tailscale Serve
+  - H3: Private wildcard reverse proxy
+  - H3: Direct and local listeners
+  - H2: Declare development servers
+  - H2: Application contract
+  - H2: Availability and configuration
+  - H2: Security model
+  - H2: Limitations
+  - H2: Troubleshooting
+  - H3: The portal shows a 502 waiting page
+  - H3: The portal is not reachable from this browser
+  - H3: Close a portal
+
 ## gateway/prometheus.md
 
 - Route: /gateway/prometheus
 - Headings:
   - H2: Quick start
   - H2: Metrics exported
+  - H3: HTTP cancellations
+  - H3: Worktree preparation
+  - H3: Catalog list stages
+  - H3: Current sessions and work
+  - H3: Runtime identity
+  - H3: Event-loop observation windows
+  - H3: Worker request queues
+  - H3: Memory and process churn
+  - H3: Garbage collection duration
   - H2: Label policy
   - H2: PromQL recipes
   - H2: Choosing between Prometheus and OpenTelemetry export
@@ -3600,39 +5577,136 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /gateway/protocol
 - Headings:
-  - H2: Transport and framing
-  - H2: Handshake
-  - H3: Node connect example
-  - H2: Roles and scopes
-  - H2: Presence
-  - H3: Node background alive event
-  - H2: Broadcast event scoping
-  - H2: RPC method families
-  - H3: Common event families
-  - H3: Node helper methods
-  - H2: Audit ledger RPC
-  - H2: Task ledger RPCs
-  - H2: Operator helper methods
-  - H3: models.list views
-  - H2: Exec approvals
-  - H2: Agent delivery fallback
-  - H2: Versioning
-  - H3: Client constants
+  - H2: Scope
+  - H2: What each page covers
+  - H2: Where each section moved
+  - H2: Related
+
+## gateway/protocol/auth.md
+
+- Route: /gateway/protocol/auth
+- Headings:
   - H2: Auth
   - H2: Device identity and pairing
   - H3: Device auth migration diagnostics
   - H2: TLS and pinning
-  - H2: Scope
-  - H2: Related
 
-## gateway/remote-gateway-readme.md
+## gateway/protocol/handshake.md
 
-- Route: /gateway/remote-gateway-readme
+- Route: /gateway/protocol/handshake
 - Headings:
-  - H1: Running OpenClaw.app with a Remote Gateway
-  - H2: Setup
-  - H2: How it works
-  - H2: Related
+  - H2: Handshake
+  - H3: Worker role and closed protocol
+  - H3: Client capabilities
+  - H3: Node connect example
+  - H2: Roles and scopes
+  - H3: Caps/commands/permissions (node)
+
+## gateway/protocol/ledgers.md
+
+- Route: /gateway/protocol/ledgers
+- Headings:
+  - H2: Audit ledger RPC
+
+## gateway/protocol/operator-methods.md
+
+- Route: /gateway/protocol/operator-methods
+- Headings:
+  - H2: Operator helper methods
+  - H3: models.list views
+  - H2: Skill registry details
+  - H2: Exec approvals
+  - H2: Agent delivery fallback
+
+## gateway/protocol/presence.md
+
+- Route: /gateway/protocol/presence
+- Headings:
+  - H2: Presence
+  - H3: Node host stats
+  - H3: Node background alive event
+  - H2: Broadcast event scoping
+
+## gateway/protocol/rpc-bootstrap-and-events.md
+
+- Route: /gateway/protocol/rpc-bootstrap-and-events
+- Headings:
+  - H2: Session list bootstrap
+  - H2: Session message subscriptions and narration
+  - H2: Common event families
+  - H2: Node helper methods
+  - H2: Node exec lifecycle events
+
+## gateway/protocol/rpc-devices-nodes-and-approvals.md
+
+- Route: /gateway/protocol/rpc-devices-nodes-and-approvals
+- Headings:
+  - H2: Device pairing and device tokens
+  - H2: Node pairing, invoke, and pending work
+  - H2: Approval families
+  - H2: Control UI commands
+  - H2: Automation, skills, and tools
+
+## gateway/protocol/rpc-methods.md
+
+- Route: /gateway/protocol/rpc-methods
+- Headings:
+  - H2: RPC method families
+  - H2: What each page covers
+  - H2: Where each section moved
+
+## gateway/protocol/rpc-session-control.md
+
+- Route: /gateway/protocol/rpc-session-control
+- Headings:
+  - H2: Session control
+
+## gateway/protocol/rpc-system-and-channels.md
+
+- Route: /gateway/protocol/rpc-system-and-channels
+- Headings:
+  - H2: System and identity
+  - H2: Models and usage
+  - H2: Memory
+  - H2: Channels and login helpers
+  - H3: Channel DM pairing
+  - H2: Plugin management
+  - H3: Catalog detail and client confirmation
+  - H2: ClawHub catalog discovery
+  - H3: Browse and search
+  - H3: Bulk keyword discovery
+  - H3: Upstream contracts and gaps
+  - H2: Messaging and logs
+  - H2: Operator terminal
+
+## gateway/protocol/rpc-talk-config-and-agents.md
+
+- Route: /gateway/protocol/rpc-talk-config-and-agents
+- Headings:
+  - H2: Talk and TTS
+  - H3: Relay output cancellation
+  - H2: Secrets, config, update, and wizard
+  - H2: Agent and workspace helpers
+
+## gateway/protocol/transport.md
+
+- Route: /gateway/protocol/transport
+- Headings:
+  - H2: npm packages
+  - H2: Transport and framing
+  - H3: Profile binding
+  - H2: Connection keepalives
+  - H2: Gateway-controlled WebRTC Talk
+
+## gateway/protocol/versioning.md
+
+- Route: /gateway/protocol/versioning
+- Headings:
+  - H2: Versioning
+  - H3: Client constants
+  - H2: Local state owner routing
+  - H3: Refusals and uncertain outcomes
+  - H3: Mixed versions and retained boundaries
 
 ## gateway/remote.md
 
@@ -3643,6 +5717,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Command flow (what runs where)
   - H2: SSH tunnel (CLI + tools)
   - H2: CLI remote defaults
+  - H2: Gateway behind an identity-aware proxy
   - H2: Credential precedence
   - H2: Chat UI remote access
   - H2: macOS app remote mode
@@ -3655,6 +5730,25 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H4: Step 5: load the LaunchAgent
   - H4: Troubleshooting
   - H2: Related
+
+## gateway/restart-recovery.md
+
+- Route: /gateway/restart-recovery
+- Headings:
+  - H2: What survives a restart
+  - H2: Graceful restarts drain first
+  - H3: Maintenance custody observations
+  - H3: Systemd stop deadlines
+  - H3: Launchd stop deadlines
+  - H2: Host sleep and process freezes
+  - H2: Recovery after a failed update
+  - H2: How interrupted work is detected
+  - H2: Automatic resume
+  - H3: Subagents
+  - H3: Agent-requested restarts
+  - H2: Safety valves and observability
+  - H2: Verify recovery after an update
+  - H2: What is not resumed
 
 ## gateway/sandbox-vs-tool-policy-vs-elevated.md
 
@@ -3675,25 +5769,98 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /gateway/sandboxing
 - Headings:
-  - H2: What gets sandboxed
-  - H2: Modes, scope, and backend
-  - H2: Docker backend
-  - H3: Sandboxed browser
-  - H2: SSH backend
-  - H2: OpenShell backend
-  - H2: Workspace access
-  - H2: Custom bind mounts
-  - H2: Images and setup
-  - H2: setupCommand (one-time container setup)
+  - H2: Sandboxing pages
+  - H2: Where each section moved
   - H2: Tool policy and escape hatches
   - H2: Multi-agent overrides
+  - H3: Managed GitHub identity
   - H2: Minimal enable example
   - H2: Related
+
+## gateway/sandboxing/crabbox-backend.md
+
+- Route: /gateway/sandboxing/crabbox-backend
+- Headings:
+  - H2: Crabbox backend
+
+## gateway/sandboxing/docker-backend.md
+
+- Route: /gateway/sandboxing/docker-backend
+- Headings:
+  - H2: Docker backend
+  - H3: Sandboxed browser
+
+## gateway/sandboxing/images-and-setup.md
+
+- Route: /gateway/sandboxing/images-and-setup
+- Headings:
+  - H2: Images and setup
+
+## gateway/sandboxing/modes-scope-and-backend.md
+
+- Route: /gateway/sandboxing/modes-scope-and-backend
+- Headings:
+  - H2: Modes, scope, and backend
+  - H3: Per-chat sandbox opt-out
+  - H3: Scope and backend
+
+## gateway/sandboxing/multiple-folders-for-one-agent.md
+
+- Route: /gateway/sandboxing/multiple-folders-for-one-agent
+- Headings:
+  - H2: Multiple folders for one agent
+  - H3: Other bind behavior
+
+## gateway/sandboxing/openshell-backend.md
+
+- Route: /gateway/sandboxing/openshell-backend
+- Headings:
+  - H2: OpenShell backend
+
+## gateway/sandboxing/podman-backend.md
+
+- Route: /gateway/sandboxing/podman-backend
+- Headings:
+  - H2: Podman backend
+  - H2: Changing connections and upgrading existing sandboxes
+  - H2: Host init prerequisite
+
+## gateway/sandboxing/setup-command.md
+
+- Route: /gateway/sandboxing/setup-command
+- Headings:
+  - H2: setupCommand (one-time container setup)
+
+## gateway/sandboxing/ssh-backend.md
+
+- Route: /gateway/sandboxing/ssh-backend
+- Headings:
+  - H2: SSH backend
+
+## gateway/sandboxing/supported-capability-matrix.md
+
+- Route: /gateway/sandboxing/supported-capability-matrix
+- Headings:
+  - H2: Supported capability matrix
+
+## gateway/sandboxing/what-gets-sandboxed.md
+
+- Route: /gateway/sandboxing/what-gets-sandboxed
+- Headings:
+  - H2: What gets sandboxed
+
+## gateway/sandboxing/workspace-access.md
+
+- Route: /gateway/sandboxing/workspace-access
+- Headings:
+  - H2: Workspace access
+  - H2: Managed project workspaces
 
 ## gateway/secrets-plan-contract.md
 
 - Route: /gateway/secrets-plan-contract
 - Headings:
+  - H2: Plan file requirements
   - H2: Plan file shape
   - H2: Provider upserts and deletes
   - H2: Supported target scope
@@ -3709,18 +5876,22 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /gateway/secrets
 - Headings:
-  - H2: Runtime model
-  - H2: Egress-time injection (sentinels)
-  - H2: Agent-access boundary
-  - H2: Active-surface filtering
-  - H2: Gateway auth surface diagnostics
-  - H2: Onboarding reference preflight
-  - H2: SecretRef contract
-  - H2: Provider config
-  - H2: File-backed API keys
+  - H2: Secrets pages
+  - H2: Where each section moved
+  - H2: Related
+
+## gateway/secrets/integration-examples.md
+
+- Route: /gateway/secrets/integration-examples
+- Headings:
   - H2: Exec integration examples
   - H2: MCP server environment variables
   - H2: Sandbox SSH auth material
+
+## gateway/secrets/operations.md
+
+- Route: /gateway/secrets/operations
+- Headings:
   - H2: Supported credential surface
   - H2: Required behavior and precedence
   - H2: Activation triggers
@@ -3729,13 +5900,71 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Audit and configure workflow
   - H2: One-way safety policy
   - H2: Legacy auth compatibility notes
-  - H2: Web UI note
-  - H2: Related
+  - H2: Control UI
+
+## gateway/secrets/runtime-model.md
+
+- Route: /gateway/secrets/runtime-model
+- Headings:
+  - H2: Runtime model
+  - H2: Egress-time injection (sentinels)
+  - H2: Agent-access boundary
+  - H2: Active-surface filtering
+  - H2: Gateway auth surface diagnostics
+  - H2: Onboarding reference preflight
+
+## gateway/secrets/secret-store-and-egress.md
+
+- Route: /gateway/secrets/secret-store-and-egress
+- Headings:
+  - H2: Shared secret store
+  - H2: Secret egress proxy
+  - H3: Traffic allowlist
+  - H2: Model credentials for Crabbox commands
+  - H3: Requirements
+  - H3: Prepare and run
+  - H3: Lifetime and recovery
+  - H2: File-backed API keys
+
+## gateway/secrets/secretref-contract.md
+
+- Route: /gateway/secrets/secretref-contract
+- Headings:
+  - H2: SecretRef contract
+  - H2: Provider config
+
+## gateway/security/access-control.md
+
+- Route: /gateway/security/access-control
+- Headings:
+  - H2: DM access: pairing, allowlist, open, disabled
+  - H3: Allowlists (two layers)
+  - H3: DM session isolation (multi-user mode)
+  - H2: Context visibility vs trigger authorization
+  - H2: Command authorization
 
 ## gateway/security/audit-checks.md
 
 - Route: /gateway/security/audit-checks
 - Headings:
+  - H2: Related
+
+## gateway/security/browser-control.md
+
+- Route: /gateway/security/browser-control
+- Headings:
+  - H2: Browser control risks
+  - H3: Browser SSRF policy (strict by default)
+
+## gateway/security/dependency-locking.md
+
+- Route: /gateway/security/dependency-locking
+- Headings:
+  - H2: Check dependency advisories
+  - H3: Interpret coverage
+  - H2: Published package behavior
+  - H2: Validate npm dependency graphs
+  - H2: Inspect a plugin tarball
   - H2: Related
 
 ## gateway/security/exposure-runbook.md
@@ -3753,41 +5982,26 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Rollback plan
   - H2: Review checklist
 
+## gateway/security/hardened-baseline.md
+
+- Route: /gateway/security/hardened-baseline
+- Headings:
+  - H2: Hardened baseline in 60 seconds
+  - H3: Requester-scoped controls and prompt context
+  - H2: Secure baseline (copy/paste)
+  - H3: Separate numbers (WhatsApp, Signal, Telegram)
+
 ## gateway/security/index.md
 
 - Route: /gateway/security
 - Headings:
-  - H2: Scope: personal assistant security model
-  - H2: openclaw security audit
-  - H3: What the audit checks (high level)
-  - H3: Priority order when triaging findings
-  - H2: Hardened baseline in 60 seconds
-  - H2: Trust boundary matrix
-  - H2: Not vulnerabilities by design
-  - H2: Gateway and node trust
-  - H2: Threat model
-  - H2: DM access: pairing, allowlist, open, disabled
-  - H3: Allowlists (two layers)
-  - H3: DM session isolation (multi-user mode)
-  - H2: Context visibility vs trigger authorization
-  - H2: Prompt injection
-  - H3: External content and untrusted-input wrapping
-  - H3: Bypass flags (keep off in production)
-  - H3: Reasoning and verbose output in groups
-  - H2: Command authorization
-  - H2: Control plane tools
-  - H2: Node execution (system.run)
-  - H2: Dynamic skills (watcher / remote nodes)
-  - H2: Plugins
-  - H2: Sandboxing
-  - H3: Sub-agent delegation guardrail
-  - H3: Read-only mode
-  - H2: Per-agent access profiles (multi-agent)
-  - H3: Full access (no sandbox)
-  - H3: Read-only tools + read-only workspace
-  - H3: No filesystem/shell access (provider messaging allowed)
-  - H2: Browser control risks
-  - H3: Browser SSRF policy (strict by default)
+  - H2: Security pages
+  - H2: Where each section moved
+
+## gateway/security/network-exposure.md
+
+- Route: /gateway/security/network-exposure
+- Headings:
   - H2: Network exposure
   - H3: Bind, port, firewall
   - H3: Docker port publishing with UFW
@@ -3798,38 +6012,118 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: HSTS and origin notes
   - H3: Control UI over HTTP
   - H3: Insecure/dangerous flags
+
+## gateway/security/operator-incident-response.md
+
+- Route: /gateway/security/operator-incident-response
+- Headings:
+  - H2: Incident response
+  - H3: Contain
+  - H3: Rotate (assume compromise if secrets leaked)
+  - H3: Audit
+  - H3: Collect for a report
+
+## gateway/security/prompt-injection.md
+
+- Route: /gateway/security/prompt-injection
+- Headings:
+  - H2: Prompt injection
+  - H3: External content and untrusted-input wrapping
+  - H3: Bypass flags (keep off in production)
+  - H3: Reasoning and verbose output in groups
+
+## gateway/security/rate-limiting.md
+
+- Route: /gateway/security/rate-limiting
+- Headings:
+  - H2: Unauthenticated WebSocket connections
+  - H2: Authentication attempts (pre-auth)
+  - H3: Browser-origin connections
+  - H3: Unconfigured same-host reverse proxies
+  - H3: Webhooks
+  - H2: Control-plane writes (post-auth backstop)
+  - H2: ACP session creation
+  - H2: Restart cooldown
+  - H2: Operational notes
+
+## gateway/security/running-the-audit.md
+
+- Route: /gateway/security/running-the-audit
+- Headings:
+  - H2: openclaw security audit
+  - H3: What the audit checks (high level)
+  - H3: Priority order when triaging findings
+
+## gateway/security/secrets-and-storage.md
+
+- Route: /gateway/security/secrets-and-storage
+- Headings:
   - H2: Deployment and host trust
   - H2: Secrets on disk
   - H3: Credential storage map
   - H3: File permissions
   - H3: Workspace .env files
   - H3: Logs and transcripts
-  - H2: Secure baseline (copy/paste)
-  - H3: Separate numbers (WhatsApp, Signal, Telegram)
-  - H2: Incident response
-  - H3: Contain
-  - H3: Rotate (assume compromise if secrets leaked)
-  - H3: Audit
-  - H3: Collect for a report
   - H2: Secret scanning
-  - H2: Reporting security issues
 
 ## gateway/security/secure-file-operations.md
 
 - Route: /gateway/security/secure-file-operations
 - Headings:
-  - H2: Default: no Python helper
-  - H2: What stays protected without Python
-  - H2: What Python adds
+  - H2: Platform defaults
+  - H2: Windows path boundaries
+  - H2: What stays protected without native acceleration
+  - H2: What native acceleration adds
   - H2: Plugin and core guidance
 
-## gateway/security/shrinkwrap.md
+## gateway/security/tool-permissions.md
 
-- Route: /gateway/security/shrinkwrap
+- Route: /gateway/security/tool-permissions
 - Headings:
-  - H2: Why it matters
-  - H2: Generating and checking
-  - H2: Inspecting a published package
+  - H2: Control plane tools
+  - H2: Cross-provider messaging
+  - H2: Node execution (system.run)
+  - H2: Dynamic skills (watcher / remote nodes)
+  - H2: Plugins
+  - H2: Sandboxing
+  - H3: Sub-agent delegation guardrail
+  - H3: Read-only mode
+  - H2: Per-agent access profiles (multi-agent)
+  - H3: Full access (no sandbox)
+  - H3: Read-only tools + read-only workspace
+  - H3: No filesystem/shell access (provider messaging allowed)
+
+## gateway/security/trust-model.md
+
+- Route: /gateway/security/trust-model
+- Headings:
+  - H2: Scope: one trust boundary per gateway
+  - H2: Trust boundary matrix
+  - H2: Not vulnerabilities by design
+  - H2: Gateway and node trust
+  - H2: Threat model
+  - H2: Reporting security issues
+
+## gateway/stable-https-url.md
+
+- Route: /gateway/stable-https-url
+- Headings:
+  - H2: Before you begin
+  - H2: 1. Enable Serve while keeping loopback bind
+  - H3: Optional identity-header auth
+  - H2: 2. Allow HTTPS in your tailnet policy
+  - H3: Modern grants policy
+  - H3: Older ACL policy
+  - H2: 3. Verify the route and loopback boundary
+  - H2: 4. Use the URL from clients
+  - H3: macOS app
+  - H3: iOS and Android companion apps
+  - H2: Troubleshooting
+  - H3: The URL times out from other devices
+  - H3: The certificate is not issued or the first request is slow
+  - H3: The serve command is unavailable
+  - H3: Tailscale identity headers are not accepted
+  - H2: Related
 
 ## gateway/tailscale.md
 
@@ -3843,11 +6137,46 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: CLI examples
   - H2: Auth
   - H3: Tailscale identity headers (Serve only)
+  - H3: Externally managed Serve and Funnel
   - H2: Notes
   - H3: Tailscale prerequisites and limits
+  - H2: Recover an orphaned foreground claim
   - H2: Browser control (remote Gateway + local browser)
   - H2: Learn more
   - H2: Related
+
+## gateway/team-server.md
+
+- Route: /gateway/team-server
+- Headings:
+  - H2: How we build OpenClaw with OpenClaw
+  - H2: Before you begin
+  - H2: 1. Install under one service account
+  - H2: 2. Configure the public URL and authenticated ingress
+  - H3: Set the public URL once
+  - H2: 3. Bootstrap administrators and assign roles
+  - H2: 4. Synchronize people with verified GitHub identities
+  - H3: Use an OIDC provider without losing existing profiles
+  - H3: Configure GitHub access for repository work
+  - H2: 5. Connect chat and remote clients
+  - H2: 6. Give widgets a separate sandbox origin
+  - H2: 7. Share selected sessions from another Gateway
+  - H2: 8. Verify the complete flow
+  - H2: Keep operations recoverable
+  - H2: Troubleshooting
+
+## gateway/telemetry.md
+
+- Route: /gateway/telemetry
+- Headings:
+  - H2: Inspect what is sent
+  - H2: Daily update check
+  - H2: Approximate location
+  - H2: Optional anonymous feature statistics
+  - H3: What is not sent or stored
+  - H2: Turn anonymous feature statistics on or off
+  - H2: Automated environments
+  - H2: Disable every automatic update request
 
 ## gateway/tools-invoke-http-api.md
 
@@ -3866,27 +6195,65 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /gateway/troubleshooting
 - Headings:
   - H2: Command ladder
-  - H2: After an update
-  - H2: Split brain installs and newer config guard
-  - H2: Protocol mismatch after rollback
-  - H2: Skill symlink skipped as path escape
-  - H2: Anthropic 429 extra usage required for long context
-  - H2: Upstream 403 blocked responses
-  - H2: Local OpenAI-compatible backend passes direct probes but agent runs fail
+  - H2: Symptom index
+  - H2: Where each section moved
+  - H2: If you upgraded and something suddenly broke
+  - H2: Related
+
+## gateway/troubleshooting/agent-replies-and-control-ui.md
+
+- Route: /gateway/troubleshooting/agent-replies-and-control-ui
+- Headings:
+  - H2: Agent run failed with a storage error
+  - H2: Provider rejected the request
+  - H2: Unreadable conversation history
   - H2: No replies
   - H2: Dashboard control UI connectivity
   - H3: Auth detail codes quick map
-  - H2: Gateway service not running
-  - H2: macOS gateway silently stops responding, then resumes when you touch the dashboard
-  - H2: Gateway exits during high memory use
-  - H2: Gateway rejected invalid config
-  - H2: Gateway probe warnings
+
+## gateway/troubleshooting/channel-delivery-and-tools.md
+
+- Route: /gateway/troubleshooting/channel-delivery-and-tools
+- Headings:
   - H2: Channel connected, messages not flowing
   - H2: Cron and heartbeat delivery
   - H2: Node paired, tool fails
   - H2: Browser tool fails
-  - H2: If you upgraded and something suddenly broke
-  - H2: Related
+
+## gateway/troubleshooting/config-validation-and-probes.md
+
+- Route: /gateway/troubleshooting/config-validation-and-probes
+- Headings:
+  - H2: Gateway rejected invalid config
+  - H2: Gateway check warnings
+
+## gateway/troubleshooting/gateway-service-and-process.md
+
+- Route: /gateway/troubleshooting/gateway-service-and-process
+- Headings:
+  - H2: Gateway service not running
+  - H2: macOS gateway silently stops responding, then resumes when you touch the dashboard
+  - H2: macOS launchd supervisor loop with duplicate gateway/node LaunchAgents
+  - H2: Native aborts on Linux (SIGABRT)
+  - H2: Gateway exits during high memory use
+
+## gateway/troubleshooting/skills-and-model-providers.md
+
+- Route: /gateway/troubleshooting/skills-and-model-providers
+- Headings:
+  - H2: Skill symlink skipped as path escape
+  - H2: Anthropic 429 extra usage required for long context
+  - H2: Upstream 403 blocked responses
+  - H2: Local OpenAI-compatible backend passes direct checks but agent runs fail
+
+## gateway/troubleshooting/updates-and-rollbacks.md
+
+- Route: /gateway/troubleshooting/updates-and-rollbacks
+- Headings:
+  - H2: After an update
+  - H2: Prepared model runtime publication timeout
+  - H2: Split brain installs and newer config guard
+  - H2: Protocol mismatch after rollback
 
 ## gateway/trusted-proxy-auth.md
 
@@ -3897,15 +6264,20 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: How it works
   - H2: Configuration
   - H3: Configuration reference
+  - H3: Configure with the wizard
+  - H2: Per-identity scope grants
+  - H2: Automatic device approval
   - H2: Control UI pairing behavior
   - H2: Operator scopes header
   - H2: TLS termination and HSTS
   - H3: Rollout guidance
   - H2: Proxy setup examples
   - H2: Mixed token configuration
+  - H2: Restrict a separate Gateway to one owner
   - H2: Security checklist
   - H2: Security audit
   - H2: Troubleshooting
+  - H3: Control UI says Proxy authentication required
   - H2: Migration from token auth
   - H2: Related
 
@@ -3913,17 +6285,18 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /help/debugging
 - Headings:
-  - H2: Runtime debug overrides
-  - H2: Session trace output
-  - H2: Plugin lifecycle trace
-  - H2: CLI startup and command profiling
   - H2: Gateway watch mode
   - H2: Dev profile + dev gateway (--dev)
   - H2: Raw stream logging
-  - H2: Safety notes
+  - H3: Safety notes
+  - H2: CLI startup and command profiling
+  - H2: Plugin lifecycle trace
+  - H2: Node and tsx startup errors
   - H2: Debugging in VSCode
   - H3: Setup
   - H3: Notes
+  - H2: Runtime debug overrides
+  - H2: Session trace output
   - H2: Related
 
 ## help/environment.md
@@ -3931,6 +6304,15 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /help/environment
 - Headings:
   - H2: Precedence (highest to lowest)
+  - H2: Supported operator-facing variables
+  - H3: Paths and instances
+  - H4: `OPENCLAW_HOME`
+  - H3: Temporary compile cache
+  - H3: Gateway and authentication
+  - H3: Provider credentials
+  - H3: Logging and diagnostics
+  - H3: Feature and runtime toggles
+  - H3: Filesystem observation
   - H2: Provider credentials and workspace .env
   - H2: Config env block
   - H2: Shell env import
@@ -3940,8 +6322,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Env var substitution in config
   - H2: Secret refs vs ${ENV} strings
   - H2: Path-related env vars
+  - H2: Agent helper tool downloads
   - H2: Logging
-  - H3: OPENCLAWHOME
   - H2: nvm users: webfetch TLS failures
   - H2: Legacy environment variables
   - H2: Related
@@ -3950,8 +6332,19 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /help/faq-first-run
 - Headings:
-  - H2: Quick start and first-run setup
+  - H2: Where each section moved
   - H2: Related
+
+## help/faq-first-run/providers-and-hosting.md
+
+- Route: /help/faq-first-run/providers-and-hosting
+- Headings: none
+
+## help/faq-first-run/quick-start.md
+
+- Route: /help/faq-first-run/quick-start
+- Headings:
+  - H2: Quick start and first-run setup
 
 ## help/faq-models.md
 
@@ -3968,22 +6361,88 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: First 60 seconds if something is broken
   - H2: Quick start and first-run setup
-  - H2: What is OpenClaw?
-  - H2: Skills and automation
-  - H2: Sandboxing and memory
-  - H2: Where things live on disk
-  - H2: Config basics
-  - H2: Remote gateways and nodes
-  - H2: Env vars and .env loading
-  - H2: Sessions and multiple chats
   - H2: Models, failover, and auth profiles
-  - H2: Gateway: ports, "already running", and remote mode
-  - H2: Logging and debugging
-  - H2: Media and attachments
-  - H2: Security and access control
-  - H2: Chat commands, aborting tasks, and "it will not stop"
   - H2: Miscellaneous
+  - H2: Where each section moved
   - H2: Related
+
+## help/faq/chat-commands-and-stopping.md
+
+- Route: /help/faq/chat-commands-and-stopping
+- Headings:
+  - H2: Chat commands, aborting tasks, and "it will not stop"
+
+## help/faq/config-basics.md
+
+- Route: /help/faq/config-basics
+- Headings:
+  - H2: Config basics
+
+## help/faq/env-vars.md
+
+- Route: /help/faq/env-vars
+- Headings:
+  - H2: Env vars and .env loading
+
+## help/faq/gateway-ports-and-remote-mode.md
+
+- Route: /help/faq/gateway-ports-and-remote-mode
+- Headings:
+  - H2: Gateway: ports, "already running", and remote mode
+
+## help/faq/logging-and-debugging.md
+
+- Route: /help/faq/logging-and-debugging
+- Headings:
+  - H2: Logging and debugging
+
+## help/faq/media-and-attachments.md
+
+- Route: /help/faq/media-and-attachments
+- Headings:
+  - H2: Media and attachments
+
+## help/faq/remote-gateways-and-nodes.md
+
+- Route: /help/faq/remote-gateways-and-nodes
+- Headings:
+  - H2: Remote gateways and nodes
+
+## help/faq/sandboxing-and-memory.md
+
+- Route: /help/faq/sandboxing-and-memory
+- Headings:
+  - H2: Sandboxing and memory
+
+## help/faq/security-and-access-control.md
+
+- Route: /help/faq/security-and-access-control
+- Headings:
+  - H2: Security and access control
+
+## help/faq/sessions-and-chats.md
+
+- Route: /help/faq/sessions-and-chats
+- Headings:
+  - H2: Sessions and multiple chats
+
+## help/faq/skills-and-automation.md
+
+- Route: /help/faq/skills-and-automation
+- Headings:
+  - H2: Skills and automation
+
+## help/faq/what-is-openclaw.md
+
+- Route: /help/faq/what-is-openclaw
+- Headings:
+  - H2: What is OpenClaw?
+
+## help/faq/where-things-live-on-disk.md
+
+- Route: /help/faq/where-things-live-on-disk
+- Headings:
+  - H2: Where things live on disk
 
 ## help/index.md
 
@@ -4008,19 +6467,40 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /help/testing-live
 - Headings:
-  - H2: Live: local smoke commands
-  - H2: Live: Android node capability sweep
-  - H2: Live: model smoke (profile keys)
-  - H3: Layer 1: Direct model completion (no gateway)
-  - H3: Layer 2: Gateway + dev agent smoke (what "@openclaw" actually does)
-  - H2: Live: CLI backend smoke (Claude, Gemini, or other local CLIs)
-  - H2: Live: APNs HTTP/2 proxy reachability
+  - H2: Live tests vs your real gateway
+  - H2: Credentials (never commit)
+  - H2: Where each section moved
+  - H2: Related
+
+## help/testing-live/acp-and-codex.md
+
+- Route: /help/testing-live/acp-and-codex
+- Headings:
   - H2: Live: ACP bind smoke (/acp spawn ... --bind here)
   - H2: Live: Codex app-server harness smoke
+
+## help/testing-live/cli-backends.md
+
+- Route: /help/testing-live/cli-backends
+- Headings:
+  - H2: Live: CLI backend smoke (Claude, Gemini, or other local CLIs)
+  - H2: Live: APNs HTTP/2 proxy reachability
+
+## help/testing-live/long-context-and-matrix.md
+
+- Route: /help/testing-live/long-context-and-matrix
+- Headings:
+  - H2: Live: OpenAI long context
+  - H3: Long-context hard oracles
+  - H3: Bounded compaction replay
   - H3: Recommended live recipes
   - H2: Live: model matrix (what we cover)
   - H3: Aggregators / alternate gateways
-  - H2: Credentials (never commit)
+
+## help/testing-live/media-providers.md
+
+- Route: /help/testing-live/media-providers
+- Headings:
   - H2: Deepgram live (audio transcription)
   - H2: BytePlus coding plan live
   - H2: ComfyUI workflow media live
@@ -4028,52 +6508,117 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Music generation live
   - H2: Video generation live
   - H2: Media live harness
-  - H2: Related
+
+## help/testing-live/model-smoke.md
+
+- Route: /help/testing-live/model-smoke
+- Headings:
+  - H2: Live: model smoke (profile keys)
+  - H3: Layer 1: Direct model completion (no gateway)
+  - H3: Layer 2: Gateway + dev agent smoke (what "@openclaw" actually does)
+
+## help/testing-live/quick-smokes.md
+
+- Route: /help/testing-live/quick-smokes
+- Headings:
+  - H2: Live: local smoke commands
+  - H2: Live: Android node capability sweep
 
 ## help/testing-updates-plugins.md
 
 - Route: /help/testing-updates-plugins
 - Headings:
+  - H2: On this page
   - H2: What we protect
   - H2: Local proof during development
+  - H2: Headless node auto-update proof
   - H2: Docker lanes
   - H2: Package Acceptance
   - H2: Release default
   - H2: Legacy compatibility
   - H2: Adding coverage
   - H2: Failure triage
+  - H2: Related
 
 ## help/testing.md
 
 - Route: /help/testing
 - Headings:
-  - H2: Quick start
-  - H2: Test Temp Directories
+  - H2: Where each section moved
+  - H2: Related
+
+## help/testing/contracts.md
+
+- Route: /help/testing/contracts
+- Headings:
+  - H2: Contract tests (plugin and channel shape)
+  - H3: Commands
+  - H3: Channel contracts
+  - H3: Provider contracts
+  - H3: When to run
+
+## help/testing/control-ui-load.md
+
+- Route: /help/testing/control-ui-load
+- Headings:
+  - H1: Control UI protocol load
+  - H2: Workload contract
+  - H2: Results
+  - H2: Cache policy and proof
+
+## help/testing/docker.md
+
+- Route: /help/testing/docker
+- Headings:
+  - H2: Docker runners (optional "works in Linux" checks)
+
+## help/testing/live-workflows.md
+
+- Route: /help/testing/live-workflows
+- Headings:
   - H2: Live and Docker/Parallels workflows
+
+## help/testing/qa-runners.md
+
+- Route: /help/testing/qa-runners
+- Headings:
   - H2: QA-specific runners
   - H3: Shared Telegram credentials via Convex (v1)
   - H3: Adding a channel to QA
+
+## help/testing/suites.md
+
+- Route: /help/testing/suites
+- Headings:
+  - H2: Quick start
   - H2: Test suites (what runs where)
   - H3: Unit / integration (default)
   - H3: Stability (gateway)
   - H3: E2E (repo aggregate)
   - H3: E2E (gateway smoke)
   - H3: E2E (Control UI mocked browser)
+  - H3: Network-isolated local E2E
   - H3: E2E: OpenShell backend smoke
   - H3: Live (real providers + real models)
+  - H3: Advisory Bun release checks
   - H2: Which suite should I run?
   - H2: Live (network-touching) tests
-  - H2: Docker runners (optional "works in Linux" checks)
   - H2: Docs sanity
   - H2: Offline regression (CI-safe)
+
+## help/testing/writing-tests.md
+
+- Route: /help/testing/writing-tests
+- Headings:
+  - H2: Prove behavior at the owning boundary
+  - H2: Test Temp Directories
   - H2: Agent reliability evals (skills)
-  - H2: Contract tests (plugin and channel shape)
-  - H3: Commands
-  - H3: Channel contracts
-  - H3: Provider contracts
-  - H3: When to run
+  - H2: Cost budget
+  - H2: Module mocks and export completeness
+  - H2: Raw SQLite state access
+  - H2: Skills watchers
+  - H2: Flake triage
   - H2: Adding regressions (guidance)
-  - H2: Related
 
 ## help/troubleshooting.md
 
@@ -4094,6 +6639,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /
 - Headings:
   - H1: OpenClaw 🦞
+  - H2: Browse docs
   - H2: What is OpenClaw?
   - H2: How it works
   - H2: Key capabilities
@@ -4134,28 +6680,94 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Next steps
   - H2: Related
 
+## install/backups.md
+
+- Route: /install/backups
+- Headings:
+  - H2: Choose a path
+  - H2: Full archives
+  - H2: Per-database snapshots
+  - H3: Cold transcript backups
+  - H2: Schedule backups
+  - H2: Copy backups offsite
+  - H2: Versioned backups to a Git repository
+  - H2: Continuous replication with Litestream
+  - H2: Pull replication with sqlite3rsync
+  - H2: Restore
+  - H3: Restore a full archive
+  - H3: Restore a database
+  - H2: Related
+
+## install/bun-compatibility.md
+
+- Route: /install/bun-compatibility
+- Headings:
+  - H2: Requirements
+  - H2: macOS app private runtime
+  - H2: SQLite library selection on macOS
+  - H2: Memory search without an extension-capable library
+  - H2: Browser subprocesses
+  - H2: Bun-only installs
+  - H2: SQLite worker lifecycle
+  - H2: Known limitations
+  - H2: History across releases
+  - H2: Related
+
 ## install/bun.md
 
 - Route: /install/bun
 - Headings:
   - H2: Install
+  - H2: Bun-only global install
   - H2: Lifecycle scripts
   - H2: Caveats
+  - H2: Known limitations
+  - H3: Updating from 2026.9.7 with an older system Node
+  - H3: Rollback finalization on 2026.9.7
   - H2: Related
 
-## install/clawdock.md
+## install/cloudflare.md
 
-- Route: /install/clawdock
+- Route: /install/cloudflare
 - Headings:
-  - H2: Install
-  - H2: What you get
-  - H3: Basic operations
-  - H3: Container access
-  - H3: Web UI and pairing
-  - H3: Setup and maintenance
-  - H3: Utilities
-  - H2: First-time flow
-  - H2: Config and secrets
+  - H2: What you need
+  - H2: How it works
+  - H2: Deploy
+  - H2: Verify the deployment
+  - H2: Cost and sizing
+  - H2: Observability
+  - H2: Choose the lifecycle mode
+  - H2: Limits and recovery
+  - H2: Update
+  - H2: Troubleshooting
+  - H2: Related
+
+## install/daytona.md
+
+- Route: /install/daytona
+- Headings:
+  - H2: What you need
+  - H2: Install the Daytona CLI
+  - H2: Authenticate
+  - H2: Create a sandbox
+  - H2: Connect via SSH
+  - H2: Run onboarding
+  - H2: Allow the preview URL origin
+  - H2: Start the Gateway
+  - H2: Open the dashboard
+  - H3: Approve your device
+  - H2: Security
+  - H2: Channel setup
+  - H3: Telegram
+  - H3: WhatsApp
+  - H2: Updating
+  - H2: Stop and resume the sandbox
+  - H2: Troubleshooting
+  - H3: Gateway not running after sandbox restart
+  - H3: Preview URL expired
+  - H3: Sandbox auto-stopped
+  - H3: Gateway port not reachable
+  - H2: Notes
   - H2: Related
 
 ## install/development-channels.md
@@ -4187,10 +6799,14 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /install/docker-vm-runtime
 - Headings:
+  - H2: Before you begin
+  - H2: Prepare persistent host state
+  - H2: Run the maintained Docker setup
   - H2: Bake required binaries into the image
-  - H2: Build and launch
+  - H2: Verify and administer the Gateway
   - H2: What persists where
-  - H2: Updates
+  - H2: Common pitfall: never file-bind openclaw.json
+  - H2: Update OpenClaw
   - H2: Related
 
 ## install/docker.md
@@ -4198,23 +6814,49 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /install/docker
 - Headings:
   - H2: Prerequisites
-  - H2: Containerized gateway
+  - H2: Containerized Gateway
+  - H3: Using the Control UI browser
+  - H3: Headless bootstrap
   - H3: Manual flow
   - H3: Upgrading container images
-  - H3: Environment variables
+  - H3: Source-built images with selected plugins
   - H3: Observability
   - H3: Health checks
-  - H3: LAN vs loopback
-  - H3: Host local providers
-  - H3: Claude CLI backend in Docker
-  - H3: Bonjour / mDNS
-  - H3: Storage and persistence
-  - H3: Shell helpers (optional)
-  - H3: Running on a VPS?
+  - H2: Detailed topics
+  - H2: Related
+
+## install/docker/compose-operations.md
+
+- Route: /install/docker/compose-operations
+- Headings:
+  - H2: ClawDock migration
+  - H2: Image contents and security scanning
+  - H2: Weekly image refreshes
+  - H2: Running on a VPS?
+
+## install/docker/environment-variables.md
+
+- Route: /install/docker/environment-variables
+- Headings:
+  - H2: Environment variables
+
+## install/docker/networking-and-storage.md
+
+- Route: /install/docker/networking-and-storage
+- Headings:
+  - H2: LAN vs loopback
+  - H2: Host local providers
+  - H2: Claude CLI backend in Docker
+  - H2: Bonjour / mDNS
+  - H2: Storage and persistence
+
+## install/docker/sandbox-and-troubleshooting.md
+
+- Route: /install/docker/sandbox-and-troubleshooting
+- Headings:
   - H2: Agent sandbox
   - H3: Quick enable
   - H2: Troubleshooting
-  - H2: Related
 
 ## install/exe-dev.md
 
@@ -4261,9 +6903,14 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /install/gcp
 - Headings:
   - H2: What you need
-  - H2: Quick path
+  - H2: Provision the VM
+  - H2: Configure the Docker runtime
+  - H2: Access the Control UI
   - H2: Troubleshooting
-  - H2: Service accounts (security best practice)
+  - H3: SSH connection refused
+  - H3: OS Login issues
+  - H3: Resize after an out-of-memory build
+  - H2: Use a deployment service account
   - H2: Next steps
   - H2: Related
 
@@ -4272,8 +6919,10 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /install/hetzner
 - Headings:
   - H2: What you need
-  - H2: Quick path
-  - H2: Infrastructure as Code (Terraform)
+  - H2: Provision and secure the VPS
+  - H2: Configure the Docker runtime
+  - H2: Access the Control UI
+  - H2: Infrastructure as code
   - H2: Next steps
   - H2: Related
 
@@ -4294,6 +6943,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /install
 - Headings:
   - H2: System requirements
+  - H2: Download the desktop app
   - H2: Recommended: installer script
   - H2: Alternative install methods
   - H3: Local prefix installer (install-cli.sh)
@@ -4302,17 +6952,22 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Install from the GitHub main checkout
   - H3: Containers and package managers
   - H2: Verify the install
+  - H2: Next: run onboarding and connect a channel
   - H2: Hosting and deployment
-  - H2: Update, migrate, or uninstall
+  - H2: Back up, update, migrate, or uninstall
   - H2: Troubleshooting: openclaw not found
 
 ## install/installer.md
 
 - Route: /install/installer
 - Headings:
+  - H2: Private Node recovery
+  - H3: Diagnostics on an unsupported Node
+  - H2: Source build toolchain
   - H2: Quick commands
   - H2: install.sh
   - H3: Flow (install.sh)
+  - H3: Existing nvm installations
   - H3: Source checkout detection
   - H3: Examples (install.sh)
   - H2: install-cli.sh
@@ -4426,13 +7081,30 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Service PATH discovery
   - H2: Related
 
+## install/node-compatibility.md
+
+- Route: /install/node-compatibility
+- Headings:
+  - H2: Supported versions
+  - H2: How the gate decides
+  - H2: Why the floors exist
+  - H2: V8 compiler settings
+  - H2: Platform consequences
+  - H2: What the installer provisions
+  - H2: Check your runtime
+  - H2: History across releases
+  - H2: Related
+
 ## install/node.md
 
 - Route: /install/node
 - Headings:
   - H2: Check your version
+  - H3: Update from the CLI
+  - H3: Node requirements during an update
   - H2: Install Node
   - H2: Troubleshooting
+  - H3: Homebrew upgrades while the Gateway is running
   - H3: openclaw: command not found
   - H3: Permission errors on npm install -g (Linux)
   - H2: Related
@@ -4466,6 +7138,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Prerequisites
   - H2: Quick start
+  - H2: Agent sandbox backend
   - H2: Podman and Tailscale
   - H2: Systemd (Quadlet, optional)
   - H2: Config, env, and storage
@@ -4532,30 +7205,88 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: macOS (launchd)
   - H3: Linux (systemd user unit)
   - H3: Windows (Scheduled Task)
-  - H2: Normal install vs source checkout
-  - H3: Normal install (install.sh / npm / pnpm / bun)
-  - H3: Source checkout (git clone)
+  - H2: Remove the CLI
   - H2: Related
+
+## install/update-troubleshooting.md
+
+- Route: /install/update-troubleshooting
+- Headings:
+  - H2: Recover in the Control UI
+  - H2: Doctor cannot enter maintenance during finalization
+  - H2: Node and global install permissions
+  - H3: System-scope systemd services
+  - H2: Candidate migration rehearsal timeouts
+  - H2: Published 2026.9.4 on large agent fleets
+  - H2: Headless nodes waiting on 2026.9.6
+  - H2: Plugin repair warnings
+  - H3: Missing temporary plugin captures
+  - H3: Database snapshots under continuous writes
+  - H3: Snapshot parse errors from 2026.9.5 and 2026.9.6
+  - H3: Large model-catalog temporary directories
+  - H2: Reason codes
+  - H2: Retained legacy session history
+  - H2: CLI fallback
+  - H2: Rollback boundary
+  - H2: Support diagnostics
 
 ## install/updating.md
 
 - Route: /install/updating
 - Headings:
+  - H2: Update implementation contract
+  - H2: Retired tenant-container management
+  - H2: Upgrading very old versions
   - H2: Recommended: openclaw update
-  - H2: Switch between npm and git installs
-  - H2: Alternative: re-run the installer
-  - H2: Alternative: manual npm, pnpm, or bun
-  - H3: Advanced npm install topics
-  - H2: Auto-updater
+  - H3: Package-publication recovery
+  - H3: Recover an unfinished publication after a remount
+  - H3: Recover a completed receipt with an older updater
+  - H3: Unfinished publication and rollback
+  - H3: Updating from 2026.9.2 across a schema bump
+  - H3: From chat
+  - H2: Inspect FreeBSD service discovery
+  - H2: Stale update history
+  - H2: Retire update recovery data
   - H2: After updating
   - H3: Run doctor
   - H3: Restart the gateway
   - H3: Verify
-  - H2: Rollback
-  - H3: Pin a version (npm)
-  - H3: Pin a commit (source)
-  - H2: If you are stuck
+  - H3: Background exec notifications after an update
+  - H2: Detailed topics
   - H2: Related
+
+## install/updating/automatic-updates.md
+
+- Route: /install/updating/automatic-updates
+- Headings:
+  - H2: Headless node updates
+  - H2: Auto-updater
+  - H3: Update campaigns
+
+## install/updating/rollback-and-recovery.md
+
+- Route: /install/updating/rollback-and-recovery
+- Headings:
+  - H2: Before you upgrade
+  - H2: Downgrade
+  - H3: Full-state recovery requires a backup
+  - H3: Automatic schema-neutral rollback
+  - H3: Before updating: create a verified backup
+  - H2: If you are stuck
+  - H3: Unattended repair on your own inference
+
+## install/updating/update-methods.md
+
+- Route: /install/updating/update-methods
+- Headings:
+  - H2: Switch between npm and git installs
+  - H2: Source-checkout servers (reference script)
+  - H2: Alternative: re-run the installer
+  - H2: Homebrew formula installs
+  - H2: Alternative: manual npm, pnpm, or bun
+  - H3: Package lifecycle and operator state
+  - H3: Stuck on 2026.9.3
+  - H3: Advanced npm install topics
 
 ## install/upstash.md
 
@@ -4569,6 +7300,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Start the Gateway
   - H2: Auto-restart
   - H2: Troubleshooting
+  - H2: Next steps
   - H2: Related
 
 ## logging.md
@@ -4584,10 +7316,23 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: File logs (JSONL)
   - H3: Console output
   - H3: Gateway WebSocket logs
+  - H3: Steering and input cancellation
   - H2: Configuring logging
   - H3: Log levels
+  - H3: Provider request failures
   - H3: Targeted model transport diagnostics
   - H3: Trace correlation
+  - H3: Embedded attempt preparation
+  - H3: Session catalog provider waits
+  - H3: Codex catalog phases
+  - H3: Lifecycle queue waits
+  - H3: Worker pool capacity
+  - H3: Slow Git content reads
+  - H3: Slow worktree cleanup
+  - H3: Slow agent database opens
+  - H3: SQLite transaction timing
+  - H3: SQLite session writes
+  - H3: Slow reply preparation
   - H3: Model call size and timing
   - H3: Console styles
   - H3: Redaction
@@ -4604,8 +7349,59 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: At a glance
   - H2: Score bands
   - H2: Surface explorer
+  - H2: Decision context
+  - H3: CLI
+  - H3: Linux Gateway host
+  - H3: Gateway runtime
+  - H3: macOS Gateway host
+  - H3: Discord
+  - H3: Android app
+  - H3: iOS app
+  - H3: Agent Runtime
+  - H3: Channel framework
+  - H3: Browser automation, exec, and sandbox tools
+  - H3: Observability
+  - H3: OpenAI and Codex provider path
+  - H3: Control UI
+  - H3: Web search tools
+  - H3: Plugins
+  - H3: Security, auth, pairing, and secrets
+  - H3: Automation and durable work
+  - H3: Windows via WSL2
+  - H3: ChromeOS, Raspberry Pi, and small Linux devices
+  - H3: Anthropic provider path
+  - H3: Telegram
+  - H3: Slack
+  - H3: Google provider path
+  - H3: iMessage
+  - H3: macOS companion app
+  - H3: OpenRouter provider path
+  - H3: WhatsApp
+  - H3: Session, memory, and state lifecycle
+  - H3: Linux companion app
+  - H3: Containers and cloud execution
+  - H3: Windows App / Node
+  - H3: Media understanding and media generation
+  - H3: Image, video, and music generation tools
+  - H3: Local model providers: Ollama, vLLM, SGLang, LM Studio
+  - H3: Long-tail hosted providers
+  - H3: Voice and realtime talk
+  - H3: Matrix
+  - H3: Google Chat
+  - H3: Microsoft Teams
+  - H3: Signal
+  - H3: TUI
+  - H3: Native Windows
+  - H3: ClawHub
+  - H3: Kubernetes hosting
+  - H3: Regional channel cohort
+  - H3: Community channel cohort
+  - H3: External apps and interoperability
+  - H3: Nix install path
+  - H3: Voice Call channel
+  - H3: watchOS companion surfaces
   - H2: QA evidence summary
-  - H3: Readiness by area
+  - H3: Historical category evidence
 
 ## maturity/taxonomy.md
 
@@ -4638,14 +7434,15 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: What it does
   - H2: Auto-detection (default)
+  - H2: OpenAI transcription alongside ChatGPT/Codex OAuth
   - H2: Config examples
   - H3: Provider + CLI fallback (OpenAI + Whisper CLI)
-  - H3: Provider-only with scope gating
   - H3: Provider-only (Deepgram)
   - H3: Provider-only (Mistral Voxtral)
   - H3: Provider-only (SenseAudio)
   - H3: Echo transcript to chat (opt-in)
   - H2: Notes and limits
+  - H3: Resident local STT
   - H3: Proxy environment support
   - H2: Mention detection in groups
   - H2: Gotchas
@@ -4668,9 +7465,68 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: macOS app
   - H3: macOS user setting
   - H3: CLI helper (node invoke)
+  - H3: macOS physical PTZ
+  - H2: Linux node host
   - H2: Safety + practical limits
   - H2: macOS screen video (OS-level)
   - H2: Related
+
+## nodes/command-policy.md
+
+- Route: /nodes/command-policy
+- Headings:
+  - H2: Command policy
+  - H2: Config (openclaw.json)
+  - H2: Permissions map
+
+## nodes/computer-use.md
+
+- Route: /nodes/computer-use
+- Headings:
+  - H2: Requirements
+  - H2: Gateway desktop
+  - H3: Linux Gateway live proof
+  - H2: The computer agent tool
+  - H2: CUA Driver provider
+  - H3: macOS app-owned daemon
+  - H4: Trust model
+  - H4: Browser profiles
+  - H3: Maintainer live-proof rig
+  - H4: macOS
+  - H4: Linux X11 through Crabbox
+  - H3: Windows and Linux (experimental, direct SDK)
+  - H2: The computer.act node command
+  - H2: Authorization
+  - H2: Safety
+  - H2: Troubleshooting
+  - H3: Gateway computer unavailable
+  - H3: CUA Driver error codes
+  - H3: Desktop stream
+  - H3: macOS desktop availability
+  - H3: macOS permissions
+  - H2: Relationship to other desktop-control paths
+
+## nodes/device-commands.md
+
+- Route: /nodes/device-commands
+- Headings:
+  - H2: macOS widget panel
+  - H2: Photos + videos (node camera)
+  - H2: Screen recordings (nodes)
+  - H2: Location (nodes)
+  - H2: SMS (Android nodes)
+  - H2: Device and personal data commands
+
+## nodes/file-transfers.md
+
+- Route: /nodes/file-transfers
+- Headings:
+  - H2: Terminal file uploads
+  - H2: Agent file transfers
+  - H3: Gateway workspace files
+  - H3: Workspace Skill installation
+  - H3: Binary transfers for services
+  - H3: Transferred files
 
 ## nodes/images.md
 
@@ -4678,6 +7534,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Goals
   - H2: CLI Surface
+  - H2: Message tool attachment metadata
   - H2: WhatsApp Web channel behavior
   - H2: Auto-Reply Pipeline
   - H2: Inbound Media To Commands
@@ -4689,32 +7546,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /nodes
 - Headings:
-  - H2: Pairing + status
-  - H2: Version skew and upgrade order
-  - H2: Remote node host (system.run)
-  - H3: Start a node host (foreground)
-  - H3: Remote gateway via SSH tunnel (loopback bind)
-  - H3: Start a node host (service)
-  - H3: Pair + name
-  - H3: Allowlist the commands
-  - H3: Point exec at the node
-  - H3: Local model inference
-  - H2: Invoking commands
-  - H2: Command policy
-  - H2: Config (openclaw.json)
-  - H2: Screenshots (canvas snapshots)
-  - H3: Canvas controls
-  - H3: A2UI (Canvas)
-  - H2: Photos + videos (node camera)
-  - H2: Screen recordings (nodes)
-  - H2: Location (nodes)
-  - H2: SMS (Android nodes)
-  - H2: Device and personal data commands
-  - H2: System commands (node host / mac node)
-  - H2: Exec node binding
-  - H2: Permissions map
-  - H2: Headless node host (cross-platform)
-  - H2: Mac node mode
+  - H2: Node pages
+  - H2: Where each section moved
 
 ## nodes/location-command.md
 
@@ -4726,8 +7559,34 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Permissions mapping (node.permissions)
   - H2: Command: location.get
   - H2: Background behavior
+  - H2: Linux node host
   - H2: Model/tooling integration
   - H2: UX copy (suggested)
+  - H2: Related
+
+## nodes/mcp-and-skills.md
+
+- Route: /nodes/mcp-and-skills
+- Headings:
+  - H2: Node-hosted MCP servers
+  - H2: Node-hosted skills
+  - H2: Local model inference
+
+## nodes/media-playback.md
+
+- Route: /nodes/media-playback
+- Headings:
+  - H2: Client support
+  - H2: Portable formats
+  - H2: Lazy playback renditions
+  - H2: Managed attachments and access
+  - H2: Metadata and limits
+  - H2: Troubleshooting
+  - H3: Duration or dimensions are missing
+  - H3: A recognized format downloads instead of playing
+  - H3: Playback stays in preparing state
+  - H3: Linux reports a codec error
+  - H3: Android shows a media row while offline
   - H2: Related
 
 ## nodes/media-understanding.md
@@ -4746,28 +7605,123 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Model selection guidance
   - H2: Attachment policy
   - H3: File-attachment extraction
+  - H2: Vision models and image replay cost
   - H2: Config examples
   - H2: Status output
   - H2: Notes
   - H2: Related
 
+## nodes/node-exec.md
+
+- Route: /nodes/node-exec
+- Headings:
+  - H2: Allowlist the commands
+  - H2: Point exec at the node
+  - H2: Channel and subagent context
+  - H2: Invoking commands
+  - H2: Codex sessions on a node
+  - H2: Exec node binding
+
+## nodes/node-host.md
+
+- Route: /nodes/node-host
+- Headings:
+  - H2: Remote node host (system.run)
+  - H3: Gateway deployments that cannot host nodes
+  - H3: Start a node host (foreground)
+  - H3: Remote gateway via SSH tunnel (loopback bind)
+  - H3: Restrict the node command surface
+  - H3: Start a node host (service)
+  - H3: Session-host workspace permissions
+  - H3: Automatic node updates
+  - H3: Pair + name
+  - H3: Headless identity state
+  - H2: System commands (node host / mac node)
+  - H2: Headless node host (cross-platform)
+  - H2: Mac node mode
+
+## nodes/pairing-and-status.md
+
+- Route: /nodes/pairing-and-status
+- Headings:
+  - H2: Pairing + status
+  - H2: Version skew and upgrade order
+
+## nodes/presence.md
+
+- Route: /nodes/presence
+- Headings:
+  - H2: Requirements
+  - H2: Check the active computer
+  - H2: How activity becomes presence
+  - H2: Privacy and model context
+  - H2: How connection alerts are routed
+  - H2: Troubleshooting
+  - H2: Related
+
+## nodes/session-catalogs.md
+
+- Route: /nodes/session-catalogs
+- Headings:
+  - H2: Import transcripts
+  - H2: Codex sessions and transcripts
+  - H2: Claude sessions and transcripts
+  - H2: OpenCode and Pi sessions
+  - H2: OpenClaw sessions and transcripts
+
+## nodes/session-hosting.md
+
+- Route: /nodes/session-hosting
+- Headings:
+  - H2: Host OpenClaw sessions
+  - H3: Isolate hosted worker sessions in containers
+
 ## nodes/talk.md
 
 - Route: /nodes/talk
 - Headings:
-  - H2: Behavior (macOS)
+  - H2: Talk documentation pages
+  - H2: Where each section moved
   - H2: Voice directives in replies
-  - H2: Config (/.openclaw/openclaw.json)
-  - H2: macOS UI
-  - H2: Android UI
+  - H2: Config (`~/.openclaw/openclaw.json`)
   - H2: Notes
   - H2: Related
+
+## nodes/talk/client-ui.md
+
+- Route: /nodes/talk/client-ui
+- Headings:
+  - H2: macOS UI
+  - H2: Apple Watch UI
+  - H2: Android UI
+
+## nodes/talk/macos-relay.md
+
+- Route: /nodes/talk/macos-relay
+- Headings:
+  - H2: Behavior (macOS)
+  - H2: Realtime Talk over the Gateway relay (macOS)
+  - H3: When realtime cannot start
+
+## nodes/talk/realtime-sessions.md
+
+- Route: /nodes/talk/realtime-sessions
+- Headings:
+  - H2: Choose a Talk voice from chat
+
+## nodes/talk/session-ownership.md
+
+- Route: /nodes/talk/session-ownership
+- Headings:
+  - H2: Session ownership
 
 ## nodes/troubleshooting.md
 
 - Route: /nodes/troubleshooting
 - Headings:
+  - H2: Node goes offline after SSH logout (Linux)
   - H2: Command ladder
+  - H2: Node runtime version differs from the CLI
   - H2: Foreground requirements
   - H2: Permissions matrix
   - H2: Pairing versus approvals
@@ -4795,67 +7749,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Running Agent Runtime Tests
   - H2: Manual testing
   - H2: Clean slate reset
-  - H2: References
-  - H2: Related
-
-## perplexity.md
-
-- Route: /perplexity
-- Headings:
-  - H2: Related
-
-## plan/codex-context-engine-harness.md
-
-- Route: /plan/codex-context-engine-harness
-- Headings:
-  - H2: Status
-  - H2: Goal
-  - H2: Non-goals
-  - H2: Current architecture
-  - H2: Current gap
-  - H2: Desired behavior
-  - H2: Design constraints
-  - H3: Codex app-server remains canonical for native thread state
-  - H3: Context engine assembly must be projected into Codex inputs
-  - H3: Prompt-cache stability matters
-  - H3: Runtime selection semantics do not change
-  - H2: Implementation plan
-  - H3: 1. Export or relocate reusable context-engine attempt helpers
-  - H3: 2. Add a Codex context projection helper
-  - H3: 3. Wire bootstrap before Codex thread startup
-  - H3: 4. Wire assemble before thread/start / thread/resume and turn/start
-  - H3: 5. Preserve prompt-cache stable formatting
-  - H3: 6. Wire post-turn after transcript mirroring
-  - H3: 7. Normalize usage and prompt-cache runtime context
-  - H3: 8. Compaction policy
-  - H4: /compact and explicit OpenClaw compaction
-  - H4: In-turn Codex native contextCompaction events
-  - H3: 9. Session reset and binding behavior
-  - H3: 10. Error handling
-  - H2: Test plan
-  - H3: Unit tests
-  - H3: Existing tests to update
-  - H3: Integration / live tests
-  - H2: Observability
-  - H2: Migration / compatibility
-  - H2: Open questions
-  - H2: Acceptance criteria
-
-## plan/ui-channels.md
-
-- Route: /plan/ui-channels
-- Headings:
-  - H2: Status
-  - H2: Problem
-  - H2: Goals
-  - H2: Non goals
-  - H2: Target model
-  - H2: Delivery metadata
-  - H2: Runtime capability contract
-  - H2: Channel mapping
-  - H2: Refactor steps
-  - H2: Tests
-  - H2: Open questions
   - H2: Related
 
 ## platforms/android.md
@@ -4863,7 +7756,11 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /platforms/android
 - Headings:
   - H2: Support snapshot
+  - H2: Simultaneous Gateway sessions
+  - H2: Dictation and attachments
+  - H2: Wear OS companion
   - H2: Install outside Google Play
+  - H2: App and Gateway compatibility
   - H2: Mirror and control Android from a remote Mac
   - H3: Before you begin
   - H3: Enable ADB over TCP
@@ -4876,23 +7773,32 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: 2. Verify discovery (optional)
   - H4: Cross-network discovery via unicast DNS-SD
   - H3: 3. Connect from Android
-  - H3: Multiple gateways
+  - H3: Manage paired Gateways
   - H3: Presence alive beacons
   - H3: 4. Approve pairing (CLI)
   - H3: 5. Verify the node is connected
   - H3: 6. Chat + history
-  - H3: 7. Canvas + camera
-  - H4: Gateway Canvas Host (recommended for web content)
+  - H4: Reactions
+  - H4: Agent browser in chat
+  - H3: 7. Camera
   - H3: 8. Voice + expanded Android command surface
   - H3: 9. Workspace files (read-only)
+  - H2: Review command approvals
+  - H2: Answer agent questions
   - H2: Assistant entrypoints
   - H2: Notification forwarding
   - H2: Related
 
-## platforms/digitalocean.md
+## platforms/chromeos.md
 
-- Route: /platforms/digitalocean
+- Route: /platforms/chromeos
 - Headings:
+  - H2: Enable the Linux container
+  - H2: Quick path
+  - H2: Prefer the native install over Docker
+  - H2: Node version
+  - H2: Provider keys and environment variables
+  - H2: Crostini is not always on
   - H2: Related
 
 ## platforms/easyrunner.md
@@ -4905,6 +7811,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Verify
   - H2: Updates and backups
   - H2: Troubleshooting
+  - H2: Related
 
 ## platforms/index.md
 
@@ -4916,13 +7823,47 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Gateway service install (CLI)
   - H2: Related
 
+## platforms/ios-healthkit.md
+
+- Route: /platforms/ios-healthkit
+- Headings:
+  - H1: HealthKit summaries
+  - H2: Requirements
+  - H2: Enable access
+  - H3: 1. Authorize the Gateway command
+  - H3: 2. Enable sharing on the iOS device
+  - H2: Request today's summary
+  - H2: Privacy behavior
+  - H2: Troubleshooting
+  - H3: Command is not declared by the node
+  - H3: Command requires explicit opt-in
+  - H3: `HEALTH_ACCESS_DISABLED`
+  - H3: Summary succeeds but metrics are missing
+  - H3: Older ranges fail
+  - H2: Related
+
 ## platforms/ios.md
 
 - Route: /platforms/ios
 - Headings:
   - H2: What it does
+  - H2: Settings
+  - H2: Cloudflare Access sign-in
+  - H2: Sessions
+  - H2: Session colors
+  - H2: Reactions
+  - H2: Message times and models
+  - H2: Sources in chat
+  - H2: Diagrams in chat
   - H2: Requirements
   - H2: Quick start (pair + connect)
+  - H2: Health summaries
+  - H2: Apple Watch voice and chat
+  - H3: Talk to Claw with the iPhone
+  - H3: Standalone voice
+  - H2: Review command approvals
+  - H2: Answer agent questions
+  - H2: Optional direct Apple Watch node
   - H2: Relay-backed push for official builds
   - H2: Background alive beacons
   - H2: Authentication and trust flow
@@ -4930,11 +7871,10 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Bonjour (LAN)
   - H3: Tailnet (cross-network)
   - H3: Manual host/port
-  - H2: Multiple gateways
-  - H2: Canvas + A2UI
+  - H2: Multiple Gateways
   - H2: Computer Use relationship
-  - H3: Canvas eval / snapshot
   - H2: Voice wake + talk mode
+  - H3: Start live voice with Siri or Shortcuts
   - H2: Common errors
   - H2: Related docs
 
@@ -4942,7 +7882,19 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /platforms/linux
 - Headings:
-  - H2: Quick path (VPS)
+  - H2: Desktop companion
+  - H3: Chrome extension setup
+  - H3: Desktop compatibility
+  - H3: Gateway selection
+  - H3: Use the bundled runtime
+  - H3: Desktop sharing
+  - H3: First-run setup
+  - H3: Host sleep
+  - H3: Media codecs
+  - H3: Quick Chat
+  - H2: CLI and SSH alternative
+  - H2: Node capabilities
+  - H2: Retired Linux Canvas
   - H2: Install
   - H2: Gateway service (systemd)
   - H2: Memory pressure and OOM kills
@@ -4955,6 +7907,10 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Automatic setup
   - H2: Manual recovery
   - H2: Launchd (Gateway as LaunchAgent)
+  - H3: Unexpected repeated restarts
+  - H3: Attach-only development
+  - H2: App-hosted lifecycle and updates
+  - H3: Existing app-managed Node services
   - H2: Version compatibility
   - H2: State directory on macOS
   - H2: Debug app connectivity
@@ -4965,24 +7921,11 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /platforms/mac/canvas
 - Headings:
-  - H2: Where Canvas lives
   - H2: Panel behavior
-  - H2: Agent API surface
-  - H2: A2UI in Canvas
-  - H3: A2UI commands (v0.8)
-  - H2: Triggering agent runs from Canvas
-  - H2: Security notes
-  - H2: Related
-
-## platforms/mac/child-process.md
-
-- Route: /platforms/mac/child-process
-- Headings:
-  - H2: Default behavior (launchd)
-  - H2: Unsigned dev builds
-  - H2: Attach-only mode
-  - H2: Remote mode
-  - H2: Why we prefer launchd
+  - H2: Agent path
+  - H2: Node commands
+  - H2: A2UI belongs on session dashboards
+  - H2: Migrating documents from a custom root
   - H2: Related
 
 ## platforms/mac/dev-setup.md
@@ -4993,9 +7936,13 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Prerequisites
   - H2: 1. Install dependencies
   - H2: 2. Build and package the app
+  - H3: Shared Bun pin and repin gate
   - H2: 3. Install the CLI and Gateway
+  - H2: Run native tests safely
   - H2: Troubleshooting
+  - H3: Build fails while freezing Peekaboo sources
   - H3: Build fails: toolchain or SDK mismatch
+  - H3: Build fails: MLX voice helper Metal shaders
   - H3: App crashes on permission grant
   - H3: Gateway "Starting..." indefinitely
   - H2: Related
@@ -5007,7 +7954,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H1: Health checks on macOS
   - H2: Menu bar
   - H2: Settings
-  - H2: How the probe works
+  - H2: How health refresh works
   - H2: When in doubt
   - H2: Related
 
@@ -5016,6 +7963,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /platforms/mac/icon
 - Headings:
   - H1: Menu Bar Icon States
+  - H2: Dock icon
   - H2: States
   - H2: Voice wake ears
   - H2: Shapes and sizes
@@ -5028,6 +7976,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H1: Logging (macOS)
   - H2: Rolling diagnostics file log (Debug pane)
+  - H2: Export unified logs as JSON
+  - H2: App logger redaction
   - H2: Unified logging private data on macOS
   - H2: Enable for OpenClaw (ai.openclaw)
   - H2: Disable after debugging
@@ -5067,7 +8017,10 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /platforms/mac/permissions
 - Headings:
   - H2: Requirements for stable permissions
+  - H2: Screen Recording still appears missing after granting access
   - H2: Accessibility grants for Node and CLI runtimes
+  - H2: Separate Computer Control grants
+  - H2: Desktop availability and keeping awake
   - H2: Recovery checklist when prompts disappear
   - H2: Files and folders permissions (Desktop/Documents/Downloads)
   - H2: Related
@@ -5076,11 +8029,19 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /platforms/mac/remote
 - Headings:
+  - H2: Connect with your browser
+  - H3: Open the Mac app from a website
   - H2: Modes
   - H2: Remote transports
+  - H2: Run a local Gateway alongside a remote primary
   - H2: Prereqs on the remote host
   - H2: macOS app setup
-  - H2: Web Chat
+  - H3: Add and manage saved Gateways
+  - H3: Secrets, profiles, and app launch
+  - H3: Offline preconfiguration
+  - H3: Configure in the app
+  - H2: WebChat
+  - H2: Debug connection actions
   - H2: Permissions
   - H2: Security notes
   - H2: WhatsApp login flow (remote)
@@ -5104,6 +8065,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Data source
   - H2: Install actions
+  - H2: Browse ClawHub
   - H2: Env/API keys
   - H2: Remote mode
   - H2: Related
@@ -5139,6 +8101,18 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /platforms/mac/webchat
 - Headings:
+  - H2: Conversation in the native window
+  - H2: Message times and models
+  - H2: Thread view options
+  - H2: Session catalogs
+  - H2: Online people
+  - H2: Pending questions and approvals
+  - H2: Sources
+  - H2: Diagrams
+  - H2: Session colors
+  - H2: Multiple Gateway windows
+  - H3: Gateway picker
+  - H2: Quick Chat bar
   - H2: Launch and debugging
   - H2: How it is wired
   - H2: Security surface
@@ -5154,6 +8128,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: How it works
   - H3: Gateway + node transport
   - H3: Node service + app IPC
+  - H3: App control socket
   - H3: PeekabooBridge (UI automation)
   - H2: Operational flows
   - H2: Hardening notes
@@ -5163,24 +8138,30 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /platforms/macos
 - Headings:
+  - H2: Requirements
   - H2: Download
   - H2: First run
+  - H2: Connection
+  - H2: Updates
+  - H2: Open dashboard links
+  - H2: Import browser logins
+  - H2: Sync cookies to a remote computer
   - H2: Choose a Gateway mode
   - H2: What the app owns
   - H2: macOS detail pages
   - H2: Related
 
-## platforms/oracle.md
+## platforms/omarchy.md
 
-- Route: /platforms/oracle
+- Route: /platforms/omarchy
 - Headings:
-  - H2: Related
-
-## platforms/raspberry-pi.md
-
-- Route: /platforms/raspberry-pi
-- Headings:
-  - H2: Related
+  - H1: OpenClaw on Omarchy
+  - H2: Requirements
+  - H2: Install the bar plugin
+  - H2: Use agents, sessions, and quick prompts
+  - H2: One icon with the desktop app
+  - H2: Updates
+  - H2: Troubleshooting and support
 
 ## platforms/windows.md
 
@@ -5192,10 +8173,13 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Windows node mode
   - H2: Local MCP mode
   - H2: Native Windows CLI and Gateway
+  - H3: Updating from 2026.9.4
   - H2: WSL2 Gateway
   - H2: Gateway auto-start before Windows login
   - H2: Expose WSL services over LAN
   - H2: Troubleshooting
+  - H3: The Gateway Scheduled Task is disabled
+  - H3: The Scheduled Task stops before the Gateway is ready
   - H3: The tray icon does not appear
   - H3: Local setup fails
   - H3: The app says pairing is required
@@ -5234,41 +8218,120 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Troubleshooting
   - H2: Related
 
-## plugins/agent-tools.md
+## plugins/agentsapi.md
 
-- Route: /plugins/agent-tools
+- Route: /plugins/agentsapi
 - Headings:
-  - H2: Related
+  - H2: What is Agents API?
+  - H3: What you can do
+  - H2: Set up Agents API
+  - H3: 1. Sign in with an API key
+  - H3: 2. Enable the plugin and choose your model
+  - H3: 3. Start a conversation and try a task
+  - H2: Continue a task
+  - H2: Work with files and tools
+  - H2: Advanced configuration and reference
+  - H3: Files and storage
+  - H3: MCP connections
+  - H3: Self-hosted execution
+  - H4: One executor per session
+  - H4: 1. Prepare the execution host
+  - H4: 2. Install and configure a controller plugin
+  - H4: 3. Select the controller
+  - H4: How startup, reconnection, and cleanup work
+  - H4: Use an external controller instead
+  - H4: Check the setup and file boundaries
+  - H3: Session settings and diagnostics
+  - H3: Current limitations
+
+## plugins/apple-fm.md
+
+- Route: /plugins/apple-fm
+- Headings:
+  - H2: Requirements
+  - H2: Set up
+  - H2: Runtime behavior
+  - H2: Troubleshooting
 
 ## plugins/architecture-internals.md
 
 - Route: /plugins/architecture-internals
 - Headings:
+  - H2: What each page covers
+  - H2: Where each section moved
+  - H3: Load pipeline and registry
+  - H3: Provider hooks and catalogs
+  - H3: Core runtime helpers
+  - H3: Gateway routes
+  - H3: Channel surfaces
+  - H3: Packs and import paths
+  - H3: Context engines
+  - H3: New capability
+  - H2: Related
+
+## plugins/architecture-internals/channel-surfaces.md
+
+- Route: /plugins/architecture-internals/channel-surfaces
+- Headings:
+  - H2: Conversation binding callbacks
+  - H2: Message tool schemas
+  - H2: Channel target resolution
+  - H2: Config-backed directories
+  - H2: Read-only channel inspection
+
+## plugins/architecture-internals/context-engines.md
+
+- Route: /plugins/architecture-internals/context-engines
+- Headings:
+  - H2: Context engine plugins
+
+## plugins/architecture-internals/gateway-routes.md
+
+- Route: /plugins/architecture-internals/gateway-routes
+- Headings:
+  - H2: Gateway HTTP routes
+
+## plugins/architecture-internals/load-pipeline.md
+
+- Route: /plugins/architecture-internals/load-pipeline
+- Headings:
   - H2: Load pipeline
   - H3: Manifest-first behavior
   - H3: Plugin cache boundary
   - H2: Registry model
-  - H2: Conversation binding callbacks
+
+## plugins/architecture-internals/new-capability.md
+
+- Route: /plugins/architecture-internals/new-capability
+- Headings:
+  - H2: Adding a new capability
+  - H3: Capability checklist
+  - H3: Capability template
+
+## plugins/architecture-internals/packaging.md
+
+- Route: /plugins/architecture-internals/packaging
+- Headings:
+  - H2: Plugin SDK import paths
+  - H2: Package packs
+  - H3: Channel catalog metadata
+
+## plugins/architecture-internals/provider-hooks.md
+
+- Route: /plugins/architecture-internals/provider-hooks
+- Headings:
   - H2: Provider runtime hooks
   - H3: Hook order and usage
   - H3: Provider example
   - H3: Built-in examples
+  - H2: Provider catalogs
+
+## plugins/architecture-internals/runtime-helpers.md
+
+- Route: /plugins/architecture-internals/runtime-helpers
+- Headings:
   - H2: Runtime helpers
   - H3: api.runtime.imageGeneration
-  - H2: Gateway HTTP routes
-  - H2: Plugin SDK import paths
-  - H2: Message tool schemas
-  - H2: Channel target resolution
-  - H2: Config-backed directories
-  - H2: Provider catalogs
-  - H2: Read-only channel inspection
-  - H2: Package packs
-  - H3: Channel catalog metadata
-  - H2: Context engine plugins
-  - H2: Adding a new capability
-  - H3: Capability checklist
-  - H3: Capability template
-  - H2: Related
 
 ## plugins/architecture.md
 
@@ -5277,10 +8340,10 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Public capability model
   - H3: External compatibility stance
   - H3: Plugin shapes
-  - H3: Legacy hooks
   - H3: Compatibility signals
   - H2: Architecture overview
   - H3: Plugin metadata snapshot and lookup table
+  - H3: Runtime instance and source lifetime
   - H3: Activation planning
   - H3: Channel plugins and the shared message tool
   - H2: Capability ownership model
@@ -5289,15 +8352,25 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Capability example: video understanding
   - H2: Contracts and enforcement
   - H3: What belongs in a contract
+  - H2: Skill previews
   - H2: Execution model
   - H2: Export boundary
   - H2: Internals and reference
   - H2: Related
 
-## plugins/building-extensions.md
+## plugins/beam.md
 
-- Route: /plugins/building-extensions
+- Route: /plugins/beam
 - Headings:
+  - H2: Enable
+  - H2: Authentication
+  - H2: Request
+  - H2: Continue on the Team Gateway
+  - H2: Storage and visibility
+  - H3: Delete
+  - H2: Security boundary
+  - H2: Mirroring
+  - H2: Troubleshooting
   - H2: Related
 
 ## plugins/building-plugins.md
@@ -5307,6 +8380,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Requirements
   - H2: Choose the plugin shape
   - H2: Quickstart
+  - H2: Add plugin artwork
   - H2: Registering tools
   - H2: Import conventions
   - H2: Pre-submission checklist
@@ -5324,10 +8398,12 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Supported now
   - H4: Skill content
   - H4: Hook packs
-  - H4: MCP for embedded OpenClaw
   - H4: Embedded OpenClaw settings
   - H4: Embedded OpenClaw LSP
   - H3: Detected but not executed
+  - H2: MCP for embedded OpenClaw
+  - H3: Transports
+  - H3: Tool naming
   - H2: Bundle formats
   - H2: Detection precedence
   - H2: Runtime dependencies and cleanup
@@ -5343,12 +8419,25 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Minimal backend plugin
   - H2: Config shape
   - H2: Advanced backend hooks
+  - H3: parseJsonlEvent: provider-specific JSONL streams
+  - H3: parseJsonlLifecycleEvent: provider-native lifecycle records
   - H3: ownsNativeCompaction: opting out of OpenClaw compaction
   - H2: MCP tool bridge
-  - H2: User configuration
+  - H2: Selecting the backend
   - H2: Verification
   - H2: Checklist
   - H2: Related
+
+## plugins/cloudflare.md
+
+- Route: /plugins/cloudflare
+- Headings:
+  - H1: Cloudflare
+  - H2: Create a bucket and credentials
+  - H2: Configure a location
+  - H2: Initialize and test
+  - H2: Settings
+  - H2: Troubleshooting
 
 ## plugins/codex-computer-use.md
 
@@ -5361,7 +8450,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Commands
   - H2: Marketplace choices
   - H2: Bundled macOS marketplace
-  - H2: Remote catalog limit
+  - H3: Shared plugin cache
+  - H2: Remote marketplaces
   - H2: Configuration reference
   - H2: What OpenClaw checks
   - H2: macOS permissions
@@ -5373,62 +8463,266 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /plugins/codex-harness-reference
 - Headings:
   - H2: Plugin config surface
+  - H2: Where each section moved
+  - H3: Codex session catalog and supervision
+  - H3: Codex app-server transport
+  - H3: Codex approval and sandbox modes
+  - H3: Codex auth and environment isolation
+  - H3: Codex dynamic tools
+  - H3: Codex timeouts and turn settlement
+  - H3: Codex model discovery
+  - H3: Codex restricted turns
+  - H3: Codex workspace bootstrap files
+  - H2: Related
+
+## plugins/codex-harness-reference/app-server-transport.md
+
+- Route: /plugins/codex-harness-reference/app-server-transport
+- Headings:
   - H2: App-server transport
+  - H2: Environment overrides
+
+## plugins/codex-harness-reference/approval-and-sandbox.md
+
+- Route: /plugins/codex-harness-reference/approval-and-sandbox
+- Headings:
   - H2: Approval and sandbox modes
   - H2: Sandboxed native execution
+
+## plugins/codex-harness-reference/auth.md
+
+- Route: /plugins/codex-harness-reference/auth
+- Headings:
   - H2: Auth and environment isolation
+  - H2: Upgrading from 2026.9.4 with Codex sign-in
+
+## plugins/codex-harness-reference/dynamic-tools.md
+
+- Route: /plugins/codex-harness-reference/dynamic-tools
+- Headings:
   - H2: Dynamic tools
-  - H2: Timeouts
+
+## plugins/codex-harness-reference/model-discovery.md
+
+- Route: /plugins/codex-harness-reference/model-discovery
+- Headings:
   - H2: Model discovery
+
+## plugins/codex-harness-reference/restricted-turns.md
+
+- Route: /plugins/codex-harness-reference/restricted-turns
+- Headings:
+  - H2: Restricted turns
+
+## plugins/codex-harness-reference/supervision.md
+
+- Route: /plugins/codex-harness-reference/supervision
+- Headings:
+  - H2: Supervision
+
+## plugins/codex-harness-reference/timeouts.md
+
+- Route: /plugins/codex-harness-reference/timeouts
+- Headings:
+  - H2: Timeouts
+  - H3: Session catalog reads
+  - H3: Turn execution and settlement
+
+## plugins/codex-harness-reference/workspace-bootstrap-files.md
+
+- Route: /plugins/codex-harness-reference/workspace-bootstrap-files
+- Headings:
   - H2: Workspace bootstrap files
-  - H2: Environment overrides
-  - H2: Related
+  - H3: Skills, persona, and memory without a managed relay
 
 ## plugins/codex-harness-runtime.md
 
 - Route: /plugins/codex-harness-runtime
 - Headings:
   - H2: Overview
-  - H2: Thread bindings and model changes
-  - H2: Visible replies and heartbeats
-  - H2: Hook boundaries
-  - H2: V1 support contract
-  - H2: Native permissions and MCP elicitations
-  - H2: Queue steering
-  - H2: Codex feedback upload
-  - H2: Compaction and transcript mirror
   - H2: Media and delivery
+  - H2: Where each section moved
+  - H3: Codex process recovery
+  - H3: Codex thread bindings and supervision
+  - H3: Codex replies and final answers
+  - H3: Codex hook boundaries
+  - H3: Codex sandbox process streaming
+  - H3: Codex runtime v1 support contract
+  - H3: Codex native permissions and elicitations
+  - H3: Codex queue steering and feedback upload
+  - H3: Codex compaction and transcript mirror
   - H2: Related
+
+## plugins/codex-harness-runtime/compaction.md
+
+- Route: /plugins/codex-harness-runtime/compaction
+- Headings:
+  - H2: Compaction and transcript mirror
+
+## plugins/codex-harness-runtime/hooks.md
+
+- Route: /plugins/codex-harness-runtime/hooks
+- Headings:
+  - H2: Hook boundaries
+  - H2: Remote native hook callbacks
+
+## plugins/codex-harness-runtime/permissions.md
+
+- Route: /plugins/codex-harness-runtime/permissions
+- Headings:
+  - H2: Native permissions and MCP elicitations
+  - H2: Async questions
+
+## plugins/codex-harness-runtime/queue-and-feedback.md
+
+- Route: /plugins/codex-harness-runtime/queue-and-feedback
+- Headings:
+  - H2: Queue steering
+  - H2: Configuration and policy warnings
+  - H2: Diagnostic-log warnings
+  - H2: Codex feedback upload
+
+## plugins/codex-harness-runtime/recovery.md
+
+- Route: /plugins/codex-harness-runtime/recovery
+- Headings:
+  - H2: Timed-out model discovery
+  - H2: Recovery after a hard Gateway stop
+
+## plugins/codex-harness-runtime/replies.md
+
+- Route: /plugins/codex-harness-runtime/replies
+- Headings:
+  - H2: Visible replies and heartbeats
+  - H2: Attachments in a remote workspace
+  - H2: Final answers after settled tool work
+
+## plugins/codex-harness-runtime/sandbox-streaming.md
+
+- Route: /plugins/codex-harness-runtime/sandbox-streaming
+- Headings:
+  - H2: Experimental sandbox process streaming
+
+## plugins/codex-harness-runtime/threads.md
+
+- Route: /plugins/codex-harness-runtime/threads
+- Headings:
+  - H2: Thread bindings and model changes
+  - H2: Supervision and safe continuation
+
+## plugins/codex-harness-runtime/v1-support-contract.md
+
+- Route: /plugins/codex-harness-runtime/v1-support-contract
+- Headings:
+  - H2: V1 support contract
 
 ## plugins/codex-harness.md
 
 - Route: /plugins/codex-harness
 - Headings:
+  - H2: Shared output projection
+  - H2: Saved-account usage
+  - H2: Native subagent status
   - H2: Requirements
   - H2: Quickstart
-  - H2: Share threads with Codex Desktop and CLI
-  - H2: Configuration
-  - H3: Compaction
   - H2: Verify Codex runtime
+  - H2: Luna Reserve and credit usage
+  - H2: Where each section moved
+  - H3: Run Codex on another machine
+  - H3: Codex routing and deployment
+  - H3: Codex harness configuration
+  - H3: Codex app-server policy
+  - H3: Codex plugin config fields
+  - H3: Codex commands and diagnostics
+  - H3: Codex runtime behavior
+  - H3: Native Codex state and features
+  - H3: Codex harness troubleshooting
+  - H2: Related
+
+## plugins/codex-harness/app-server.md
+
+- Route: /plugins/codex-harness/app-server
+- Headings:
+  - H2: App-server policy
+  - H3: Native approval audit evidence
+  - H2: Auth order
+  - H2: Scheduled app authority
+  - H2: Environment isolation
+  - H2: Local testing env overrides
+
+## plugins/codex-harness/commands.md
+
+- Route: /plugins/codex-harness/commands
+- Headings:
+  - H2: Commands and diagnostics
+  - H3: Shared Fast mode and Codex fast mode
+  - H3: Inspect Codex threads locally
+
+## plugins/codex-harness/config-fields.md
+
+- Route: /plugins/codex-harness/config-fields
+- Headings:
+  - H2: Config fields
+
+## plugins/codex-harness/configuration.md
+
+- Route: /plugins/codex-harness/configuration
+- Headings:
+  - H2: Configuration
+  - H3: Restricted turns and ring zero
+  - H3: Project instructions
+  - H3: Compaction
+  - H3: Direct API long context
+
+## plugins/codex-harness/native-features.md
+
+- Route: /plugins/codex-harness/native-features
+- Headings:
+  - H2: Share threads with Codex Desktop and CLI
+  - H2: Use an existing local config.toml
+  - H3: Credentials and account ownership
+  - H2: Supervise Codex sessions
+  - H2: Native Codex plugins
+  - H2: Computer Use
+  - H2: Rich MCP forms
+
+## plugins/codex-harness/placement.md
+
+- Route: /plugins/codex-harness/placement
+- Headings:
+  - H2: Run Codex on a paired device
+  - H2: Run Codex on a cloud worker
+
+## plugins/codex-harness/routing.md
+
+- Route: /plugins/codex-harness/routing
+- Headings:
   - H2: Routing and model selection
+  - H3: Operator role model permissions
   - H2: Deployment patterns
   - H3: Basic Codex deployment
   - H3: Mixed provider deployment
   - H3: Fail-closed Codex deployment
-  - H2: App-server policy
-  - H2: Commands and diagnostics
-  - H3: Inspect Codex threads locally
-  - H3: Auth order
-  - H3: Environment isolation
-  - H3: Dynamic tools and web search
-  - H3: Config fields
-  - H3: Dynamic tool call timeouts
-  - H3: Local testing env overrides
-  - H2: Native Codex plugins
-  - H2: Computer Use
+
+## plugins/codex-harness/runtime-behavior.md
+
+- Route: /plugins/codex-harness/runtime-behavior
+- Headings:
+  - H2: Dynamic tools and web search
+  - H2: Inspecting tool output
+  - H2: Background text completions
+  - H2: Image loader ownership
+  - H2: Turn liveness and timeouts
+  - H2: Cyber safety notices
+  - H2: Automatic Daybreak escalation
+  - H2: Parallel chats and thread ownership
   - H2: Runtime boundaries
+
+## plugins/codex-harness/troubleshooting.md
+
+- Route: /plugins/codex-harness/troubleshooting
+- Headings:
   - H2: Troubleshooting
-  - H2: Related
 
 ## plugins/codex-native-plugins.md
 
@@ -5436,13 +8730,36 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Requirements
   - H2: Quickstart
+  - H2: Scheduled automations
   - H2: Manage plugins from chat
   - H2: How native plugin setup works
-  - H2: V1 support boundary
+  - H2: Support boundary
   - H2: App inventory and ownership
   - H2: Connected account apps
   - H2: Thread app config
+  - H2: Approval decision order
+  - H3: Which configuration owns each setting
+  - H3: Native tool enablement
+  - H3: Native approval mode
   - H2: Destructive action policy
+  - H3: Approval examples
+  - H2: Troubleshooting
+  - H2: Related
+
+## plugins/codex-supervision.md
+
+- Route: /plugins/codex-supervision
+- Headings:
+  - H2: Before you begin
+  - H2: Enable supervision
+  - H2: Start a new native Codex CLI
+  - H2: Use the operator CLI
+  - H2: Branch from a local session
+  - H2: Fork a message in a supervised Chat
+  - H2: Archive a local session
+  - H2: Understand paired-node limits
+  - H2: Metadata and permissions
+  - H3: Compatibility tools
   - H2: Troubleshooting
   - H2: Related
 
@@ -5461,11 +8778,16 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Compatibility registry
   - H2: Deprecation policy
   - H2: Current compatibility areas
-  - H3: WhatsApp inbound callback flat aliases
-  - H3: WhatsApp inbound admission fields
+  - H3: Session-store bridge retirement
+  - H3: Synchronous plugin state
+  - H3: Session agent resolution aliases
+  - H3: Auth profile cooldown classifications
+  - H3: Channel prompt-context identifier aliases
+  - H3: WhatsApp inbound callback retirement
   - H2: Plugin inspector package
   - H3: Maintainer acceptance lane
   - H2: Release notes
+  - H2: Related
 
 ## plugins/copilot.md
 
@@ -5479,7 +8801,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Auth
   - H2: Configuration surface
   - H2: Compaction
-  - H2: Transcript mirroring
+  - H2: Transcript persistence
   - H2: Side questions (/btw)
   - H2: Doctor
   - H2: Limitations
@@ -5493,10 +8815,90 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Responsibility split
   - H2: Install roots
+  - H3: npm-pack tarball installs
+  - H3: Missing runtime imports
+  - H3: Hoisted transitive dependencies
+  - H3: Lockfile policy
+  - H3: Verify a package tarball
+  - H3: Bundled runtime dependencies
+  - H3: Host peer dependency
+  - H3: git installs
   - H2: Local plugins
   - H2: Startup and reload
   - H2: Bundled plugins
+  - H3: Native imports from a standalone source build
   - H2: Legacy cleanup
+
+## plugins/facetime-recovery.md
+
+- Route: /plugins/facetime-recovery
+- Headings:
+  - H2: Remove driver and helper artifacts
+  - H2: Restore SIP debugging restrictions
+  - H2: Recover a failed driver update
+
+## plugins/facetime.md
+
+- Route: /plugins/facetime
+- Headings:
+  - H2: Requirements
+  - H2: Install the plugin and native companion
+  - H2: Configure owner identities
+  - H3: Configure voice credentials
+  - H3: Choose the agent and tool access
+  - H3: Choose a voice
+  - H2: Prepare the Mac
+  - H3: Enable developer-tools access
+  - H3: Allow debugger attachment
+  - H3: Grant permissions and allow incoming calls
+  - H3: Install the audio driver
+  - H3: Select the call audio devices
+  - H2: Inspect and activate
+  - H2: Verify your first call
+  - H2: Place and end calls
+  - H2: Update the integration
+  - H2: Remove the integration
+  - H2: Limits
+  - H2: Troubleshooting
+  - H2: Related
+
+## plugins/feature-plugins.md
+
+- Route: /plugins/feature-plugins
+- Headings:
+  - H2: Enable custom plugin UI
+  - H2: Create a feature plugin
+  - H2: Define operations once
+  - H2: Contribute and replace views
+  - H3: Host capabilities
+  - H3: Dock a conversation
+  - H2: Build and reload
+  - H2: Approve an agent-built artifact
+
+## plugins/geolocation.md
+
+- Route: /plugins/geolocation
+- Headings:
+  - H2: Quickstart
+  - H3: Gateway lookup
+  - H2: Why some clients never show a location
+  - H2: Configuration
+  - H3: Using a different database
+  - H2: Data license
+  - H2: How the database is managed
+  - H2: Troubleshooting
+  - H2: Related
+
+## plugins/github.md
+
+- Route: /plugins/github
+- Headings:
+  - H1: GitHub
+  - H2: Upgrading with an existing plugin allowlist
+  - H2: Read an item beside chat
+  - H2: Enable or disable the plugin
+  - H2: Limits and unavailable content
+  - H2: Plugin author integration
 
 ## plugins/google-meet.md
 
@@ -5505,13 +8907,29 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Quick start
   - H3: Create a meeting
   - H3: Observe-only join
+  - H2: Audio bridge architecture
   - H3: Realtime session health
-  - H2: Local Gateway + Parallels Chrome
-  - H3: Common failure checks
-  - H2: Install notes
-  - H2: Transports
-  - H3: Chrome
-  - H3: Twilio
+  - H2: Where each section moved
+  - H3: Google Meet transports and hosts
+  - H3: Google Meet OAuth and artifacts
+  - H3: Google Meet configuration
+  - H3: Google Meet tool and modes
+  - H3: Google Meet troubleshooting
+  - H2: Related
+
+## plugins/google-meet/config.md
+
+- Route: /plugins/google-meet/config
+- Headings:
+  - H2: Config
+  - H3: Defaults
+  - H3: GPT-Live with Cove
+  - H3: Optional overrides
+
+## plugins/google-meet/oauth-and-artifacts.md
+
+- Route: /plugins/google-meet/oauth-and-artifacts
+- Headings:
   - H2: OAuth and preflight
   - H3: Create Google credentials
   - H3: Mint the refresh token
@@ -5519,11 +8937,30 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Resolve, preflight, and read artifacts
   - H3: Live smoke test
   - H3: Create examples
-  - H2: Config
-  - H3: Defaults
-  - H3: Optional overrides
+
+## plugins/google-meet/tool-and-modes.md
+
+- Route: /plugins/google-meet/tool-and-modes
+- Headings:
   - H2: Tool
+  - H2: Native participation requests
   - H2: Agent and bidi modes
+
+## plugins/google-meet/transports.md
+
+- Route: /plugins/google-meet/transports
+- Headings:
+  - H2: Local Gateway + Parallels Chrome
+  - H3: Common failure checks
+  - H2: Install notes
+  - H2: Transports
+  - H3: Chrome
+  - H3: Twilio
+
+## plugins/google-meet/troubleshooting.md
+
+- Route: /plugins/google-meet/troubleshooting
+- Headings:
   - H2: Live test checklist
   - H2: Troubleshooting
   - H3: Agent cannot see the Google Meet tool
@@ -5531,29 +8968,69 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Browser opens but agent cannot join
   - H3: Meeting creation fails
   - H3: Agent joins but does not talk
+  - H3: Live cannot hear interruptions or browser capture fails
   - H3: Twilio setup checks fail
   - H3: Twilio call starts but never enters the meeting
-  - H2: Notes
-  - H2: Related
 
 ## plugins/hooks.md
 
 - Route: /plugins/hooks
 - Headings:
   - H2: Quick start
-  - H2: Hook catalog
-  - H3: Channel pairing requests
-  - H2: Debug runtime hooks
-  - H2: Tool call policy
-  - H3: Exec environment hook
-  - H3: Tool result persistence
-  - H2: Prompt and model hooks
-  - H3: Session extensions and next-turn injections
-  - H2: Message hooks
+  - H3: Permissions and scope
+  - H3: Choose a hook
+  - H2: Troubleshooting
+  - H2: Upcoming deprecations
+  - H2: Where each section moved
+  - H3: Hook reference
+  - H3: Tool call policy hooks
+  - H3: Prompt and session hooks
+  - H3: Message and delivery hooks
+  - H3: Gateway and install lifecycle hooks
+  - H2: Related
+
+## plugins/hooks/lifecycle.md
+
+- Route: /plugins/hooks/lifecycle
+- Headings:
   - H2: Install hooks
   - H2: Gateway lifecycle
-  - H2: Upcoming deprecations
-  - H2: Related
+  - H3: Safe external cron projection
+
+## plugins/hooks/messages.md
+
+- Route: /plugins/hooks/messages
+- Headings:
+  - H2: Message hooks
+
+## plugins/hooks/prompt-and-session.md
+
+- Route: /plugins/hooks/prompt-and-session
+- Headings:
+  - H2: Debug runtime hooks
+  - H2: Prompt and model hooks
+  - H3: Handler lifetime
+  - H3: Authorized prompt enrichment
+  - H3: Session extensions and next-turn injections
+
+## plugins/hooks/reference.md
+
+- Route: /plugins/hooks/reference
+- Headings:
+  - H2: Registration and execution
+  - H2: Hook catalog
+  - H3: Skill lifecycle
+  - H3: Channel pairing requests
+
+## plugins/hooks/tool-policy.md
+
+- Route: /plugins/hooks/tool-policy
+- Headings:
+  - H2: Tool call policy
+  - H3: Sender-aware policy in one file
+  - H3: Tool call observation
+  - H3: Exec environment hook
+  - H3: Tool result persistence
 
 ## plugins/install-overrides.md
 
@@ -5567,9 +9044,18 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/llama-cpp
 - Headings:
-  - H2: Configuration
-  - H2: Native Runtime
+  - H2: Choose server ownership
+  - H2: Managed local server
+  - H3: Model recommendations
+  - H3: Execution backends
+  - H3: Set up only local embeddings
+  - H3: Use another managed GGUF
+  - H2: Existing llama-server
+  - H3: Authentication and endpoint replacement
+  - H3: Manual configuration
+  - H2: Requests and local embeddings
   - H2: Troubleshooting
+  - H2: Related
 
 ## plugins/logbook.md
 
@@ -5594,10 +9080,13 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/manage-plugins
 - Headings:
+  - H2: Use the Control UI
   - H2: List and search plugins
   - H2: Enable and disable plugins
+  - H2: Capability consent
   - H2: Install plugins
-  - H2: Restart and inspect
+  - H2: Apply changes and inspect
+  - H2: Manage plugins from an agent conversation
   - H2: Update plugins
   - H2: Uninstall plugins
   - H2: Choose a source
@@ -5609,39 +9098,118 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /plugins/manifest
 - Headings:
   - H2: What this file does
+  - H2: Where each field is documented
+  - H3: Model fields
+  - H3: Provider fields
+  - H3: Setup and auth fields
+  - H3: Capability fields
+  - H3: Host surface fields
+  - H3: Config and secret fields
+  - H3: Manifest and package.json fields
   - H2: Minimal example
   - H2: Rich example
   - H2: Top-level field reference
-  - H2: Generation provider metadata reference
-  - H2: Tool metadata reference
-  - H2: providerAuthChoices reference
-  - H2: commandAliases reference
-  - H2: activation reference
-  - H2: qaRunners reference
-  - H2: setup reference
-  - H3: setup.providers reference
-  - H3: setup fields
-  - H2: uiHints reference
+  - H2: Catalog categories
+  - H2: JSON Schema requirements
+  - H2: Retained state checks
+  - H2: Validation behavior
+  - H3: Capability catalogs
+  - H3: Configuration validation
+  - H2: Notes
+  - H2: Related
+
+## plugins/manifest/capabilities.md
+
+- Route: /plugins/manifest/capabilities
+- Headings:
   - H2: contracts reference
+  - H2: Decision models reference
+  - H2: Tool metadata reference
+  - H2: activation reference
+
+## plugins/manifest/config-and-secrets.md
+
+- Route: /plugins/manifest/config-and-secrets
+- Headings:
   - H2: configContracts reference
-  - H2: mediaUnderstandingProviderMetadata reference
-  - H2: channelConfigs reference
-  - H3: Replacing another channel plugin
+  - H3: dangerousFlags entries
+  - H3: secretInputs paths
+  - H2: secretProviderIntegrations reference
+
+## plugins/manifest/models.md
+
+- Route: /plugins/manifest/models
+- Headings:
   - H2: modelSupport reference
   - H2: modelCatalog reference
   - H2: modelIdNormalization reference
-  - H2: providerEndpoints reference
-  - H2: providerRequest reference
-  - H2: secretProviderIntegrations reference
   - H2: modelPricing reference
   - H3: OpenClaw Provider Index
+
+## plugins/manifest/package-json.md
+
+- Route: /plugins/manifest/package-json
+- Headings:
   - H2: Manifest versus package.json
   - H3: package.json fields that affect discovery
   - H2: Discovery precedence (duplicate plugin ids)
-  - H2: JSON Schema requirements
-  - H2: Validation behavior
-  - H2: Notes
-  - H2: Related
+
+## plugins/manifest/providers.md
+
+- Route: /plugins/manifest/providers
+- Headings:
+  - H2: Generation provider metadata reference
+  - H2: mediaUnderstandingProviderMetadata reference
+  - H2: providerEndpoints reference
+  - H2: providerRequest reference
+
+## plugins/manifest/setup-and-auth.md
+
+- Route: /plugins/manifest/setup-and-auth
+- Headings:
+  - H2: Native conversation discovery
+  - H2: providerAuthChoices reference
+  - H3: Login choices
+  - H2: setup reference
+  - H3: setup fields
+  - H3: setup.providers reference
+  - H2: configGroups reference
+  - H2: uiHints reference
+
+## plugins/manifest/surfaces.md
+
+- Route: /plugins/manifest/surfaces
+- Headings:
+  - H2: Plugin icon
+  - H2: Inline activity icons
+  - H2: Themes
+  - H2: Transcript sources reference
+  - H2: backupResources reference
+  - H2: MCP server reference
+  - H2: UI capabilities
+  - H2: controlUi reference
+  - H2: dashboard reference
+  - H2: catalog reference
+  - H2: cliCommands reference
+  - H2: commandAliases reference
+  - H2: qaRunners reference
+  - H2: channelAccountKeyPolicies reference
+  - H2: channelConfigs reference
+  - H3: Replacing another channel plugin
+
+## plugins/meeting-plugins.md
+
+- Route: /plugins/meeting-plugins
+- Headings:
+  - H2: Choose a plugin
+  - H2: Choose a mode
+  - H2: Configure Teams or Zoom
+  - H2: Prepare Chrome and audio
+  - H2: Install or disable plugins
+  - H2: Verify and join
+  - H2: Handle platform policy prompts
+  - H2: Discord voice chat
+  - H2: Platform guides
 
 ## plugins/memory-lancedb.md
 
@@ -5675,9 +9243,11 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Dashboards and health reports
   - H2: Search and retrieval
   - H2: Agent tools
+  - H2: Browsing the wiki in the Control UI
   - H2: Prompt and context behavior
   - H2: Configuration
-  - H3: Example: QMD + bridge mode
+  - H3: Per-agent vaults
+  - H3: Example: builtin memory + bridge mode
   - H2: CLI
   - H2: Obsidian support
   - H2: Recommended workflow
@@ -5712,16 +9282,45 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Safety
   - H2: Related
 
+## plugins/onepassword.md
+
+- Route: /plugins/onepassword
+- Headings:
+  - H1: 1Password
+  - H2: Security model
+  - H2: Before you begin
+  - H2: Configure SecretRefs
+  - H2: Configure registered secrets
+  - H2: Use the agent tool
+  - H2: Policy tiers and approvals
+  - H2: Inspect status and audit history
+  - H2: 1Password CLI behavior
+  - H2: Error codes
+  - H2: Related
+
+## plugins/onnx.md
+
+- Route: /plugins/onnx
+- Headings:
+  - H1: Local ONNX decision models
+  - H2: Setup
+  - H3: Current development checkout
+  - H3: Packaged installation
+  - H3: Configuration
+  - H2: Models
+  - H2: Question semantics
+  - H2: Lifecycle and runtime
+
 ## plugins/plugin-inventory.md
 
 - Route: /plugins/plugin-inventory
 - Headings:
-  - H1: Plugin inventory
   - H2: Definitions
   - H2: Install a plugin
   - H2: Core npm package
   - H2: Official external packages
   - H2: Source checkout only
+  - H2: How this page is built
 
 ## plugins/plugin-permission-requests.md
 
@@ -5729,6 +9328,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Choose the right gate
   - H2: Request approval before a tool call
+  - H2: Declare approval scope
   - H2: Decision behavior
   - H2: Route approval prompts
   - H2: Codex native permissions
@@ -5739,22 +9339,44 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference
 - Headings:
-  - H1: Plugin reference
+  - H2: How this page is built
+
+## plugins/reference/a2a.md
+
+- Route: /plugins/reference/a2a
+- Headings:
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
 
 ## plugins/reference/acpx.md
 
 - Route: /plugins/reference/acpx
 - Headings:
-  - H1: ACPx plugin
   - H2: Distribution
   - H2: Surface
+  - H2: Pi native sessions
   - H2: Related docs
+
+## plugins/reference/active-memory.md
+
+- Route: /plugins/reference/active-memory
+- Headings:
+  - H2: Distribution
+  - H2: Surface
 
 ## plugins/reference/admin-http-rpc.md
 
 - Route: /plugins/reference/admin-http-rpc
 - Headings:
-  - H1: Admin Http Rpc plugin
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
+
+## plugins/reference/agentsapi.md
+
+- Route: /plugins/reference/agentsapi
+- Headings:
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -5763,7 +9385,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/alibaba
 - Headings:
-  - H1: Alibaba plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -5772,7 +9393,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/amazon-bedrock-mantle
 - Headings:
-  - H1: Amazon Bedrock Mantle plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -5781,7 +9401,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/amazon-bedrock
 - Headings:
-  - H1: Amazon Bedrock plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -5790,7 +9409,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/anthropic-vertex
 - Headings:
-  - H1: Anthropic Vertex plugin
   - H2: Distribution
   - H2: Surface
   - H2: Claude Fable 5
@@ -5800,7 +9418,14 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/anthropic
 - Headings:
-  - H1: Anthropic plugin
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
+
+## plugins/reference/apple-fm.md
+
+- Route: /plugins/reference/apple-fm
+- Headings:
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -5809,7 +9434,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/arcee
 - Headings:
-  - H1: Arcee plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -5818,7 +9442,22 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/azure-speech
 - Headings:
-  - H1: Azure Speech plugin
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
+
+## plugins/reference/baseten.md
+
+- Route: /plugins/reference/baseten
+- Headings:
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
+
+## plugins/reference/beam.md
+
+- Route: /plugins/reference/beam
+- Headings:
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -5827,7 +9466,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/bonjour
 - Headings:
-  - H1: Bonjour plugin
   - H2: Distribution
   - H2: Surface
 
@@ -5835,7 +9473,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/brave
 - Headings:
-  - H1: Brave plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -5844,7 +9481,14 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/browser
 - Headings:
-  - H1: Browser plugin
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
+
+## plugins/reference/buzz.md
+
+- Route: /plugins/reference/buzz
+- Headings:
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -5853,7 +9497,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/byteplus
 - Headings:
-  - H1: BytePlus plugin
   - H2: Distribution
   - H2: Surface
 
@@ -5861,7 +9504,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/canvas
 - Headings:
-  - H1: Canvas plugin
   - H2: Distribution
   - H2: Surface
 
@@ -5869,7 +9511,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/cerebras
 - Headings:
-  - H1: Cerebras plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -5878,7 +9519,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/chutes
 - Headings:
-  - H1: Chutes plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -5887,7 +9527,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/clawrouter
 - Headings:
-  - H1: ClawRouter plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -5896,7 +9535,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/clickclack
 - Headings:
-  - H1: Clickclack plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -5905,25 +9543,29 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/cloudflare-ai-gateway
 - Headings:
-  - H1: Cloudflare AI Gateway plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
 
-## plugins/reference/codex-supervisor.md
+## plugins/reference/cloudflare.md
 
-- Route: /plugins/reference/codex-supervisor
+- Route: /plugins/reference/cloudflare
 - Headings:
-  - H1: Codex Supervisor plugin
   - H2: Distribution
   - H2: Surface
-  - H2: Session Listing
+  - H2: Related docs
+
+## plugins/reference/code-mode-quickjs.md
+
+- Route: /plugins/reference/code-mode-quickjs
+- Headings:
+  - H2: Distribution
+  - H2: Surface
 
 ## plugins/reference/codex.md
 
 - Route: /plugins/reference/codex
 - Headings:
-  - H1: Codex plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -5932,7 +9574,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/cohere
 - Headings:
-  - H1: Cohere plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -5941,7 +9582,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/comfy
 - Headings:
-  - H1: ComfyUI plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -5950,7 +9590,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/copilot-proxy
 - Headings:
-  - H1: Copilot Proxy plugin
   - H2: Distribution
   - H2: Surface
 
@@ -5958,16 +9597,29 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/copilot
 - Headings:
-  - H1: Copilot plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
+
+## plugins/reference/crabbox.md
+
+- Route: /plugins/reference/crabbox
+- Headings:
+  - H2: Distribution
+  - H2: Surface
+  - H2: Configure
+
+## plugins/reference/cua-computer.md
+
+- Route: /plugins/reference/cua-computer
+- Headings:
+  - H2: Distribution
+  - H2: Surface
 
 ## plugins/reference/deepgram.md
 
 - Route: /plugins/reference/deepgram
 - Headings:
-  - H1: Deepgram plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -5976,7 +9628,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/deepinfra
 - Headings:
-  - H1: DeepInfra plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -5985,16 +9636,21 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/deepseek
 - Headings:
-  - H1: DeepSeek plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
+
+## plugins/reference/device-pair.md
+
+- Route: /plugins/reference/device-pair
+- Headings:
+  - H2: Distribution
+  - H2: Surface
 
 ## plugins/reference/diagnostics-otel.md
 
 - Route: /plugins/reference/diagnostics-otel
 - Headings:
-  - H1: Diagnostics OpenTelemetry plugin
   - H2: Distribution
   - H2: Surface
 
@@ -6002,7 +9658,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/diagnostics-prometheus
 - Headings:
-  - H1: Diagnostics Prometheus plugin
   - H2: Distribution
   - H2: Surface
 
@@ -6010,7 +9665,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/diffs-language-pack
 - Headings:
-  - H1: Diffs Language Pack plugin
   - H2: Distribution
   - H2: Surface
   - H2: Added languages
@@ -6019,7 +9673,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/diffs
 - Headings:
-  - H1: Diffs plugin
   - H2: Distribution
   - H2: Surface
 
@@ -6027,7 +9680,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/discord
 - Headings:
-  - H1: Discord plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6036,7 +9688,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/document-extract
 - Headings:
-  - H1: Document Extract plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6045,7 +9696,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/duckduckgo
 - Headings:
-  - H1: DuckDuckGo plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6054,7 +9704,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/elevenlabs
 - Headings:
-  - H1: Elevenlabs plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6063,7 +9712,14 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/exa
 - Headings:
-  - H1: Exa plugin
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
+
+## plugins/reference/facetime.md
+
+- Route: /plugins/reference/facetime
+- Headings:
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6072,7 +9728,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/fal
 - Headings:
-  - H1: fal plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6081,7 +9736,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/featherless
 - Headings:
-  - H1: Featherless plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6090,7 +9744,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/feishu
 - Headings:
-  - H1: Feishu plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6099,15 +9752,15 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/file-transfer
 - Headings:
-  - H1: File Transfer plugin
   - H2: Distribution
   - H2: Surface
+  - H2: Directory archives
+  - H2: Migrate existing permissions
 
 ## plugins/reference/firecrawl.md
 
 - Route: /plugins/reference/firecrawl
 - Headings:
-  - H1: Firecrawl plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6116,7 +9769,22 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/fireworks
 - Headings:
-  - H1: Fireworks plugin
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
+
+## plugins/reference/fish-audio-speech.md
+
+- Route: /plugins/reference/fish-audio-speech
+- Headings:
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
+
+## plugins/reference/geolocation.md
+
+- Route: /plugins/reference/geolocation
+- Headings:
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6125,7 +9793,14 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/github-copilot
 - Headings:
-  - H1: GitHub Copilot plugin
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
+
+## plugins/reference/github.md
+
+- Route: /plugins/reference/github
+- Headings:
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6134,7 +9809,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/gmi
 - Headings:
-  - H1: Gmi plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6143,7 +9817,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/google-meet
 - Headings:
-  - H1: Google Meet plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6152,7 +9825,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/google
 - Headings:
-  - H1: Google plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6161,7 +9833,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/googlechat
 - Headings:
-  - H1: Google Chat plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6170,7 +9841,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/gradium
 - Headings:
-  - H1: Gradium plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6179,7 +9849,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/groq
 - Headings:
-  - H1: Groq plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6188,7 +9857,14 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/huggingface
 - Headings:
-  - H1: Hugging Face plugin
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
+
+## plugins/reference/imap.md
+
+- Route: /plugins/reference/imap
+- Headings:
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6197,7 +9873,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/imessage
 - Headings:
-  - H1: iMessage plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6206,7 +9881,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/inworld
 - Headings:
-  - H1: Inworld plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6215,7 +9889,14 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/irc
 - Headings:
-  - H1: IRC plugin
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
+
+## plugins/reference/kie.md
+
+- Route: /plugins/reference/kie
+- Headings:
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6224,7 +9905,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/kilocode
 - Headings:
-  - H1: Kilocode plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6233,7 +9913,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/kimi
 - Headings:
-  - H1: Kimi plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6242,16 +9921,21 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/line
 - Headings:
-  - H1: LINE plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
+
+## plugins/reference/linux-node.md
+
+- Route: /plugins/reference/linux-node
+- Headings:
+  - H2: Distribution
+  - H2: Surface
 
 ## plugins/reference/litellm.md
 
 - Route: /plugins/reference/litellm
 - Headings:
-  - H1: LiteLLM plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6260,16 +9944,15 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/llama-cpp
 - Headings:
-  - H1: Llama Cpp plugin
   - H2: Distribution
   - H2: Surface
+  - H2: Managed text models
   - H2: Related docs
 
 ## plugins/reference/llm-task.md
 
 - Route: /plugins/reference/llm-task
 - Headings:
-  - H1: LLM Task plugin
   - H2: Distribution
   - H2: Surface
 
@@ -6277,7 +9960,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/lmstudio
 - Headings:
-  - H1: LM Studio plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6286,7 +9968,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/lobster
 - Headings:
-  - H1: Lobster plugin
   - H2: Distribution
   - H2: Surface
 
@@ -6294,7 +9975,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/logbook
 - Headings:
-  - H1: Logbook plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6303,7 +9983,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/longcat
 - Headings:
-  - H1: LongCat plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6312,7 +9991,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/matrix
 - Headings:
-  - H1: Matrix plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6321,7 +9999,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/mattermost
 - Headings:
-  - H1: Mattermost plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6330,7 +10007,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/memory-core
 - Headings:
-  - H1: Memory Core plugin
   - H2: Distribution
   - H2: Surface
 
@@ -6338,7 +10014,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/memory-lancedb
 - Headings:
-  - H1: Memory Lancedb plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6347,7 +10022,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/memory-wiki
 - Headings:
-  - H1: Memory Wiki plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6356,7 +10030,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/meta
 - Headings:
-  - H1: Meta plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6365,7 +10038,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/microsoft-foundry
 - Headings:
-  - H1: Microsoft Foundry plugin
   - H2: Distribution
   - H2: Surface
   - H2: Requirements
@@ -6377,7 +10049,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/microsoft
 - Headings:
-  - H1: Microsoft plugin
   - H2: Distribution
   - H2: Surface
 
@@ -6385,7 +10056,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/migrate-claude
 - Headings:
-  - H1: Migrate Claude plugin
   - H2: Distribution
   - H2: Surface
 
@@ -6393,7 +10063,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/migrate-hermes
 - Headings:
-  - H1: Migrate Hermes plugin
   - H2: Distribution
   - H2: Surface
 
@@ -6401,7 +10070,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/minimax
 - Headings:
-  - H1: MiniMax plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6410,7 +10078,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/mistral
 - Headings:
-  - H1: Mistral plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6419,7 +10086,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/moonshot
 - Headings:
-  - H1: Moonshot plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6428,16 +10094,21 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/msteams
 - Headings:
-  - H1: Microsoft Teams plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
+
+## plugins/reference/mxc.md
+
+- Route: /plugins/reference/mxc
+- Headings:
+  - H2: Distribution
+  - H2: Surface
 
 ## plugins/reference/nextcloud-talk.md
 
 - Route: /plugins/reference/nextcloud-talk
 - Headings:
-  - H1: Nextcloud Talk plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6446,7 +10117,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/nostr
 - Headings:
-  - H1: Nostr plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6455,7 +10125,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/novita
 - Headings:
-  - H1: Novita plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6464,7 +10133,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/nvidia
 - Headings:
-  - H1: NVIDIA plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6473,7 +10141,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/oc-path
 - Headings:
-  - H1: Oc Path plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6482,24 +10149,30 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/ollama
 - Headings:
-  - H1: Ollama plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
 
-## plugins/reference/open-prose.md
+## plugins/reference/onepassword.md
 
-- Route: /plugins/reference/open-prose
+- Route: /plugins/reference/onepassword
 - Headings:
-  - H1: Open Prose plugin
   - H2: Distribution
   - H2: Surface
+  - H2: Related docs
+
+## plugins/reference/onnx.md
+
+- Route: /plugins/reference/onnx
+- Headings:
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
 
 ## plugins/reference/openai.md
 
 - Route: /plugins/reference/openai
 - Headings:
-  - H1: OpenAI plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6508,7 +10181,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/opencode-go
 - Headings:
-  - H1: OpenCode Go plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6517,16 +10189,15 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/opencode
 - Headings:
-  - H1: OpenCode plugin
   - H2: Distribution
   - H2: Surface
+  - H2: Native sessions
   - H2: Related docs
 
 ## plugins/reference/openrouter.md
 
 - Route: /plugins/reference/openrouter
 - Headings:
-  - H1: OpenRouter plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6535,7 +10206,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/openshell
 - Headings:
-  - H1: Openshell plugin
   - H2: Distribution
   - H2: Surface
 
@@ -6543,7 +10213,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/perplexity
 - Headings:
-  - H1: Perplexity plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6552,7 +10221,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/pixverse
 - Headings:
-  - H1: PixVerse plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6561,7 +10229,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/policy
 - Headings:
-  - H1: Policy plugin
   - H2: Distribution
   - H2: Surface
   - H2: Behavior
@@ -6571,7 +10238,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/qa-channel
 - Headings:
-  - H1: QA Channel plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6580,15 +10246,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/qa-lab
 - Headings:
-  - H1: QA Lab plugin
-  - H2: Distribution
-  - H2: Surface
-
-## plugins/reference/qa-matrix.md
-
-- Route: /plugins/reference/qa-matrix
-- Headings:
-  - H1: QA Matrix plugin
   - H2: Distribution
   - H2: Surface
 
@@ -6596,7 +10253,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/qianfan
 - Headings:
-  - H1: Qianfan plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6605,7 +10261,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/qqbot
 - Headings:
-  - H1: QQ Bot plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6614,7 +10269,14 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/qwen
 - Headings:
-  - H1: Qwen plugin
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
+
+## plugins/reference/radius.md
+
+- Route: /plugins/reference/radius
+- Headings:
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6623,7 +10285,14 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/raft
 - Headings:
-  - H1: Raft plugin
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
+
+## plugins/reference/reef.md
+
+- Route: /plugins/reference/reef
+- Headings:
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6632,7 +10301,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/runway
 - Headings:
-  - H1: Runway plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6641,7 +10309,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/searxng
 - Headings:
-  - H1: SearXNG plugin
   - H2: Distribution
   - H2: Surface
 
@@ -6649,7 +10316,14 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/senseaudio
 - Headings:
-  - H1: Senseaudio plugin
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
+
+## plugins/reference/session-share.md
+
+- Route: /plugins/reference/session-share
+- Headings:
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6658,7 +10332,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/sglang
 - Headings:
-  - H1: SGLang plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6667,7 +10340,14 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/signal
 - Headings:
-  - H1: Signal plugin
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
+
+## plugins/reference/slack-huddles.md
+
+- Route: /plugins/reference/slack-huddles
+- Headings:
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6676,7 +10356,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/slack
 - Headings:
-  - H1: Slack plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6685,7 +10364,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/sms
 - Headings:
-  - H1: Sms plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6694,7 +10372,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/stepfun
 - Headings:
-  - H1: StepFun plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6703,7 +10380,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/synology-chat
 - Headings:
-  - H1: Synology Chat plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6712,16 +10388,38 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/synthetic
 - Headings:
-  - H1: Synthetic plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
+
+## plugins/reference/talk-voice.md
+
+- Route: /plugins/reference/talk-voice
+- Headings:
+  - H2: Distribution
+  - H2: Surface
+  - H2: Configure a Talk voice from chat
 
 ## plugins/reference/tavily.md
 
 - Route: /plugins/reference/tavily
 - Headings:
-  - H1: Tavily plugin
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
+
+## plugins/reference/team-reports.md
+
+- Route: /plugins/reference/team-reports
+- Headings:
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
+
+## plugins/reference/teams-meetings.md
+
+- Route: /plugins/reference/teams-meetings
+- Headings:
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6730,7 +10428,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/telegram
 - Headings:
-  - H1: Telegram plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6739,7 +10436,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/tencent
 - Headings:
-  - H1: Tencent plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6748,7 +10444,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/tlon
 - Headings:
-  - H1: Tlon plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6757,7 +10452,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/together
 - Headings:
-  - H1: Together plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6766,7 +10460,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/tokenjuice
 - Headings:
-  - H1: Tokenjuice plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6775,7 +10468,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/tts-local-cli
 - Headings:
-  - H1: TTS Local CLI plugin
   - H2: Distribution
   - H2: Surface
 
@@ -6783,7 +10475,22 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/twitch
 - Headings:
-  - H1: Twitch plugin
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
+
+## plugins/reference/typesafe.md
+
+- Route: /plugins/reference/typesafe
+- Headings:
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
+
+## plugins/reference/vault.md
+
+- Route: /plugins/reference/vault
+- Headings:
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6792,7 +10499,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/venice
 - Headings:
-  - H1: Venice plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6801,16 +10507,21 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/vercel-ai-gateway
 - Headings:
-  - H1: Vercel AI Gateway plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
+
+## plugins/reference/visitor-access.md
+
+- Route: /plugins/reference/visitor-access
+- Headings:
+  - H2: Distribution
+  - H2: Surface
 
 ## plugins/reference/vllm.md
 
 - Route: /plugins/reference/vllm
 - Headings:
-  - H1: vLLM plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6819,7 +10530,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/voice-call
 - Headings:
-  - H1: Voice Call plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6828,7 +10538,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/volcengine
 - Headings:
-  - H1: Volcengine plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6837,7 +10546,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/voyage
 - Headings:
-  - H1: Voyage plugin
   - H2: Distribution
   - H2: Surface
 
@@ -6845,7 +10553,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/vydra
 - Headings:
-  - H1: Vydra plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6854,24 +10561,13 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/web-readability
 - Headings:
-  - H1: Web Readability plugin
   - H2: Distribution
   - H2: Surface
-
-## plugins/reference/webhooks.md
-
-- Route: /plugins/reference/webhooks
-- Headings:
-  - H1: Webhooks plugin
-  - H2: Distribution
-  - H2: Surface
-  - H2: Related docs
 
 ## plugins/reference/whatsapp.md
 
 - Route: /plugins/reference/whatsapp
 - Headings:
-  - H1: WhatsApp plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6880,7 +10576,14 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/workboard
 - Headings:
-  - H1: Workboard plugin
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
+
+## plugins/reference/x.md
+
+- Route: /plugins/reference/x
+- Headings:
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6889,7 +10592,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/xai
 - Headings:
-  - H1: xAI plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6898,7 +10600,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/xiaomi
 - Headings:
-  - H1: Xiaomi plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6907,7 +10608,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/zai
 - Headings:
-  - H1: Z.AI plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6916,7 +10616,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/zalo
 - Headings:
-  - H1: Zalo plugin
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6925,7 +10624,14 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /plugins/reference/zalouser
 - Headings:
-  - H1: Zalo Personal plugin
+  - H2: Distribution
+  - H2: Surface
+  - H2: Related docs
+
+## plugins/reference/zoom-meetings.md
+
+- Route: /plugins/reference/zoom-meetings
+- Headings:
   - H2: Distribution
   - H2: Surface
   - H2: Related docs
@@ -6935,156 +10641,667 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /plugins/sdk-agent-harness
 - Headings:
   - H2: When to use a harness
-  - H2: What core still owns
-  - H2: Register a harness
-  - H2: Selection policy
-  - H2: Provider plus harness pairing
-  - H3: Tool-result middleware
-  - H3: Terminal outcome classification
-  - H3: Agent-end side effects
-  - H3: User input and tool surfaces
-  - H3: Native Codex harness mode
-  - H2: Runtime strictness
-  - H2: Native sessions and transcript mirror
-  - H2: Tool and media results
+  - H2: Where each section moved
+  - H3: Core ownership contract
+  - H3: Harness registration
+  - H3: Harness selection and provider pairing
+  - H3: Attempt runtime helpers
+  - H3: User input and execution authority
+  - H3: Native inventories
+  - H3: Runtime configuration
+  - H3: Sessions and results
   - H2: Current limitations
   - H2: Related
+
+## plugins/sdk-agent-harness/attempt-runtime.md
+
+- Route: /plugins/sdk-agent-harness/attempt-runtime
+- Headings:
+  - H2: Guarded active-run injection
+  - H2: Tool-result middleware
+  - H2: Reply attachments from a remote workspace
+  - H2: Shared attempt mechanics
+  - H2: Shared host-tool result facts
+  - H2: Workspace-staged attachments
+  - H2: Final tool-argument validation
+  - H2: Terminal outcome classification
+  - H2: Live output-token usage
+  - H2: Agent-end side effects
+
+## plugins/sdk-agent-harness/core-ownership.md
+
+- Route: /plugins/sdk-agent-harness/core-ownership
+- Headings:
+  - H2: What core still owns
+  - H3: Current input files for local execution
+  - H3: Workspace files on the harness host
+  - H3: Input attachments for a remote workspace
+  - H3: Host-only execution
+  - H3: Native tool-policy enforcement
+  - H3: Harness-owned auth bootstrap
+  - H3: Bound native session ownership
+  - H3: Verified setup runtime artifacts
+  - H3: Request-transport contract
+  - H3: Per-turn temporal context
+
+## plugins/sdk-agent-harness/native-inventories.md
+
+- Route: /plugins/sdk-agent-harness/native-inventories
+- Headings:
+  - H2: Native model inventory
+  - H3: Service-tier picker policy
+  - H2: Native MCP inventory
+
+## plugins/sdk-agent-harness/registration.md
+
+- Route: /plugins/sdk-agent-harness/registration
+- Headings:
+  - H2: Register a harness
+  - H3: Executor controller plugins
+  - H3: Isolated completion
+  - H3: Delegated execution
+
+## plugins/sdk-agent-harness/runtime-config.md
+
+- Route: /plugins/sdk-agent-harness/runtime-config
+- Headings:
+  - H2: Native Codex harness mode
+  - H2: Agents API environment
+  - H2: Agents API HTTP MCP servers
+  - H2: Runtime strictness
+
+## plugins/sdk-agent-harness/selection-policy.md
+
+- Route: /plugins/sdk-agent-harness/selection-policy
+- Headings:
+  - H2: Selection policy
+  - H2: Provider plus harness pairing
+
+## plugins/sdk-agent-harness/sessions-and-results.md
+
+- Route: /plugins/sdk-agent-harness/sessions-and-results
+- Headings:
+  - H2: Native sessions and transcript mirror
+  - H2: Shared native binding lifecycle
+  - H2: Tool and media results
+  - H3: Same-turn retry context
+  - H2: Harness delivery defaults
+  - H2: Terminal tool outcomes
+  - H2: Settled tool finalization
+
+## plugins/sdk-agent-harness/user-input-and-execution.md
+
+- Route: /plugins/sdk-agent-harness/user-input-and-execution
+- Headings:
+  - H2: User input and tool surfaces
+  - H2: Exec reviewer outcomes
+  - H2: Sandbox subprocess cleanup
+  - H2: Paired-device execution
 
 ## plugins/sdk-channel-inbound.md
 
 - Route: /plugins/sdk-channel-inbound
 - Headings:
   - H2: Core helpers
+  - H2: Platform-selected history windows
+  - H2: Agent group dispatch
+  - H2: Internal turn sources
+  - H2: Receive acknowledgment policy
+  - H2: Delivery settlement contract
   - H2: Migration
+  - H2: Related
 
 ## plugins/sdk-channel-ingress.md
 
 - Route: /plugins/sdk-channel-ingress
 - Headings:
   - H2: Runtime resolver
+  - H3: Product participant identity
   - H2: Result
+  - H2: Identifier authentication
+  - H3: Bundled channel declarations
   - H2: Access groups
   - H2: Event modes
   - H2: Routes and activation
   - H2: Redaction
   - H2: Verification
-
-## plugins/sdk-channel-message.md
-
-- Route: /plugins/sdk-channel-message
-- Headings: none
+  - H2: Related
 
 ## plugins/sdk-channel-outbound.md
 
 - Route: /plugins/sdk-channel-outbound
 - Headings:
+  - H2: Durable ingress monitors
+  - H3: One turn, several durable claims
+  - H3: Start slots and deferral
+  - H3: Deferred claim heartbeats
   - H2: Adapter
+  - H2: Progress and preview delivery ownership
+  - H2: Outbound echo suppression
+  - H2: Plain-text sanitization
   - H2: Delivery Evidence
   - H2: Existing outbound adapters
   - H2: Durable sends
+  - H3: Automatic unknown-send reconciliation
+  - H2: Deferred delivery admission
   - H2: Compatibility dispatch
+  - H3: Migrating from channel-message
+  - H2: Related
 
 ## plugins/sdk-channel-plugins.md
 
 - Route: /plugins/sdk-channel-plugins
 - Headings:
   - H2: What your plugin owns
-  - H2: Message adapter
-  - H3: Inbound ingress (experimental)
-  - H3: Typing indicators
-  - H3: Media source params
-  - H3: Native payload shaping
-  - H3: Session conversation grammar
+  - H2: Opted-in public child sessions
+  - H2: Walkthrough
+  - H2: File structure
+  - H2: Delegated context reads
+  - H2: Scheduled channel administration
+  - H2: Advanced topics
+  - H2: Next steps
+  - H2: Where each section moved
+  - H3: Channel message adapter
+  - H3: Durable channel ingress
+  - H3: Channel status and media
+  - H3: Channel sessions and bindings
+  - H3: Channel approvals
+  - H3: Channel setup and config
+  - H3: Channel mention policy
+  - H2: Related
+
+## plugins/sdk-channel-plugins/approvals.md
+
+- Route: /plugins/sdk-channel-plugins/approvals
+- Headings:
   - H2: Approvals and channel capabilities
   - H3: Approval auth
   - H3: Payload lifecycle and setup guidance
   - H3: Native approval delivery
   - H3: Narrower approval runtime subpaths
-  - H3: Setup subpaths
-  - H3: Other narrow channel subpaths
+
+## plugins/sdk-channel-plugins/durable-ingress.md
+
+- Route: /plugins/sdk-channel-plugins/durable-ingress
+- Headings:
+  - H2: Inbound ingress (experimental)
+  - H2: Durable ingress and replay dedupe
+  - H3: Transport classes and retention
+  - H3: At-least-once side effects
+  - H3: Dynamic policy publication
+  - H3: Account-scoped restart contract
+
+## plugins/sdk-channel-plugins/mention-policy.md
+
+- Route: /plugins/sdk-channel-plugins/mention-policy
+- Headings:
   - H2: Inbound mention policy
-  - H2: Walkthrough
-  - H2: File structure
-  - H2: Advanced topics
-  - H2: Next steps
-  - H2: Related
+  - H2: Bot-owned threads
 
-## plugins/sdk-channel-turn.md
+## plugins/sdk-channel-plugins/message-adapter.md
 
-- Route: /plugins/sdk-channel-turn
-- Headings: none
+- Route: /plugins/sdk-channel-plugins/message-adapter
+- Headings:
+  - H2: Message adapter
+  - H3: Progress visibility acceptance
+  - H3: Quiet progress presentation
+  - H3: Quiet acknowledgement and coalesced progress
+  - H3: Commentary delivery ownership
+  - H3: TTS voice delivery
+
+## plugins/sdk-channel-plugins/sessions-and-bindings.md
+
+- Route: /plugins/sdk-channel-plugins/sessions-and-bindings
+- Headings:
+  - H2: Session conversation grammar
+  - H2: Conversation route ownership
+  - H2: Account-scoped conversation binding support
+
+## plugins/sdk-channel-plugins/setup-and-config.md
+
+- Route: /plugins/sdk-channel-plugins/setup-and-config
+- Headings:
+  - H2: Setup subpaths
+  - H2: Account schemas and inheritance
+  - H3: Stored account-key selection
+  - H2: Other narrow channel subpaths
+
+## plugins/sdk-channel-plugins/status-and-media.md
+
+- Route: /plugins/sdk-channel-plugins/status-and-media
+- Headings:
+  - H2: Runtime lifecycle status
+  - H2: Typing indicators
+  - H2: Media source params
+  - H2: Native payload shaping
+  - H2: Progress card handoff
+  - H2: Post-delivery pins
 
 ## plugins/sdk-entrypoints.md
 
 - Route: /plugins/sdk-entrypoints
 - Headings:
-  - H2: Package entries
-  - H2: defineToolPlugin
-  - H2: definePluginEntry
-  - H2: defineChannelPluginEntry
-  - H2: defineSetupPluginEntry
-  - H2: Registration mode
+  - H2: Where each section moved
   - H2: Plugin shapes
   - H2: Related
+  - H2: Code Mode executor runtime
+  - H2: Native MCP App adapters
+  - H2: MCP subprocess runtime
+  - H2: Workspace access
+  - H2: Agent workspace context
+  - H2: Tool failure diagnostics
+  - H2: ACP harness turns
+
+## plugins/sdk-entrypoints/define-channel-plugin-entry.md
+
+- Route: /plugins/sdk-entrypoints/define-channel-plugin-entry
+- Headings:
+  - H2: defineChannelPluginEntry
+
+## plugins/sdk-entrypoints/define-plugin-entry.md
+
+- Route: /plugins/sdk-entrypoints/define-plugin-entry
+- Headings:
+  - H2: definePluginEntry
+
+## plugins/sdk-entrypoints/define-setup-plugin-entry.md
+
+- Route: /plugins/sdk-entrypoints/define-setup-plugin-entry
+- Headings:
+  - H2: defineSetupPluginEntry
+
+## plugins/sdk-entrypoints/define-tool-plugin.md
+
+- Route: /plugins/sdk-entrypoints/define-tool-plugin
+- Headings:
+  - H2: defineToolPlugin
+  - H2: Input-dependent output schemas
+
+## plugins/sdk-entrypoints/native-providers.md
+
+- Route: /plugins/sdk-entrypoints/native-providers
+- Headings:
+  - H2: Native provider factories
+  - H2: Computer Use providers
+
+## plugins/sdk-entrypoints/package-entries.md
+
+- Route: /plugins/sdk-entrypoints/package-entries
+- Headings:
+  - H2: Package entries
+
+## plugins/sdk-entrypoints/registration-mode.md
+
+- Route: /plugins/sdk-entrypoints/registration-mode
+- Headings:
+  - H2: Registration mode
+
+## plugins/sdk-entrypoints/tool-policy-and-sandbox.md
+
+- Route: /plugins/sdk-entrypoints/tool-policy-and-sandbox
+- Headings:
+  - H2: Tool policy vocabulary
+  - H2: Runtime tool allowlists
+  - H2: Sandbox bind parsing
+  - H2: Sandbox filesystem mappings
+  - H2: Directory listing metadata
 
 ## plugins/sdk-migration.md
 
 - Route: /plugins/sdk-migration
 - Headings:
   - H2: What changed
+  - H3: Session reset freshness
   - H3: Why
-  - H2: Compatibility policy
-  - H2: How to migrate
-  - H2: Import path reference
-  - H2: Active deprecations
-  - H2: Talk and realtime voice migration
-  - H2: Removal timeline
-  - H2: Suppressing the warnings temporarily
+  - H2: Where each topic lives
+  - H3: Migration steps
+  - H3: Import paths
+  - H3: Removed surfaces and replacements
+  - H3: Talk and voice
+  - H3: Compatibility records
+  - H3: Timeline
   - H2: Related
+
+## plugins/sdk-migration/compatibility-policy.md
+
+- Route: /plugins/sdk-migration/compatibility-policy
+- Headings:
+  - H2: Compatibility policy
+  - H3: Retained helper contracts
+  - H3: Session header link helper
+  - H3: Private runtime facade exports
+  - H3: Harness tool construction
+  - H3: WebSocket options and constructors
+  - H3: Gateway worker environment creation
+  - H3: Gateway placement and publication readers
+  - H3: Channel pairing allowlists
+  - H3: Inbound envelope timestamps
+  - H3: Progress card handoff
+  - H3: Watched-session harness context
+  - H3: Reply tool authority preparation
+  - H3: Harness attempt result migration
+  - H3: Session observer and progress visibility
+  - H3: Mention Inbox persistence
+  - H3: Personal model-account control plane
+  - H3: Awaited session persistence
+  - H3: Reply run-start transcript facts
+  - H3: Agent execution preparation compatibility
+  - H3: ACP metadata binding compatibility
+  - H3: Memory session binding compatibility
+  - H3: Session upstream-link writes
+  - H3: Native session generation authority
+  - H3: Model-provider result compatibility
+  - H3: Memory session inventory readers
+  - H3: Memory read missing results
+  - H3: Config record migrations
+  - H3: Plugin state migration declarations
+  - H3: AuthStorage SQLite migration
+  - H3: Published channel setup compatibility
+  - H3: Channel setup input field compatibility
+  - H4: Verifying readers
+  - H3: TTS preference resolution
+  - H3: Media legacy projection
+
+## plugins/sdk-migration/how-to-migrate.md
+
+- Route: /plugins/sdk-migration/how-to-migrate
+- Headings:
+  - H2: Workspace mutation guards
+  - H2: Await Mention Inbox operations
+  - H2: Await personal model-account operations
+  - H2: Await placement preparation
+  - H2: Await reply tool authority
+  - H2: Prepare session catalog identities
+  - H2: Await session upstream links
+  - H2: Await locked transcript preparation
+  - H2: Await session transcript persistence
+  - H3: Await extension session changes
+  - H3: Await provider replay metadata
+  - H2: Await session observer and progress visibility
+  - H2: Managed node workspace acquisition
+  - H2: Migrate durable ingress files through Doctor
+  - H2: Agent roster config
+  - H2: How to migrate
+  - H2: Await strict transcript message preparation
+
+## plugins/sdk-migration/import-paths.md
+
+- Route: /plugins/sdk-migration/import-paths
+- Headings:
+  - H2: Import path reference
+  - H3: Removed command and channel facades
+  - H3: Removed channel facade mappings
+
+## plugins/sdk-migration/removal-timeline.md
+
+- Route: /plugins/sdk-migration/removal-timeline
+- Headings:
+  - H2: Removal timeline
+
+## plugins/sdk-migration/removed-surfaces.md
+
+- Route: /plugins/sdk-migration/removed-surfaces
+- Headings:
+  - H2: Removed compatibility surfaces
+  - H3: Channel, config, and infrastructure compatibility facades
+  - H3: Command, Discord, and Telegram account facades
+  - H3: Retroactively recorded shipped exports
+  - H3: Process-global API-provider publication
+  - H3: Deactivate hook alias
+  - H3: Skill Workshop proposal hooks
+  - H3: Private testing barrel
+  - H3: Credential prompt builder
+  - H2: Migration reference
+
+## plugins/sdk-migration/talk.md
+
+- Route: /plugins/sdk-migration/talk
+- Headings:
+  - H2: Talk and realtime voice migration
 
 ## plugins/sdk-overview.md
 
 - Route: /plugins/sdk-overview
 - Headings:
+  - H2: API stability
+  - H2: What each page covers
+  - H2: Registration API
+  - H3: Session discussion provider
+  - H3: API object fields
+  - H2: Where each section moved
+  - H2: Docked link readers
+  - H2: Related
+
+## plugins/sdk-overview/capabilities.md
+
+- Route: /plugins/sdk-overview/capabilities
+- Headings:
+  - H2: Capability registration
+  - H3: Storage providers
+  - H3: Worker providers
+  - H2: Decision models (contract version 1)
+  - H3: Calling from a third-party plugin
+
+## plugins/sdk-overview/cli-and-discovery.md
+
+- Route: /plugins/sdk-overview/cli-and-discovery
+- Headings:
+  - H2: Gateway discovery registration
+  - H2: CLI registration metadata
+  - H2: CLI backend registration
+
+## plugins/sdk-overview/events-and-hooks.md
+
+- Route: /plugins/sdk-overview/events-and-hooks
+- Headings:
+  - H2: Events and lifecycle
+  - H2: Hook decision semantics
+
+## plugins/sdk-overview/host-hooks.md
+
+- Route: /plugins/sdk-overview/host-hooks
+- Headings:
+  - H2: Host hooks for workflow plugins
+  - H2: Sandbox backends
+  - H2: Docked link readers
+
+## plugins/sdk-overview/imports.md
+
+- Route: /plugins/sdk-overview/imports
+- Headings:
   - H2: Import convention
   - H2: Subpath reference
-  - H2: Registration API
-  - H3: Capability registration
-  - H3: Tools and commands
-  - H3: Infrastructure
-  - H3: Host hooks for workflow plugins
-  - H3: Gateway discovery registration
-  - H3: CLI registration metadata
-  - H3: CLI backend registration
-  - H3: Exclusive slots
-  - H3: Deprecated memory embedding adapters
-  - H3: Events and lifecycle
-  - H3: Hook decision semantics
-  - H3: API object fields
   - H2: Internal module convention
-  - H2: Related
+
+## plugins/sdk-overview/infrastructure.md
+
+- Route: /plugins/sdk-overview/infrastructure
+- Headings:
+  - H2: Infrastructure
+  - H3: File-watch capacity errors
+  - H3: Filesystem observation and worker notifications
+  - H3: Streaming file verification
+  - H3: Browser lifecycle cleanup
+  - H3: SQLite write admission
+  - H3: Worker task admission
+  - H3: SQLite worker stores
+  - H3: Computation worker entrypoints
+  - H3: Webhook body rejection
+  - H3: Post-ack webhook work
+  - H3: Requester-scoped MCP connections
+  - H3: Doctor plugin-state repairs
+
+## plugins/sdk-overview/memory-and-context.md
+
+- Route: /plugins/sdk-overview/memory-and-context
+- Headings:
+  - H2: Exclusive slots
+  - H2: Memory embedding adapters
+  - H2: Pre-compaction memory flush
+  - H3: Audience and flush identity
+  - H3: Completion evidence
+  - H2: Provider-neutral memory runtime
+  - H3: Host consumers
+  - H3: Memory audience
+  - H3: Compatibility and host integration
+  - H3: Dreaming remains separate
+  - H2: Bundled Memory Core workers
+
+## plugins/sdk-overview/tools-and-commands.md
+
+- Route: /plugins/sdk-overview/tools-and-commands
+- Headings:
+  - H2: Tools and commands
 
 ## plugins/sdk-provider-plugins.md
 
 - Route: /plugins/sdk-provider-plugins
 - Headings:
+  - H2: Import an existing credential during sign-in
+  - H2: Loopback OAuth callbacks
+  - H2: Handle model access after sign-in
+  - H3: Defer the choice to a later reply
+  - H3: Keep hosted writes authorized
   - H2: Walkthrough
   - H2: Publish to ClawHub
   - H2: File structure
   - H2: Catalog order reference
   - H2: Next steps
+  - H2: Where each section moved
+  - H3: Provider model catalogs
+  - H3: Provider hook families
+  - H3: Provider hook wiring
+  - H3: Provider voice capabilities
+  - H3: Provider media and search
   - H2: Related
+
+## plugins/sdk-provider-plugins/hook-families.md
+
+- Route: /plugins/sdk-provider-plugins/hook-families
+- Headings:
+  - H2: Family builders
+
+## plugins/sdk-provider-plugins/media-and-search.md
+
+- Route: /plugins/sdk-provider-plugins/media-and-search
+- Headings:
+  - H2: Media and search capabilities
+
+## plugins/sdk-provider-plugins/model-catalogs.md
+
+- Route: /plugins/sdk-provider-plugins/model-catalogs
+- Headings:
+  - H2: Live model discovery
+  - H2: Selecting catalog augmentation hooks
+
+## plugins/sdk-provider-plugins/runtime-hooks.md
+
+- Route: /plugins/sdk-provider-plugins/runtime-hooks
+- Headings:
+  - H2: Model route policy
+  - H2: Credential lookup cancellation
+  - H2: OAuth refresh configuration
+  - H2: Hook examples
+
+## plugins/sdk-provider-plugins/voice-and-audio.md
+
+- Route: /plugins/sdk-provider-plugins/voice-and-audio
+- Headings:
+  - H2: Voice and audio capabilities
 
 ## plugins/sdk-runtime.md
 
 - Route: /plugins/sdk-runtime
 - Headings:
-  - H2: Config loading and writes
-  - H2: Reusable runtime utilities
+  - H2: What each page covers
   - H2: Runtime namespaces
   - H2: Storing runtime references
+  - H2: Plugin lifecycle and cleanup
+  - H3: Plugin value boundary
+  - H3: Instance-bound background context
+  - H3: Memory runtime replacement
+  - H2: Browser meeting transport builders
+  - H2: Browser meeting status ownership
+  - H2: Browser meeting participation
+  - H2: Worker provider allocation authority
   - H2: Other top-level api fields
+  - H2: Where each section moved
   - H2: Related
+  - H2: Decision model runtime
+
+## plugins/sdk-runtime/agent.md
+
+- Route: /plugins/sdk-runtime/agent
+- Headings:
+  - H2: Plugin command runtime helpers
+  - H2: Auth-profile resolution
+  - H2: Session transcript hydration
+  - H2: Awaited transcript mutations
+  - H2: Native assistant persistence
+  - H2: Bounded model context
+  - H2: Scoped session visibility
+  - H2: Agent and session namespaces
+
+## plugins/sdk-runtime/background-work.md
+
+- Route: /plugins/sdk-runtime/background-work
+- Headings:
+  - H2: Background work namespaces
+  - H2: Native harness completion delivery
+
+## plugins/sdk-runtime/channel.md
+
+- Route: /plugins/sdk-runtime/channel
+- Headings:
+  - H2: Channel namespaces
+  - H2: Awaited conversation binding mutations
+
+## plugins/sdk-runtime/config-and-utilities.md
+
+- Route: /plugins/sdk-runtime/config-and-utilities
+- Headings:
+  - H2: Config loading and writes
+  - H2: Reusable runtime utilities
+  - H3: Bounded waits
+  - H3: Stage timing diagnostics
+
+## plugins/sdk-runtime/gateway-and-nodes.md
+
+- Route: /plugins/sdk-runtime/gateway-and-nodes
+- Headings:
+  - H2: Service scheduling
+  - H2: Gateway and node namespaces
+  - H3: Session resource methods
+  - H3: Person access lifetimes
+  - H3: Durable person access grants
+  - H2: Gateway service events
+
+## plugins/sdk-runtime/media.md
+
+- Route: /plugins/sdk-runtime/media
+- Headings:
+  - H2: FFmpeg command discovery
+  - H2: Realtime voice playback
+  - H2: Media and generation namespaces
+
+## plugins/sdk-runtime/models.md
+
+- Route: /plugins/sdk-runtime/models
+- Headings:
+  - H2: Protected model egress for standalone commands
+  - H2: Prepared simple completions
+  - H2: Low-level completions
+  - H2: Model namespaces
+  - H2: Prepared completion SDK compatibility
+
+## plugins/sdk-runtime/state-and-system.md
+
+- Route: /plugins/sdk-runtime/state-and-system
+- Headings:
+  - H2: SQLite maintenance lifetime
+  - H2: State, config, and system namespaces
+  - H2: Synchronous keyed store migration
+  - H2: Per-agent SQLite writes
 
 ## plugins/sdk-setup.md
 
@@ -7093,17 +11310,19 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Package metadata
   - H3: openclaw fields
   - H3: openclaw.channel
+  - H3: Channel-owned setup fields
   - H3: openclaw.install
-  - H3: Deferred full load
+  - H3: Setup-time gateway methods
   - H2: Plugin manifest
-  - H2: ClawHub publishing
   - H2: Setup entry
   - H3: Narrow setup helper imports
+  - H3: Channel-owned setup input fields
   - H3: Channel-owned single-account promotion
   - H2: Config schema
   - H3: Building channel config schemas
   - H2: Setup wizards
   - H2: Publishing and installing
+  - H3: ClawHub publishing
   - H2: Related
 
 ## plugins/sdk-subpaths.md
@@ -7111,8 +11330,12 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /plugins/sdk-subpaths
 - Headings:
   - H2: Plugin entry
-  - H3: Deprecated compatibility and test helpers
-  - H3: Reserved bundled plugin helper subpaths
+  - H3: Control UI conversation dock
+  - H3: Capability catalog entry
+  - H3: Compatibility and private-local helpers
+  - H3: Bundled plugin helper subpaths
+  - H3: Sensitive text redaction
+  - H2: Asynchronous proxy capture
   - H2: Related
 
 ## plugins/sdk-testing.md
@@ -7136,6 +11359,57 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Test configuration
   - H2: Related
 
+## plugins/session-share.md
+
+- Route: /plugins/session-share
+- Headings:
+  - H2: Before you begin
+  - H2: Choose sessions on the source
+  - H2: Enable the receiver and pair the source
+  - H2: Read shared sessions
+  - H2: Attribute the source node
+  - H2: Security boundary
+  - H2: Troubleshooting
+  - H2: Related
+
+## plugins/slack-huddles.md
+
+- Route: /plugins/slack-huddles
+- Headings:
+  - H2: Requirements
+  - H2: Install and enable
+  - H2: Configure
+  - H2: Join and manage a huddle
+  - H2: Handle manual actions
+  - H2: Limits
+  - H2: Related
+
+## plugins/team-reports.md
+
+- Route: /plugins/team-reports
+- Headings:
+  - H2: Before you begin
+  - H2: Install and enable Team Reports
+  - H2: Read reports in the Control UI
+  - H3: Work sessions
+  - H2: Configuration
+  - H3: GitHub
+  - H3: Discord
+  - H3: People and identity
+  - H3: Summaries
+  - H3: Schedule
+  - H2: Understand report windows and counts
+  - H2: CLI and exports
+  - H2: Troubleshooting
+
+## plugins/teams-meetings.md
+
+- Route: /plugins/teams-meetings
+- Headings:
+  - H2: Handle Teams policy and manual actions
+  - H2: Tool and Gateway surface
+  - H2: Related
+
 ## plugins/tool-plugins.md
 
 - Route: /plugins/tool-plugins
@@ -7144,7 +11418,10 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Quickstart
   - H2: Write a tool
   - H2: Optional and factory tools
+  - H3: Owner-authorized continuations
   - H2: Return values
+  - H2: Output contracts
+  - H2: Deliver the reply directly
   - H2: Configuration
   - H2: Generated metadata
   - H2: Package metadata
@@ -7160,20 +11437,98 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Tool does not appear after install
   - H2: See also
 
+## plugins/typesafe.md
+
+- Route: /plugins/typesafe
+- Headings:
+  - H1: TypeSafe AI
+  - H2: Install
+  - H2: Enable and configure
+  - H2: Local System One server
+  - H3: Run Kev
+  - H3: Connect OpenClaw
+  - H2: Decision contract
+  - H2: Agent evaluation tool
+  - H2: Existing external installation
+
+## plugins/vault.md
+
+- Route: /plugins/vault
+- Headings:
+  - H1: Vault SecretRefs
+  - H2: Before you begin
+  - H2: Store a provider key in Vault
+  - H2: Make Vault visible to the Gateway
+  - H2: Generate and apply a SecretRef plan
+  - H2: Configure more provider keys
+  - H2: SecretRef id format
+  - H2: What OpenClaw stores
+  - H2: Containers and managed deployments
+  - H2: Related
+
 ## plugins/voice-call.md
 
 - Route: /plugins/voice-call
 - Headings:
   - H2: Quick start
+  - H2: Where each section moved
+  - H3: Voice call configuration
+  - H3: Voice call realtime and streaming
+  - H3: Voice call TTS and inbound calls
+  - H3: Voice call security and interfaces
+  - H3: Voice call troubleshooting
+  - H2: Related
+
+## plugins/voice-call/configuration.md
+
+- Route: /plugins/voice-call/configuration
+- Headings:
   - H2: Configuration
+  - H3: Choose the call owner
   - H3: Config reference
+  - H3: Twilio voicemail detection tuning
   - H2: Session scope
+
+## plugins/voice-call/realtime-and-streaming.md
+
+- Route: /plugins/voice-call/realtime-and-streaming
+- Headings:
   - H2: Realtime voice conversations
+  - H3: GPT-Live
+  - H3: Per-call briefs and errands
+  - H3: Hangup detection
   - H3: Tool policy
   - H3: Agent voice context
   - H3: Realtime provider examples
   - H2: Streaming transcription
   - H3: Streaming provider examples
+
+## plugins/voice-call/security-and-interfaces.md
+
+- Route: /plugins/voice-call/security-and-interfaces
+- Headings:
+  - H2: Webhook security
+  - H2: CLI
+  - H2: Agent tool
+  - H2: Gateway RPC
+
+## plugins/voice-call/troubleshooting.md
+
+- Route: /plugins/voice-call/troubleshooting
+- Headings:
+  - H2: Troubleshooting
+  - H3: Call placement fails to save its initial record
+  - H3: Setup fails webhook exposure
+  - H3: Provider credentials fail
+  - H3: Calls start but provider webhooks do not arrive
+  - H3: Signature verification fails
+  - H3: Google Meet Twilio joins fail
+  - H3: Realtime call has no speech
+
+## plugins/voice-call/tts-and-inbound-calls.md
+
+- Route: /plugins/voice-call/tts-and-inbound-calls
+- Headings:
   - H2: TTS for calls
   - H3: TTS examples
   - H2: Inbound calls
@@ -7182,31 +11537,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Conversation startup behavior
   - H3: Twilio stream disconnect grace
   - H2: Stale call reaper
-  - H2: Webhook security
-  - H2: CLI
-  - H2: Agent tool
-  - H2: Gateway RPC
-  - H2: Troubleshooting
-  - H3: Setup fails webhook exposure
-  - H3: Provider credentials fail
-  - H3: Calls start but provider webhooks do not arrive
-  - H3: Signature verification fails
-  - H3: Google Meet Twilio joins fail
-  - H3: Realtime call has no speech
-  - H2: Related
-
-## plugins/webhooks.md
-
-- Route: /plugins/webhooks
-- Headings:
-  - H2: Configure routes
-  - H2: Security model
-  - H2: Request format
-  - H2: Supported actions
-  - H3: createflow
-  - H3: runtask
-  - H2: Response shape
-  - H2: Related
 
 ## plugins/workboard.md
 
@@ -7214,6 +11544,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Enable it
   - H2: Configuration
+  - H2: Board appearance
+  - H2: Sessions board
   - H2: Card fields
   - H2: Starting work from a card
   - H2: Agent tools
@@ -7222,7 +11554,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Entry points
   - H2: CLI and slash command
   - H2: Session lifecycle sync
-  - H2: Dashboard workflow
+  - H2: Control UI workflow
+  - H3: Session-board widgets
   - H2: Diagnostics
   - H2: Permissions
   - H2: Storage
@@ -7243,18 +11576,19 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Agent tool
   - H2: Related
 
+## plugins/zoom-meetings.md
+
+- Route: /plugins/zoom-meetings
+- Headings:
+  - H2: Handle Zoom policy and manual actions
+  - H2: Tool and Gateway surface
+  - H2: Related
+
 ## prose.md
 
 - Route: /prose
 - Headings:
-  - H2: Install
-  - H2: Slash command
-  - H2: What it can do
-  - H2: Example: parallel research and synthesis
-  - H2: OpenClaw runtime mapping
-  - H2: File locations
-  - H2: State backends
-  - H2: Security
+  - H2: Migrate
   - H2: Related
 
 ## providers/alibaba.md
@@ -7271,10 +11605,18 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /providers/anthropic
 - Headings:
+  - H2: Choose a model route
+  - H2: Claude Haiku 5.5
   - H2: Usage and cost tracking
   - H2: Getting started
-  - H2: Thinking defaults (Claude Sonnet 5, Mythos 5, Fable 5, 4.8, and 4.6)
-  - H2: Safety refusal fallback (Claude Fable 5)
+  - H2: Use Claude Opus 5.5
+  - H2: Use Claude Sonnet 5.5
+  - H2: Use Claude Fable 5.1
+  - H3: Tool calls and retained thinking
+  - H2: Claude sessions across computers
+  - H2: Live model discovery
+  - H2: Thinking defaults (Claude 5.5, 5, 4.8, and 4.6)
+  - H2: Safety refusal fallback (Claude Opus, Sonnet 5.5, and Fable)
   - H3: Why this exists
   - H3: How it works
   - H3: Observability and billing
@@ -7291,7 +11633,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Install plugin
   - H2: Getting started
   - H2: Non-interactive setup
-  - H2: Built-in catalog
+  - H2: Direct Arcee catalog
+  - H2: OpenRouter catalog
   - H2: Supported features
   - H2: Related
 
@@ -7302,6 +11645,17 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Getting started
   - H2: Configuration options
   - H2: Notes
+  - H2: Related
+
+## providers/baseten.md
+
+- Route: /providers/baseten
+- Headings:
+  - H2: Install plugin
+  - H2: Getting started
+  - H2: Default model
+  - H2: Bundled fallback catalog
+  - H2: Manual config
   - H2: Related
 
 ## providers/bedrock-mantle.md
@@ -7332,6 +11686,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Install plugin
   - H2: Getting started
   - H2: Non-interactive setup
+  - H2: Discovery and pricing
   - H2: Built-in catalog
   - H2: Manual config
   - H2: Related
@@ -7364,6 +11719,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /providers/clawrouter
 - Headings:
   - H2: Getting started
+  - H2: Managed non-interactive deployment
+  - H2: Readiness and live proof
   - H2: Model discovery
   - H2: Protocol and provider plugins
   - H2: Quotas and usage
@@ -7385,6 +11742,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /providers/cohere
 - Headings:
+  - H2: Built-in catalog
   - H2: Get started
   - H2: Environment-only setup
   - H2: Related
@@ -7393,6 +11751,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /providers/comfy
 - Headings:
+  - H2: Comfy Cloud with MCP OAuth
+  - H2: Workflow plugin
   - H2: What it supports
   - H2: Getting started
   - H2: Configuration
@@ -7407,6 +11767,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Getting started
   - H2: Configuration options
+  - H3: Flux models
   - H2: Voice Call streaming STT
   - H2: Notes
   - H2: Related
@@ -7421,6 +11782,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Config snippet
   - H2: Supported surfaces
   - H2: Available models
+  - H2: Price estimates
   - H2: Notes
   - H2: Related
 
@@ -7465,6 +11827,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Getting started
   - H2: Image generation
+  - H3: GPT Image 2.5
+  - H3: Krea 2
   - H2: Video generation
   - H2: Music generation
   - H2: Related
@@ -7489,11 +11853,25 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Custom Fireworks model ids
   - H2: Related
 
+## providers/fish-audio.md
+
+- Route: /providers/fish-audio
+- Headings:
+  - H2: Hosted S2.1
+  - H3: Hosted models
+  - H3: Expressive speech
+  - H3: Voice selection and cloning
+  - H2: Local S2 Pro on macOS
+  - H3: Local reference voice
+  - H2: Troubleshooting
+
 ## providers/github-copilot.md
 
 - Route: /providers/github-copilot
 - Headings:
   - H2: Three ways to use Copilot in OpenClaw
+  - H2: GitHub Enterprise (data residency)
+  - H3: Tenant request identity
   - H2: Optional flags
   - H2: Non-interactive onboarding
   - H2: Memory search embeddings
@@ -7516,6 +11894,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /providers/google
 - Headings:
   - H2: Getting started
+  - H2: Gemini 4 Argon
   - H2: Capabilities
   - H2: Web search
   - H2: Image generation
@@ -7571,17 +11950,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Transcription providers
   - H2: Community tools
 
-## providers/inferrs.md
-
-- Route: /providers/inferrs
-- Headings:
-  - H2: Getting started
-  - H2: Full config example
-  - H2: On-demand startup
-  - H2: Advanced configuration
-  - H2: Troubleshooting
-  - H2: Related
-
 ## providers/inworld.md
 
 - Route: /providers/inworld
@@ -7590,6 +11958,15 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Getting started
   - H2: Configuration options
   - H2: Notes
+  - H2: Related
+
+## providers/kie.md
+
+- Route: /providers/kie
+- Headings:
+  - H2: Setup
+  - H2: Video generation
+  - H2: Live testing
   - H2: Related
 
 ## providers/kilocode.md
@@ -7613,6 +11990,30 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Advanced
   - H2: Related
 
+## providers/llmman.md
+
+- Route: /providers/llmman
+- Headings:
+  - H2: Auth rules
+  - H2: Getting started
+  - H2: Full config example
+  - H2: Model discovery
+  - H3: Smoke tests
+  - H2: Hybrid inference
+  - H3: Hosted-provider key
+  - H3: Hybrid config
+  - H3: Pinning a side
+  - H3: Hybrid versus OpenClaw fallbacks
+  - H3: Hosted models through llmman
+  - H2: Vision and image description
+  - H2: Configuration
+  - H2: Common recipes
+  - H3: Model selection
+  - H3: Quick verification
+  - H2: Advanced configuration
+  - H2: Troubleshooting
+  - H2: Related
+
 ## providers/lmstudio.md
 
 - Route: /providers/lmstudio
@@ -7621,11 +12022,15 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Non-interactive onboarding
   - H2: Configuration
   - H3: Streaming usage compatibility
+  - H3: Gemma 4 tool-call recovery
   - H3: Thinking compatibility
   - H3: Explicit configuration
+  - H3: Model instances and context
   - H3: Disabling preload
   - H3: LAN or tailnet host
   - H2: Troubleshooting
+  - H3: Context overflow
+  - H3: Model discovery failures
   - H3: LM Studio not detected
   - H3: Authentication errors (HTTP 401)
   - H2: Related
@@ -7709,7 +12114,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Setup
   - H2: Defaults
-  - H2: Bundled model catalog
+  - H2: Model catalog
+  - H2: Video generation
   - H2: When to choose Novita
   - H2: Troubleshooting
   - H2: Related
@@ -7720,7 +12126,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Getting started
   - H2: Config example
-  - H2: Featured catalog
+  - H2: Live model catalog
+  - H2: Nemotron 3.5 Lightning
   - H2: Nemotron 3 Ultra
   - H2: Bundled fallback catalog
   - H2: Advanced configuration
@@ -7742,46 +12149,154 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /providers/ollama
 - Headings:
-  - H2: Auth rules
-  - H2: Getting started
-  - H2: Cloud models through a local host
+  - H2: Where each section moved
+  - H2: Related
+
+## providers/ollama/advanced.md
+
+- Route: /providers/ollama/advanced
+- Headings:
+  - H2: Advanced configuration
+
+## providers/ollama/configuration.md
+
+- Route: /providers/ollama/configuration
+- Headings:
+  - H2: Configuration
+
+## providers/ollama/model-discovery.md
+
+- Route: /providers/ollama/model-discovery
+- Headings:
   - H2: Model discovery (implicit provider)
   - H3: Smoke tests
+
+## providers/ollama/node-local-inference.md
+
+- Route: /providers/ollama/node-local-inference
+- Headings:
   - H2: Node-local inference
-  - H2: Vision and image description
-  - H2: Configuration
+
+## providers/ollama/recipes.md
+
+- Route: /providers/ollama/recipes
+- Headings:
   - H2: Common recipes
   - H3: Model selection
   - H3: Quick verification
-  - H2: Ollama Web Search
-  - H2: Advanced configuration
+
+## providers/ollama/setup.md
+
+- Route: /providers/ollama/setup
+- Headings:
+  - H2: Auth rules
+  - H2: Getting started
+  - H2: Cloud models through a local host
+
+## providers/ollama/troubleshooting.md
+
+- Route: /providers/ollama/troubleshooting
+- Headings:
   - H2: Troubleshooting
-  - H2: Related
+
+## providers/ollama/vision.md
+
+- Route: /providers/ollama/vision
+- Headings:
+  - H2: Vision and image description
+
+## providers/ollama/web-search.md
+
+- Route: /providers/ollama/web-search
+- Headings:
+  - H2: Ollama Web Search
 
 ## providers/openai.md
 
 - Route: /providers/openai
 - Headings:
-  - H2: Usage and cost tracking
-  - H2: Quick choice
-  - H2: Naming map
-  - H2: GPT-5.6 limited preview
-  - H2: OpenClaw feature coverage
-  - H2: Memory embeddings
-  - H2: Getting started
-  - H2: Native Codex app-server auth
-  - H2: Image generation
-  - H2: Video generation
+  - H2: Where each section moved
+  - H2: Related
+
+## providers/openai/advanced.md
+
+- Route: /providers/openai/advanced
+- Headings:
   - H2: GPT-5 prompt contribution
-  - H2: Voice and speech
+  - H2: Advanced configuration
+
+## providers/openai/authentication.md
+
+- Route: /providers/openai/authentication
+- Headings:
+  - H2: Compare capabilities
+  - H3: Choose model access and harness separately
+  - H2: Shared agent credential or personal account?
+  - H2: Set up an agent's credential
+  - H2: Check the selected account
+
+## providers/openai/azure.md
+
+- Route: /providers/openai/azure
+- Headings:
   - H2: Azure OpenAI endpoints
   - H3: Configuration
   - H3: API version
   - H3: Model names are deployment names
   - H3: Regional availability
   - H3: Parameter differences
-  - H2: Advanced configuration
-  - H2: Related
+
+## providers/openai/coverage-and-cost.md
+
+- Route: /providers/openai/coverage-and-cost
+- Headings:
+  - H2: Usage and cost tracking
+  - H2: OpenClaw feature coverage
+  - H2: Memory embeddings
+
+## providers/openai/image-and-video.md
+
+- Route: /providers/openai/image-and-video
+- Headings:
+  - H2: Image generation
+  - H3: GPT Image 2.5
+  - H3: Other Image Models
+
+## providers/openai/models.md
+
+- Route: /providers/openai/models
+- Headings:
+  - H2: Quick choice
+  - H3: Retired subscription model references
+  - H2: Models your API key lists
+  - H2: Daybreak Blue and Red
+  - H2: GPT-6 Astra
+  - H3: Async tools, steering, and reasoning changes
+  - H2: GPT-6.1 Sol
+  - H2: GPT-6 Sol and Luna
+  - H2: GPT-5.6 limited preview
+
+## providers/openai/runtimes.md
+
+- Route: /providers/openai/runtimes
+- Headings:
+  - H2: Naming map
+  - H2: Implicit agent runtime
+  - H2: Native Codex app-server auth
+
+## providers/openai/setup.md
+
+- Route: /providers/openai/setup
+- Headings:
+  - H2: Getting started
+  - H2: Sign in with ChatGPT (Beta)
+  - H3: Current limitations
+
+## providers/openai/voice-and-speech.md
+
+- Route: /providers/openai/voice-and-speech
+- Headings:
+  - H2: Voice and speech
 
 ## providers/opencode-go.md
 
@@ -7789,7 +12304,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Getting started
   - H2: Config example
-  - H2: Built-in catalog
+  - H2: Catalog
+  - H2: Privacy
   - H2: Advanced configuration
   - H2: Related
 
@@ -7799,7 +12315,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Getting started
   - H2: Config example
-  - H2: Built-in catalogs
+  - H2: Provider catalogs
   - H3: Zen
   - H3: Go
   - H2: Advanced configuration
@@ -7854,30 +12370,30 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Config example
   - H2: Related
 
-## providers/qwen-oauth.md
-
-- Route: /providers/qwen-oauth
-- Headings:
-  - H2: Setup
-  - H2: Defaults
-  - H2: How this differs from Qwen
-  - H2: Models
-  - H2: Migration
-  - H2: Troubleshooting
-  - H2: Related
-
 ## providers/qwen.md
 
 - Route: /providers/qwen
 - Headings:
   - H2: Install plugin
   - H2: Getting started
+  - H2: Retired Qwen Portal authentication
   - H2: Plan types and endpoints
   - H2: Built-in catalog
+  - H3: Token Plan catalog
   - H2: Thinking controls
   - H2: Multimodal add-ons
+  - H3: Video generation
   - H2: Advanced configuration
   - H2: Related
+
+## providers/radius.md
+
+- Route: /providers/radius
+- Headings:
+  - H2: Sign in
+  - H3: Organization API key
+  - H2: Choose a model
+  - H2: Scope and troubleshooting
 
 ## providers/runway.md
 
@@ -7924,7 +12440,20 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Getting started
   - H2: Config example
-  - H2: Built-in catalog
+  - H2: Model discovery
+  - H2: Related
+
+## providers/telnyx.md
+
+- Route: /providers/telnyx
+- Headings:
+  - H2: Requirements
+  - H2: Install plugin
+  - H2: Getting started
+  - H2: Default model
+  - H2: Live model discovery
+  - H2: Bundled fallback catalog
+  - H2: Manual config
   - H2: Related
 
 ## providers/tencent.md
@@ -7934,6 +12463,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Quick start
   - H2: Non-interactive setup
   - H2: Built-in catalog
+  - H2: Existing TokenHub configurations
   - H2: Advanced configuration
   - H2: Related
 
@@ -7954,7 +12484,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Privacy modes
   - H2: Getting started
   - H2: Model selection
-  - H2: Built-in catalog (38 models)
+  - H2: Built-in catalog (16 visible models)
   - H2: Model discovery
   - H2: DeepSeek V4 replay behavior
   - H2: Streaming and tool support
@@ -8012,8 +12542,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: OAuth troubleshooting
   - H2: Built-in catalog
   - H2: Feature coverage
-  - H3: Fast-mode mappings
-  - H3: Legacy compatibility aliases
+  - H3: Legacy fast-mode compatibility
+  - H3: Legacy compatibility and moving aliases
   - H2: Features
   - H2: Live testing
   - H2: Related
@@ -8037,116 +12567,27 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: GLM models
   - H2: Getting started
   - H3: Endpoints
+  - H2: Rate limits and overloads
   - H2: Config example
   - H2: Built-in catalog
+  - H2: Video generation
   - H2: Thinking levels
   - H2: Advanced configuration
   - H2: Related
-
-## refactor/access.md
-
-- Route: /refactor/access
-- Headings: none
-
-## refactor/acp.md
-
-- Route: /refactor/acp
-- Headings:
-  - H2: Goals
-  - H2: Non-goals
-  - H2: Target Model
-  - H3: Gateway Instance Identity
-  - H3: ACP Session Ownership
-  - H3: ACPX Process Leases
-  - H2: Lifecycle Controller
-  - H2: Wrapper Contract
-  - H2: Session Visibility Contract
-  - H2: Migration Plan
-  - H3: Phase 1: Add Identity And Leases
-  - H3: Phase 2: Lease-First Cleanup
-  - H3: Phase 3: Lease-First Startup Reaping
-  - H3: Phase 4: Session Ownership Rows
-  - H3: Phase 5: Remove Legacy Heuristics
-  - H2: Tests
-  - H2: Compatibility Notes
-  - H2: Success Criteria
-
-## refactor/canvas.md
-
-- Route: /refactor/canvas
-- Headings:
-  - H1: Canvas plugin refactor
-  - H2: Goal
-  - H2: Non-goals
-  - H2: Current branch state
-  - H2: Target shape
-  - H2: Migration steps
-  - H2: Audit checklist
-  - H2: Verification commands
-
-## refactor/database-first.md
-
-- Route: /refactor/database-first
-- Headings:
-  - H1: Database-First State Refactor
-  - H2: Decision
-  - H2: Hard Contract
-  - H2: Goal state and progress
-  - H3: Hard goal
-  - H3: Goal states
-  - H3: Current state
-  - H3: Remaining work
-  - H3: Do not regress
-  - H2: Code-Read Assumptions
-  - H2: Code-Read Findings
-  - H2: Current Code Shape
-  - H2: Target Schema Shape
-  - H2: Doctor Migration Shape
-  - H2: Migration Inventory
-  - H2: Migration Plan
-  - H3: Phase 0: Freeze The Boundary
-  - H3: Phase 1: Finish The Global Control Plane
-  - H3: Phase 2: Introduce Per-Agent Databases
-  - H3: Phase 3: Replace Session Store APIs
-  - H3: Phase 4: Move Transcripts, ACP Streams, Trajectories, And VFS
-  - H3: Phase 5: Backup, Restore, Vacuum, And Verify
-  - H3: Phase 6: Worker Runtime
-  - H3: Phase 7: Delete The Old World
-  - H2: Backup And Restore
-  - H2: Runtime Refactor Plan
-  - H2: Performance Rules
-  - H2: Static Bans
-  - H2: Done Criteria
-
-## refactor/ingress-core.md
-
-- Route: /refactor/ingress-core
-- Headings:
-  - H1: Ingress core deletion plan
-  - H2: Budget
-  - H2: Diagnosis
-  - H2: Hotspots
-  - H2: Current Code Read
-  - H2: Boundary
-  - H2: Acceptance Rule
-  - H2: Work Packages
-  - H2: Deletion Waves
-  - H2: Do Not Move
-  - H2: Verification
-  - H2: Exit Criteria
 
 ## reference/AGENTS.default.md
 
 - Route: /reference/AGENTS.default
 - Headings:
   - H2: First run (recommended)
-  - H2: Safety defaults
+  - H2: Care defaults
   - H2: Existing solutions preflight
   - H2: Session start (required)
   - H2: Soul (required)
   - H2: Shared spaces (recommended)
   - H2: Memory system (recommended)
-  - H2: Tools and skills
+  - H2: Tools
+  - H3: Local notes
   - H2: Backup tip (recommended)
   - H2: What OpenClaw does
   - H2: Core skills (enable in Settings → Skills)
@@ -8157,22 +12598,17 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /reference/RELEASING
 - Headings:
+  - H2: Release channels
   - H2: Version naming
   - H2: Release cadence
-  - H2: Monthly npm-only extended-stable publication
-  - H2: Regular release operator checklist
-  - H2: Stable main closeout
-  - H2: Release preflight
-  - H2: Release test boxes
-  - H3: Vitest
-  - H3: Docker
-  - H3: QA Lab
-  - H3: Package
-  - H2: Regular release publish automation
-  - H2: NPM workflow inputs
-  - H2: Regular beta/latest stable release sequence
-  - H2: Public references
-  - H2: Related
+  - H2: Release validation
+  - H3: Operator capabilities
+  - H3: Plugin SDK evidence transport
+  - H3: Frozen qualification identity
+  - H2: Packages and apps can become available at different times
+  - H2: Release notes and verification
+  - H3: Downstream packaging
+  - H2: Maintainer procedures
 
 ## reference/api-usage-costs.md
 
@@ -8189,66 +12625,9 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Web fetch tool (Firecrawl)
   - H3: Provider usage snapshots (status/health)
   - H3: Compaction safeguard summarization
-  - H3: Model scan / probe
+  - H3: Model scan / check
   - H3: Talk (speech)
   - H3: Skills (third-party APIs)
-  - H2: Related
-
-## reference/application-modernization-plan.md
-
-- Route: /reference/application-modernization-plan
-- Headings:
-  - H2: Goal
-  - H2: Principles
-  - H2: Phase 1: Baseline audit
-  - H2: Phase 2: Product and UX cleanup
-  - H2: Phase 3: Frontend architecture tightening
-  - H2: Phase 4: Performance and reliability
-  - H2: Phase 5: Type, contract, and test hardening
-  - H2: Phase 6: Documentation and release readiness
-  - H2: Recommended first slice
-  - H2: Frontend skill update
-
-## reference/code-mode.md
-
-- Route: /reference/code-mode
-- Headings:
-  - H2: What it does
-  - H2: Why use it
-  - H2: Enable it
-  - H2: Technical tour
-  - H2: Runtime status
-  - H2: Scope
-  - H2: Terms
-  - H2: Configuration
-  - H2: Activation
-  - H2: Model-visible tools
-  - H2: exec
-  - H2: wait
-  - H2: Guest runtime API
-  - H2: Internal namespaces
-  - H3: Registry lifecycle
-  - H3: Registration shape
-  - H3: Ownership and visibility
-  - H3: Scope serialization rules
-  - H3: Prompts
-  - H3: Cleanup
-  - H3: Test checklist
-  - H2: Output API
-  - H2: Tool catalog
-  - H2: Tool Search interaction
-  - H2: Tool names and collisions
-  - H2: Nested tool execution
-  - H2: Run and snapshot lifecycle
-  - H2: QuickJS-WASI runtime
-  - H2: TypeScript
-  - H2: Security boundary
-  - H2: Error codes
-  - H2: Telemetry
-  - H2: Debugging
-  - H2: Implementation layout
-  - H2: Validation checklist
-  - H2: E2E test plan
   - H2: Related
 
 ## reference/credits.md
@@ -8259,6 +12638,180 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Core contributors
   - H2: License
   - H2: Related
+
+## reference/database-schemas.md
+
+- Route: /reference/database-schemas
+- Headings:
+  - H2: Related
+  - H2: Where each section moved
+
+## reference/database-schemas/agent-schema-history.md
+
+- Route: /reference/database-schemas/agent-schema-history
+- Headings:
+  - H2: Agent schema history
+  - H3: Canonical writer validation
+  - H3: Session hot facts and snapshots
+  - H3: Compact agent payload storage
+  - H3: Transcript FTS row ownership
+  - H3: Incremental canonical-session validation
+  - H3: Cold transcript storage
+  - H3: Creator namespace migration
+  - H3: Participant identity migration
+
+## reference/database-schemas/integrity-and-recovery.md
+
+- Route: /reference/database-schemas/integrity-and-recovery
+- Headings:
+  - H2: Integrity checks
+  - H3: Startup on multi-agent hosts
+  - H2: btrfs and NOCOW
+  - H2: Planner statistics maintenance
+  - H2: Troubleshooting
+  - H3: The state database is busy
+  - H3: Database paths cannot be compared
+  - H3: A mount check times out while opening a local database
+  - H3: A legacy Workshop index prevents shared-state reads
+  - H3: The shared-state WAL keeps growing
+  - H3: Doctor reports orphan session windows
+  - H3: Doctor reports orphan task delivery rows
+  - H3: Why you cannot go back after updating to 2026.7.2
+  - H3: The Gateway refuses to start with a newer schema version error
+  - H3: A database is quarantined after integrity verification failed
+  - H2: Downgrade recovery
+
+## reference/database-schemas/layout.md
+
+- Route: /reference/database-schemas/layout
+- Headings:
+  - H2: Database layout
+  - H3: Linux database page cache
+  - H3: Session reactions
+  - H3: Session run outcomes and liveness
+  - H3: Activity session recaps
+  - H3: User-turn model prompt projections
+  - H3: Transcript search row ownership
+  - H3: Cold transcript archives
+  - H3: Plugin state listing index
+  - H3: Mentions Inbox
+  - H3: ACP replay accounting
+  - H3: Meeting transcript tables
+  - H4: `meeting_transcript_sessions`
+  - H4: `meeting_transcript_utterances`
+  - H4: `meeting_transcript_summaries`
+  - H3: Update run ledger
+  - H3: Update installation control
+  - H3: Managed worktree acceleration templates
+  - H3: Conversation environments
+  - H3: Cloud repository workspaces
+  - H2: Sandbox runtime reservations
+  - H2: Package-publication recovery receipt
+  - H2: Immutable installation preparation
+
+## reference/database-schemas/personal-data.md
+
+- Route: /reference/database-schemas/personal-data
+- Headings:
+  - H2: Personal GitHub connections and publication
+  - H2: Personal model accounts
+  - H2: Apple companion delivery journals
+
+## reference/database-schemas/state-schema-history.md
+
+- Route: /reference/database-schemas/state-schema-history
+- Headings:
+  - H2: State schema history
+  - H3: State schema 20
+  - H3: Skill Workshop proposal retirement (state schema 20, same version)
+  - H3: State schema 19
+  - H3: State schema 18
+  - H3: State schema 17
+  - H3: State schema 16
+  - H3: State schema 15
+  - H3: State schema 13
+  - H3: State schema 11
+  - H3: State schema 9
+
+## reference/database-schemas/storage-changes.md
+
+- Route: /reference/database-schemas/storage-changes
+- Headings:
+  - H2: Canonical writer validation
+  - H2: Preparing for another database backend
+  - H3: Keep operations at the owning store
+  - H3: Memory chunk path index retirement
+  - H3: Preserve the data and concurrency contracts
+  - H3: Keep engine-specific capabilities owned
+  - H2: Trajectory retention covering index
+  - H2: Talk voice-session lookup indexes
+  - H2: Review checkpoint for material changes
+  - H2: Preflight a target release
+  - H3: Preflight an explicit agent copy
+
+## reference/database-schemas/versioning.md
+
+- Route: /reference/database-schemas/versioning
+- Headings:
+  - H2: Versioning contract
+  - H3: Schema bumps and older updaters
+  - H3: Profile-owned skill library
+
+## reference/database-schemas/worker-access-inventory.md
+
+- Route: /reference/database-schemas/worker-access-inventory
+- Headings:
+  - H2: Scope and interpretation
+  - H2: Profile priority and current cutover status
+  - H2: Next four independent lanes
+  - H2: Call sites by tier and owner
+  - H3: T1
+  - H3: T2
+  - H3: T3
+  - H3: W
+
+## reference/database-schemas/worker-access.md
+
+- Route: /reference/database-schemas/worker-access
+- Headings:
+  - H2: Committed facts and completeness
+  - H3: Managed raw handle settlement and write-set coverage
+  - H3: Sandbox, worktree, and publication receipts
+  - H3: Durable cross-store source fences
+  - H3: Session authority projections
+  - H3: Conversation and plugin-state receipt coverage
+  - H3: Foreign observation and recertification
+  - H2: Retained final-authority guards
+  - H2: Keep one store owner
+  - H3: Incognito worker ownership (P1, inactive)
+  - H3: Incognito session facts and authority (P2, inactive)
+  - H3: Incognito reports and closed-turn outbox (P4a, inactive)
+  - H3: Incognito session lifecycle (P4b, inactive)
+  - H3: Incognito history (P5a, inactive)
+  - H3: Incognito compute and usage (P5b, inactive)
+  - H3: Incognito Memory and Codex history (P5c, inactive)
+  - H3: Incognito ACP and shared authority (P6, inactive)
+  - H3: Incognito Board and lifecycle composition (P7b, inactive)
+  - H4: Remaining synchronous contracts before P7
+  - H3: Incognito SessionManager composition (P7a, inactive)
+  - H3: Incognito hydration and pending-input history (P7c, inactive)
+  - H3: Incognito pending input and collaboration (P7e, inactive)
+  - H3: Incognito domain facades and deferred lifetimes (P7i, inactive)
+  - H3: Incognito history, compute, and manager reads (P7f, inactive)
+  - H3: Incognito history and Memory wiring (P7j, inactive)
+  - H3: Incognito history and compute facade composition (P7m, inactive)
+  - H3: Incognito private display and expiry composition (P7m2, inactive)
+  - H3: Incognito shared binding and SDK preflight (P7h1, inactive)
+  - H3: Incognito creation and entry patches (P7h2, inactive)
+  - H3: Incognito acquisition and authority composition (P7k, inactive)
+  - H3: Incognito domain entry points (P7l, inactive)
+  - H3: Incognito steering, visibility, trajectory, and project authority (P7n, inactive)
+  - H3: Incognito retained source authority (P01, inactive)
+  - H3: Incognito transcript and lifecycle operations (P02, inactive)
+  - H3: Incognito SDK history preparation (P04, inactive)
+  - H3: Existing worker flows
+  - H2: Carry facts, publish after commit
+  - H2: Migrate a caller
 
 ## reference/device-models.md
 
@@ -8272,38 +12825,84 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /reference/full-release-validation
 - Headings:
-  - H2: Top-level stages
-  - H2: Release checks stages
-  - H2: Docker release-path chunks
+  - H2: Where each section moved
+  - H2: Related
+
+## reference/full-release-validation/continuation.md
+
+- Route: /reference/full-release-validation/continuation
+- Headings:
+  - H2: Continue failed child jobs
+  - H3: Cancel an owned validation tree
+  - H3: Automatic retries for declared flakes
+  - H3: Read publication observations
+  - H3: Post-merge continuation proof
+
+## reference/full-release-validation/dispatch.md
+
+- Route: /reference/full-release-validation/dispatch
+- Headings:
+  - H2: Exact frozen-target test omissions
+  - H2: Retain and reconcile the root request
+  - H2: Select coverage
+
+## reference/full-release-validation/evidence.md
+
+- Route: /reference/full-release-validation/evidence
+- Headings:
+  - H2: Evidence to keep
+  - H2: Workflow files
+
+## reference/full-release-validation/extended-stable.md
+
+- Route: /reference/full-release-validation/extended-stable
+- Headings:
+  - H2: Extended-stable validation
+
+## reference/full-release-validation/profiles.md
+
+- Route: /reference/full-release-validation/profiles
+- Headings:
   - H2: Release profiles
   - H2: Full-only additions
   - H2: Focused reruns
-  - H2: Evidence to keep
-  - H2: Workflow files
+
+## reference/full-release-validation/release-checks.md
+
+- Route: /reference/full-release-validation/release-checks
+- Headings:
+  - H2: Release checks stages
+  - H2: Docker release-path chunks
+
+## reference/full-release-validation/stages.md
+
+- Route: /reference/full-release-validation/stages
+- Headings:
+  - H2: Top-level stages
 
 ## reference/memory-config.md
 
 - Route: /reference/memory-config
 - Headings:
+  - H2: Remember across conversations
   - H2: Provider selection
   - H3: Custom provider ids
   - H3: API key resolution
   - H2: Remote endpoint config
   - H2: Provider-specific config
-  - H3: Inline embedding timeout
   - H2: Indexing behavior
+  - H3: File-watcher pressure
   - H2: Hybrid search config
   - H3: Full example
   - H2: Additional memory paths
   - H2: Multimodal memory (Gemini)
   - H2: Embedding cache
   - H2: Batch indexing
-  - H2: Session memory search (experimental)
+  - H2: Session memory search
   - H2: SQLite vector acceleration (sqlite-vec)
   - H2: Index storage
-  - H2: QMD backend config
-  - H3: mcporter integration
-  - H3: Full QMD example
+  - H2: Citations
+  - H2: Memory admission policy
   - H2: Dreaming
   - H3: User settings
   - H3: Example
@@ -8321,18 +12920,23 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /reference/prompt-caching
 - Headings:
+  - H2: Keep model settings stable
   - H2: Primary knobs
+  - H3: Worker turns
   - H3: cacheRetention
   - H3: contextPruning.mode: "cache-ttl"
   - H3: Heartbeat keep-warm
   - H2: Provider behavior
   - H3: Anthropic (direct API and Vertex AI)
+  - H3: DeepInfra
+  - H3: Model Studio / DashScope (Qwen)
   - H3: OpenAI (direct API)
   - H3: Amazon Bedrock
   - H3: OpenRouter
   - H3: Google Gemini (direct API)
   - H3: CLI-harness providers (Claude Code, Gemini CLI)
   - H3: Other providers
+  - H2: Chat Completions cache markers
   - H2: System-prompt cache boundary
   - H2: OpenClaw cache-stability guards
   - H2: Tuning patterns
@@ -8347,6 +12951,19 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Quick troubleshooting
   - H2: Related
 
+## reference/pull-request-review-flow.md
+
+- Route: /reference/pull-request-review-flow
+- Headings:
+  - H2: Barnacle
+  - H2: ClawSweeper
+  - H2: Improve a PR during review
+  - H2: Maintainer review artifacts
+  - H2: When automation stays quiet
+  - H2: Troubleshooting
+  - H2: Forking the automation
+  - H2: Related
+
 ## reference/release-performance-sweep.md
 
 - Route: /reference/release-performance-sweep
@@ -8357,7 +12974,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Install footprint
   - H3: npm package size
   - H2: Kova agent turn summary
-  - H2: Source probes
+  - H2: Source checks
   - H2: Install footprint audit
   - H3: Shrinkwrap boundary
   - H2: Supply-chain interpretation
@@ -8367,7 +12984,10 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /reference/rich-output-protocol
 - Headings:
   - H2: Media attachments
-  - H2: [embed ...]
+  - H2: Legacy MEDIA: lines
+  - H3: WebChat commentary compatibility
+  - H3: Structured payloads and block streaming
+  - H2: `[embed ...]`
   - H2: Stored rendering shape
   - H2: Related
 
@@ -8384,7 +13004,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /reference/secret-placeholder-conventions
 - Headings:
-  - H1: Secret placeholder conventions
+  - H1: Secret Placeholder Conventions
   - H2: Recommended style
   - H2: Avoid these patterns in docs
   - H2: Example
@@ -8395,7 +13015,18 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Supported credentials
   - H3: openclaw.json targets (secrets configure + secrets apply + secrets audit)
-  - H3: auth-profiles.json targets (secrets configure + secrets apply + secrets audit)
+  - H4: agents
+  - H4: channels
+  - H4: cron
+  - H4: gateway
+  - H4: memory
+  - H4: models
+  - H4: plugins
+  - H4: skills
+  - H4: talk
+  - H4: tts
+  - H3: SQLite auth-profile targets (secrets configure + secrets apply + secrets audit)
+  - H3: Node-host connection targets
   - H2: Unsupported credentials
   - H2: Related
 
@@ -8403,25 +13034,88 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /reference/session-management-compaction
 - Headings:
-  - H2: Two persistence layers
-  - H2: On-disk locations
-  - H2: Store maintenance and disk controls
-  - H2: Cron sessions and run logs
-  - H2: Session keys (sessionKey)
-  - H2: Session ids (sessionId)
-  - H2: Session store schema (sessions.json)
-  - H2: Transcript structure (.jsonl)
+  - H2: Where each section moved
+  - H2: Troubleshooting checklist
+  - H2: Related
+
+## reference/session-management-compaction/compaction.md
+
+- Route: /reference/session-management-compaction/compaction
+- Headings:
   - H2: Context windows vs tracked tokens
   - H2: Compaction: what it is
-  - H3: Chunk boundaries and tool pairing
+  - H3: Summary input and tool pairing
   - H2: When auto-compaction happens
   - H2: Compaction settings
   - H2: Pluggable compaction providers
   - H2: User-visible surfaces
-  - H2: Silent housekeeping (NOREPLY)
+
+## reference/session-management-compaction/housekeeping.md
+
+- Route: /reference/session-management-compaction/housekeeping
+- Headings:
+  - H2: Silent housekeeping (`NO_REPLY`)
   - H2: Pre-compaction memory flush
-  - H2: Troubleshooting checklist
-  - H2: Related
+
+## reference/session-management-compaction/maintenance.md
+
+- Route: /reference/session-management-compaction/maintenance
+- Headings:
+  - H2: Store maintenance and disk controls
+  - H3: Cold transcript storage
+  - H3: Downgrading After The SQLite Flip
+  - H2: Cron sessions and run logs
+
+## reference/session-management-compaction/resident-history.md
+
+- Route: /reference/session-management-compaction/resident-history
+- Headings:
+  - H2: Current boundary
+  - H2: Resident snapshot
+  - H2: Proposed asynchronous operations
+  - H2: Oversized entries and cleanup
+  - H2: Consumer cutover
+  - H2: SDK and incognito migration boundaries
+  - H2: First slice and completion evidence
+
+## reference/session-management-compaction/schema.md
+
+- Route: /reference/session-management-compaction/schema
+- Headings:
+  - H2: Session keys (sessionKey)
+  - H2: Session ids (sessionId)
+  - H2: Session store schema
+  - H2: Transcript event structure
+
+## reference/session-management-compaction/store.md
+
+- Route: /reference/session-management-compaction/store
+- Headings:
+  - H2: Two persistence layers
+  - H2: On-disk locations
+
+## reference/team-immutable-update-design.md
+
+- Route: /reference/team-immutable-update-design
+- Headings:
+  - H1: Team immutable update design
+  - H2: Implementation status
+  - H2: Problem and performance boundary
+  - H2: Existing owners on main
+  - H3: Installation, preparation, and activation
+  - H3: Lifecycle, migrations, recovery, and reporting
+  - H3: Controller disposition
+  - H2: Proposed contract
+  - H3: Detect and adopt an immutable installation
+  - H3: Prepare everything possible while the previous Gateway serves
+  - H3: Drain, migrate when required, and activate
+  - H3: Keep recovery independent of the database being recovered
+  - H3: Give Doctor budgets that describe the work
+  - H3: Service definition
+  - H2: Migrate the current controller without two writers
+  - H2: Proof matrix and rollout slices
+  - H3: Three proposed PRs
+  - H2: Review decisions and evidence gaps
 
 ## reference/templates/AGENTS.dev.md
 
@@ -8430,10 +13124,11 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H1: AGENTS.md - OpenClaw Workspace
   - H2: Your identity is pre-seeded
   - H2: Backup tip (recommended)
-  - H2: Safety defaults
+  - H2: Care defaults
   - H2: Existing solutions preflight
   - H2: Daily memory (recommended)
-  - H2: Heartbeats (optional)
+  - H2: Automations (optional)
+  - H2: Tools
   - H2: Customize
   - H2: C-3PO Origin Memory
   - H3: Birth Day: 2026-01-09
@@ -8451,18 +13146,20 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /reference/templates/BOOTSTRAP
 - Headings:
-  - H1: BOOTSTRAP.md - Hello, World
-  - H2: The Conversation
-  - H2: After You Know Who You Are
-  - H2: Connect (Optional)
-  - H2: When You Are Done
+  - H1: BOOTSTRAP.md - Birth Sequence
+  - H2: 1. Ask What to Call You
+  - H2: 2. Choose Your Vibe
+  - H2: 3. Choose Your Avatar
+  - H3: Save Your Identity
+  - H2: 4. Finish With Recommendations
+  - H2: Done
   - H2: Related
 
 ## reference/templates/HEARTBEAT.md
 
 - Route: /reference/templates/HEARTBEAT
 - Headings:
-  - H1: HEARTBEAT.md template
+  - H1: HEARTBEAT.md is retired
   - H2: Related
 
 ## reference/templates/IDENTITY.dev.md
@@ -8509,24 +13206,11 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Continuity
   - H2: Related
 
-## reference/templates/TOOLS.dev.md
-
-- Route: /reference/templates/TOOLS.dev
-- Headings:
-  - H1: TOOLS.md - User Tool Notes (editable)
-  - H2: Examples
-  - H3: imsg
-  - H3: sag
-  - H2: Related
-
 ## reference/templates/TOOLS.md
 
 - Route: /reference/templates/TOOLS
 - Headings:
-  - H1: TOOLS.md - Local Notes
-  - H2: Examples
-  - H2: Why Separate?
-  - H2: Related
+  - H1: TOOLS.md is retired
 
 ## reference/templates/USER.dev.md
 
@@ -8539,28 +13223,98 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /reference/templates/USER
 - Headings:
-  - H1: USER.md - About Your Human
-  - H2: Context
+  - H1: USER.md - User Model
+  - H2: Directives
   - H2: Related
+
+## reference/templates/roles/coordinator/CLAW.md
+
+- Route: /reference/templates/roles/coordinator/CLAW
+- Headings:
+  - H1: Chief of staff soul
+
+## reference/templates/roles/researcher/CLAW.md
+
+- Route: /reference/templates/roles/researcher/CLAW
+- Headings:
+  - H1: Researcher soul
+
+## reference/templates/roles/reviewer/CLAW.md
+
+- Route: /reference/templates/roles/reviewer/CLAW
+- Headings:
+  - H1: Reviewer soul
+
+## reference/templates/roles/writer/CLAW.md
+
+- Route: /reference/templates/roles/writer/CLAW
+- Headings:
+  - H1: Writer soul
 
 ## reference/test.md
 
 - Route: /reference/test
 - Headings:
-  - H2: Agent default
-  - H2: Routine local order
-  - H2: Core commands
-  - H2: Shared test state and process helpers
-  - H2: Control UI, TUI, and extension lanes
-  - H2: Gateway and E2E
+  - H2: Where each section moved
+  - H2: Related
+
+## reference/test/docker.md
+
+- Route: /reference/test/docker
+- Headings:
   - H2: Full Docker suite (pnpm test:docker:all)
   - H3: Notable Docker lanes
-  - H2: Local PR gate
-  - H2: Test performance tooling
-  - H2: Benchmarks
+  - H3: Anthropic runtime-context cache regression
+  - H3: Sandbox compatibility lanes
   - H2: Onboarding E2E (Docker)
   - H2: QR import smoke (Docker)
-  - H2: Related
+
+## reference/test/lanes.md
+
+- Route: /reference/test/lanes
+- Headings:
+  - H2: Control UI, TUI, and extension lanes
+  - H3: Real-Gateway Control UI fixture lifetimes
+  - H3: Retained Control UI proof
+  - H3: Screenshots during Chromium recordings
+  - H2: Gateway and E2E
+
+## reference/test/local.md
+
+- Route: /reference/test/local
+- Headings:
+  - H2: Routine local order
+  - H2: Core commands
+  - H3: Source tests and subprocess builds
+  - H2: Local PR gate
+
+## reference/test/performance.md
+
+- Route: /reference/test/performance
+- Headings:
+  - H2: Test performance tooling
+  - H3: Kitchen Sink Gateway resource comparison
+  - H3: Plugin coverage inventory
+  - H3: Reusing the resource host
+  - H3: Zod schema compilation
+  - H2: Benchmarks
+
+## reference/test/remote-proof.md
+
+- Route: /reference/test/remote-proof
+- Headings:
+  - H2: Remote proof policy for agents
+  - H2: Focused Android proof
+  - H2: Testbox runner sizing
+  - H2: Crabbox repository setup
+
+## reference/test/runner-internals.md
+
+- Route: /reference/test/runner-internals
+- Headings:
+  - H2: Shared test state and process helpers
+  - H2: Public test diagnostics
+  - H2: JSON reports across native processes
 
 ## reference/token-use.md
 
@@ -8581,33 +13335,22 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /reference/transcript-hygiene
 - Headings:
+  - H2: Failed attempts and recovery
   - H2: Global rule: runtime context is not user transcript
   - H2: Where this runs
   - H2: Global rule: image sanitization
   - H2: Global rule: malformed tool calls
-  - H2: Global rule: incomplete reasoning-only turns
+  - H2: Global rule: tool result pairing
+  - H2: Global rule: incomplete or silent reasoning-only turns
   - H2: Global rule: inter-session input provenance
   - H2: Provider matrix (current behavior)
   - H2: Historical behavior (pre-2026.1.22)
   - H2: Related
 
-## reference/wizard.md
-
-- Route: /reference/wizard
-- Headings:
-  - H2: Flow details (local mode)
-  - H2: Non-interactive mode
-  - H3: Add agent (non-interactive)
-  - H2: Gateway wizard RPC
-  - H2: Signal setup (signal-cli)
-  - H2: What the wizard writes
-  - H2: Related docs
-
 ## releases/2026.6.11.md
 
 - Route: /releases/2026.6.11
 - Headings:
-  - H1: OpenClaw v2026.6.11 Release Notes (2026-06-30)
   - H2: Highlights
   - H3: Channel delivery reliability
   - H3: Provider and model recovery
@@ -8627,13 +13370,382 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Setup and command reliability
   - H3: Tools and scheduled work
 
+## releases/2026.7.1.md
+
+- Route: /releases/2026.7.1
+- Headings:
+  - H2: Highlights
+  - H3: Control UI overhaul: chat, sessions, workspaces, and usage
+  - H3: Easier setup from install to first chat
+  - H3: Official apps
+  - H4: Shared app improvements
+  - H4: iOS, iPadOS, and Apple Watch
+  - H4: Android
+  - H4: macOS
+  - H3: Models and providers
+  - H4: GPT-5.6 and Codex
+  - H4: Tencent Hy3
+  - H4: Meta Model API and Muse Spark 1.1
+  - H4: Claude models
+  - H4: Other provider routes
+  - H3: Codex and connected coding agents
+  - H3: Telegram
+  - H3: Signal
+  - H3: Slack
+  - H3: Discord
+  - H3: WhatsApp
+  - H3: Apple Messages
+  - H3: Crash loops now stop for repair
+  - H3: Scheduled work, remote browser control, and workspace terminals
+  - H4: Scheduled work that wakes only when needed
+  - H4: Remote browser pairing and downloads
+  - H4: Workspace terminals in web and mobile
+  - H2: More channel improvements
+  - H3: More fixes across messaging channels
+  - H2: More model and provider improvements
+  - H3: Sign-in, model choice, media, and reliability
+  - H2: Memory and conversations
+  - H3: Recall, long chats, and session continuity
+  - H2: Agents, background work, and connections
+  - H3: Keeping work moving and replies delivered
+  - H2: Accounts, devices, and private data
+  - H3: Credentials, permissions, pairing, and file safeguards
+  - H2: Official app details
+  - H3: Shared app changes
+  - H3: More iOS, iPadOS, and Apple Watch changes
+  - H3: More Android changes
+  - H3: More macOS changes
+  - H3: Terminal UI and other clients
+  - H2: Skills, plugins, and installs
+  - H3: Skills, connected apps, packages, and repairs
+  - H2: Setup, maintenance, and tools
+  - H3: Command-line setup, updates, and administration
+  - H3: Documentation and operating guides
+  - H3: Browser, schedules, files, and coding tools
+
+## releases/2026.8.1.md
+
+- Route: /releases/2026.8.1
+- Headings:
+  - H2: Sections
+
+## releases/2026.8.1/automations-and-scheduling.md
+
+- Route: /releases/2026.8.1/automations-and-scheduling
+- Headings: none
+
+## releases/2026.8.1/browser-and-computer-use.md
+
+- Route: /releases/2026.8.1/browser-and-computer-use
+- Headings: none
+
+## releases/2026.8.1/installation-and-onboarding.md
+
+- Route: /releases/2026.8.1/installation-and-onboarding
+- Headings: none
+
+## releases/2026.8.1/maintainer-and-internal-changes.md
+
+- Route: /releases/2026.8.1/maintainer-and-internal-changes
+- Headings:
+  - H2: Maintenance changes
+
+## releases/2026.8.1/maintenance-changes-part-1.md
+
+- Route: /releases/2026.8.1/maintenance-changes-part-1
+- Headings: none
+
+## releases/2026.8.1/maintenance-changes-part-2.md
+
+- Route: /releases/2026.8.1/maintenance-changes-part-2
+- Headings: none
+
+## releases/2026.8.1/maintenance-changes-part-3.md
+
+- Route: /releases/2026.8.1/maintenance-changes-part-3
+- Headings: none
+
+## releases/2026.8.1/maintenance-changes-part-4.md
+
+- Route: /releases/2026.8.1/maintenance-changes-part-4
+- Headings: none
+
+## releases/2026.8.1/maintenance-changes-part-5.md
+
+- Route: /releases/2026.8.1/maintenance-changes-part-5
+- Headings: none
+
+## releases/2026.8.1/maintenance-changes-part-6.md
+
+- Route: /releases/2026.8.1/maintenance-changes-part-6
+- Headings: none
+
+## releases/2026.8.1/maintenance-changes-part-7.md
+
+- Route: /releases/2026.8.1/maintenance-changes-part-7
+- Headings: none
+
+## releases/2026.8.1/maintenance-changes-part-8.md
+
+- Route: /releases/2026.8.1/maintenance-changes-part-8
+- Headings: none
+
+## releases/2026.8.1/memory.md
+
+- Route: /releases/2026.8.1/memory
+- Headings: none
+
+## releases/2026.8.1/messaging.md
+
+- Route: /releases/2026.8.1/messaging
+- Headings: none
+
+## releases/2026.8.1/models-and-providers.md
+
+- Route: /releases/2026.8.1/models-and-providers
+- Headings: none
+
+## releases/2026.8.1/native-apps.md
+
+- Route: /releases/2026.8.1/native-apps
+- Headings: none
+
+## releases/2026.8.1/other-bug-fixes.md
+
+- Route: /releases/2026.8.1/other-bug-fixes
+- Headings: none
+
+## releases/2026.8.1/plugins-and-integrations.md
+
+- Route: /releases/2026.8.1/plugins-and-integrations
+- Headings: none
+
+## releases/2026.8.1/quality-of-life-improvements.md
+
+- Route: /releases/2026.8.1/quality-of-life-improvements
+- Headings: none
+
+## releases/2026.8.1/security-and-privacy.md
+
+- Route: /releases/2026.8.1/security-and-privacy
+- Headings: none
+
+## releases/2026.8.1/skills.md
+
+- Route: /releases/2026.8.1/skills
+- Headings: none
+
+## releases/2026.8.1/the-new-web-ui.md
+
+- Route: /releases/2026.8.1/the-new-web-ui
+- Headings: none
+
+## releases/2026.8.1/updates-and-maintenance.md
+
+- Route: /releases/2026.8.1/updates-and-maintenance
+- Headings: none
+
+## releases/2026.8.2.md
+
+- Route: /releases/2026.8.2
+- Headings:
+  - H2: Installation and Onboarding
+  - H2: The New Web UI
+  - H2: Updates and Maintenance
+  - H2: Messaging
+  - H2: Memory
+  - H2: Skills
+  - H2: Native Apps
+  - H2: Models and Providers
+  - H2: Automations and Scheduling
+  - H2: Browser and Computer Use
+  - H2: Plugins and Integrations
+  - H2: Security and Privacy
+  - H2: Maintainer and Internal Changes
+
+## releases/2026.9.1.md
+
+- Route: /releases/2026.9.1
+- Headings:
+  - H2: Installation and Onboarding
+  - H2: The New Web UI
+  - H2: Updates and Maintenance
+  - H2: Messaging
+  - H2: Memory
+  - H2: Skills
+  - H2: Native Apps
+  - H2: Models and Providers
+  - H2: Automations and Scheduling
+  - H2: Browser and Computer Use
+  - H2: Plugins and Integrations
+  - H2: Security and Privacy
+  - H2: Quality-of-Life Improvements
+  - H2: Other Bug Fixes
+  - H2: Maintainer and Internal Changes
+
+## releases/2026.9.2.md
+
+- Route: /releases/2026.9.2
+- Headings:
+  - H2: Installation and Onboarding
+  - H2: The New Web UI
+  - H2: Updates and Maintenance
+  - H2: Messaging
+  - H2: Memory
+  - H2: Skills
+  - H2: Native Apps
+  - H2: Models and Providers
+  - H2: Automations and Scheduling
+  - H2: Browser and Computer Use
+  - H2: Plugins and Integrations
+  - H2: Security and Privacy
+  - H2: Quality-of-Life Improvements
+  - H2: Other Bug Fixes
+  - H2: Maintainer and Internal Changes
+
+## releases/2026.9.3.md
+
+- Route: /releases/2026.9.3
+- Headings:
+  - H1: v2026.9.3
+  - H2: Installation and Onboarding
+  - H2: The New Web UI
+  - H2: Updates and Maintenance
+  - H2: Messaging
+  - H2: Memory
+  - H2: Skills
+  - H2: Native Apps
+  - H2: Models and Providers
+  - H2: Automations and Scheduling
+  - H2: Browser and Computer Use
+  - H2: Plugins and Integrations
+  - H2: Security and Privacy
+  - H2: Quality-of-Life Improvements
+  - H2: Other Bug Fixes
+  - H2: Maintainer and Internal Changes
+
+## releases/2026.9.4.md
+
+- Route: /releases/2026.9.4
+- Headings:
+  - H1: v2026.9.4
+  - H2: Installation and Onboarding
+  - H2: The New Web UI
+  - H2: Updates and Maintenance
+  - H2: Messaging
+  - H2: Memory
+  - H2: Skills
+  - H2: Native Apps
+  - H2: Models and Providers
+  - H2: Automations and Scheduling
+  - H2: Browser and Computer Use
+  - H2: Plugins and Integrations
+  - H2: Security and Privacy
+  - H2: Quality-of-Life Improvements
+  - H2: Other Bug Fixes
+  - H2: Maintainer and Internal Changes
+
+## releases/2026.9.5.md
+
+- Route: /releases/2026.9.5
+- Headings:
+  - H1: v2026.9.5
+  - H2: Installation and Onboarding
+  - H2: Web UI
+  - H2: Updates and Maintenance
+  - H2: Messaging
+  - H2: Memory
+  - H2: Skills
+  - H2: Native Apps
+  - H2: Models and Providers
+  - H2: Automations and Scheduling
+  - H2: Browser and Computer Use
+  - H2: Plugins and Integrations
+  - H2: Security and Privacy
+  - H2: Quality-of-Life Improvements
+  - H2: Other Bug Fixes
+  - H2: Maintainer and Internal Changes
+
+## releases/2026.9.6.md
+
+- Route: /releases/2026.9.6
+- Headings:
+  - H1: v2026.9.6
+  - H2: Installation and Onboarding
+  - H2: Web UI
+  - H2: Updates and Maintenance
+  - H2: Messaging
+  - H2: Memory
+  - H2: Skills
+  - H2: Native Apps
+  - H2: Models and Providers
+  - H2: Automations and Scheduling
+  - H2: Browser and Computer Use
+  - H2: Plugins and Integrations
+  - H2: Security and Privacy
+  - H2: Quality-of-Life Improvements
+  - H2: Other Bug Fixes
+  - H2: Maintainer and Internal Changes
+
+## releases/2026.9.7.md
+
+- Route: /releases/2026.9.7
+- Headings:
+  - H1: v2026.9.7
+  - H2: Installation and Onboarding
+  - H2: Web UI
+  - H2: Updates and Maintenance
+  - H2: Messaging
+  - H2: Memory
+  - H2: Skills
+  - H2: Native Apps
+  - H2: Models and Providers
+  - H2: Automations and Scheduling
+  - H2: Browser and Computer Use
+  - H2: Plugins and Integrations
+  - H2: Security and Privacy
+  - H2: Quality-of-Life Improvements
+  - H2: Other Bug Fixes
+  - H2: Maintainer and Internal Changes
+
+## releases/2026.9.8.md
+
+- Route: /releases/2026.9.8
+- Headings:
+  - H1: v2026.9.8
+  - H2: Web UI
+  - H2: Updates and Maintenance
+  - H2: Messaging
+  - H2: Skills
+  - H2: Models and Providers
+  - H2: Browser and Computer Use
+  - H2: Security and Privacy
+  - H2: Other Bug Fixes
+
+## releases/2026.9.9.md
+
+- Route: /releases/2026.9.9
+- Headings:
+  - H1: v2026.9.9
+  - H2: Installation and Onboarding
+  - H2: Web UI
+  - H2: Updates and Maintenance
+  - H2: Messaging
+  - H2: Memory
+  - H2: Skills
+  - H2: Models and Providers
+  - H2: Automations and Scheduling
+  - H2: Plugins and Integrations
+  - H2: Security and Privacy
+  - H2: Quality-of-Life Improvements
+  - H2: Other Bug Fixes
+
 ## releases/index.md
 
 - Route: /releases
 - Headings:
-  - H1: Release notes
   - H2: Releases
-  - H2: Raw release history
+  - H2: Changelog
 
 ## security/CONTRIBUTING-THREAT-MODEL.md
 
@@ -8656,36 +13768,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: 2.1 Trust boundaries
   - H3: 2.2 Data flows
   - H2: 3. Threat analysis by ATLAS tactic
-  - H3: 3.1 Reconnaissance (AML.TA0002)
-  - H4: T-RECON-001: Agent endpoint discovery
-  - H4: T-RECON-002: Channel integration probing
-  - H3: 3.2 Initial access (AML.TA0004)
-  - H4: T-ACCESS-001: Pairing code interception
-  - H4: T-ACCESS-002: AllowFrom spoofing
-  - H4: T-ACCESS-003: Token theft
-  - H3: 3.3 Execution (AML.TA0005)
-  - H4: T-EXEC-001: Direct prompt injection
-  - H4: T-EXEC-002: Indirect prompt injection
-  - H4: T-EXEC-003: Tool argument injection
-  - H4: T-EXEC-004: Exec approval bypass
-  - H3: 3.4 Persistence (AML.TA0006)
-  - H4: T-PERSIST-001: Malicious skill installation
-  - H4: T-PERSIST-002: Skill update poisoning
-  - H4: T-PERSIST-003: Agent configuration tampering
-  - H3: 3.5 Defense evasion (AML.TA0007)
-  - H4: T-EVADE-001: Moderation pattern bypass
-  - H4: T-EVADE-002: Content wrapper escape
-  - H3: 3.6 Discovery (AML.TA0008)
-  - H4: T-DISC-001: Tool enumeration
-  - H4: T-DISC-002: Session data extraction
-  - H3: 3.7 Collection and exfiltration (AML.TA0009, AML.TA0010)
-  - H4: T-EXFIL-001: Data theft via webfetch
-  - H4: T-EXFIL-002: Unauthorized message sending
-  - H4: T-EXFIL-003: Credential harvesting
-  - H3: 3.8 Impact (AML.TA0011)
-  - H4: T-IMPACT-001: Unauthorized command execution
-  - H4: T-IMPACT-002: Resource exhaustion (DoS)
-  - H4: T-IMPACT-003: Reputation damage
   - H2: 4. ClawHub supply chain analysis
   - H3: 4.1 Current security controls
   - H3: 4.2 Moderation limitations
@@ -8701,7 +13783,70 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: 7.1 ATLAS technique mapping
   - H3: 7.2 Key security files
   - H3: 7.3 Glossary
+  - H2: Where each section moved
   - H2: Related
+
+## security/THREAT-MODEL-ATLAS/collection-and-exfiltration.md
+
+- Route: /security/THREAT-MODEL-ATLAS/collection-and-exfiltration
+- Headings:
+  - H2: T-EXFIL-001: Data theft via webfetch
+  - H2: T-EXFIL-002: Unauthorized message sending
+  - H2: T-EXFIL-003: Credential harvesting
+
+## security/THREAT-MODEL-ATLAS/defense-evasion.md
+
+- Route: /security/THREAT-MODEL-ATLAS/defense-evasion
+- Headings:
+  - H2: T-EVADE-001: Moderation pattern bypass
+  - H2: T-EVADE-002: Content wrapper escape
+
+## security/THREAT-MODEL-ATLAS/discovery.md
+
+- Route: /security/THREAT-MODEL-ATLAS/discovery
+- Headings:
+  - H2: T-DISC-001: Tool enumeration
+  - H2: T-DISC-002: Session data extraction
+
+## security/THREAT-MODEL-ATLAS/execution.md
+
+- Route: /security/THREAT-MODEL-ATLAS/execution
+- Headings:
+  - H2: T-EXEC-001: Direct prompt injection
+  - H2: T-EXEC-002: Indirect prompt injection
+  - H2: T-EXEC-003: Tool argument injection
+  - H2: T-EXEC-004: Exec approval bypass
+
+## security/THREAT-MODEL-ATLAS/impact.md
+
+- Route: /security/THREAT-MODEL-ATLAS/impact
+- Headings:
+  - H2: T-IMPACT-001: Unauthorized command execution
+  - H2: T-IMPACT-002: Resource exhaustion (DoS)
+  - H2: T-IMPACT-003: Reputation damage
+
+## security/THREAT-MODEL-ATLAS/initial-access.md
+
+- Route: /security/THREAT-MODEL-ATLAS/initial-access
+- Headings:
+  - H2: T-ACCESS-001: Pairing code interception
+  - H2: T-ACCESS-002: AllowFrom spoofing
+  - H2: T-ACCESS-003: Token theft
+
+## security/THREAT-MODEL-ATLAS/persistence.md
+
+- Route: /security/THREAT-MODEL-ATLAS/persistence
+- Headings:
+  - H2: T-PERSIST-001: Malicious skill installation
+  - H2: T-PERSIST-002: Skill update poisoning
+  - H2: T-PERSIST-003: Agent configuration tampering
+
+## security/THREAT-MODEL-ATLAS/reconnaissance.md
+
+- Route: /security/THREAT-MODEL-ATLAS/reconnaissance
+- Headings:
+  - H2: T-RECON-001: Agent endpoint discovery
+  - H2: T-RECON-002: Channel integration discovery
 
 ## security/formal-verification.md
 
@@ -8742,30 +13887,34 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: HTTPS proxy endpoint with a private CA
   - H2: How routing works
   - H3: Gateway loopback mode
+  - H3: WebChat or Codex fails after upgrading
   - H3: Containers
   - H2: Related proxy terms
   - H2: Validating the proxy
   - H2: Recommended blocked destinations
   - H2: Limits
+  - H2: Related
 
-## specs/claw-supervisor.md
+## specs/codex-supervision.md
 
-- Route: /specs/claw-supervisor
+- Route: /specs/codex-supervision
 - Headings:
-  - H1: Claw Supervisor
+  - H1: Codex supervision
   - H2: Goal
-  - H2: Product Model
-  - H2: Architecture
-  - H2: Codex App-Server Contract
-  - H2: Session Registry
-  - H2: MCP Surface For Codex
-  - H2: Claw Control Surface
-  - H2: Launch Flow
-  - H2: Deployment
-  - H2: Security
-  - H2: Implementation Plan
-  - H2: Acceptance Tests
-  - H2: Open Questions
+  - H2: Product boundary
+  - H2: Ownership
+  - H2: Catalog flow
+  - H2: Operator CLI boundary
+  - H2: Canonical message forks
+  - H2: Local continuation
+  - H2: Archive behavior
+  - H2: Active thread safety
+  - H2: Paired-node boundary
+  - H2: Permissions
+  - H2: Compatibility
+  - H2: Future work
+  - H2: Acceptance tests
+  - H2: Related
 
 ## start/bootstrapping.md
 
@@ -8782,6 +13931,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /start/docs-directory
 - Headings:
   - H2: Start here
+  - H2: Setup and reference
   - H2: Channels and UX
   - H2: Companion apps
   - H2: Operations and safety
@@ -8792,7 +13942,9 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /start/getting-started
 - Headings:
   - H2: What you need
+  - H2: Try it in one command
   - H2: Quick setup
+  - H2: If setup does not work
   - H2: What to do next
   - H2: Related
 
@@ -8847,6 +13999,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: What onboarding configures
   - H2: CLI onboarding
   - H2: macOS app onboarding
+  - H2: Linux app onboarding
   - H2: Custom or unlisted providers
   - H2: Related
 
@@ -8860,7 +14013,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /start/openclaw
 - Headings:
-  - H2: Safety first
+  - H2: Good defaults first
   - H2: Prerequisites
   - H2: The two-phone setup (recommended)
   - H2: 5-minute quick start
@@ -8871,12 +14024,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Media in and out
   - H2: Operations checklist
   - H2: Next steps
-  - H2: Related
-
-## start/quickstart.md
-
-- Route: /start/quickstart
-- Headings:
   - H2: Related
 
 ## start/setup.md
@@ -8899,24 +14046,75 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Linux (systemd user service)
   - H2: Related docs
 
-## start/showcase.md
+## start/teams.md
 
-- Route: /start/showcase
+- Route: /start/teams
 - Headings:
-  - H2: Fresh from Discord
-  - H2: Automation and workflows
-  - H2: Knowledge and memory
-  - H2: Voice and phone
-  - H2: Infrastructure and deployment
-  - H2: Home and hardware
-  - H2: Community projects
-  - H2: Submit your project
+  - H2: Before you begin
+  - H2: One trust boundary
+  - H2: Step 1: Give the team access to the Gateway
+  - H2: Step 2: Connect the team chat
+  - H2: Step 3: Sign the team in to the Control UI
+  - H2: Step 4: Work in shared sessions
+  - H2: Step 5: Bound what each person can do
+  - H3: Coding as a guest
+  - H2: Verify
+  - H2: When to split things up
   - H2: Related
+
+## start/why-openclaw.md
+
+- Route: /start/why-openclaw
+- Headings:
+  - H2: What an enterprise harness has to prove
+  - H2: How OpenClaw answers
+  - H2: The vendor's harness, as a plugin
+  - H2: Open standards
+  - H2: Working together
+  - H2: Governance
+  - H2: What we do not claim
+  - H2: The hardened setup
+
+## start/why-openclaw/identity-and-roles.md
+
+- Route: /start/why-openclaw/identity-and-roles
+- Headings: none
+
+## start/why-openclaw/openclaw-and-hermes-agent.md
+
+- Route: /start/why-openclaw/openclaw-and-hermes-agent
+- Headings: none
+
+## start/why-openclaw/policy-as-code.md
+
+- Route: /start/why-openclaw/policy-as-code
+- Headings: none
+
+## start/why-openclaw/provenance.md
+
+- Route: /start/why-openclaw/provenance
+- Headings: none
+
+## start/why-openclaw/secrets.md
+
+- Route: /start/why-openclaw/secrets
+- Headings: none
+
+## start/why-openclaw/the-trust-boundary.md
+
+- Route: /start/why-openclaw/the-trust-boundary
+- Headings: none
+
+## start/why-openclaw/versioned-state-guarded-upgrades.md
+
+- Route: /start/why-openclaw/versioned-state-guarded-upgrades
+- Headings: none
 
 ## start/wizard-cli-automation.md
 
 - Route: /start/wizard-cli-automation
 - Headings:
+  - H2: Review required plugins
   - H2: Baseline non-interactive example
   - H2: Provider-specific examples
   - H2: Add another agent
@@ -8930,7 +14128,9 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Local flow details
   - H2: Remote mode details
   - H2: Auth and model options
+  - H2: Headless and server setup
   - H2: Outputs and internals
+  - H3: Installed app recommendations
   - H2: Non-interactive setup
   - H2: Gateway wizard RPC
   - H2: Signal setup behavior
@@ -8941,8 +14141,10 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /start/wizard
 - Headings:
   - H2: Locale
-  - H2: QuickStart vs Advanced
-  - H2: What onboarding configures
+  - H2: Guided default
+  - H2: Choose one agent or a team
+  - H2: Classic wizard setup modes
+  - H2: What classic onboarding configures
   - H2: Add another agent
   - H2: Full reference
   - H2: Related docs
@@ -8952,14 +14154,17 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /tools/acp-agents-setup
 - Headings:
   - H2: acpx harness support (current)
+  - H2: GitHub Copilot CLI in native chat
+  - H2: Permissions for native chat runtimes
   - H2: Required config
+  - H2: Repair existing bare-session histories
   - H2: Plugin setup for acpx backend
-  - H3: acpx runtime startup probe
+  - H3: acpx runtime startup check
   - H3: Automatic adapter download
   - H3: Plugin tools MCP bridge
   - H3: OpenClaw tools MCP bridge
   - H3: Runtime operation timeout configuration
-  - H3: Health probe agent configuration
+  - H3: Health check agent configuration
   - H2: Permission configuration
   - H3: permissionMode
   - H3: nonInteractivePermissions
@@ -8971,11 +14176,17 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /tools/acp-agents
 - Headings:
   - H2: Which page do I want?
-  - H2: Does this work out of the box?
-  - H2: Supported harness targets
-  - H2: Operator runbook
+  - H2: ACP agents documentation pages
   - H2: ACP versus sub-agents
   - H2: How ACP runs Claude Code
+  - H2: acpx harness, plugin setup, and permissions
+  - H2: Where each section moved
+  - H2: Related
+
+## tools/acp-agents/bindings.md
+
+- Route: /tools/acp-agents/bindings
+- Headings:
   - H2: Bound sessions
   - H3: Mental model
   - H3: Current-conversation binds
@@ -8984,17 +14195,50 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Runtime defaults per agent
   - H3: Example
   - H3: Behavior
-  - H2: Start ACP sessions
-  - H3: sessionsspawn parameters
-  - H2: Spawn bind and thread modes
-  - H2: Delivery model
-  - H2: Sandbox compatibility
+
+## tools/acp-agents/controls.md
+
+- Route: /tools/acp-agents/controls
+- Headings:
   - H2: Session target resolution
+  - H3: Session owner and harness
   - H2: ACP controls
   - H3: Runtime options mapping
-  - H2: acpx harness, plugin setup, and permissions
+
+## tools/acp-agents/delivery.md
+
+- Route: /tools/acp-agents/delivery
+- Headings:
+  - H2: Delivery model
+  - H2: Sandbox compatibility
+
+## tools/acp-agents/quickstart.md
+
+- Route: /tools/acp-agents/quickstart
+- Headings:
+  - H2: Does this work out of the box?
+  - H2: Supported harness targets
+
+## tools/acp-agents/runbook.md
+
+- Route: /tools/acp-agents/runbook
+- Headings:
+  - H2: Operator runbook
+
+## tools/acp-agents/sessions.md
+
+- Route: /tools/acp-agents/sessions
+- Headings:
+  - H2: Start ACP sessions
+  - H3: `sessions_spawn` parameters
+  - H2: Spawn bind and thread modes
+
+## tools/acp-agents/troubleshooting.md
+
+- Route: /tools/acp-agents/troubleshooting
+- Headings:
   - H2: Troubleshooting
-  - H2: Related
+  - H2: Oversized harness messages
 
 ## tools/agent-send.md
 
@@ -9015,6 +14259,18 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Example
   - H2: Related
 
+## tools/ask-user.md
+
+- Route: /tools/ask-user
+- Headings:
+  - H2: Answer a question
+  - H2: Platform behavior
+  - H2: Async questions
+  - H2: Timeout and no answer
+  - H2: Tool schema
+  - H2: Model guidance
+  - H2: Related
+
 ## tools/brave-search.md
 
 - Route: /tools/brave-search
@@ -9030,12 +14286,14 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /tools/browser-control
 - Headings:
   - H2: Control API (optional)
+  - H3: Screencast stream
   - H3: /act error contract
   - H3: Playwright requirement
   - H4: Docker Playwright install
   - H2: How it works (internal)
   - H2: CLI quick reference
   - H2: Snapshots and refs
+  - H2: Browser batch CLI
   - H2: Wait power-ups
   - H2: Debug workflows
   - H2: JSON output
@@ -9053,7 +14311,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Solution 2: use snap Chromium in attach-only mode
   - H3: Verify the browser works
   - H3: Config reference
-  - H3: Problem: No Chrome tabs found for profile="user"
+  - H2: Problem: No Chrome tabs found for profile="user"
   - H2: Related
 
 ## tools/browser-login.md
@@ -9061,6 +14319,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /tools/browser-login
 - Headings:
   - H2: Manual login (recommended)
+  - H2: Passkeys in headless browsers
   - H2: Which Chrome profile is used?
   - H2: Sandboxing: allow host browser access
   - H2: Related
@@ -9090,14 +14349,69 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /tools/browser
 - Headings:
   - H2: What you get
-  - H2: Quick start
-  - H2: Plugin control
-  - H2: Agent guidance
-  - H2: Missing browser command or tool
-  - H2: Profiles: openclaw, user, chrome
+  - H2: Where each section moved
+  - H2: Related
+
+## tools/browser/agent-tools.md
+
+- Route: /tools/browser/agent-tools
+- Headings: none
+
+## tools/browser/configuration.md
+
+- Route: /tools/browser/configuration
+- Headings:
   - H2: Configuration
+  - H3: Tab cleanup ownership
   - H3: Screenshot vision (text-only model support)
   - H2: Use Brave or another Chromium-based browser
+
+## tools/browser/existing-session.md
+
+- Route: /tools/browser/existing-session
+- Headings:
+  - H2: Profiles (multi-browser)
+  - H2: Existing session via Chrome DevTools MCP
+  - H3: Custom Chrome MCP launch
+
+## tools/browser/isolation.md
+
+- Route: /tools/browser/isolation
+- Headings:
+  - H2: Isolation guarantees
+  - H2: Browser selection
+  - H2: Control API (optional)
+
+## tools/browser/lightweight.md
+
+- Route: /tools/browser/lightweight
+- Headings:
+  - H1: Lightweight browsers
+  - H2: Browser plugin architecture
+  - H2: Licensing and distribution
+  - H2: Alternatives reviewed
+  - H3: Obscura audit boundary
+  - H2: Choose where the engine runs
+  - H2: Docker with OpenClaw on the host
+  - H2: Docker Compose with OpenClaw in a container
+  - H2: Native Linux and macOS
+  - H2: Configure an opt-in profile
+  - H2: Session and capability limits
+  - H2: Verification and benchmarks
+  - H3: Chromium headless shell baseline
+  - H3: Native engine comparison
+  - H3: An externally managed engine
+
+## tools/browser/profiles.md
+
+- Route: /tools/browser/profiles
+- Headings:
+  - H2: Browser panel in the Control UI
+
+## tools/browser/remote.md
+
+- Route: /tools/browser/remote
+- Headings:
   - H2: Local vs remote control
   - H2: Node browser proxy (zero-config default)
   - H2: Browserless (hosted remote CDP)
@@ -9105,17 +14419,28 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Direct WebSocket CDP providers
   - H3: Browserbase
   - H3: Notte
-  - H2: Security
-  - H2: Profiles (multi-browser)
-  - H2: Existing session via Chrome DevTools MCP
-  - H3: Custom Chrome MCP launch
-  - H2: Isolation guarantees
-  - H2: Browser selection
-  - H2: Control API (optional)
-  - H2: Troubleshooting
-  - H3: CDP startup failure vs navigation SSRF block
-  - H2: Agent tools + how control works
-  - H2: Related
+
+## tools/browser/security.md
+
+- Route: /tools/browser/security
+- Headings: none
+
+## tools/browser/setup.md
+
+- Route: /tools/browser/setup
+- Headings:
+  - H2: Quick start
+  - H2: Plugin control
+  - H2: Agent guidance
+  - H2: Missing browser command or tool
+
+## tools/browser/troubleshooting.md
+
+- Route: /tools/browser/troubleshooting
+- Headings:
+  - H2: Inspection times out but screenshots work
+  - H2: Output directory errors
+  - H2: CDP startup failure vs navigation SSRF block
 
 ## tools/btw.md
 
@@ -9125,13 +14450,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: What it does not do
   - H2: Delivery model
   - H2: Surface behavior
+  - H2: Selection popup (Control UI)
   - H2: When to use it
-  - H2: Related
-
-## tools/capability-cookbook.md
-
-- Route: /tools/capability-cookbook
-- Headings:
   - H2: Related
 
 ## tools/chrome-extension.md
@@ -9139,17 +14459,20 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /tools/chrome-extension
 - Headings:
   - H1: Chrome extension
-  - H2: How it works
-  - H2: Install and pair
+  - H2: Requirements
+  - H2: Install
+  - H2: Shared setup controller
   - H2: Use it
-  - H2: Remote / cross-machine
-  - H2: Diagnostics
-  - H2: Security model
-
-## tools/clawhub.md
-
-- Route: /tools/clawhub
-- Headings: none
+  - H3: Standalone direct-loopback relay
+  - H3: Choose tab access
+  - H2: Automatic setup controls
+  - H3: Upgrades from the retired tab copilot
+  - H2: Status and removal
+  - H2: Advanced manual pairing
+  - H2: External CDP clients
+  - H2: Permissions
+  - H2: Native bootstrap security
+  - H2: Troubleshooting
 
 ## tools/code-execution.md
 
@@ -9160,19 +14483,136 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Errors
   - H2: Related
 
+## tools/code-mode.md
+
+- Route: /tools/code-mode
+- Headings:
+  - H2: What it does
+  - H2: Why use it
+  - H2: Technical tour
+  - H2: Where each section moved
+  - H2: Related
+
+## tools/code-mode/configuration.md
+
+- Route: /tools/code-mode/configuration
+- Headings:
+  - H2: Configuration
+  - H2: Automatic per-model activation
+  - H3: The compat.codeMode catalog flag
+  - H3: Shipped preferred models
+  - H3: Models shipped by more than one provider
+  - H3: Choosing when to enable
+  - H2: Activation
+
+## tools/code-mode/executors.md
+
+- Route: /tools/code-mode/executors
+- Headings:
+  - H2: Choose an executor
+  - H2: Set the executor
+  - H2: Understand waits and limits
+  - H2: Upgrade an existing configuration
+  - H2: Related
+
+## tools/code-mode/guest-api.md
+
+- Route: /tools/code-mode/guest-api
+- Headings:
+  - H2: Guest runtime API
+  - H2: Session store
+  - H2: Reading paginated file data
+
+## tools/code-mode/internals.md
+
+- Route: /tools/code-mode/internals
+- Headings:
+  - H2: Runtime status
+  - H2: Scope
+  - H2: Terms
+  - H2: Nested tool execution
+  - H2: Run and snapshot lifecycle
+  - H3: Session-store persistence
+  - H2: QuickJS-WASI runtime
+  - H2: Node runtime
+  - H2: TypeScript
+  - H2: Security boundary
+
+## tools/code-mode/maintainers.md
+
+- Route: /tools/code-mode/maintainers
+- Headings:
+  - H2: Implementation layout
+  - H2: Validation checklist
+  - H2: E2E test plan
+
+## tools/code-mode/output.md
+
+- Route: /tools/code-mode/output
+- Headings:
+  - H2: Declared output contracts
+  - H2: Input-dependent outputs
+  - H2: Output API
+
+## tools/code-mode/quickstart.md
+
+- Route: /tools/code-mode/quickstart
+- Headings:
+  - H2: Enable code mode
+  - H2: Override one model
+  - H2: What the model does
+  - H2: Reuse data across cells
+  - H2: Recover from tool errors
+  - H2: Verify the active surface
+  - H2: Use Swarm for agent fan-out
+
+## tools/code-mode/tool-surface.md
+
+- Route: /tools/code-mode/tool-surface
+- Headings:
+  - H2: Model-visible tools
+  - H2: exec
+  - H3: Required results
+  - H3: Source in session history
+  - H2: wait
+  - H2: Tool catalog
+  - H2: Tool Search interaction
+  - H2: Tool names and collisions
+
+## tools/code-mode/troubleshooting.md
+
+- Route: /tools/code-mode/troubleshooting
+- Headings:
+  - H2: Error codes
+  - H2: Telemetry
+  - H2: Debugging
+
 ## tools/creating-skills.md
 
 - Route: /tools/creating-skills
 - Headings:
   - H2: Create your first skill
+  - H2: Create a personal skill on a shared Gateway
   - H2: SKILL.md reference
   - H3: Required fields
   - H3: Optional frontmatter keys
   - H3: Using {baseDir}
   - H2: Adding conditional activation
-  - H2: Propose via Skill Workshop
+  - H2: Learned skills (Skill Workshop)
   - H2: Publishing to ClawHub
   - H2: Best practices
+  - H2: Related
+
+## tools/custodian-skills.md
+
+- Route: /tools/custodian-skills
+- Headings:
+  - H2: Workflow contract
+  - H2: First wave
+  - H2: Roadmap catalog
+  - H3: Tier 2: common operations
+  - H3: Tier 3: advanced operations
+  - H2: Add an operator skill
   - H2: Related
 
 ## tools/diffs.md
@@ -9243,10 +14683,12 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Safe bins versus allowlist
   - H2: Interpreter/runtime commands
   - H3: Followup delivery behavior
+  - H2: Minimal scopes for third-party clients
   - H2: Approval forwarding to chat channels
   - H3: Plugin approval forwarding
   - H3: Same-chat approvals on any channel
   - H3: Native approval delivery
+  - H3: Official mobile operator apps
   - H3: macOS IPC flow
   - H2: FAQ
   - H3: When would accountId and threadId be used on an approval target?
@@ -9273,13 +14715,19 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Persistent gateway-host "never prompt" setup
   - H3: Local shortcut
   - H3: Node host
-  - H3: Session-only shortcut
+  - H3: Session and turn shortcuts
   - H2: Allowlist (per agent)
   - H3: Restricting arguments with argPattern
+  - H2: MCP tool grants
+  - H2: Standing grants for automations
+  - H3: What a grant covers, and when it stops
+  - H3: Grant lifetime
+  - H3: Listing and revoking
   - H2: Auto-allow skill CLIs
   - H2: Safe bins and approval forwarding
   - H2: Control UI editing
   - H2: Approval flow
+  - H2: Approval scope summaries
   - H2: System events and denials
   - H2: Implications
   - H2: Related
@@ -9293,6 +14741,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Modes
   - H3: Inline eval (strictInlineEval)
   - H3: PATH handling
+  - H3: Python environments (uv)
   - H2: Session overrides (/exec)
   - H2: Exec approvals (companion app / node host)
   - H2: Allowlist + safe bins
@@ -9305,15 +14754,15 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /tools/firecrawl
 - Headings:
   - H2: Install plugin
-  - H2: Keyless webfetch and API keys
+  - H2: Keyless access and API keys
   - H2: Configure Firecrawl search
   - H2: Configure Firecrawl webfetch fallback
   - H3: Self-hosted Firecrawl
   - H2: Firecrawl plugin tools
-  - H3: firecrawlsearch
-  - H3: firecrawlscrape
+  - H3: `firecrawl_search`
+  - H3: `firecrawl_scrape`
   - H2: Stealth / bot circumvention
-  - H2: How webfetch uses Firecrawl
+  - H2: How `web_fetch` uses Firecrawl
   - H2: Related
 
 ## tools/gemini-search.md
@@ -9322,6 +14771,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Get an API key
   - H2: Config
+  - H3: Request headers
   - H2: How it works
   - H2: Supported parameters
   - H2: Model selection
@@ -9332,7 +14782,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /tools/goal
 - Headings:
-  - H1: Goal
   - H2: Quick start
   - H2: What goals are for
   - H2: Command reference
@@ -9341,6 +14790,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Model tools
   - H2: Goal context on every turn
   - H2: Control UI
+  - H3: Gateway requests and retries
   - H2: TUI
   - H2: Channel behavior
   - H2: Troubleshooting
@@ -9422,13 +14872,13 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: JSON-only LLM steps (llm-task)
   - H3: Important limitation: embedded Lobster vs openclaw.invoke
   - H2: Workflow files (.lobster)
+  - H3: Injected environment variables
   - H2: Tool parameters
   - H3: run
   - H3: resume
-  - H3: Managed Task Flow mode
+  - H3: Structured input
   - H2: Output envelope
   - H2: Approvals
-  - H2: OpenProse
   - H2: Safety
   - H2: Troubleshooting
   - H2: Learn more
@@ -9443,8 +14893,26 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Configuration block
   - H3: Field behavior
   - H2: Recommended setup
+  - H2: Repeated tool errors
   - H2: Post-compaction guard
   - H2: Logs and expected behavior
+  - H2: Related
+
+## tools/mcp.md
+
+- Route: /tools/mcp
+- Headings:
+  - H2: Add a server from Settings
+  - H2: Add a server from the composer
+  - H2: Add a server from the CLI
+  - H2: Configure a server directly
+  - H2: Interactive apps and plugin extensions
+  - H2: Approvals
+  - H2: Troubleshooting
+  - H3: The server appears in Settings but exposes no tools
+  - H3: A stdio server does not start
+  - H3: An HTTP server needs authorization
+  - H3: Changes do not reach an active agent
   - H2: Related
 
 ## tools/media-overview.md
@@ -9452,6 +14920,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /tools/media-overview
 - Headings:
   - H2: Capabilities
+  - H2: Local media files
   - H2: Provider capability matrix
   - H2: Async vs synchronous
   - H2: Speech-to-text and Voice Call
@@ -9507,6 +14976,8 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /tools/ollama-search
 - Headings:
   - H2: Setup
+  - H3: Local Ollama
+  - H3: Hosted Ollama
   - H2: Config
   - H2: Auth and request routing
   - H2: Related
@@ -9580,8 +15051,26 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Plugin hooks
   - H2: Verify the active Gateway
   - H2: Troubleshooting
+  - H3: Plugin runtime trust refused
   - H3: Blocked plugin path ownership
   - H3: Slow plugin tool setup
+  - H2: Related
+
+## tools/progress-card.md
+
+- Route: /tools/progress-card
+- Headings:
+  - H2: Adoption
+  - H2: Update a card
+  - H2: Before an active run ends
+  - H2: Pause without marking work complete
+  - H2: Format the note
+  - H2: Limits
+  - H2: Clear a card
+  - H2: Where the card appears
+  - H2: Refresh current work status
+  - H2: Gateway requests
+  - H2: Pin the card to the dashboard
   - H2: Related
 
 ## tools/reactions.md
@@ -9591,6 +15080,14 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: How it works
   - H2: Channel behavior
   - H2: Reaction level
+  - H2: Related
+
+## tools/screen.md
+
+- Route: /tools/screen
+- Headings:
+  - H2: Actions
+  - H2: Routing and security
   - H2: Related
 
 ## tools/searxng-search.md
@@ -9604,27 +15101,67 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Notes
   - H2: Related
 
+## tools/secrets.md
+
+- Route: /tools/secrets
+- Headings:
+  - H2: Actions
+  - H2: Answering a request
+  - H2: Using a stored credential
+  - H2: Related
+
+## tools/self-learning.md
+
+- Route: /tools/self-learning
+- Headings:
+  - H2: When a review runs
+  - H2: What a review does
+  - H2: What you see
+  - H2: Turn it on or off
+  - H2: Cost and privacy
+  - H2: Troubleshooting
+  - H3: Nothing is learned
+  - H3: Too many or unwanted changes
+  - H2: Related
+
+## tools/show-widget.md
+
+- Route: /tools/show-widget
+- Headings:
+  - H2: How widgets work
+  - H2: Design system
+  - H2: Libraries and fonts
+  - H2: Use the tool
+  - H2: Native dashboard reports
+  - H2: Show on a device
+  - H2: Audio and video
+  - H2: Interactive widgets
+  - H2: Dashboard capabilities
+  - H3: Read GitHub Actions runs
+  - H2: Security and storage
+  - H2: Related
+
 ## tools/skill-workshop.md
 
 - Route: /tools/skill-workshop
 - Headings:
-  - H2: How it works
-  - H2: Lifecycle
-  - H2: Lifecycle curation
-  - H2: Chat
-  - H3: Learn from recent work
-  - H2: CLI
-  - H2: Proposal content
-  - H2: Support files
+  - H2: How the agent learns
+  - H2: Undo
+  - H2: Unused-skill cleanup
+  - H2: /learn
   - H2: Agent tool
-  - H2: Suggested skills
-  - H2: Approval and autonomy
-  - H2: Gateway methods
-  - H2: Storage
-  - H2: Limits
+  - H2: Configuration
+  - H2: Where files live
+  - H2: Operator surfaces
+  - H2: Upgrading from earlier releases
   - H2: Troubleshooting
-  - H3: Tool-policy diagnostic
   - H2: Related
+
+## tools/skill-workshop/personal-library.md
+
+- Route: /tools/skill-workshop/personal-library
+- Headings:
+  - H2: Personal library authoring
 
 ## tools/skills-config.md
 
@@ -9647,9 +15184,14 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /tools/skills
 - Headings:
   - H2: Loading order
+  - H2: Node-hosted skills
   - H2: Per-agent vs shared skills
+  - H2: Personal skills on a shared Gateway
+  - H3: Ownership and sharing
+  - H3: Revisions and session selection
   - H2: Agent allowlists
   - H2: Plugins and skills
+  - H2: Reference a skill in a prompt
   - H2: Skill Workshop
   - H2: Installing from ClawHub
   - H2: Security
@@ -9660,6 +15202,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Config overrides
   - H2: Environment injection
   - H2: Snapshots and refresh
+  - H2: Search installed skills
   - H2: Token impact
   - H2: Related
 
@@ -9671,10 +15214,10 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Configuration
   - H2: Command list
   - H3: Core commands
-  - H3: Dock commands
   - H3: Bundled plugin commands
   - H3: Skill commands
   - H2: /tools: what the agent can use now
+  - H2: /loop: recurring conversation work
   - H2: /model: model selection
   - H2: /config: on-disk config writes
   - H2: /mcp: MCP server config
@@ -9700,16 +15243,54 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /tools/subagents
 - Headings:
+  - H2: Where each section moved
+  - H2: Related
+
+## tools/subagents/announce.md
+
+- Route: /tools/subagents/announce
+- Headings:
+  - H2: Announce
+  - H3: Private parent completion
+  - H3: Announce context
+  - H3: Stats line
+  - H3: Why prefer `sessions_history`
+
+## tools/subagents/nesting.md
+
+- Route: /tools/subagents/nesting
+- Headings:
+  - H2: Nested sub-agents
+  - H3: Depth levels
+  - H3: Announce chain
+  - H3: Tool policy by depth
+  - H3: Per-agent spawn limit
+  - H3: Reset a conversation
+  - H3: Cascade stop
+  - H2: Authentication
+  - H3: Memory audience inheritance
+
+## tools/subagents/operations.md
+
+- Route: /tools/subagents/operations
+- Headings:
+  - H2: Concurrency
+  - H2: Liveness and recovery
+  - H2: Stopping
+  - H2: Limitations
+
+## tools/subagents/slash-command.md
+
+- Route: /tools/subagents/slash-command
+- Headings:
   - H2: Slash command
   - H3: Thread binding controls
   - H3: Spawn behavior
-  - H2: Context modes
-  - H2: Tool: sessionsspawn
-  - H3: Delegation prompt mode
-  - H3: Tool parameters
-  - H3: Task names and targeting
-  - H2: Tool: sessionsyield
-  - H2: Tool: subagents
+
+## tools/subagents/thread-bound-sessions.md
+
+- Route: /tools/subagents/thread-bound-sessions
+- Headings:
   - H2: Thread-bound sessions
   - H3: Thread supporting channels
   - H3: Quick flow
@@ -9718,23 +15299,44 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: Allowlist
   - H3: Discovery
   - H3: Auto-archive
-  - H2: Nested sub-agents
-  - H3: Depth levels
-  - H3: Announce chain
-  - H3: Tool policy by depth
-  - H3: Per-agent spawn limit
-  - H3: Cascade stop
-  - H2: Authentication
-  - H2: Announce
-  - H3: Announce context
-  - H3: Stats line
-  - H3: Why prefer sessionshistory
+
+## tools/subagents/tool-policy.md
+
+- Route: /tools/subagents/tool-policy
+- Headings:
   - H2: Tool policy
   - H3: Override via config
-  - H2: Concurrency
-  - H2: Liveness and recovery
-  - H2: Stopping
-  - H2: Limitations
+
+## tools/subagents/tool-reference.md
+
+- Route: /tools/subagents/tool-reference
+- Headings:
+  - H2: Context modes
+  - H2: Tool: `sessions_spawn`
+  - H3: Cloud placement
+  - H3: Delegation prompt mode
+  - H3: Tool parameters
+  - H3: Task names and targeting
+  - H2: Tool: `sessions_yield`
+  - H2: Tool: subagents
+
+## tools/swarm.md
+
+- Route: /tools/swarm
+- Headings:
+  - H2: When to use Swarm
+  - H2: Enable Swarm
+  - H2: Requirements
+  - H2: Write a Swarm script
+  - H3: Fan out in parallel with structured results
+  - H3: Loop on a decision gate
+  - H3: Process the first child that finishes
+  - H2: How collector children behave
+  - H3: Keep collector groups flat
+  - H2: Observe a Swarm
+  - H2: Stop a Swarm
+  - H2: Use Swarm from other harnesses
+  - H2: Limits
   - H2: Related
 
 ## tools/tavily.md
@@ -9743,10 +15345,20 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Getting started
   - H2: Tool reference
-  - H3: tavilysearch
-  - H3: tavilyextract
+  - H3: `tavily_search`
+  - H3: `tavily_extract`
   - H2: Choosing the right tool
   - H2: Advanced configuration
+  - H2: Related
+
+## tools/theme.md
+
+- Route: /tools/theme
+- Headings:
+  - H2: Select a theme
+  - H2: Actions
+  - H2: Create and apply a personal theme
+  - H2: Plugin themes and hot reload
   - H2: Related
 
 ## tools/thinking.md
@@ -9754,7 +15366,9 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /tools/thinking
 - Headings:
   - H2: What it does
+  - H2: Custom OpenAI-compatible endpoints
   - H2: Resolution order
+  - H2: Setting a model default
   - H2: Setting a session default
   - H2: Application by agent
   - H2: Fast mode (/fast)
@@ -9783,11 +15397,18 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: How a turn runs
   - H2: Modes
   - H2: Why this exists
-  - H2: API
-  - H2: Runtime boundary
+  - H2: Structured controls
+  - H3: Search
+  - H3: Describe
+  - H3: Call
+  - H3: Batch search
+  - H3: Directory mode
+  - H2: Execution policy
   - H2: Config
-  - H2: Prompt and telemetry
+  - H2: Upgrading
+  - H2: Session activity
   - H2: E2E validation
+  - H3: Real-model comparison
   - H2: Failure behavior
   - H2: Related
 
@@ -9799,7 +15420,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Access
   - H2: What gets recorded
   - H2: Bundle files
-  - H2: Capture location
+  - H2: Capture storage
   - H2: Disable capture
   - H2: Tune flush timeout
   - H2: Privacy and limits
@@ -9810,26 +15431,65 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /tools/tts
 - Headings:
-  - H2: Quick start
-  - H2: Supported providers
-  - H2: Configuration
-  - H3: Per-agent voice overrides
-  - H2: Personas
-  - H3: Minimal persona
-  - H3: Full persona (provider-neutral prompt)
-  - H3: Persona resolution
-  - H3: How providers use persona prompts
-  - H3: Fallback policy
+  - H2: Where each section moved
+  - H2: Component anchors
+  - H2: Service links
+  - H2: Related
+
+## tools/tts/api.md
+
+- Route: /tools/tts/api
+- Headings:
+  - H2: Agent tool
+  - H3: Tool profiles
+  - H2: Gateway RPC
+
+## tools/tts/commands.md
+
+- Route: /tools/tts/commands
+- Headings:
   - H2: Model-driven directives
   - H2: Slash commands
   - H2: Per-user preferences
+
+## tools/tts/configuration.md
+
+- Route: /tools/tts/configuration
+- Headings:
+  - H2: Configuration
+  - H3: Local Speech Swift and speech-core
+  - H3: Per-agent voice overrides
+
+## tools/tts/field-reference.md
+
+- Route: /tools/tts/field-reference
+- Headings:
+  - H2: Field reference
+
+## tools/tts/output.md
+
+- Route: /tools/tts/output
+- Headings:
   - H2: Output formats
   - H2: Auto-TTS behavior
-  - H2: Field reference
-  - H2: Agent tool
-  - H2: Gateway RPC
-  - H2: Service links
-  - H2: Related
+
+## tools/tts/personas.md
+
+- Route: /tools/tts/personas
+- Headings:
+  - H2: Personas
+  - H3: Minimal persona
+  - H3: Full persona (provider-specific shaping)
+  - H3: Persona resolution
+  - H3: Custom persona shaping
+  - H3: Fallback policy
+
+## tools/tts/quickstart.md
+
+- Route: /tools/tts/quickstart
+- Headings:
+  - H2: Quick start
+  - H2: Supported providers
 
 ## tools/video-generation.md
 
@@ -9860,10 +15520,12 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Quick start
   - H2: Tool parameters
+  - H2: Result
   - H2: How it works
   - H2: Progress updates
   - H2: Config
   - H2: Firecrawl fallback
+  - H2: Custom request headers
   - H2: Trusted env proxy
   - H2: Limits and safety
   - H2: Tool profiles
@@ -9874,11 +15536,14 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Route: /tools/web
 - Headings:
   - H2: Quick start
+  - H2: Search settings
   - H2: Choosing a provider
   - H3: Provider comparison
+  - H2: Result shape
   - H2: Auto-detection
   - H2: Native OpenAI web search
   - H2: Native Codex web search
+  - H2: CLI harness search
   - H2: Network safety
   - H2: Config
   - H3: Storing API keys
@@ -9889,12 +15554,6 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H3: xsearch example
   - H2: Examples
   - H2: Tool profiles
-  - H2: Related
-
-## tts.md
-
-- Route: /tts
-- Headings:
   - H2: Related
 
 ## vps.md
@@ -9914,33 +15573,169 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 
 - Route: /web/control-ui
 - Headings:
+  - H2: Take a photo in chat
+  - H2: Watch a desktop in Picture-in-Picture
   - H2: Quick open (local)
+  - H2: Agents home
+  - H2: What each page covers
+  - H2: Where each section moved
+  - H2: Related
+
+## web/control-ui/chat.md
+
+- Route: /web/control-ui/chat
+- Headings:
+  - H2: Collaborator drafts
+  - H2: Reactions
+  - H2: Session rail and side chat
+  - H2: Session links in messages
+  - H2: Suggested tasks
+  - H2: Composer capability menu
+  - H2: Emoji shortcodes
+  - H2: JSON in chat
+  - H2: Chat behavior
+  - H3: ClawHub recommendation cards
+  - H3: Source previews and copying code
+  - H3: Markdown tables
+  - H3: Mermaid diagrams
+  - H2: Hosted embeds
+  - H3: YouTube videos
+  - H2: Chat transcript layout
+  - H2: Run transcripts
+  - H2: Conversations stopped for review
+  - H2: Chat message width
+
+## web/control-ui/connect-and-pair.md
+
+- Route: /web/control-ui/connect-and-pair
+- Headings:
   - H2: Device pairing (first connection)
   - H2: Pair a mobile device
-  - H2: Personal identity (browser-local)
   - H2: Runtime config endpoint
+  - H2: PWA install and web push
+  - H2: Tailnet access (recommended)
+  - H2: Insecure HTTP
+  - H2: Blank Control UI page
+
+## web/control-ui/development.md
+
+- Route: /web/control-ui/development
+- Headings:
+  - H2: Build and develop the UI
+  - H2: Chat input ownership
+  - H2: Chat render scheduling
+  - H2: Talk live smoke test
+  - H2: Debugging/testing: dev server + remote Gateway
+
+## web/control-ui/feature-reference.md
+
+- Route: /web/control-ui/feature-reference
+- Headings:
+  - H2: Feature and RPC reference
+
+## web/control-ui/offline-and-reconnect.md
+
+- Route: /web/control-ui/offline-and-reconnect
+- Headings:
+  - H2: Busy initial connection
+  - H2: Warm reload
+  - H3: Upgrading existing browser data
+  - H2: Offline page reload
+  - H2: Gateway updates and suspended tabs
+  - H2: Visualizations during a connection loss
+  - H2: Connection loss and reconnect
+
+## web/control-ui/panels.md
+
+- Route: /web/control-ui/panels
+- Headings:
+  - H2: OpenClaw system care
+  - H2: Home dock
+  - H2: Plugin conversation docks
+  - H2: Operator terminal
+  - H3: Terminal fonts
+  - H2: Browser panel
+  - H2: GitHub side panel
+
+## web/control-ui/security-model.md
+
+- Route: /web/control-ui/security-model
+- Headings:
+  - H2: Content security policy
+  - H2: Public transcript boundary
+  - H2: Avatar route auth
+  - H2: Assistant media route auth
+  - H2: Approval links
+
+## web/control-ui/sessions-and-sidebar.md
+
+- Route: /web/control-ui/sessions-and-sidebar
+- Headings:
+  - H2: New session names
+  - H2: New-session preferences and recents
+  - H2: Systems workspace
+  - H2: Sidebar navigation
+  - H3: Session menu
+  - H3: Share a session publicly
+  - H3: Session placement
+  - H3: Session icons
+  - H2: Session colors
+  - H2: Direct session shortcuts
+  - H2: Command palette
+  - H2: New session page
+  - H3: Start a native coding CLI
+  - H3: OpenClaw Chat workspace startup
+
+## web/control-ui/settings.md
+
+- Route: /web/control-ui/settings
+- Headings:
+  - H2: Environment identity
+  - H2: Browser tab icon
+  - H2: Community invitation
+  - H2: Personal identity
   - H2: Gateway host status
   - H2: Language support
   - H2: Appearance themes
-  - H2: Sidebar navigation
-  - H2: What it can do (today)
+  - H2: Opening links
+  - H2: Session sources
+  - H2: Manage plugins
+  - H2: Updates
+  - H2: Apps and extensions
+  - H2: Settings
+  - H3: Side panel keyboard shortcuts
+  - H3: This device (macOS and iOS apps)
+  - H2: Custom plugin UI
+  - H2: Import assistant memory
   - H2: MCP page
   - H2: Activity tab
-  - H2: Operator terminal
-  - H2: Chat behavior
-  - H2: Connection loss and reconnect
-  - H2: PWA install and web push
-  - H2: Hosted embeds
-  - H2: Chat message width
-  - H2: Tailnet access (recommended)
-  - H2: Insecure HTTP
-  - H2: Content security policy
-  - H2: Avatar route auth
-  - H2: Assistant media route auth
-  - H2: Building the UI
-  - H2: Blank Control UI page
-  - H2: Debugging/testing: dev server + remote Gateway
-  - H2: Related
+  - H2: Meetings page
+
+## web/dashboard-architecture.md
+
+- Route: /web/dashboard-architecture
+- Headings:
+  - H2: Vision
+  - H2: Concepts
+  - H2: UX flows
+  - H2: Interaction tiers
+  - H2: Widget model and hosting
+  - H3: Widgets host content; MCP apps are one content kind
+  - H3: Website widgets
+  - H3: Browser dashboards
+  - H3: Native data reports
+  - H3: Plugin capability declarations
+  - H3: Authenticated GitHub reads
+  - H3: Modeled residual: WebRTC data channels
+  - H3: Transcript display: one widget card
+  - H3: Server-sourced widgets (pinned MCP apps)
+  - H3: WorkBoard integration
+  - H2: Layout: fluid grid
+  - H2: Data model (per-agent DB)
+  - H2: Protocol surface
+  - H2: Agent tools
+  - H2: What this replaces
+  - H2: Current boundaries
 
 ## web/dashboard.md
 
@@ -9948,8 +15743,27 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
 - Headings:
   - H2: Fast path (recommended)
   - H2: Auth basics (local vs remote)
+  - H2: Automatic browser handoff
+  - H2: Open in Telegram
   - H2: If you see "unauthorized" / 1008
   - H2: Related
+
+## web/dashboards.md
+
+- Route: /web/dashboards
+- Headings:
+  - H2: Find your dashboards
+  - H2: Arrange your task
+  - H2: Build a dashboard by asking
+  - H2: The board
+  - H2: Show a website fullscreen
+  - H2: Share a browser dashboard with your agent
+  - H3: Session writer access
+  - H2: What widgets are allowed to do
+  - H2: MCP apps on the board
+  - H2: A2UI widgets
+  - H2: Retired Workspaces
+  - H2: Good to know
 
 ## web/index.md
 
@@ -9962,6 +15776,40 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Security notes
   - H2: Building the UI
 
+## web/lobster.md
+
+- Route: /web/lobster
+- Headings:
+  - H2: What you are looking at
+  - H2: When it shows up
+  - H2: Things you can do
+  - H2: Turning visits off (or back on)
+  - H2: The Lobsterdex
+  - H2: Field notes
+  - H2: Privacy
+  - H2: Related
+
+## web/notifications.md
+
+- Route: /web/notifications
+- Headings:
+  - H2: Which surface you get
+  - H2: Enable browser notifications
+  - H3: Choose what reaches each device
+  - H3: Receive human mention alerts
+  - H3: Use more than one Gateway on one phone
+  - H2: Enable notifications in the macOS app
+  - H3: Background session completion
+  - H2: Troubleshooting
+  - H3: Enable is unavailable
+  - H3: Browser permission is blocked
+  - H3: Permission is granted but the browser is not subscribed
+  - H3: Service worker is not ready
+  - H3: Web Push asks for a Doctor migration
+  - H3: Tests arrive but approval requests do not
+  - H3: A mention is missing or produces no browser alert
+  - H2: Related
+
 ## web/tui.md
 
 - Route: /web/tui
@@ -9973,17 +15821,42 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Mental model: agents + sessions
   - H2: Sending + delivery
   - H2: Pickers + overlays
+  - H2: Questions
   - H2: Keyboard shortcuts
   - H2: Slash commands
+  - H2: Local Chrome setup
   - H2: Local shell commands
-  - H2: Crestodian setup and repair helper
+  - H2: OpenClaw setup and repair helper
   - H2: Tool output
+  - H2: Image previews
   - H2: Terminal colors
   - H2: History + streaming
   - H2: Connection details
   - H2: Options
   - H2: Troubleshooting
   - H2: Connection troubleshooting
+  - H2: Related
+
+## web/urls.md
+
+- Route: /web/urls
+- Headings:
+  - H2: Session and dashboard URLs
+  - H3: Stability contract
+  - H3: Native catalog links
+  - H2: Social previews
+  - H3: Behind a login proxy
+  - H2: Public session transcripts
+  - H3: Revocation and older links
+  - H3: Login-proxy deployment
+  - H3: Reader capacity
+  - H2: Person activity URLs
+  - H2: Terminal URLs
+  - H2: Focus presentation routes
+  - H2: Beam share URLs
+  - H2: Route table
+  - H2: Other special documents and startup modes
+  - H2: Remote Gateway handoff
   - H2: Related
 
 ## web/webchat.md
@@ -9994,6 +15867,7 @@ Do not edit it by hand; run `pnpm docs:map:gen`.
   - H2: Quick start
   - H2: How it works
   - H3: Transcript and delivery model
+  - H2: Human mention delivery
   - H2: Control UI agents tools panel
   - H2: Remote use
   - H2: Configuration reference (WebChat)

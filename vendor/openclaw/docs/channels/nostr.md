@@ -22,7 +22,7 @@ From a local checkout (dev workflows):
 openclaw plugins install --link <path-to-local-nostr-plugin>
 ```
 
-Restart the gateway after installing or enabling plugins. Onboarding (`openclaw onboard`) and `openclaw channels add` surface Nostr from the shared channel catalog once the plugin is installed.
+Installing or enabling the plugin applies it to a running Gateway; check the [application result](/plugins/manage-plugins#apply-changes-and-inspect). Onboarding (`openclaw onboard`) and `openclaw channels add` surface Nostr from the shared channel catalog once the plugin is installed.
 
 ### Non-interactive setup
 
@@ -113,6 +113,10 @@ Notes:
 - **allowlist**: only pubkeys in `allowFrom` can DM.
 - **open**: public inbound DMs (requires `allowFrom: ["*"]`).
 - **disabled**: ignore inbound DMs.
+
+Gateway pairing approval notifications require a running Nostr account. If the account is stopped, approval still succeeds, but the Gateway reports that notification failed.
+
+The CLI's `pairing approve nostr ... --notify` cannot access the Gateway's Nostr connection, so notification fails even when the account is running. Pairing approval still succeeds; use a Gateway client to request an approval notification.
 
 Enforcement notes:
 
@@ -237,5 +241,5 @@ docker run -p 7777:7777 ghcr.io/hoytech/strfry
 - [Channels Overview](/channels) — all supported channels
 - [Pairing](/channels/pairing) — DM authentication and pairing flow
 - [Groups](/channels/groups) — group chat behavior and mention gating
-- [Channel Routing](/channels/channel-routing) — session routing for messages
+- [Channel routing](/channels/channel-routing) — session routing for messages
 - [Security](/gateway/security) — access model and hardening

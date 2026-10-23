@@ -16,12 +16,12 @@ const serverControlPlane = read('server/controlPlane.ts')
 
 assert.match(
   prepareRuntimeBundles,
-  /const DEFAULT_BUNDLED_NODE_VERSION = 'v24\.16\.0'/,
+  /const DEFAULT_BUNDLED_NODE_VERSION = 'v24\.22\.1'/,
   'bundled Node runtime must default to an exact Node 24 version',
 )
 assert.match(
   prepareRuntimeBundles,
-  /const DEFAULT_BUNDLED_CODEX_VERSION = '2026\.9\.2'/,
+  /const DEFAULT_BUNDLED_CODEX_VERSION = '2026\.10\.6'/,
   'bundled Codex plugin must default to an exact version',
 )
 assert.match(
@@ -236,6 +236,11 @@ assert.match(
 )
 assert.match(
   serverControlPlane,
+  /nodeToolchainVersionSupportsOpenClaw\(entry\.name\)[\s\S]*\.sort\(\(a, b\) => compareNodeToolchainVersions\(b\.name, a\.name\)\)/,
+  'bundled Node candidates must exclude engines rejected by the pinned OpenClaw release and sort numerically newest first',
+)
+assert.match(
+  serverControlPlane,
   /function isOpenClawNodeRuntimeUnavailableText/,
   'missing Node runtime failures must be classified separately from invalid OpenClaw config',
 )
@@ -258,6 +263,11 @@ assert.match(
   electronMain,
   /nodeToolchainDirMatchesCurrentPlatform/,
   'desktop launcher must discover bundled Node/npm toolchains for the current platform',
+)
+assert.match(
+  electronMain,
+  /nodeToolchainVersionSupportsOpenClaw\(entry\.name\)[\s\S]*compareNodeToolchainVersions/,
+  'desktop launcher must not select a stale or unsupported Node toolchain when caches contain multiple versions',
 )
 assert.match(
   electronMain,

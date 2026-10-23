@@ -221,7 +221,7 @@ for (const catalogFragment of [
   'mediaUnderstandingProviderIds',
   'videoGenerationProviderIds',
 ]) {
-    assert(pluginInventoryService.includes(catalogFragment), `Plugin inventory should preserve OpenClaw 2026.9.2 catalog support: ${catalogFragment}`)
+    assert(pluginInventoryService.includes(catalogFragment), `Plugin inventory should preserve OpenClaw 2026.10.6 catalog support: ${catalogFragment}`)
 }
 
 for (const catalogTestFragment of [

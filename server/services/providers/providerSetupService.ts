@@ -1022,7 +1022,7 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     const modulePath = openAICodexOAuthModulePath()
     const oauthModule = await importModule(pathToFileURL(modulePath).href)
     const loginOpenAICodex = oauthModule.loginOpenAICodex ?? oauthModule.t
-    // Older top-level shims used `r`; OpenClaw 2026.9.2 uses `n`. Prefer
+    // Older top-level shims used `r`; OpenClaw 2026.10.6 uses `n`. Prefer
     // named exports from the extension entrypoint, then retain both shims as
     // compatibility fallbacks for already-packaged runtimes.
     const refreshOpenAICodexToken = oauthModule.refreshOpenAICodexToken ?? oauthModule.r ?? oauthModule.n

@@ -575,7 +575,12 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
       switch (group) {
         case 'appearance': { const value = backupPreview.appearance!; saveUiSettings(value); applyUiSettings(value); setUiSettings(value); break }
         case 'voice': { const value = backupPreview.voice!; saveSpeechSettings(value); setSpeechSettings(value); break }
-        case 'registry': { const value = backupPreview.registry!; saveRegistryPreferences(value); setRegistryPreferences(value); break }
+        case 'registry': {
+          const value = { ...DEFAULT_REGISTRY_PREFERENCES, ...backupPreview.registry!, pinnedAgentIds: backupPreview.registry!.pinnedAgentIds ?? [] }
+          saveRegistryPreferences(value)
+          setRegistryPreferences(value)
+          break
+        }
         case 'console': { const value = backupPreview.console!; saveConsolePreferences(value); setConsolePreferences(value); if (!value.rememberDrafts) clearAllCommandConsoleDrafts(); break }
         case 'activity': saveChannelActivitySettings(backupPreview.activity!); break
         case 'mission': updateMissionDraft(backupPreview.mission!); break

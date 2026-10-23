@@ -278,8 +278,8 @@ for (const directory of [
   assertDirectory(directory)
 }
 if (process.platform === 'win32') {
-  assertFile(`${resourcesRoot}/toolchains/node/node-v24.16.0-win-x64/node.exe`)
-  assertFile(`${resourcesRoot}/toolchains/node/node-v24.16.0-win-x64/npm.cmd`)
+  assertFile(`${resourcesRoot}/toolchains/node/node-v24.22.1-win-x64/node.exe`)
+  assertFile(`${resourcesRoot}/toolchains/node/node-v24.22.1-win-x64/npm.cmd`)
 }
 pass(149, 'No missing packaged resources remain', 'Packaged app, frontend/backend, legal notices, OpenClaw catalogs, skills, and Node runtime resources are present.', [
   `${releaseRoot}/win-unpacked`,

@@ -49,19 +49,20 @@ Object.defineProperty(globalThis, 'document', {
 
 test('registry preferences validate persisted values and publish live updates', () => {
   storage.clear()
-  storage.setItem(REGISTRY_PREFS_KEY, JSON.stringify({ displayMode: 'broken', overlayPreset: 'blueprint-grid', rarityFilter: 'invalid', sortKey: 'level' }))
+  storage.setItem(REGISTRY_PREFS_KEY, JSON.stringify({ displayMode: 'broken', overlayPreset: 'blueprint-grid', rarityFilter: 'invalid', sortKey: 'level', pinnedAgentIds: ['researcher', 'bad id', 'RESEARCHER', 'writer'] }))
   assert.deepEqual(readRegistryPreferences(), {
     ...DEFAULT_REGISTRY_PREFERENCES,
     overlayPreset: 'blueprint-grid',
     rarityColorsEnabled: false,
     sortKey: 'level',
+    pinnedAgentIds: ['researcher', 'writer'],
   })
 
   let changed = false
   events.addEventListener(REGISTRY_PREFS_CHANGED_EVENT, () => { changed = true }, { once: true })
-  saveRegistryPreferences({ displayMode: 'list', overlayPreset: 'blueprint-grid', rarityColorsEnabled: true, rarityFilter: 'epic', sortKey: 'name' })
+  saveRegistryPreferences({ displayMode: 'list', overlayPreset: 'blueprint-grid', rarityColorsEnabled: true, rarityFilter: 'epic', sortKey: 'name', pinnedAgentIds: ['writer', 'researcher'] })
   assert.equal(changed, true)
-  assert.deepEqual(readRegistryPreferences(), { displayMode: 'list', overlayPreset: 'blueprint-grid', rarityColorsEnabled: true, rarityFilter: 'epic', sortKey: 'name' })
+  assert.deepEqual(readRegistryPreferences(), { displayMode: 'list', overlayPreset: 'blueprint-grid', rarityColorsEnabled: true, rarityFilter: 'epic', sortKey: 'name', pinnedAgentIds: ['writer', 'researcher'] })
   assert.deepEqual(AGENT_CARD_RARITY_THEMES, {
     legendary: 'original',
     epic: 'original',

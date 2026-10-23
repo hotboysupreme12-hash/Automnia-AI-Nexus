@@ -618,7 +618,7 @@ async function runClawTalkControlCenterOrEmbeddedAgentTurn(options) {
 `.trim()
 
 export const TELEGRAM_AGENT_ROUTING_HELPER = String.raw`
-var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 19;
+var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 20;
 var TELEGRAM_AGENT_ROUTE_MEMORY_KEY = '__openclawTelegramAgentRoutes';
 var TELEGRAM_AGENT_ROUTE_MEMORY_MAX_ENTRIES = 256;
 var TELEGRAM_AGENT_ROUTE_MEMORY_FILE_NAME = 'telegram-agent-routes.json';

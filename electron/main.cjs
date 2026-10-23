@@ -970,6 +970,26 @@ function nodeToolchainDirMatchesCurrentPlatform(name) {
   return new RegExp(`^node-v\\d+\\.\\d+\\.\\d+-${platform}-${arch}$`, 'i').test(name)
 }
 
+function nodeToolchainVersion(name) {
+  const match = /^node-v(\d+)\.(\d+)\.(\d+)-/.exec(name)
+  if (!match) return null
+  return { major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]) }
+}
+
+function nodeToolchainVersionSupportsOpenClaw(name) {
+  const version = nodeToolchainVersion(name)
+  if (!version) return false
+  return (version.major === 24 && (version.minor > 22 || (version.minor === 22 && version.patch >= 1))) ||
+    (version.major === 26 && (version.minor > 12 || (version.minor === 12 && version.patch >= 1)))
+}
+
+function compareNodeToolchainVersions(left, right) {
+  const a = nodeToolchainVersion(left)
+  const b = nodeToolchainVersion(right)
+  if (!a || !b) return 0
+  return a.major - b.major || a.minor - b.minor || a.patch - b.patch
+}
+
 function nodeBinForNpmBin(npmBin) {
   return process.platform === 'win32' ? path.join(path.dirname(npmBin), 'node.exe') : path.join(path.dirname(npmBin), 'node')
 }
@@ -984,10 +1004,10 @@ function rememberNodeForNpm(npmBin) {
 function existingNpmBinInToolchainRoot(root) {
   if (!root || !fs.existsSync(root)) return ''
   return fs.readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && nodeToolchainDirMatchesCurrentPlatform(entry.name))
+    .filter((entry) => entry.isDirectory() && nodeToolchainDirMatchesCurrentPlatform(entry.name) && nodeToolchainVersionSupportsOpenClaw(entry.name))
     .map((entry) => path.join(root, entry.name))
     .filter((dir) => isExecutableFile(npmBinInNodeDir(dir)) && isExecutableFile(nodeBinInNodeDir(dir)))
-    .sort((a, b) => b.localeCompare(a))
+    .sort((a, b) => compareNodeToolchainVersions(path.basename(b), path.basename(a)))
     .map(npmBinInNodeDir)[0] || ''
 }
 
@@ -998,10 +1018,10 @@ function existingBundledNpmBin() {
 function existingNodeBinInToolchainRoot(root) {
   if (!root || !fs.existsSync(root)) return ''
   return fs.readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && nodeToolchainDirMatchesCurrentPlatform(entry.name))
+    .filter((entry) => entry.isDirectory() && nodeToolchainDirMatchesCurrentPlatform(entry.name) && nodeToolchainVersionSupportsOpenClaw(entry.name))
     .map((entry) => nodeBinInNodeDir(path.join(root, entry.name)))
     .filter(isRunnableNodeBinary)
-    .sort((a, b) => b.localeCompare(a))[0] || ''
+    .sort((a, b) => compareNodeToolchainVersions(path.basename(path.dirname(b)), path.basename(path.dirname(a))))[0] || ''
 }
 
 function preferBundledNodeRuntime() {

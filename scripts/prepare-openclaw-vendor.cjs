@@ -4,7 +4,7 @@ const fs = require('node:fs')
 const https = require('node:https')
 const { tmpdir } = require('node:os')
 const path = require('node:path')
-const { ensureRelayThoughtSignatureReplay } = require('./lib/relay-thought-signature-patch.cjs')
+const { ensureRelayAiTransportCompatibility } = require('./lib/relay-thought-signature-patch.cjs')
 const { ensureRestartRecoveryClaimStartupRepair } = require('./lib/restart-recovery-stale-claim-patch.cjs')
 
 const root = path.resolve(__dirname, '..')
@@ -16,9 +16,13 @@ const metadataPath = path.join(nodeModulesRoot, '.automnia-openclaw-vendor-deps.
 const cacheRoot = path.join(root, '.cache', 'openclaw-vendor')
 const refresh = /^(1|true|yes)$/i.test(process.env.AUTOMNIA_REFRESH_OPENCLAW_VENDOR_DEPS || '')
 
-const DEFAULT_OPENCLAW_PACKAGE_VERSION = '2026.9.2'
-const DEFAULT_OPENCLAW_PACKAGE_TARBALL = 'https://registry.npmjs.org/openclaw/-/openclaw-2026.9.2.tgz'
-const DEFAULT_OPENCLAW_PACKAGE_INTEGRITY = 'sha512-M6C7UsnX815nv26qBJFYGe6aGzv+ftZLRzV6S9oRXUtXg2Yn67eVntpssT94kgkquKVSeUxerUg0j1ONp4WYQg=='
+function isJavaScriptBundle(name) {
+  return name.endsWith('.js') || name.endsWith('.mjs')
+}
+
+const DEFAULT_OPENCLAW_PACKAGE_VERSION = '2026.10.6'
+const DEFAULT_OPENCLAW_PACKAGE_TARBALL = 'https://registry.npmjs.org/openclaw/-/openclaw-2026.10.6.tgz'
+const DEFAULT_OPENCLAW_PACKAGE_INTEGRITY = 'sha512-jSpQPa2Jw5rG0J2GC07j9+qHtVYIuoHjgccU88JeS+p7188sBCnvIJeuaiNPHj1zsWkuHcBv443QiEUh7qrxwA=='
 
 const installArgs = [
   'ci',
@@ -293,10 +297,9 @@ async function hydratePublishedPackageArtifacts(packageJson) {
 }
 
 function ensureAutomniaRelayThoughtSignatureSupport() {
-  // OpenClaw 2026.9.2 moved the serializer into @openclaw/ai. Its replay
-  // patch runs after dependency validation/installation below. Keep this
-  // older transport injection for older pinned cores only.
-  if (readJson(packageJsonPath).version === '2026.9.2') return
+  // OpenClaw moved the OpenAI-compatible serializer into @openclaw/ai.
+  // That path is patched after production dependencies are validated below.
+  if (readJson(packageJsonPath).dependencies?.['@openclaw/ai']) return
   const distRoot = path.join(vendorRoot, 'dist')
   if (!fs.existsSync(distRoot)) throw new Error('[openclaw-vendor] Missing OpenClaw dist directory for Automnia Relay compatibility patch')
   const marker = 'const isAutomniaGeminiRelay = model.provider === "automnia-cloud"'
@@ -304,7 +307,7 @@ function ensureAutomniaRelayThoughtSignatureSupport() {
   const replacement = `function isGoogleOpenAICompatModel(model) {\n\tconst endpointClass = detectOpenAICompletionsCompat(model).capabilities.endpointClass;\n\t// Automnia Relay is an OpenAI-compatible billing boundary backed by\n\t// Gemini 3.x. Keep it on the same thought-signature replay path as Google\n\t// providers so a hosted tool call can continue through the next Gateway\n\t// turn without degrading the function call into transcript text.\n\tconst isAutomniaGeminiRelay = model.provider === "automnia-cloud" && /(?:^|\\/)gemini-3(?:\\.\\d+)?-(?:flash|pro)(?:-|$)/i.test(model.id);\n\treturn model.provider === "google" || isAutomniaGeminiRelay || endpointClass === "google-generative-ai" || endpointClass === "google-vertex";\n}`
   let patched = false
   for (const name of fs.readdirSync(distRoot)) {
-    if (!name.endsWith('.js')) continue
+    if (!isJavaScriptBundle(name)) continue
     const filePath = path.join(distRoot, name)
     const source = fs.readFileSync(filePath, 'utf8')
     if (source.includes(marker)) {
@@ -318,36 +321,10 @@ function ensureAutomniaRelayThoughtSignatureSupport() {
   if (!patched) throw new Error('[openclaw-vendor] Could not install Automnia Relay thought-signature compatibility patch')
 }
 
-function ensureWindowsOpenSslGitFallback() {
-  if (process.platform !== 'win32') return
-  const distRoot = path.join(vendorRoot, 'dist')
-  if (!fs.existsSync(distRoot)) throw new Error('[openclaw-vendor] Missing OpenClaw dist directory for Windows OpenSSL resolver patch')
-
-  const resolverFiles = fs.readdirSync(distRoot).filter((name) => /^resolve-system-bin-.*\.js$/.test(name))
-  if (!resolverFiles.length) throw new Error('[openclaw-vendor] Missing OpenClaw system-binary resolver bundle')
-
-  const anchor = 'dirs.push(path.win32.join(programFilesRoot, "OpenSSL", "bin"));'
-  const replacement = `${anchor}
-\t\t// Git for Windows is installed under Program Files and ships an OS-managed
-\t\t// OpenSSL build. Keep it behind the dedicated OpenSSL locations so a
-\t\t// normal Git install can satisfy certificate generation without trusting
-\t\t// arbitrary PATH entries or user-writable directories.
-\t\tdirs.push(path.win32.join(programFilesRoot, "Git", "mingw64", "bin"));
-\t\tdirs.push(path.win32.join(programFilesRoot, "Git", "usr", "bin"));`
-  let patched = false
-  for (const name of resolverFiles) {
-    const filePath = path.join(distRoot, name)
-    const source = fs.readFileSync(filePath, 'utf8')
-    if (source.includes('path.win32.join(programFilesRoot, "Git", "mingw64", "bin")')) continue
-    if (!source.includes(anchor)) throw new Error(`[openclaw-vendor] OpenClaw system-binary resolver changed; cannot patch ${name}`)
-    fs.writeFileSync(filePath, source.replace(anchor, replacement))
-    patched = true
-  }
-  if (patched) console.log('[openclaw-vendor] added trusted Git for Windows OpenSSL fallback')
-}
-
 function ensureAutomniaRelayRetrySafetySupport() {
-  if (readJson(packageJsonPath).version === '2026.9.2') return
+  // Modern OpenClaw keeps the OpenAI-compatible transport in @openclaw/ai;
+  // its SDK retry guard and stable Relay idempotency key are patched there.
+  if (readJson(packageJsonPath).dependencies?.['@openclaw/ai']) return
   const distRoot = path.join(vendorRoot, 'dist')
   if (!fs.existsSync(distRoot)) throw new Error('[openclaw-vendor] Missing OpenClaw dist directory for Automnia Relay retry-safety patch')
 
@@ -391,7 +368,7 @@ function ensureAutomniaRelayRetrySafetySupport() {
   let completionsPatched = false
   let agentRunnerPatched = false
   for (const name of fs.readdirSync(distRoot)) {
-    if (!name.endsWith('.js')) continue
+    if (!isJavaScriptBundle(name)) continue
     const filePath = path.join(distRoot, name)
     let source = fs.readFileSync(filePath, 'utf8')
     let next = source
@@ -487,7 +464,7 @@ function ensureAutomniaRelayCompactContextSupport() {
   let selectionHistoryPatched = false
   let compactHistoryPatched = false
   for (const name of fs.readdirSync(distRoot)) {
-    if (!name.endsWith('.js')) continue
+    if (!isJavaScriptBundle(name)) continue
     const filePath = path.join(distRoot, name)
     const source = fs.readFileSync(filePath, 'utf8')
     let next = source
@@ -538,13 +515,17 @@ function ensureAutomniaRelayCompactContextSupport() {
   // instead of failing startup while looking for retired source patterns.
   if (!selectionHistoryPatched) {
     const hasLegacySelectionPattern = fs.readdirSync(distRoot)
-      .filter((name) => name.startsWith('selection-') && name.endsWith('.js'))
+      .filter((name) => name.startsWith('selection-') && isJavaScriptBundle(name))
       .some((name) => selectionHistoryPattern.test(fs.readFileSync(path.join(distRoot, name), 'utf8')))
     if (!hasLegacySelectionPattern) selectionHistoryPatched = true
   }
   if (!compactHistoryPatched) {
-    const compactBundle = fs.readdirSync(distRoot).find((name) => name.startsWith('compact-') && name.endsWith('.js'))
-    if (compactBundle && fs.readFileSync(path.join(distRoot, compactBundle), 'utf8').includes('preserveCompactionReplayWindow')) compactHistoryPatched = true
+    compactHistoryPatched = fs.readdirSync(distRoot)
+      .filter((name) => name.startsWith('compact-') && isJavaScriptBundle(name))
+      .some((name) => {
+        const source = fs.readFileSync(path.join(distRoot, name), 'utf8')
+        return source.includes('preserveCompactionReplayWindow') || /limitHistoryTurns\(session\.messages, Math\.min\(4, Math\.max\(1, Number\(/.test(source)
+      })
   }
 
   if (!promptPatched) throw new Error('[openclaw-vendor] Could not force token-efficient minimal system prompt mode')
@@ -565,7 +546,7 @@ function ensureAutomniaRelayToolResultBudgetSupport() {
   let patched = false
 
   for (const name of fs.readdirSync(distRoot)) {
-    if (!name.endsWith('.js')) continue
+    if (!isJavaScriptBundle(name)) continue
     const filePath = path.join(distRoot, name)
     const source = fs.readFileSync(filePath, 'utf8')
     if (!source.includes(aggregateMarker)) continue
@@ -628,7 +609,7 @@ function compactAutomniaRelayToolSchemas(tools) {
 
   let patched = false
   for (const name of fs.readdirSync(distRoot)) {
-    if (!name.endsWith('.js')) continue
+    if (!isJavaScriptBundle(name)) continue
     const filePath = path.join(distRoot, name)
     const source = fs.readFileSync(filePath, 'utf8')
     let next = source
@@ -647,7 +628,7 @@ function compactAutomniaRelayToolSchemas(tools) {
   // runtime while the request-level recovery budget still applies.
   if (!patched) {
     const hasNativeProviderProjection = fs.readdirSync(distRoot)
-      .some((name) => name.startsWith('provider-tools-') && name.endsWith('.js'))
+      .some((name) => name.startsWith('provider-tools-') && isJavaScriptBundle(name))
     if (hasNativeProviderProjection) patched = true
   }
   if (!patched) throw new Error('[openclaw-vendor] Could not install Automnia Relay provider payload compaction patch')
@@ -677,7 +658,7 @@ function ensureAutomniaSettledTurnFinalizationSupport() {
 
   let resultPatched = false
   for (const name of fs.readdirSync(distRoot)) {
-    if (!/^settled-turn-finalization-result-.*\.js$/.test(name)) continue
+    if (!/^settled-turn-finalization-result-.*\.(?:m?js)$/.test(name)) continue
     const filePath = path.join(distRoot, name)
     const source = fs.readFileSync(filePath, 'utf8')
     let next = source
@@ -696,10 +677,11 @@ function ensureAutomniaSettledTurnFinalizationSupport() {
   if (!resultPatched) throw new Error('[openclaw-vendor] Missing OpenClaw settled-turn finalization result bundle')
 
   const continuationInstruction = 'const SETTLED_TOOL_TERMINAL_CONTINUATION_INSTRUCTION = "The previous assistant turn completed its tool calls but did not produce a user-visible answer. Continue from the current transcript and produce the final user-visible answer now. Do not repeat completed tool calls or restart from scratch.";'
+  const currentContinuationInstruction = 'const SETTLED_TOOL_TERMINAL_CONTINUATION_INSTRUCTION = "The previous assistant turn completed its tool calls but did not produce a user-visible answer. Continue from the current transcript and produce the final user-visible answer now. Do not repeat completed tool calls or restart from scratch. Tools are unavailable in this step: it is a text-only pass, so reply with plain text and do not attempt any tool call.";'
   const patchedContinuationInstruction = 'const SETTLED_TOOL_TERMINAL_CONTINUATION_INSTRUCTION = "The previous assistant turn completed its tool calls but did not produce a user-visible answer. Continue from the current transcript and produce the final user-visible answer now. Do not repeat completed tool calls or restart from scratch. This is a tool-disabled recovery pass: return plain user-visible text only; never emit tool calls, exec, tool_call, or any new action. Use only evidence already present in the transcript.";'
   let continuationPatched = false
   for (const name of fs.readdirSync(distRoot)) {
-    if (!/^builtin-openclaw-.*\.js$/.test(name)) continue
+    if (!/^builtin-openclaw-.*\.(?:m?js)$/.test(name)) continue
     const filePath = path.join(distRoot, name)
     const source = fs.readFileSync(filePath, 'utf8')
     let next = source
@@ -707,6 +689,9 @@ function ensureAutomniaSettledTurnFinalizationSupport() {
       continuationPatched = true
     } else if (next.includes(continuationInstruction)) {
       next = next.replace(continuationInstruction, patchedContinuationInstruction)
+      continuationPatched = true
+    } else if (next.includes(currentContinuationInstruction)) {
+      next = next.replace(currentContinuationInstruction, patchedContinuationInstruction)
       continuationPatched = true
     } else {
       continue
@@ -814,7 +799,6 @@ async function main() {
   const shrinkwrapSha256 = sha256File(shrinkwrapPath)
   validateVendorSource(lock)
   const packageArtifacts = await hydratePublishedPackageArtifacts(packageJson)
-  ensureWindowsOpenSslGitFallback()
   ensureAutomniaRelayThoughtSignatureSupport()
   ensureAutomniaRelayRetrySafetySupport()
   ensureAutomniaRelayCompactContextSupport()
@@ -827,12 +811,12 @@ async function main() {
     const missing = validateInstalledPackages(lock)
     const metadata = readMetadata()
     if (missing.length === 0 && metadataMatches(metadata, packageJson, shrinkwrapSha256)) {
-      if (packageJson.version === '2026.9.2') ensureRelayThoughtSignatureReplay(vendorRoot)
+      if (packageJson.dependencies?.['@openclaw/ai']) ensureRelayAiTransportCompatibility(vendorRoot)
       console.log(`[openclaw-vendor] OpenClaw ${packageJson.version} production dependencies already prepared`)
       return
     }
     if (missing.length === 0) {
-      if (packageJson.version === '2026.9.2') ensureRelayThoughtSignatureReplay(vendorRoot)
+      if (packageJson.dependencies?.['@openclaw/ai']) ensureRelayAiTransportCompatibility(vendorRoot)
       writeMetadata(packageJson, shrinkwrapSha256, 'validated-existing-node-modules', packageArtifacts)
       console.log(`[openclaw-vendor] validated existing OpenClaw ${packageJson.version} production dependencies`)
       return
@@ -847,7 +831,7 @@ async function main() {
     throw new Error(`[openclaw-vendor] npm ci completed but runtime dependencies are still missing: ${missing.join(', ')}`)
   }
   writeMetadata(packageJson, shrinkwrapSha256, installMode, packageArtifacts)
-  if (packageJson.version === '2026.9.2') ensureRelayThoughtSignatureReplay(vendorRoot)
+  if (packageJson.dependencies?.['@openclaw/ai']) ensureRelayAiTransportCompatibility(vendorRoot)
   console.log(`[openclaw-vendor] prepared OpenClaw ${packageJson.version} production dependencies`)
 }
 
