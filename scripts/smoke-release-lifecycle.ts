@@ -6,7 +6,7 @@ const root = process.cwd()
 const read = (relativePath: string) => readFileSync(path.join(root, relativePath), 'utf8')
 const packageJson = JSON.parse(read('package.json')) as {
   scripts?: Record<string, string>
-  build?: { nsis?: { runAfterFinish?: boolean } }
+  build?: { nsis?: { runAfterFinish?: boolean }; extraResources?: Array<{ from?: string; to?: string }> }
 }
 const scripts = packageJson.scripts || {}
 const lifecycle = read('scripts/windows-release-lifecycle.ps1')
@@ -14,6 +14,9 @@ const updateLibrary = read('scripts/lib/update-manifest.cjs')
 const updateGenerator = read('scripts/generate-update-manifest.cjs')
 const updateVerifier = read('scripts/verify-update-manifest.cjs')
 const backupLibrary = read('scripts/lib/runtime-state-backup.cjs')
+const runtimeBackupResource = (packageJson.build?.extraResources || []).some((resource) =>
+  resource.from === 'scripts/lib/runtime-state-backup.cjs'
+  && resource.to === 'runtime-state-backup/runtime-state-backup.cjs')
 const releaseValidator = read('scripts/validate-release-artifacts.cjs')
 
 assert.match(updateLibrary, /crypto\.sign\(null, bytes, privateKey\)/, 'update manifests must use detached Ed25519 signatures')
@@ -54,6 +57,7 @@ assert.match(backupLibrary, /backup-manifest\.json/, 'state backups must carry a
 assert.match(backupLibrary, /symbolic_link_not_followed/, 'state backups must skip symlink traversal without following targets')
 assert.match(backupLibrary, /skippedEntries/, 'state backups must record skipped symlink entries in the manifest')
 assert.match(backupLibrary, /Backup file checksum mismatch/, 'state backups must fail verification after tampering')
+assert.equal(runtimeBackupResource, true, 'packaged app must include the runtime backup helper used by background snapshots')
 assert.match(backupLibrary, /pre-restore/, 'forced restores must preserve the previous state directory')
 
 assert.equal(scripts['release:update-manifest'], 'node scripts/generate-update-manifest.cjs')

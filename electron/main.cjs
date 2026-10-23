@@ -2003,6 +2003,7 @@ function startControlServerProcess(serverEntry) {
       CONTROL_CENTER_EXIT_ON_PORT_ERROR: process.env.CONTROL_CENTER_EXIT_ON_PORT_ERROR || '1',
       AUTOMNIA_DESKTOP_SERVER_CHILD: '1',
       AUTOMNIA_DESKTOP_SERVER_PARENT_PID: String(process.pid),
+      AUTOMNIA_RESOURCES_PATH: process.resourcesPath,
       CONTROL_CENTER_STARTUP_TRACE: process.env.CONTROL_CENTER_STARTUP_TRACE || '1',
       ELECTRON_RUN_AS_NODE: '1',
     },

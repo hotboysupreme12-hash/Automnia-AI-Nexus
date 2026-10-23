@@ -33,6 +33,7 @@ test('SIGTERM after runtime API shutdown still closes and exits the server', asy
     signalShutdownInFlight: false,
     console: { log() {}, warn() {} },
     setTimeout, clearTimeout,
+    runtimeStateBackupService: { stopScheduler: () => { calls.push('stop-backups') } },
     closeControlServerForShutdown: async () => { calls.push('close') },
     runtimeRecoveryService: { shutdownControlCenterRuntime: async () => { calls.push('cleanup') } },
     process: { exitCode: undefined, exit: () => calls.push('exit') },
@@ -42,7 +43,7 @@ test('SIGTERM after runtime API shutdown still closes and exits the server', asy
   vm.runInContext(handler, context)
   vm.runInContext("handleControlCenterShutdown('SIGTERM')", context)
   await new Promise(resolve => setImmediate(resolve))
-  assert.deepEqual(calls, ['close', 'cleanup', 'exit'])
+  assert.deepEqual(calls, ['stop-backups', 'close', 'cleanup', 'exit'])
 })
 
 test('startup failures receive full quit cleanup; second instances do not touch the running app', () => {

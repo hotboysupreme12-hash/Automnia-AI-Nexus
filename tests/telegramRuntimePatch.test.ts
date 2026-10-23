@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import test from 'node:test'
+import { ScriptTarget, transpileModule } from 'typescript'
 import {
   TELEGRAM_AGENT_ROUTING_HELPER,
   TELEGRAM_PROGRESS_STATUS_HELPER,
@@ -11,7 +12,7 @@ import {
 const workspace = process.cwd()
 const controlPlane = fs.readFileSync(path.join(workspace, 'server', 'controlPlane.ts'), 'utf8')
 const distRoot = path.join(workspace, 'vendor', 'openclaw', 'dist')
-const botMessageBundle = fs.readdirSync(distRoot)
+const rawBotMessageBundle = fs.readdirSync(distRoot)
   .filter((entry) => /^bot-message-[^.]+\.mjs$/.test(entry))
   .map((entry) => fs.readFileSync(path.join(distRoot, entry), 'utf8'))
   .find((source) => source.includes('const buildTelegramMessageContext = async') && source.includes('function resolveTelegramInboundBody') && source.includes('const hasFinalResponse =')) || ''
@@ -19,12 +20,29 @@ const telegramCommandBundle = fs.readdirSync(distRoot)
   .filter((entry) => entry.endsWith('.mjs'))
   .map((entry) => fs.readFileSync(path.join(distRoot, entry), 'utf8'))
   .find((source) => source.includes('const registerTelegramNativeCommands =') && source.includes('for (const pluginCommand of pluginCatalog.selectedCommands)')) || ''
+const telegramTransformStart = controlPlane.indexOf('function patchedTelegramBotRuntimeSource(source: string) {')
+const telegramTransformEnd = controlPlane.indexOf('\nfunction openClawPackageRootCandidates()', telegramTransformStart)
+assert.ok(telegramTransformStart >= 0 && telegramTransformEnd > telegramTransformStart, 'Control Center should expose a bounded Telegram runtime patch transformer')
+const telegramTransformSource = transpileModule(
+  controlPlane.slice(telegramTransformStart, telegramTransformEnd),
+  { compilerOptions: { target: ScriptTarget.ES2022 } },
+).outputText
+const patchTelegramBundle = new Function(
+  'TELEGRAM_AGENT_ROUTING_HELPER',
+  'TELEGRAM_PROGRESS_STATUS_HELPER',
+  'dedupeTelegramProgressHooks',
+  `${telegramTransformSource}\nreturn patchedTelegramBotRuntimeSource;`,
+)(TELEGRAM_AGENT_ROUTING_HELPER, TELEGRAM_PROGRESS_STATUS_HELPER, dedupeTelegramProgressHooks) as (source: string) => string
+const botMessageBundle = patchTelegramBundle(rawBotMessageBundle.replace(
+  /\n\t\tconst telegramModelSelected = typeof onModelSelected === "function" \? \(\.\.\.args\) => \{[\s\S]*?\n\t\t\} : onModelSelected;/,
+  '',
+))
 
 test('Telegram runtime repair targets OpenClaw split message and ingress bundles', () => {
   assert.match(controlPlane, /startsWith\('bot-message-'\)/)
   assert.match(controlPlane, /hasMessageRoutingShape/)
   assert.match(controlPlane, /hasNativeCommandShape/)
-  assert.match(controlPlane, /TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 20/)
+  assert.match(controlPlane, /TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 21/)
   assert.match(controlPlane, /TELEGRAM_PROGRESS_STATUS_HELPER/)
   assert.match(controlPlane, /turn\.dispatchAdmission = turnResult\.admission/)
   assert.match(controlPlane, /const duplicate = \/duplicate\|already\[-_ \]\?handled\/i/)
@@ -40,6 +58,8 @@ test('the bundled OpenClaw shape exposes the routing and native-command insertio
   assert.doesNotMatch(botMessageBundle, /No response was generated for this Telegram message\./)
   assert.match(botMessageBundle, /const telegramModelSelected = typeof onModelSelected === "function"/)
   assert.ok(botMessageBundle.indexOf('const telegramModelSelected =') < botMessageBundle.indexOf('telegramModelSelected\n'))
+  assert.match(botMessageBundle, /beforeDeliver: async \(payload, info\) => applyTelegramVerifiedIdentityDeliveryGuard/)
+  assert.match(botMessageBundle, /config: turn\.cfg,[\s\S]*?agentId: context\.route\.agentId,[\s\S]*?prompt: context\.ctxPayload\.RawBody/)
   assert.match(botMessageBundle, /createAutomniaTelegramProgressStatus/)
   assert.match(telegramCommandBundle, /const registerTelegramNativeCommands =/)
   assert.match(telegramCommandBundle, /for \(const pluginCommand of pluginCatalog\.selectedCommands\)/)

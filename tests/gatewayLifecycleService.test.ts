@@ -298,6 +298,33 @@ test('ensureGatewayRunning releases an unhealthy stale listener before starting 
   assert.equal(harness.service.gatewayStatusSnapshot(true).state, 'healthy')
 })
 
+test('a manual stop cancels an in-flight startup until an explicit start resumes it', async () => {
+  const repairEntered = deferred()
+  const finishRepair = deferred()
+  const harness = createHarness({
+    healthFromActiveProcess: true,
+    onTelegramRepair: async () => {
+      repairEntered.resolve()
+      await finishRepair.promise
+    },
+  })
+
+  const pendingStart = harness.service.ensureGatewayRunning()
+  await repairEntered.promise
+  const stop = await harness.service.stopGatewayRuntime()
+  assert.equal(stop.stopped, true)
+
+  finishRepair.resolve()
+  await pendingStart
+  assert.equal(harness.spawnCalls, 0)
+  assert.equal(harness.service.gatewayStatusSnapshot(false).autoRestartPaused, true)
+
+  await harness.service.ensureGatewayRunning()
+  harness.service.stopGatewayHealthMonitor()
+  assert.equal(harness.spawnCalls, 1)
+  assert.equal(harness.service.gatewayStatusSnapshot(true).autoRestartPaused, false)
+})
+
 test('ensureGatewayRunning attaches to an existing gateway listener that becomes healthy', async () => {
   const harness = createHarness({
     healthSequence: [false, false, true],

@@ -14,7 +14,13 @@ const backupParent = path.resolve(process.env.AUTOMNIA_STATE_BACKUP_DIR || path.
 
 try {
   if (command === 'backup') {
-    const result = createStateBackup({ sourceRoot, backupParent })
+    const result = createStateBackup({
+      sourceRoot,
+      backupParent,
+      onProgress(progress) {
+        if (progress.phase === 'copying') console.log(`[state-backup] progress ${progress.completed}/${progress.total}`)
+      },
+    })
     console.log(`[state-backup] created ${result.backupRoot}`)
     console.log(`[state-backup] verified ${result.manifest.fileCount} file(s), ${result.manifest.totalBytes} byte(s)`)
     if (result.manifest.skippedEntryCount) {

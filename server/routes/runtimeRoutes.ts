@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
 import type { RuntimeActionService } from '../services/runtime/runtimeActionService'
 import type { GatewayActivityFeed } from '../services/runtime/gatewayActivityFeedService'
+import { RuntimeStateBackupBusyError, type RuntimeStateBackupService } from '../services/runtime/runtimeStateBackupService'
 
 type RuntimeRoutesOptions = {
   getRuntimeStatusPayload: (forcePluginRefresh: boolean) => Promise<Record<string, unknown>>
@@ -11,6 +12,7 @@ type RuntimeRoutesOptions = {
   getAgentBackgroundTasks: (targets: Array<{ agentId: string; sessionKey: string }>) => Promise<unknown[]>
   isValidAgentId: (agentId: string) => boolean
   runtimeActions: RuntimeActionService
+  runtimeStateBackups: RuntimeStateBackupService
 }
 
 const RuntimeSessionCloseSchema = z.object({
@@ -43,6 +45,22 @@ const RuntimeAgentTasksQuerySchema = z.object({
 })
 
 export function registerRuntimeRoutes(app: Express, options: RuntimeRoutesOptions) {
+  app.get('/api/openclaw/runtime/backup', (_req, res) => {
+    return apiSuccess(res, options.runtimeStateBackups.status())
+  })
+
+  app.post('/api/openclaw/runtime/backup', async (_req, res) => {
+    try {
+      const result = await options.runtimeStateBackups.createBackup()
+      return apiSuccess(res, result)
+    } catch (error) {
+      if (error instanceof RuntimeStateBackupBusyError) {
+        return apiFailure(res, 409, 'runtime_backup_busy', error.message)
+      }
+      return apiFailure(res, 500, 'runtime_backup_failed', 'Could not start a runtime backup.', String(error))
+    }
+  })
+
   app.post('/api/openclaw/runtime/session/close', async (req, res) => {
     const parsed = RuntimeSessionCloseSchema.safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())

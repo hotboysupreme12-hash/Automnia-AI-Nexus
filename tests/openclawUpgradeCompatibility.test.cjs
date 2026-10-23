@@ -52,7 +52,7 @@ test('canonical agents hydrate for billing sync and round-trip selected tiers an
 test('Telegram 10.6 bundle patch handles authorized /agents and resilient delivery hook markers', () => {
   const warnings = []
   const patchTelegram = load('patchedTelegramBotRuntimeSource', {
-    TELEGRAM_AGENT_ROUTING_HELPER: 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 20;\n//#endregion telegram-agent-routing-patch',
+    TELEGRAM_AGENT_ROUTING_HELPER: 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 21;\n//#endregion telegram-agent-routing-patch',
     TELEGRAM_PROGRESS_STATUS_HELPER: 'var AUTOMNIA_TELEGRAM_PROGRESS_STATUS_PATCH = 1;',
     dedupeTelegramProgressHooks: value => value,
     console: { warn: value => warnings.push(value) },
@@ -77,7 +77,7 @@ test('Telegram 10.6 bundle patch handles authorized /agents and resilient delive
 })
 test('Telegram 10.6 patch declares the model-selection callback before dispatch uses it', () => {
   const patchTelegram = load('patchedTelegramBotRuntimeSource', {
-    TELEGRAM_AGENT_ROUTING_HELPER: 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 20;\n//#endregion telegram-agent-routing-patch',
+    TELEGRAM_AGENT_ROUTING_HELPER: 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 21;\n//#endregion telegram-agent-routing-patch',
     TELEGRAM_PROGRESS_STATUS_HELPER: 'var AUTOMNIA_TELEGRAM_PROGRESS_STATUS_PATCH = 1;',
     dedupeTelegramProgressHooks: value => value,
     console: { warn() {} },

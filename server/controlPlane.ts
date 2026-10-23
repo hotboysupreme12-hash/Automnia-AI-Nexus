@@ -43,6 +43,7 @@ import { registerPartyManagementRoutes } from './routes/partyManagementRoutes'
 import { registerPluginRoutes } from './routes/pluginRoutes'
 import { registerProviderAuthRoutes } from './routes/providerAuthRoutes'
 import { registerRuntimeRoutes } from './routes/runtimeRoutes'
+import { createRuntimeStateBackupService } from './services/runtime/runtimeStateBackupService'
 import { registerSkillRoutes } from './routes/skillRoutes'
 import { registerSpeechRoutes } from './routes/speechRoutes'
 import { createControlFilesService } from './services/controlFilesService'
@@ -323,7 +324,7 @@ const HOME_DIR = process.env.USERPROFILE || process.env.HOME || WORKSPACE_ROOT
 const NATIVE_OPENCLAW_STATE_ROOT = path.join(HOME_DIR, '.openclaw')
 function getElectronResourcesPath() {
   const resourcesPath = (process as NodeJS.Process & { resourcesPath?: unknown }).resourcesPath
-  return typeof resourcesPath === 'string' ? resourcesPath : ''
+  return typeof resourcesPath === 'string' ? resourcesPath : process.env.AUTOMNIA_RESOURCES_PATH?.trim() || ''
 }
 
 function mutableRecord(value: unknown): Record<string, unknown> {
@@ -4662,6 +4663,7 @@ async function closeControlServerForShutdown(reason: string): Promise<void> {
 }
 
 function handleControlCenterShutdown(signalName: 'SIGTERM' | 'SIGINT' | 'SIGHUP' | 'process exit') {
+  runtimeStateBackupService.stopScheduler()
   if (desktopParentWatchdogTimer) {
     clearInterval(desktopParentWatchdogTimer)
     desktopParentWatchdogTimer = null
@@ -11330,7 +11332,7 @@ async function sendClawTalkSmsWithRetry(client, logger, params) {
 
 function patchedTelegramBotRuntimeSource(source: string) {
   let next = source
-  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 20;'
+  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 21;'
   const routingHelperPattern = /var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = \d+;[\s\S]*?\/\/#endregion telegram-agent-routing-patch/
   if (routingHelperPattern.test(next)) {
     next = next.replace(routingHelperPattern, TELEGRAM_AGENT_ROUTING_HELPER)
@@ -11693,22 +11695,26 @@ function patchedTelegramBotRuntimeSource(source: string) {
     console.warn('[plugins/telegram] agent route patch skipped: no current routing or native-command insertion point was patched')
     return source
   }
-  const identityDeliveryMarker = /([ \t]*)beforeDeliver: async \(payload\) => payload,\r?\n[ \t]*onBeforeDeliverCancelled: \(payload, info\) => \{/u
+  const identityDeliveryMarker = /([ \t]*)beforeDeliver: async \(payload\) => payload,/u
   const identityDeliveryMatch = next.match(identityDeliveryMarker)
   if (identityDeliveryMatch) {
     const indent = identityDeliveryMatch[1]
     const nestedIndent = `${indent}\t`
+    const dispatchTurnStart = next.lastIndexOf('async function runTelegramDispatchTurn(turn)', identityDeliveryMatch.index)
+    const usesTurnContext = dispatchTurnStart >= 0
+    const identityConfig = usesTurnContext ? 'turn.cfg' : 'cfg'
+    const identityAgentId = usesTurnContext ? 'context.route.agentId' : 'route.agentId'
+    const identityPrompt = usesTurnContext ? 'context.ctxPayload.RawBody' : 'ctxPayload.RawBody'
     next = next.replace(
       identityDeliveryMarker,
       [
         `${indent}beforeDeliver: async (payload, info) => applyTelegramVerifiedIdentityDeliveryGuard({`,
         `${nestedIndent}payload,`,
         `${nestedIndent}info,`,
-        `${nestedIndent}config: cfg,`,
-        `${nestedIndent}agentId: route.agentId,`,
-        `${nestedIndent}prompt: ctxPayload.RawBody`,
+        `${nestedIndent}config: ${identityConfig},`,
+        `${nestedIndent}agentId: ${identityAgentId},`,
+        `${nestedIndent}prompt: ${identityPrompt}`,
         `${indent}}),`,
-        `${indent}onBeforeDeliverCancelled: (payload, info) => {`,
       ].join('\n'),
     )
   } else if (!next.includes('applyTelegramVerifiedIdentityDeliveryGuard({') && source.includes('beforeDeliver: async (payload) => payload,')) {
@@ -18443,6 +18449,23 @@ const runtimeActionService = createRuntimeActionService({
   tryRestartGatewayService,
 })
 
+const runtimeBackupHelperPath = [
+  path.join(getElectronResourcesPath(), 'runtime-state-backup', 'runtime-state-backup.cjs'),
+  process.env.CONTROL_CENTER_APP_ROOT ? path.join(process.env.CONTROL_CENTER_APP_ROOT, 'scripts', 'lib', 'runtime-state-backup.cjs') : '',
+  path.join(WORKSPACE_ROOT, 'scripts', 'lib', 'runtime-state-backup.cjs'),
+].find((candidate) => candidate && existsSync(candidate))
+  || path.join(WORKSPACE_ROOT, 'scripts', 'lib', 'runtime-state-backup.cjs')
+const runtimeStateBackupParent = path.resolve(
+  process.env.AUTOMNIA_STATE_BACKUP_DIR?.trim() || path.join(HOME_DIR, 'Automnia Backups'),
+)
+const runtimeStateBackupService = createRuntimeStateBackupService({
+  sourceRoot: OPENCLAW_STATE_ROOT,
+  backupParent: runtimeStateBackupParent,
+  schedulePath: path.join(runtimeStateBackupParent, '.runtime-backup-schedule.json'),
+  helperPath: runtimeBackupHelperPath,
+  getActiveRunCount: () => activeOpenClawRuns.size,
+})
+
 registerRuntimeRoutes(app, {
   getGatewayActivityFeed,
   getAgentBackgroundTasks: async (targets) => {
@@ -18490,7 +18513,9 @@ registerRuntimeRoutes(app, {
   getRuntimeSummaryPayload,
   isValidAgentId,
   runtimeActions: runtimeActionService,
+  runtimeStateBackups: runtimeStateBackupService,
 })
+runtimeStateBackupService.startScheduler()
 
 registerPluginRoutes(app, {
   clawTalkPluginId: CLAWTALK_PLUGIN_ID,
