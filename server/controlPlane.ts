@@ -11090,7 +11090,7 @@ function patchedClawTalkRuntimeSource(source: string) {
 
 
 const CLAWTALK_REPAIR_SIGNATURE_VERSION = 'clawtalk-repair:v13'
-const TELEGRAM_REPAIR_SIGNATURE_VERSION = 'telegram-routing-repair:v12'
+const TELEGRAM_REPAIR_SIGNATURE_VERSION = 'telegram-routing-repair:v13'
 const clawTalkRepairSignatureCache = new Map<string, string>()
 const telegramRepairSignatureCache = new Map<string, string>()
 
@@ -11294,15 +11294,23 @@ async function sendClawTalkSmsWithRetry(client, logger, params) {
 
 function patchedTelegramBotRuntimeSource(source: string) {
   let next = source
-  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 16;'
+  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 17;'
   const routingHelperPattern = /var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = \d+;[\s\S]*?\/\/#endregion telegram-agent-routing-patch/
   if (routingHelperPattern.test(next)) {
     next = next.replace(routingHelperPattern, TELEGRAM_AGENT_ROUTING_HELPER)
   } else if (!next.includes(routingPatchVersion)) {
-    next = next.replace(
+    const helperMarkers = [
       '//#region extensions/telegram/src/group-config-helpers.ts',
-      `${TELEGRAM_AGENT_ROUTING_HELPER}\n//#region extensions/telegram/src/group-config-helpers.ts`,
-    )
+      '//#region extensions/telegram/src/forum-service-message.ts',
+      '//#region extensions/telegram/src/bot-message-context.body.ts',
+    ]
+    const helperMarker = helperMarkers.find((marker) => next.includes(marker))
+      || next.match(/^\/\/#region[^\r\n]*$/m)?.[0]
+    if (helperMarker) {
+      next = next.replace(helperMarker, `${TELEGRAM_AGENT_ROUTING_HELPER}\n${helperMarker}`)
+    } else {
+      console.warn('[plugins/telegram] agent route helper insertion skipped: no stable Telegram bundle marker found')
+    }
   }
   next = next.replace(
     'const wasMentioned = options?.forceWasMentioned === true ? true : computedWasMentioned;',
@@ -11334,7 +11342,7 @@ function patchedTelegramBotRuntimeSource(source: string) {
     const routeApplicationBlock = [
       ...trafficGateRecoveryLines,
       'const telegramAgentRoute = resolveTelegramAgentRouteForMessage({',
-      'cfg: freshCfg,',
+      'cfg,',
       'route,',
       'accountId: account.accountId,',
       'chatId,',
@@ -11350,11 +11358,11 @@ function patchedTelegramBotRuntimeSource(source: string) {
       'route = telegramAgentRoute.route;',
       'bodyResult.rawBody = telegramAgentRoute.rawBody;',
       'bodyResult.bodyText = telegramAgentRoute.bodyText;',
-      'const telegramAgentModelRef = route.modelRef || resolveTelegramAgentModelRef(freshCfg, route.agentId);',
+      'const telegramAgentModelRef = route.modelRef || resolveTelegramAgentModelRef(cfg, route.agentId);',
       'console.log(`[telegram] Agent route selected: agent=${route.agentId} mode=${telegramAgentRoute.reason || "selected"} scope=${route.lastRoutePolicy || "session"} model=${telegramAgentModelRef || "configured-default"}`);',
       '}',
       'bodyResult.bodyText = withTelegramAgentRouteContext({',
-      'config: freshCfg,',
+      'config: cfg,',
       'agentId: route.agentId,',
       'sessionKey: route.sessionKey,',
       'prompt: bodyResult.bodyText',
@@ -11404,6 +11412,15 @@ function patchedTelegramBotRuntimeSource(source: string) {
     ].join('\n\t')
     next = next.replace(noVisibleResponseMarker, `${noVisibleResponseBlock}\n\t${noVisibleResponseMarker}`)
   }
+  const currentNoVisibleResponseMarker = 'const hasFinalResponse = turn.finalAnswerDelivered || sentFallback || turn.suppressSilentReplyFallback || turn.queuedFinal;'
+  if (next.includes(currentNoVisibleResponseMarker) && !next.includes('No response was generated for this Telegram message.')) {
+    const currentNoVisibleResponseBlock = [
+      'if (!sentFallback && !isRoomEvent && !turn.suppressSilentReplyFallback && !turn.queuedFinal && !deliverySummary.delivered) {',
+      'sentFallback = (await deliverFallback(turn, [{ text: "No response was generated for this Telegram message. Please try again; Automnia kept the request on the active route." }], false)).delivered;',
+      '}',
+    ].join('\n\t')
+    next = next.replace(currentNoVisibleResponseMarker, `${currentNoVisibleResponseBlock}\n\t${currentNoVisibleResponseMarker}`)
+  }
   const nativeAgentsCommandMarker = 'const commandDefinition = findCommandByNativeName(command.name, "telegram");\n\t\t\t\tconst rawText = ctx.match?.trim() ?? "";'
   if (!next.includes('const telegramAgentsCommandText = resolveTelegramAgentsCommandResponse({')) {
     const nativeAgentsCommandBlock = [
@@ -11433,8 +11450,44 @@ function patchedTelegramBotRuntimeSource(source: string) {
       console.warn('[plugins/telegram] agents command patch skipped: native command marker not found');
     }
   }
-  if (next !== source && !next.includes(routeApplicationMarker)) {
-    console.warn('[plugins/telegram] agent route patch skipped: route application marker was not inserted')
+  const currentNativeAgentsCommandMarker = 'for (const pluginCommand of pluginCatalog.selectedCommands) bot.command(pluginCommand.command, async (ctx) => {'
+  const currentNativeAgentsPatchMarker = 'var AUTOMNIA_TELEGRAM_AGENTS_COMMAND_PATCH = true;'
+  if (!next.includes(currentNativeAgentsPatchMarker) && next.includes(currentNativeAgentsCommandMarker)) {
+    const currentNativeAgentsCommandBlock = [
+      currentNativeAgentsPatchMarker,
+      'if (nativeEnabled && !nativeCommands.some((command) => normalizeTelegramCommandName(command.name) === "agents")) bot.command("agents", async (ctx) => {',
+      'if (shouldSkipUpdate(ctx) || !ctx.message) return;',
+      'const msg = ctx.message;',
+      'const chatId = msg.chat?.id;',
+      'if (chatId == null) return;',
+      'const isGroup = msg.chat.type === "group" || msg.chat.type === "supergroup";',
+      'const threadSpec = resolveTelegramMessageThreadSpec(msg);',
+      'const resolvedThreadId = threadSpec.scope === "forum" || threadSpec.scope === "direct-messages" ? threadSpec.id : void 0;',
+      'const dmThreadId = threadSpec.scope === "dm" ? threadSpec.id : void 0;',
+      'const routeAgentId = boundRoute?.agentId || resolveAgentRoute({ cfg, channel: "telegram", accountId })?.agentId || "main";',
+      'const telegramAgentsCommandText = resolveTelegramAgentsCommandResponse({',
+      'cfg,',
+      'accountId,',
+      'chatId,',
+      'isGroup,',
+      'resolvedThreadId,',
+      'dmThreadId,',
+      'routeAgentId,',
+      'rawText: typeof ctx.match === "string" ? ctx.match.trim() : ""',
+      '});',
+      'await withTelegramApiErrorLogging({',
+      'operation: "sendMessage",',
+      'runtime,',
+      'fn: () => bot.api.sendMessage(chatId, telegramAgentsCommandText, { ...buildTelegramThreadParams(threadSpec), reply_parameters: { message_id: msg.message_id, allow_sending_without_reply: true } })',
+      '});',
+      '});',
+    ].join('\n\t')
+    next = next.replace(currentNativeAgentsCommandMarker, `${currentNativeAgentsCommandBlock}\n\t${currentNativeAgentsCommandMarker}`)
+  }
+  const routePatchInserted = next.includes(routeApplicationMarker)
+  const nativeAgentsPatchInserted = next.includes(currentNativeAgentsPatchMarker) || next.includes('const telegramAgentsCommandText = resolveTelegramAgentsCommandResponse({')
+  if (next !== source && !routePatchInserted && !nativeAgentsPatchInserted) {
+    console.warn('[plugins/telegram] agent route patch skipped: no current routing or native-command insertion point was patched')
     return source
   }
   const identityDeliveryMarker = 'beforeDeliver: async (payload) => payload,\n\t\t\t\t\t\t\t\t\tonBeforeDeliverCancelled: (payload, info) => {'
@@ -11503,11 +11556,11 @@ async function telegramBotRuntimeFileCandidates() {
     const entries = await fs.readdir(distRoot, { withFileTypes: true }).catch(() => [])
     for (const entry of entries) {
       if (!entry.isFile()) continue
-      // OpenClaw's Telegram entry has shipped under both `bot*.js` and
-      // `telegram-ingress-*.js`. The implementation-shape check in the
-      // repair loop remains the final guard, so discover Telegram-named
-      // direct dist entries instead of relying on one build filename.
-      if (!entry.name.toLowerCase().includes('telegram')) continue
+      // OpenClaw's Telegram implementation is split across the Telegram
+      // ingress bundle and the shared `bot-message-*.js` bundle. The latter
+      // owns routing/mention/body handling, so it must be repaired too.
+      const lowerName = entry.name.toLowerCase()
+      if (!lowerName.includes('telegram') && !lowerName.startsWith('bot-message-')) continue
       files.push(path.join(distRoot, entry.name))
     }
   }
@@ -11534,7 +11587,9 @@ async function repairTelegramAgentRoutingRuntime() {
       continue
     }
     const source = await fs.readFile(entryPath, 'utf-8').catch(() => '')
-    if (!source.includes('const buildTelegramMessageContext = async') || !source.includes('function resolveTelegramInboundBody')) {
+    const hasMessageRoutingShape = source.includes('const buildTelegramMessageContext = async') && source.includes('function resolveTelegramInboundBody')
+    const hasNativeCommandShape = source.includes('const registerTelegramNativeCommands =') && source.includes('const nativeCommandsToHandle =')
+    if (!hasMessageRoutingShape && !hasNativeCommandShape) {
       telegramRepairSignatureCache.set(entryPath, beforeSignature)
       continue
     }

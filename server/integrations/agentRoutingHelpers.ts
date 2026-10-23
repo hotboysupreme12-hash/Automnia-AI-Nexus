@@ -362,8 +362,16 @@ async function resolveClawTalkTrafficGateStatus() {
             var payload = null;
             try { payload = await response.json(); } catch (unused) {}
             var gate = payload && payload.data && typeof payload.data === 'object' ? payload.data : payload;
-            if (response.ok && gate && gate.active === true && gate.messageTrafficAllowed === true) return { allowed: true, transient: false };
-            if (response.ok && gate && gate.blocked === true) return { allowed: false, transient: false, blocked: true };
+            if (response.ok && gate && gate.active === true && gate.messageTrafficAllowed === true) {
+                var allowed = { allowed: true, transient: false };
+                globalThis[TELEGRAM_TRAFFIC_GATE_CACHE_KEY] = { at: Date.now(), value: allowed };
+                return allowed;
+            }
+            if (response.ok && gate && gate.blocked === true) {
+                var blocked = { allowed: false, transient: false, blocked: true };
+                globalThis[TELEGRAM_TRAFFIC_GATE_CACHE_KEY] = { at: Date.now(), value: blocked };
+                return blocked;
+            }
         } catch (unused) {
         } finally {
             if (timer) clearTimeout(timer);
@@ -610,8 +618,11 @@ async function runClawTalkControlCenterOrEmbeddedAgentTurn(options) {
 `.trim()
 
 export const TELEGRAM_AGENT_ROUTING_HELPER = String.raw`
-var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 16;
+var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 17;
 var TELEGRAM_AGENT_ROUTE_MEMORY_KEY = '__openclawTelegramAgentRoutes';
+var TELEGRAM_AGENT_ROUTE_MEMORY_MAX_ENTRIES = 256;
+var TELEGRAM_AGENT_ROUTE_MEMORY_FILE_NAME = 'telegram-agent-routes.json';
+var TELEGRAM_TRAFFIC_GATE_CACHE_KEY = '__openclawTelegramTrafficGateCache';
 function resolveTelegramControlCenterStreamUrl() {
     var url = process.env.CLAWTALK_CONTROL_CENTER_AGENT_TURN_STREAM_URL || process.env.CONTROL_CENTER_AGENT_TURN_STREAM_URL || '';
     if (!String(url || '').trim()) {
@@ -637,8 +648,17 @@ function waitForTelegramTrafficGateRetry(delayMs) {
     return new Promise(function(resolve) { return setTimeout(resolve, delayMs); });
 }
 async function resolveTelegramTrafficGateStatus() {
+    var cache = globalThis[TELEGRAM_TRAFFIC_GATE_CACHE_KEY];
+    var cachedAt = cache && Number(cache.at);
+    var cachedValue = cache && cache.value;
+    var cacheTtl = cachedValue && cachedValue.allowed === true ? 10000 : 1500;
+    if (cachedValue && Number.isFinite(cachedAt) && Date.now() - cachedAt < cacheTtl) return cachedValue;
     var url = resolveTelegramTrafficGateUrl();
-    if (!url || typeof fetch !== 'function') return { allowed: false, transient: true, reason: 'unavailable' };
+    if (!url || typeof fetch !== 'function') {
+        var unavailable = { allowed: false, transient: true, reason: 'unavailable' };
+        globalThis[TELEGRAM_TRAFFIC_GATE_CACHE_KEY] = { at: Date.now(), value: unavailable };
+        return unavailable;
+    }
     var lastStatus = 0;
     for(var attempt = 1; attempt <= 4; attempt++){
         var controller = typeof AbortController === 'function' ? new AbortController() : null;
@@ -661,7 +681,9 @@ async function resolveTelegramTrafficGateStatus() {
         }
         if (attempt < 4) await waitForTelegramTrafficGateRetry(250 * Math.pow(2, attempt - 1));
     }
-    return { allowed: false, transient: true, status: lastStatus };
+    var transient = { allowed: false, transient: true, status: lastStatus };
+    globalThis[TELEGRAM_TRAFFIC_GATE_CACHE_KEY] = { at: Date.now(), value: transient };
+    return transient;
 }
 async function automniaTrafficGateAllowsTelegramMessages() {
     return (await resolveTelegramTrafficGateStatus()).allowed === true;
@@ -721,17 +743,85 @@ function telegramBillingModelData(config, data) {
     if (providers.indexOf('automnia-cloud') === -1) providers.push('automnia-cloud');
     return Object.assign({}, data, { byProvider: byProvider, providers: providers });
 }
+function resolveTelegramAgentRouteMemoryFile() {
+    if (typeof process === 'undefined' || !process.env || typeof process.getBuiltinModule !== 'function') return '';
+    var root = String(process.env.OPENCLAW_STATE_ROOT || process.env.OPENCLAW_STATE_DIR || process.env.OPENCLAW_HOME || '').trim();
+    if (!root) {
+        var home = String(process.env.USERPROFILE || process.env.HOME || '').trim();
+        if (home) root = home.replace(/[\\/]+$/, '') + '/.openclaw';
+    }
+    if (!root) return '';
+    try {
+        var path = process.getBuiltinModule('node:path');
+        return path && typeof path.join === 'function' ? path.join(root, TELEGRAM_AGENT_ROUTE_MEMORY_FILE_NAME) : '';
+    } catch (_error) {
+        return '';
+    }
+}
+function readTelegramAgentRouteMemoryFromDisk(state) {
+    if (state.persistenceLoaded === true) return state;
+    state.persistenceLoaded = true;
+    state.persistenceFile = resolveTelegramAgentRouteMemoryFile();
+    if (!state.persistenceFile || typeof process === 'undefined' || typeof process.getBuiltinModule !== 'function') return state;
+    try {
+        var fs = process.getBuiltinModule('node:fs');
+        if (!fs || typeof fs.readFileSync !== 'function') return state;
+        var saved = JSON.parse(String(fs.readFileSync(state.persistenceFile, 'utf8') || ''));
+        if (saved && typeof saved === 'object' && saved.routes && typeof saved.routes === 'object') {
+            var keys = Object.keys(saved.routes);
+            for(var i = 0; i < keys.length; i++){
+                var key = keys[i];
+                var entry = saved.routes[key];
+                if (entry && typeof entry === 'object' && typeof entry.agentId === 'string' && entry.agentId.trim()) state.routes[key] = {
+                    agentId: entry.agentId.trim(),
+                    alias: String(entry.alias || '').trim(),
+                    updatedAt: String(entry.updatedAt || '').trim()
+                };
+            }
+        }
+    } catch (_error) {
+        // A missing or malformed optional route file must never block Telegram ingress.
+    }
+    return state;
+}
+function persistTelegramAgentRouteMemory(state) {
+    if (!state || !state.routes || typeof state.routes !== 'object') return;
+    var filePath = state.persistenceFile || resolveTelegramAgentRouteMemoryFile();
+    if (!filePath || typeof process === 'undefined' || typeof process.getBuiltinModule !== 'function') return;
+    try {
+        var fs = process.getBuiltinModule('node:fs');
+        var path = process.getBuiltinModule('node:path');
+        if (!fs || !path || typeof fs.mkdirSync !== 'function' || typeof fs.writeFileSync !== 'function' || typeof fs.renameSync !== 'function') return;
+        var entries = Object.keys(state.routes).map(function(key) { return { key: key, value: state.routes[key] }; }).filter(function(entry) {
+            return entry.value && typeof entry.value.agentId === 'string' && entry.value.agentId.trim();
+        }).sort(function(a, b) {
+            return String(b.value.updatedAt || '').localeCompare(String(a.value.updatedAt || ''));
+        }).slice(0, TELEGRAM_AGENT_ROUTE_MEMORY_MAX_ENTRIES);
+        var routes = {};
+        for(var i = 0; i < entries.length; i++) routes[entries[i].key] = entries[i].value;
+        state.routes = routes;
+        var serialized = JSON.stringify({ version: 1, routes: routes }, null, 2) + '\n';
+        fs.mkdirSync(path.dirname(filePath), { recursive: true });
+        var tempPath = filePath + '.tmp-' + String(process.pid || 'gateway');
+        fs.writeFileSync(tempPath, serialized, 'utf8');
+        fs.renameSync(tempPath, filePath);
+    } catch (_error) {
+        // Persistence is best effort; the in-process route remains authoritative.
+    }
+}
 function resolveTelegramAgentRouteMemory() {
     var root = globalThis;
     var state = root[TELEGRAM_AGENT_ROUTE_MEMORY_KEY];
     if (!state || typeof state !== 'object') {
         state = {
-            routes: {}
+            routes: {},
+            persistenceLoaded: false,
+            persistenceFile: ''
         };
         root[TELEGRAM_AGENT_ROUTE_MEMORY_KEY] = state;
     }
     if (!state.routes || typeof state.routes !== 'object') state.routes = {};
-    return state;
+    return readTelegramAgentRouteMemoryFromDisk(state);
 }
 function normalizeTelegramAgentAlias(value) {
     return String(value == null ? '' : value).trim().toLowerCase().replace(/^[@/]+/, '').replace(/[\u0027\u0022\u0060]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -804,6 +894,24 @@ function listTelegramAgentConfigs(config) {
         return entry && typeof entry === 'object' ? Object.assign({ id: id }, entry) : { id: id };
     });
     return [];
+}
+function resolveTelegramAgentConfig(config, agentId) {
+    var requested = String(agentId == null ? '' : agentId).trim();
+    if (!requested) return {};
+    try {
+        if (typeof resolveAgentConfig === 'function') {
+            var external = resolveAgentConfig(config || {}, requested);
+            if (external && typeof external === 'object') return external;
+        }
+    } catch (_error) {
+        // Fall back to the compact roster shape used by the injected bundle.
+    }
+    var list = listTelegramAgentConfigs(config || {});
+    for(var i = 0; i < list.length; i++){
+        var entry = list[i];
+        if (entry && String(entry.id || '').trim() === requested) return entry;
+    }
+    return {};
 }
 function buildTelegramAgentAliases(config, fallbackAgentId) {
     var aliases = [];
@@ -905,6 +1013,7 @@ function resolveTelegramAgentsCommandResponse(params) {
     if (!rest || /^(?:list|help)$/i.test(rest)) return buildTelegramAgentsCommandList(params, routeState);
     if (/^(?:default|main|reset|clear)$/i.test(rest)) {
         delete routeState.state.routes[routeState.routeKey];
+        persistTelegramAgentRouteMemory(routeState.state);
         var defaultAgentId = String(params.routeAgentId || '').trim() || 'main';
         var defaultProfile = buildTelegramAgentsCommandProfile(params.cfg || {}, defaultAgentId);
         return 'Telegram agent reset. Future messages in this chat use ' + defaultProfile.name + ' (' + defaultAgentId + ').\n\nUse /agents to list agents.';
@@ -916,6 +1025,7 @@ function resolveTelegramAgentsCommandResponse(params) {
             alias: parsed.alias,
             updatedAt: new Date().toISOString()
         };
+        persistTelegramAgentRouteMemory(routeState.state);
         var selectedProfile = buildTelegramAgentsCommandProfile(params.cfg || {}, parsed.agentId);
         return 'Telegram agent selected: ' + selectedProfile.name + ' (' + parsed.agentId + ').\nFuture messages in this chat will stay on this agent.\n\nUse /agents to list agents or /agents reset to return to the default.';
     }
@@ -938,7 +1048,7 @@ function modelRefFromTelegramAgentModelSelection(selection) {
     return normalizeTelegramAgentModelRef(selection.primary || selection.model || selection.id || '');
 }
 function resolveTelegramAgentModelRef(config, agentId) {
-    var agent = resolveAgentConfig(config || {}, agentId) || {};
+    var agent = resolveTelegramAgentConfig(config || {}, agentId);
     var agentModel = modelRefFromTelegramAgentModelSelection(agent && agent.model);
     if (agentModel) return agentModel;
     var defaults = config && config.agents && config.agents.defaults ? config.agents.defaults.model : null;
@@ -1118,7 +1228,7 @@ function telegramDisplayModelRef(value) {
     return /^automnia-cloud\//i.test(normalized) ? telegramAutomniaModelLabel(normalized) : normalized;
 }
 function resolveTelegramAgentRouteProfile(config, agentId) {
-    var agent = resolveAgentConfig(config || {}, agentId) || {};
+    var agent = resolveTelegramAgentConfig(config || {}, agentId);
     var identity = agent.identity && typeof agent.identity === 'object' ? agent.identity : {};
     var name = String(identity.name || agent.name || agentId || '').trim();
     var role = normalizeTelegramAgentPurpose(identity.role || agent.role || agent.description || agent.className || agent.behaviorProfile || '') || readTelegramAgentPurposeFromIdentity(agent);
@@ -1310,6 +1420,7 @@ function resolveTelegramAgentRouteForMessage(params) {
     var intent = resolveTelegramAgentRouteIntent(rawPrompt, params.cfg, params.route.agentId);
     if (intent.kind === 'reset') {
         if (Object.prototype.hasOwnProperty.call(routes, routeKey)) delete routes[routeKey];
+        persistTelegramAgentRouteMemory(state);
         var resetPrompt = intent.prompt || 'Use the default Telegram agent for this chat. Reply briefly confirming the switch.';
         return {
             changed: true,
@@ -1326,6 +1437,7 @@ function resolveTelegramAgentRouteForMessage(params) {
             alias: parsed.alias,
             updatedAt: new Date().toISOString()
         };
+        if (parsed.mode === '/') persistTelegramAgentRouteMemory(state);
         var prompt = buildTelegramAgentRoutingPrompt(parsed);
         return {
             changed: true,
@@ -1348,6 +1460,7 @@ function resolveTelegramAgentRouteForMessage(params) {
             bodyText: params.bodyText
         };
         delete routes[routeKey];
+        persistTelegramAgentRouteMemory(state);
     }
     return {
         changed: false,

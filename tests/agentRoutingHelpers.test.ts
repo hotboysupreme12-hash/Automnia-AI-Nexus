@@ -232,6 +232,82 @@ test('Telegram slash routing remains sticky while at-routing is a one-shot overr
   }
 })
 
+test('Telegram sticky agent selections survive a Gateway restart through the state file', () => {
+  const files = new Map<string, string>()
+  const fakeFs = {
+    readFileSync(path: string) {
+      const value = files.get(path)
+      if (value === undefined) throw new Error('ENOENT')
+      return value
+    },
+    mkdirSync() {},
+    writeFileSync(path: string, value: string) {
+      files.set(path, value)
+    },
+    renameSync(from: string, to: string) {
+      const value = files.get(from)
+      if (value === undefined) throw new Error('missing temp file')
+      files.set(to, value)
+      files.delete(from)
+    },
+  }
+  const fakeProcess = {
+    env: { OPENCLAW_STATE_DIR: 'C:\\automnia-state' },
+    pid: 1234,
+    getBuiltinModule(name: string) {
+      if (name === 'node:fs') return fakeFs
+      if (name === 'node:path') return {
+        join: (...parts: string[]) => parts.join('\\'),
+        dirname: (value: string) => value.slice(0, value.lastIndexOf('\\')),
+      }
+      return undefined
+    },
+  }
+  const routeResolver = new Function(
+    'process',
+    `
+      function normalizeAccountId(value) { return String(value || 'default') }
+      function normalizeLowercaseStringOrEmpty(value) { return String(value || '').trim().toLowerCase() }
+      function resolveAgentConfig(config, agentId) {
+        return (config.agents?.list || []).find((agent) => agent.id === agentId) || {}
+      }
+      ${TELEGRAM_AGENT_ROUTING_HELPER}
+      return resolveTelegramAgentRouteForMessage
+    `,
+  )(fakeProcess) as TelegramRouteResolver
+
+  const routingConfig = {
+    agents: {
+      list: [
+        { id: 'hn-coordinator', identity: { name: 'Sarah Cooper' } },
+        { id: 'hn-architect', identity: { name: 'Elena Vasquez' } },
+      ],
+    },
+  }
+  const base = {
+    cfg: routingConfig,
+    route: { agentId: 'hn-coordinator' },
+    accountId: 'default',
+    chatId: 'persisted-chat',
+    senderId: 'persisted-chat',
+    isGroup: false,
+  }
+  const routeState = globalThis as typeof globalThis & { __openclawTelegramAgentRoutes?: unknown }
+  delete routeState.__openclawTelegramAgentRoutes
+  try {
+    const selected = routeResolver({ ...base, rawBody: '/Elena status', bodyText: '/Elena status' })
+    assert.equal(selected.route.agentId, 'hn-architect')
+    assert.match(files.get('C:\\automnia-state\\telegram-agent-routes.json') || '', /hn-architect/)
+
+    delete routeState.__openclawTelegramAgentRoutes
+    const afterRestart = routeResolver({ ...base, rawBody: 'continue', bodyText: 'continue' })
+    assert.equal(afterRestart.reason, 'sticky')
+    assert.equal(afterRestart.route.agentId, 'hn-architect')
+  } finally {
+    delete routeState.__openclawTelegramAgentRoutes
+  }
+})
+
 test('Telegram native /agents lists configured agents and persists a per-chat selection', () => {
   const commandResolver = new Function(`
     function normalizeAccountId(value) { return String(value || 'default') }
