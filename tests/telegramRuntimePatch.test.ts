@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import test from 'node:test'
+import { ScriptTarget, transpileModule } from 'typescript'
 import {
   TELEGRAM_AGENT_ROUTING_HELPER,
   TELEGRAM_PROGRESS_STATUS_HELPER,
@@ -16,7 +17,20 @@ const bundleText = (pattern: RegExp) => {
   assert.ok(name, `missing OpenClaw bundle matching ${pattern}`)
   return fs.readFileSync(path.join(distRoot, name), 'utf8')
 }
-const botMessageBundle = bundleText(/^bot-message-[^/]+\.js$/)
+const telegramTransformStart = controlPlane.indexOf('function patchedTelegramBotRuntimeSource(source: string) {')
+const telegramTransformEnd = controlPlane.indexOf('\nfunction openClawPackageRootCandidates()', telegramTransformStart)
+assert.ok(telegramTransformStart >= 0 && telegramTransformEnd > telegramTransformStart, 'Control Center should expose a bounded Telegram runtime patch transformer')
+const telegramTransformSource = transpileModule(
+  controlPlane.slice(telegramTransformStart, telegramTransformEnd),
+  { compilerOptions: { target: ScriptTarget.ES2022 } },
+).outputText
+const patchTelegramBundle = new Function(
+  'TELEGRAM_AGENT_ROUTING_HELPER',
+  'TELEGRAM_PROGRESS_STATUS_HELPER',
+  'dedupeTelegramProgressHooks',
+  `${telegramTransformSource}\nreturn patchedTelegramBotRuntimeSource;`,
+)(TELEGRAM_AGENT_ROUTING_HELPER, TELEGRAM_PROGRESS_STATUS_HELPER, dedupeTelegramProgressHooks) as (source: string) => string
+const botMessageBundle = patchTelegramBundle(bundleText(/^bot-message-[^/]+\.js$/))
 const telegramIngressBundle = bundleText(/^telegram-ingress-[^/]+\.js$/)
 
 test('Telegram runtime repair targets OpenClaw split message and ingress bundles', () => {

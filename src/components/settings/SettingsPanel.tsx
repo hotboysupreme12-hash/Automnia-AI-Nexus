@@ -24,6 +24,7 @@ import {
   formatAutomniaCreditsFromTokens,
 } from '../../utils/creditDisplay'
 import { restartPluginGateway, runOpenClawPluginCommand } from '../../api/plugins'
+import { apiRequest } from '../../api/client'
 import type {
   CapabilityKey,
   CollaborationMode,
@@ -282,6 +283,15 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   const [usagePriorityBusy, setUsagePriorityBusy] = useState(false)
   const [usagePriorityError, setUsagePriorityError] = useState('')
   const [runtimeSaveBusy, setRuntimeSaveBusy] = useState(false)
+  const [runtimeBackupStatus, setRuntimeBackupStatus] = useState<{
+    state: 'idle' | 'running' | 'deferred' | 'failed'
+    automatic: { enabled: boolean; cadenceDays: number; retention: number }
+    progress: { completed: number; total: number } | null
+    lastBackupAt: string | null
+    lastBackupPath: string | null
+    message: string
+  } | null>(null)
+  const [runtimeBackupBusy, setRuntimeBackupBusy] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmNewPassword, setConfirmNewPassword] = useState('')
@@ -531,6 +541,47 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     resetMission()
     setPendingConfirmation(null)
     setNotice(lastPreferenceSaveResult().ok ? { tone: 'success', text: 'All app preferences and mission defaults were restored. Agents, credentials, plugins, and files were kept.' } : { tone: 'warning', text: lastPreferenceSaveResult().message })
+  }
+
+  const refreshRuntimeBackupStatus = useCallback(async () => {
+    const result = await apiRequest<NonNullable<typeof runtimeBackupStatus>>('/api/openclaw/runtime/backup', { timeoutMs: 10_000 })
+    if (result.ok) setRuntimeBackupStatus(result.data)
+  }, [])
+
+  useEffect(() => {
+    if (activeSection !== 'data') return
+    let disposed = false
+    const refresh = async () => {
+      const result = await apiRequest<NonNullable<typeof runtimeBackupStatus>>('/api/openclaw/runtime/backup', { timeoutMs: 10_000 })
+      if (!disposed && result.ok) setRuntimeBackupStatus(result.data)
+    }
+    void refresh()
+    const interval = window.setInterval(() => void refresh(), runtimeBackupStatus?.state === 'running' ? 3_000 : 30_000)
+    return () => {
+      disposed = true
+      window.clearInterval(interval)
+    }
+  }, [activeSection, runtimeBackupStatus?.state])
+
+  const createRuntimeBackup = async () => {
+    if (runtimeBackupBusy) return
+    setRuntimeBackupBusy(true)
+    setNotice({ tone: 'neutral', text: 'Starting a verified runtime backup…' })
+    try {
+      const result = await apiRequest<NonNullable<typeof runtimeBackupStatus>>('/api/openclaw/runtime/backup', {
+        method: 'POST',
+        body: {},
+        timeoutMs: 15_000,
+      })
+      if (!result.ok) throw new Error(result.error.message)
+      setRuntimeBackupStatus(result.data)
+      setNotice({ tone: result.data.state === 'failed' ? 'error' : result.data.state === 'running' ? 'neutral' : 'success', text: result.data.message })
+    } catch (error) {
+      setNotice({ tone: 'warning', text: error instanceof Error ? error.message : 'Runtime backup could not be started.' })
+      void refreshRuntimeBackupStatus()
+    } finally {
+      setRuntimeBackupBusy(false)
+    }
   }
 
   const createSettingsBackup = () => serializePreferencesBackup({ appearance: uiSettings, activity: readChannelActivitySettings(), voice: speechSettings, registry: registryPreferences, console: consolePreferences, mission: missionDraft })
@@ -873,6 +924,21 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   const renderData = () => (
     <div className="dui-settings-section" id="settings-section-data">
       <SectionHeader section="data" eyebrow="Keep your preferences safe" />
+      <SettingsCard title="Runtime backup" description="Protects Automnia's local agents, sessions, configuration, and runtime history. It is separate from the preferences-only backup below.">
+        <p className="text-sm text-slate-300">Automatic backups run weekly when no agent is active. Automnia keeps the two newest verified snapshots; backups run in the background and wait rather than slow active work. Runtime snapshots can contain local credentials, so keep the backup folder private; copies are not separately encrypted.</p>
+        <div className="dui-settings-metrics">
+          <div><span>Backup status</span><strong>{runtimeBackupStatus?.state === 'running' ? 'In progress' : runtimeBackupStatus?.state === 'failed' ? 'Needs attention' : runtimeBackupStatus?.state === 'deferred' ? 'Waiting for idle' : 'Ready'}</strong></div>
+          <div><span>Last verified backup</span><strong>{runtimeBackupStatus?.lastBackupAt ? new Date(runtimeBackupStatus.lastBackupAt).toLocaleString() : 'Not created yet'}</strong></div>
+          <div><span>Automatic retention</span><strong>{runtimeBackupStatus?.automatic.retention || 2} copies</strong></div>
+        </div>
+        {runtimeBackupStatus?.message && <p role="status" className="text-sm text-slate-300">{runtimeBackupStatus.message}{runtimeBackupStatus.state === 'running' && runtimeBackupStatus.progress?.total ? ` (${runtimeBackupStatus.progress.completed}/${runtimeBackupStatus.progress.total} files)` : ''}</p>}
+        {runtimeBackupStatus?.lastBackupPath && <p className="break-all text-xs text-slate-400">Backup folder: {runtimeBackupStatus.lastBackupPath}</p>}
+        <div className="dui-settings-actions">
+          <button type="button" className="is-primary" disabled={runtimeBackupBusy || runtimeBackupStatus?.state === 'running'} onClick={() => void createRuntimeBackup()}>{runtimeBackupBusy ? 'Starting backup…' : runtimeBackupStatus?.state === 'running' ? 'Backup in progress…' : 'Back up runtime now'}</button>
+          <button type="button" onClick={() => void refreshRuntimeBackupStatus()}>Refresh backup status</button>
+          {runtimeBackupStatus?.lastBackupPath && <button type="button" onClick={() => { void navigator.clipboard.writeText(runtimeBackupStatus.lastBackupPath || '').then(() => setNotice({ tone: 'success', text: 'Backup folder path copied.' }), () => setNotice({ tone: 'warning', text: 'Clipboard is unavailable. Select and copy the backup folder path above.' })) }}>Copy backup location</button>}
+        </div>
+      </SettingsCard>
       <SettingsCard title="Settings backup" description="Only preferences and your current mission draft are included. Agents, saved responses, workspace files, runtime history, and sign-ins are excluded.">
         <div className="dui-settings-metrics"><div><span>Agents</span><strong>{agents.length}</strong></div><div><span>Active team</span><strong>{activePartyIds.length}</strong></div><div><span>Saved responses</span><strong>{responseCount}</strong></div></div>
         <div className="dui-settings-actions"><button type="button" onClick={downloadSettingsBackup}>Download backup</button><button type="button" onClick={() => void copySettingsBackup()}>Copy settings backup</button><button type="button" disabled={backupReading} onClick={() => backupInputRef.current?.click()}>{backupReading ? 'Reading backup…' : 'Import backup'}</button><input ref={backupInputRef} type="file" accept=".json,application/json" hidden onChange={(event) => { void previewSettingsBackup(event.target.files?.[0]); event.target.value = '' }} /></div>

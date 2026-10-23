@@ -201,6 +201,10 @@
         "to": "dist-server"
       },
       {
+        "from": "scripts/lib/runtime-state-backup.cjs",
+        "to": "runtime-state-backup/runtime-state-backup.cjs"
+      },
+      {
         "from": "dist",
         "to": "dist"
       },

@@ -3,6 +3,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
+const { DatabaseSync } = require('node:sqlite')
 const {
   collectSourceFiles,
   createStateBackup,
@@ -49,6 +50,45 @@ test('runtime state backup verifies and restores durable files', () => {
     fs.appendFileSync(path.join(backup.backupRoot, 'openclaw.json'), 'tamper')
     assert.throws(() => verifyStateBackup(backup.backupRoot), /size mismatch|checksum mismatch/)
   } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('runtime backup creates a consistent standalone SQLite snapshot without loading the database into memory', () => {
+  const root = tempRoot('automnia-backup-sqlite-')
+  let database
+  try {
+    const state = createState(root)
+    const databasePath = path.join(state, 'agents', 'alpha', 'openclaw-agent.sqlite')
+    database = new DatabaseSync(databasePath)
+    database.exec('PRAGMA journal_mode = WAL; CREATE TABLE messages (body TEXT);')
+    const insert = database.prepare('INSERT INTO messages VALUES (?)')
+    insert.run('before backup')
+    insert.run('also saved')
+    assert.equal(fs.existsSync(`${databasePath}-wal`), true)
+
+    const backup = createStateBackup({
+      sourceRoot: state,
+      backupParent: path.join(root, 'backups'),
+      backupName: 'snapshot',
+    })
+    const backupDatabasePath = path.join(backup.backupRoot, 'agents', 'alpha', 'openclaw-agent.sqlite')
+    assert.equal(fs.existsSync(`${backupDatabasePath}-wal`), false)
+    assert.equal(fs.existsSync(`${backupDatabasePath}-shm`), false)
+    assert.equal(verifyStateBackup(backup.backupRoot).fileCount, 4)
+    assert.equal(backup.manifest.files.find((entry) => entry.path.endsWith('.sqlite'))?.strategy, 'sqlite-vacuum-into')
+
+    const restoredDatabase = new DatabaseSync(backupDatabasePath, { readOnly: true })
+    assert.equal(restoredDatabase.prepare('PRAGMA integrity_check').get().integrity_check, 'ok')
+    assert.equal(restoredDatabase.prepare('SELECT COUNT(*) AS count FROM messages').get().count, 2)
+    restoredDatabase.close()
+
+    insert.run('after backup')
+    const unchangedSnapshot = new DatabaseSync(backupDatabasePath, { readOnly: true })
+    assert.equal(unchangedSnapshot.prepare('SELECT COUNT(*) AS count FROM messages').get().count, 2)
+    unchangedSnapshot.close()
+  } finally {
+    database?.close()
     fs.rmSync(root, { recursive: true, force: true })
   }
 })
@@ -126,6 +166,26 @@ test('backup validation rejects missing sources, duplicate and unsafe manifest p
     manifest.skippedEntries = [{ path: '../escaped-link', kind: 'symbolic-link', reason: 'symbolic_link_not_followed' }]
     fs.writeFileSync(manifestPath, JSON.stringify(manifest))
     assert.throws(() => verifyStateBackup(backup.backupRoot), /Unsafe skipped backup path/)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('runtime backup refuses to write inside its own source state', () => {
+  const root = tempRoot('automnia-backup-recursion-')
+  try {
+    const state = createState(root)
+    assert.throws(() => createStateBackup({
+      sourceRoot: state,
+      backupParent: path.join(state, 'backups'),
+      backupName: 'snapshot',
+    }), /outside the runtime state directory/)
+    assert.throws(() => createStateBackup({
+      sourceRoot: state,
+      backupParent: path.join(state, '..not-a-parent', 'backups'),
+      backupName: 'snapshot',
+    }), /outside the runtime state directory/)
+    assert.equal(fs.existsSync(path.join(state, 'backups')), false)
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }

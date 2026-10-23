@@ -80,6 +80,8 @@ export type ApiErrorCode =
   | 'plugin_terminal_failed'
   | 'runtime_status_failed'
   | 'runtime_action_failed'
+  | 'runtime_backup_busy'
+  | 'runtime_backup_failed'
   | 'runtime_activity_failed'
   | 'runtime_summary_failed'
   | 'shared_tool_policy_conflict'

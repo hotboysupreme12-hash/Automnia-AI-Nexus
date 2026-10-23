@@ -195,6 +195,8 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
   let gatewayRestartTimer: NodeJS.Timeout | null = null
   let gatewayRestartCount = 0
   let gatewayEnsureInFlight: Promise<void> | null = null
+  let gatewayEnsureInFlightGeneration: number | null = null
+  let gatewayEnsureGeneration = 0
   let gatewayEnsureStartedAtMs = 0
   let gatewayRestartInFlight: Promise<{ restarted: boolean; detail: string }> | null = null
   let gatewayProcessOwnedByControlCenter = false
@@ -266,6 +268,10 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
 
   function pauseAutoRestart(): void {
     gatewayAutoRestartPaused = true
+    // Cancel an ensure attempt already awaiting startup work. Clearing only
+    // the retry timer can otherwise let that attempt spawn after an operator
+    // has stopped the Gateway.
+    gatewayEnsureGeneration += 1
     clearRestartTimer()
   }
 
@@ -283,8 +289,15 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
     options.pushGatewayLog('lifecycle', message)
   }
 
+  function resumeAutoRestart(): void {
+    if (gatewayAutoRestartPaused) {
+      gatewayAutoRestartPaused = false
+      gatewayEnsureGeneration += 1
+    }
+  }
+
   function resumeAutoRestartAfterConfigRepair(): void {
-    gatewayAutoRestartPaused = false
+    resumeAutoRestart()
     gatewayRestartCount = 0
     options.pushGatewayLog('lifecycle', 'OpenClaw config repaired and validated; gateway startup may continue')
   }
@@ -691,23 +704,43 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
     gatewayRestartTimer = setTimeout(() => {
       gatewayRestartTimer = null
       markGatewayRestartOutcome('started')
-      void ensureGatewayRunning()
+      void ensureGatewayRunningIfAllowed()
     }, backoffMs)
   }
 
   async function ensureGatewayRunning(): Promise<void> {
-    if (gatewayEnsureInFlight) return gatewayEnsureInFlight
+    resumeAutoRestart()
+    return ensureGatewayRunningIfAllowed()
+  }
+
+  function isGatewayEnsureCurrent(generation: number): boolean {
+    return generation === gatewayEnsureGeneration && !gatewayAutoRestartPaused && !options.isShuttingDown()
+  }
+
+  async function ensureGatewayRunningIfAllowed(): Promise<void> {
+    if (gatewayAutoRestartPaused || options.isShuttingDown()) return
+    const generation = gatewayEnsureGeneration
+    if (gatewayEnsureInFlight) {
+      const pending = gatewayEnsureInFlight
+      if (gatewayEnsureInFlightGeneration === generation) return pending
+      await pending.catch(() => undefined)
+      if (!isGatewayEnsureCurrent(generation)) return
+      return ensureGatewayRunningIfAllowed()
+    }
     gatewayEnsureStartedAtMs = Date.now()
-    gatewayEnsureInFlight = ensureGatewayRunningInner().finally(() => {
+    gatewayEnsureInFlightGeneration = generation
+    gatewayEnsureInFlight = ensureGatewayRunningInner(generation).finally(() => {
       gatewayEnsureInFlight = null
+      gatewayEnsureInFlightGeneration = null
       gatewayEnsureStartedAtMs = 0
     })
     return gatewayEnsureInFlight
   }
 
-  async function ensureGatewayRunningInner(): Promise<void> {
-    gatewayAutoRestartPaused = false
+  async function ensureGatewayRunningInner(generation: number): Promise<void> {
+    if (!isGatewayEnsureCurrent(generation)) return
     if (await isGatewayHealthy()) {
+      if (!isGatewayEnsureCurrent(generation)) return
       gatewayStartupGraceUntilMs = 0
       if (gatewayLastRestartOutcome === 'scheduled' || gatewayLastRestartOutcome === 'started') {
         markGatewayRestartOutcome('succeeded')
@@ -718,6 +751,7 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
     const existingGatewayPid = gatewayProcess?.pid
     if (existingGatewayPid && options.isPidAlive(existingGatewayPid)) {
       if (await waitForGatewayStartupHealth()) return
+      if (!isGatewayEnsureCurrent(generation)) return
       if (gatewayProcess?.pid === existingGatewayPid && options.isPidAlive(existingGatewayPid)) {
         const detail = `managed Gateway pid=${existingGatewayPid} is still running without confirmed health; refusing to spawn a duplicate`
         log.warn(`[gateway] ${detail}`)
@@ -736,6 +770,7 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
         return { ok: false as const, repaired: [] as string[] }
       }),
     ])
+    if (!isGatewayEnsureCurrent(generation)) return
     const repairedClawTalkManifests = clawTalkRepairResult.repaired
     const repairedTelegramRuntimes = telegramRepairResult.repaired
     let clawTalkRegistryRefreshed = false
@@ -751,6 +786,7 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
       log.info(`[plugins/telegram] repaired agent-routing runtime in ${repairedTelegramRuntimes.length} install(s)`)
     }
     const healthy = await isGatewayHealthy()
+    if (!isGatewayEnsureCurrent(generation)) return
     if (healthy) {
       const repairedRuntimeLabels = [
         repairedClawTalkManifests.length ? 'ClawTalk' : '',
@@ -777,11 +813,14 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
     }
 
     const portBusy = await options.checkTcpPort('127.0.0.1', options.gatewayHttpPort, 700)
+    if (!isGatewayEnsureCurrent(generation)) return
     if (portBusy) {
       const listenerPid = await gatewayListenerPidForPort(options.gatewayHttpPort).catch(() => null)
+      if (!isGatewayEnsureCurrent(generation)) return
       if (listenerPid && options.isPidAlive(listenerPid) && await waitForExistingGatewayHealth(listenerPid)) {
         return
       }
+      if (!isGatewayEnsureCurrent(generation)) return
 
       const now = Date.now()
       if (now - lastGatewayPortReleaseAt < 5000) {
@@ -791,6 +830,7 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
       lastGatewayPortReleaseAt = now
       log.warn(`[gateway] port ${options.gatewayHttpPort} accepts TCP but did not answer /health; releasing stale listener`)
       const released = await options.tryReleaseGatewayPort()
+      if (!isGatewayEnsureCurrent(generation)) return
       log.warn(`[gateway] stale listener release ${released.released ? 'ok' : 'failed'}: ${released.detail}`)
       clearListenerPidCache()
       if (!released.released && (await options.checkTcpPort('127.0.0.1', options.gatewayHttpPort, 700))) {
@@ -804,13 +844,16 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
     options.pushGatewayLog('lifecycle', `starting requested on port ${options.gatewayHttpPort}`)
     try {
       await options.sweepOpenClawSessionLocks('gateway startup', { minIntervalMs: 0, minAgeMs: 0 })
+      if (!isGatewayEnsureCurrent(generation)) return
       await options.ensureGatewayStartupPluginDefaults({
         ...(clawTalkRepairResult.ok ? { repairedClawTalkManifests } : {}),
         ...(telegramRepairResult.ok ? { repairedTelegramRuntimes } : {}),
         clawTalkRegistryRefreshed,
       })
+      if (!isGatewayEnsureCurrent(generation)) return
       recordGatewayStartupEvent('config', 'started', 'Validating OpenClaw config')
       const configReady = await options.prepareOpenClawConfigForGatewayStartup('gateway startup')
+      if (!isGatewayEnsureCurrent(generation)) return
       if (!configReady) {
         gatewayStartupGraceUntilMs = 0
         if (gatewayLastRestartOutcome === 'scheduled' || gatewayLastRestartOutcome === 'started') {
@@ -853,7 +896,7 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
         if (repaired && !options.isShuttingDown()) {
           options.pushGatewayLog('lifecycle', 'retrying gateway startup after config repair')
           setTimeout(() => {
-            void ensureGatewayRunning()
+            void ensureGatewayRunningIfAllowed()
           }, 500).unref?.()
         }
       }
@@ -1088,6 +1131,7 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
 
   async function tryRestartGatewayServiceInner(optionsArg: { force?: boolean; allowExternalTakeover?: boolean; reason?: string } = {}): Promise<{ restarted: boolean; detail: string }> {
     try {
+      if (optionsArg.force) resumeAutoRestart()
       const logs: string[] = []
       const restartReason = optionsArg.reason || (optionsArg.force ? 'forced gateway restart' : 'gateway restart recovery')
       const startup = await waitForGatewayStartupHealthIfStarting()
@@ -1144,7 +1188,7 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
       const released = await options.tryReleaseGatewayPort()
       logs.push(`[gateway-port-release] ${released.released ? 'ok' : 'failed'} | ${released.detail}`)
       gatewayRestartCount = 0
-      await ensureGatewayRunning()
+      await ensureGatewayRunningIfAllowed()
       let restarted = await isGatewayHealthy()
       if (!restarted) {
         const startupAfterRestart = await waitForGatewayStartupHealthIfStarting()
@@ -1180,7 +1224,7 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
   }
 
   function resumeAfterPluginInstallRepair(actions: string[]) {
-    gatewayAutoRestartPaused = false
+    resumeAutoRestart()
     actions.push('resumed gateway auto-start after plugin install repair')
   }
 

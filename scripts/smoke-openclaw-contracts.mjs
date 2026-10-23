@@ -46,6 +46,7 @@ function assertOrderedIncludes(text, needles, label) {
 }
 
 const server = read('server/controlPlane.ts')
+const compactionPolicy = read('server/services/gateway/compactionPolicy.ts')
 const runtimeRoutes = read('server/routes/runtimeRoutes.ts')
 const routingHelpers = read('server/integrations/agentRoutingHelpers.ts')
 const gatewayLifecycleService = read('server/services/gateway/gatewayLifecycleService.ts')
@@ -98,7 +99,8 @@ assertIncludes(server, 'reserveTokensFloor: AUTOMNIA_COMPACTION_RESERVE_TOKENS',
 assertIncludes(server, 'defaults.compaction.reserveTokensFloor = AUTOMNIA_COMPACTION_RESERVE_TOKENS', 'Automnia should migrate the previous compaction reserve')
 assertIncludes(server, 'defaults.compaction.reserveTokensFloor ??= AUTOMNIA_COMPACTION_RESERVE_TOKENS', 'Automnia should default missing compaction reserves safely')
 assertIncludes(server, "midTurnPrecheck: { enabled: true }", 'Automnia should precheck tool-loop context pressure')
-assertIncludes(server, "maxActiveTranscriptBytes: '8mb'", 'Automnia should rotate oversized active transcripts')
+assertIncludes(compactionPolicy, "AUTOMNIA_MAX_ACTIVE_TRANSCRIPT_BYTES = '1mb'", 'Automnia should rotate oversized active transcripts before they overwhelm hosted model context')
+assertIncludes(server, 'maxActiveTranscriptBytes = AUTOMNIA_MAX_ACTIVE_TRANSCRIPT_BYTES', 'Control Center should apply its conservative transcript rotation limit')
 assertIncludes(server, 'contextTokens: AUTOMNIA_OPENCLAW_CONTEXT_TOKENS', 'every model should inherit the bounded context budget')
 assertIncludes(server, 'applyTokenEfficientContextLimits(entry)', 'every agent entry should inherit bounded context limits')
 assertIncludes(server, 'AUTOMNIA_CONTEXT_PRUNING_MIN_TOOL_CHARS = 2000', 'old tool results should become hard-clearable before they dominate the context')

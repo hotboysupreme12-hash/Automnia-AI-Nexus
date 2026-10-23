@@ -23,13 +23,49 @@ function normalizeRelative(value) {
 
 function isWithin(root, candidate) {
   const relative = path.relative(path.resolve(root), path.resolve(candidate))
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
+  return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative))
 }
 
 function sha256File(filePath) {
   const hash = crypto.createHash('sha256')
-  hash.update(fs.readFileSync(filePath))
-  return hash.digest('hex')
+  const descriptor = fs.openSync(filePath, 'r')
+  const buffer = Buffer.allocUnsafe(1024 * 1024)
+  try {
+    let position = 0
+    while (true) {
+      const bytesRead = fs.readSync(descriptor, buffer, 0, buffer.length, position)
+      if (!bytesRead) break
+      hash.update(buffer.subarray(0, bytesRead))
+      position += bytesRead
+    }
+    return hash.digest('hex')
+  } finally {
+    fs.closeSync(descriptor)
+  }
+}
+
+function isSqliteDatabase(relative) {
+  return /\.(?:sqlite|sqlite3|db)$/i.test(relative)
+}
+
+function isSqliteSidecar(relative) {
+  return /\.(?:sqlite|sqlite3|db)-(?:wal|shm)$/i.test(relative)
+}
+
+function sqliteStringLiteral(value) {
+  return `'${String(value).replace(/'/g, "''")}'`
+}
+
+function createSqliteSnapshot(sourcePath, targetPath) {
+  const { DatabaseSync } = require('node:sqlite')
+  ensureDirectory(path.dirname(targetPath))
+  const database = new DatabaseSync(sourcePath, { readOnly: true })
+  try {
+    database.exec('PRAGMA busy_timeout = 5000')
+    database.exec(`VACUUM INTO ${sqliteStringLiteral(targetPath)}`)
+  } finally {
+    database.close()
+  }
 }
 
 function timestampSlug(date = new Date()) {
@@ -84,24 +120,62 @@ function createStateBackup(options) {
   const backupName = options.backupName || `automnia-state-${timestampSlug()}`
   const backupRoot = path.resolve(backupParent, backupName)
   if (!isWithin(backupParent, backupRoot)) throw new Error('Backup destination escapes backup parent')
+  const backupParentRelativeToSource = path.relative(sourceRoot, backupParent)
+  if (isWithin(sourceRoot, backupParent)) {
+    throw new Error('Backup destination must be outside the runtime state directory')
+  }
   if (fs.existsSync(backupRoot)) throw new Error(`Backup destination already exists: ${backupRoot}`)
 
   const skippedEntries = []
-  const files = collectSourceFiles(sourceRoot, {
+  const discoveredFiles = collectSourceFiles(sourceRoot, {
     ...options,
     onSkippedEntry(entry) {
       skippedEntries.push(entry)
       if (typeof options.onSkippedEntry === 'function') options.onSkippedEntry(entry)
     },
   })
+  const sqliteDatabases = new Set(discoveredFiles
+    .filter((file) => isSqliteDatabase(file.relative))
+    .map((file) => file.relative.toLowerCase()))
+  const files = discoveredFiles.filter((file) => {
+    if (!isSqliteSidecar(file.relative)) return true
+    const databasePath = file.relative.slice(0, -4).toLowerCase()
+    return !sqliteDatabases.has(databasePath)
+  })
+  ensureDirectory(backupParent)
+  if (typeof fs.statfsSync === 'function') {
+    const estimatedBytes = files.reduce((total, file) => total + fs.statSync(file.fullPath).size, 0)
+    const filesystem = fs.statfsSync(backupParent)
+    const availableBytes = filesystem.bavail * filesystem.bsize
+    const requiredBytes = estimatedBytes + Math.max(128 * 1024 * 1024, Math.ceil(estimatedBytes * 0.05))
+    if (availableBytes < requiredBytes) {
+      throw new Error(`Not enough free disk space for a safe runtime backup (need about ${requiredBytes} bytes including margin).`)
+    }
+  }
   ensureDirectory(backupRoot)
   const manifestFiles = []
   try {
-    for (const file of files) {
-      const stat = fs.statSync(file.fullPath)
-      const sha256 = sha256File(file.fullPath)
-      copyFileVerified(file.fullPath, path.join(backupRoot, file.relative), sha256)
-      manifestFiles.push({ path: file.relative, size: stat.size, sha256 })
+    for (let index = 0; index < files.length; index += 1) {
+      const file = files[index]
+      const targetPath = path.join(backupRoot, file.relative)
+      let size
+      let sha256
+      let strategy
+      if (isSqliteDatabase(file.relative)) {
+        createSqliteSnapshot(file.fullPath, targetPath)
+        const targetStat = fs.statSync(targetPath)
+        size = targetStat.size
+        sha256 = sha256File(targetPath)
+        strategy = 'sqlite-vacuum-into'
+      } else {
+        const stat = fs.statSync(file.fullPath)
+        const expectedSha256 = sha256File(file.fullPath)
+        copyFileVerified(file.fullPath, targetPath, expectedSha256)
+        size = stat.size
+        sha256 = expectedSha256
+      }
+      manifestFiles.push({ path: file.relative, size, sha256, ...(strategy ? { strategy } : {}) })
+      options.onProgress?.({ phase: 'copying', completed: index + 1, total: files.length })
     }
     const manifest = {
       schema: 1,
@@ -115,6 +189,7 @@ function createStateBackup(options) {
       files: manifestFiles,
     }
     fs.writeFileSync(path.join(backupRoot, 'backup-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 })
+    options.onProgress?.({ phase: 'complete', completed: files.length, total: files.length })
     return { backupRoot, manifest }
   } catch (error) {
     fs.rmSync(backupRoot, { recursive: true, force: true })

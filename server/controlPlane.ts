@@ -43,6 +43,7 @@ import { registerPartyManagementRoutes } from './routes/partyManagementRoutes'
 import { registerPluginRoutes } from './routes/pluginRoutes'
 import { registerProviderAuthRoutes } from './routes/providerAuthRoutes'
 import { registerRuntimeRoutes } from './routes/runtimeRoutes'
+import { createRuntimeStateBackupService } from './services/runtime/runtimeStateBackupService'
 import { registerSkillRoutes } from './routes/skillRoutes'
 import { registerSpeechRoutes } from './routes/speechRoutes'
 import { createControlFilesService } from './services/controlFilesService'
@@ -323,7 +324,7 @@ const HOME_DIR = process.env.USERPROFILE || process.env.HOME || WORKSPACE_ROOT
 const NATIVE_OPENCLAW_STATE_ROOT = path.join(HOME_DIR, '.openclaw')
 function getElectronResourcesPath() {
   const resourcesPath = (process as NodeJS.Process & { resourcesPath?: unknown }).resourcesPath
-  return typeof resourcesPath === 'string' ? resourcesPath : ''
+  return typeof resourcesPath === 'string' ? resourcesPath : process.env.AUTOMNIA_RESOURCES_PATH?.trim() || ''
 }
 
 function mutableRecord(value: unknown): Record<string, unknown> {
@@ -4641,6 +4642,7 @@ async function closeControlServerForShutdown(reason: string): Promise<void> {
 }
 
 function handleControlCenterShutdown(signalName: 'SIGTERM' | 'SIGINT' | 'SIGHUP' | 'process exit') {
+  runtimeStateBackupService.stopScheduler()
   if (desktopParentWatchdogTimer) {
     clearInterval(desktopParentWatchdogTimer)
     desktopParentWatchdogTimer = null
@@ -18392,6 +18394,23 @@ const runtimeActionService = createRuntimeActionService({
   tryRestartGatewayService,
 })
 
+const runtimeBackupHelperPath = [
+  path.join(getElectronResourcesPath(), 'runtime-state-backup', 'runtime-state-backup.cjs'),
+  process.env.CONTROL_CENTER_APP_ROOT ? path.join(process.env.CONTROL_CENTER_APP_ROOT, 'scripts', 'lib', 'runtime-state-backup.cjs') : '',
+  path.join(WORKSPACE_ROOT, 'scripts', 'lib', 'runtime-state-backup.cjs'),
+].find((candidate) => candidate && existsSync(candidate))
+  || path.join(WORKSPACE_ROOT, 'scripts', 'lib', 'runtime-state-backup.cjs')
+const runtimeStateBackupParent = path.resolve(
+  process.env.AUTOMNIA_STATE_BACKUP_DIR?.trim() || path.join(HOME_DIR, 'Automnia Backups'),
+)
+const runtimeStateBackupService = createRuntimeStateBackupService({
+  sourceRoot: OPENCLAW_STATE_ROOT,
+  backupParent: runtimeStateBackupParent,
+  schedulePath: path.join(runtimeStateBackupParent, '.runtime-backup-schedule.json'),
+  helperPath: runtimeBackupHelperPath,
+  getActiveRunCount: () => activeOpenClawRuns.size,
+})
+
 registerRuntimeRoutes(app, {
   getGatewayActivityFeed,
   getAgentBackgroundTasks: async (targets) => {
@@ -18439,7 +18458,9 @@ registerRuntimeRoutes(app, {
   getRuntimeSummaryPayload,
   isValidAgentId,
   runtimeActions: runtimeActionService,
+  runtimeStateBackups: runtimeStateBackupService,
 })
+runtimeStateBackupService.startScheduler()
 
 registerPluginRoutes(app, {
   clawTalkPluginId: CLAWTALK_PLUGIN_ID,
