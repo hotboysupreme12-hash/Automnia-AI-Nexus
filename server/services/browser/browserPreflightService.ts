@@ -105,7 +105,7 @@ export function createBrowserPreflightService(options: BrowserPreflightServiceOp
     const gatewayOk = await options.isGatewayHealthy()
     return {
       gatewayOk,
-      gatewayNormalized: gatewayOk ? 'gateway health ok (http)' : 'gateway /health did not respond',
+      gatewayNormalized: gatewayOk ? 'gateway health ok (http)' : 'gateway /healthz did not respond',
       code: gatewayOk ? 0 : 1,
     }
   }

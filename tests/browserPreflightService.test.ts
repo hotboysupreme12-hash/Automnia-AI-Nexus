@@ -76,7 +76,7 @@ test('browser preflight reports offline gateway with redacted recovery detail', 
   assert.equal(result.ok, false)
   assert.equal(result.reason, 'gateway_unhealthy')
   assert.match(result.message, /gateway is not healthy/i)
-  assert.match(result.detail || '', /gateway \/health did not respond/)
+  assert.match(result.detail || '', /gateway \/healthz did not respond/)
   assert.match(result.detail || '', /restart failed with \[redacted\]/)
   assert.doesNotMatch(result.detail || '', /secret-gateway-token/)
 })

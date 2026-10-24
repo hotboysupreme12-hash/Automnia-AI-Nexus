@@ -566,6 +566,10 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
         // used by the Control Center so traffic-gate checks cannot be spoofed
         // by an unauthenticated local request.
         CONTROL_CENTER_TOKEN: options.controlCenterToken,
+        // Let the managed Gateway expose its live listener before expensive
+        // plugin/channel sidecars finish loading.  Sidecars still start
+        // asynchronously after the listener is available.
+        AUTOMNIA_MANAGED_GATEWAY_STARTUP: 'defer',
         // The injected ClawTalk and Telegram helpers prefer this alias when
         // both names exist. Refresh it as well so a stale parent-process
         // value cannot make the local traffic gate appear unauthorized.
@@ -828,7 +832,7 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
         return
       }
       lastGatewayPortReleaseAt = now
-      log.warn(`[gateway] port ${options.gatewayHttpPort} accepts TCP but did not answer /health; releasing stale listener`)
+      log.warn(`[gateway] port ${options.gatewayHttpPort} accepts TCP but did not answer /healthz; releasing stale listener`)
       const released = await options.tryReleaseGatewayPort()
       if (!isGatewayEnsureCurrent(generation)) return
       log.warn(`[gateway] stale listener release ${released.released ? 'ok' : 'failed'}: ${released.detail}`)

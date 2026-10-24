@@ -47,7 +47,7 @@ test('fetchGatewayHealthPayload marks healthy JSON responses', async () => {
 
   const result = await service.fetchGatewayHealthPayload()
 
-  assert.equal(urls[0], 'http://127.0.0.1:19998/health')
+  assert.equal(urls[0], 'http://127.0.0.1:19998/healthz')
   assert.equal(result.healthy, true)
   assert.deepEqual(result.payload?.plugins?.loaded, ['sms'])
   assert.equal(markedHealthy, 1)

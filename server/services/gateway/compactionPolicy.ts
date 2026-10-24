@@ -6,9 +6,12 @@
  * impossible to compact, even when the model itself has room for it. Keep a
  * real recovery reserve while allowing the configured model catalog to expose
  * its full context window; OpenClaw still clamps each request to the model's
- * actual provider limit.
+ * actual provider limit. The desktop Telegram path deliberately uses a
+ * bounded 128K working budget: a million-token advertised window is not a
+ * safe live prompt budget for a long-running channel session and can exhaust
+ * the worker before compaction gets a chance to run.
  */
-export const AUTOMNIA_OPENCLAW_CONTEXT_TOKENS_DEFAULT = 1_048_576
+export const AUTOMNIA_OPENCLAW_CONTEXT_TOKENS_DEFAULT = 131_072
 export const AUTOMNIA_COMPACTION_RESERVE_TOKENS = 20_000
 export const AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS = 20_000
 // Keep the active transcript comfortably below hosted model context limits.

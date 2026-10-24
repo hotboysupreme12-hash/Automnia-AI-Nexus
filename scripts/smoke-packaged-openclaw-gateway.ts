@@ -228,7 +228,7 @@ async function waitForGatewayHealth(timeoutMs: number) {
   const startedAt = Date.now()
   while (Date.now() - startedAt < timeoutMs) {
     try {
-      const response = await fetch(`http://127.0.0.1:${gatewayPort}/health`, { signal: AbortSignal.timeout(1500) })
+      const response = await fetch(`http://127.0.0.1:${gatewayPort}/healthz`, { signal: AbortSignal.timeout(1500) })
       if (response.ok) return await response.json()
     } catch {
       // The Gateway can take a while to migrate a brand-new state directory.
@@ -277,7 +277,7 @@ try {
   assert.equal(routeBody?.data?.usagePriority, 'provider_first')
 
   const healthPayload = await waitForGatewayHealth(90_000) as { ok?: boolean; status?: string }
-  assert.equal(healthPayload?.ok, true, 'packaged Gateway /health must report ok after route reconciliation')
+  assert.equal(healthPayload?.ok, true, 'packaged Gateway /healthz must report ok after route reconciliation')
   assert.doesNotMatch(output, /Another gateway \(pid \d+\) already owns this state directory/i, 'route reconciliation must not launch a second Gateway during first-start migrations')
   assert.doesNotMatch(output, /OpenClaw route changed but the Gateway did not become ready/i)
   assert.doesNotMatch(output, /EPERM: operation not permitted, open .*resources\\openclaw\\dist\\extensions\\codex/i)

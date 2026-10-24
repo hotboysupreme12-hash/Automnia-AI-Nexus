@@ -324,7 +324,7 @@ const HOME_DIR = process.env.USERPROFILE || process.env.HOME || WORKSPACE_ROOT
 const NATIVE_OPENCLAW_STATE_ROOT = path.join(HOME_DIR, '.openclaw')
 function getElectronResourcesPath() {
   const resourcesPath = (process as NodeJS.Process & { resourcesPath?: unknown }).resourcesPath
-  return typeof resourcesPath === 'string' ? resourcesPath : process.env.AUTOMNIA_RESOURCES_PATH?.trim() || ''
+  return typeof resourcesPath === 'string' ? resourcesPath : ''
 }
 
 function mutableRecord(value: unknown): Record<string, unknown> {
@@ -3735,10 +3735,11 @@ const GATEWAY_STARTUP_HEALTH_GRACE_MS = (() => {
   return Number.isFinite(configured) ? Math.max(15_000, Math.min(180_000, configured)) : 75_000
 })()
 const GATEWAY_STARTUP_HEALTH_CONFIRM_TIMEOUT_MS = (() => {
-  // Bundled Gateway cold starts can take over a minute while loading channel
-  // plugins and durable stores; do not declare them failed before they bind HTTP.
-  const configured = Number(process.env.CONTROL_CENTER_GATEWAY_STARTUP_HEALTH_CONFIRM_TIMEOUT_MS || 120_000)
-  return Number.isFinite(configured) ? Math.max(10_000, Math.min(180_000, configured)) : 120_000
+  // Multi-agent Gateway cold starts can spend several minutes preparing durable
+  // stores before /healthz answers; keep the managed process alive through that
+  // startup instead of declaring it failed while it is still making progress.
+  const configured = Number(process.env.CONTROL_CENTER_GATEWAY_STARTUP_HEALTH_CONFIRM_TIMEOUT_MS || 300_000)
+  return Number.isFinite(configured) ? Math.max(10_000, Math.min(300_000, configured)) : 300_000
 })()
 const GATEWAY_STARTUP_HEALTH_POLL_MS = (() => {
   const configured = Number(process.env.CONTROL_CENTER_GATEWAY_STARTUP_HEALTH_POLL_MS || 1_500)
@@ -9391,6 +9392,19 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
   ensureBrowserRuntimeDefaults(config)
   ensureTrustedPluginAllowlist(config)
   const defaults = config.agents.defaults
+  const defaultsRecord = defaults as Record<string, unknown>
+  const sessionStore = isLooseRecord(defaultsRecord.sessionStore) ? defaultsRecord.sessionStore : {}
+  if (typeof sessionStore.agentId !== 'string' || !isValidAgentId(sessionStore.agentId)) {
+    const systemAgent = isLooseRecord(defaultsRecord.systemAgent) ? defaultsRecord.systemAgent : null
+    const heartbeat = isLooseRecord(defaultsRecord.heartbeat) ? defaultsRecord.heartbeat : null
+    const preferredAgentId = [
+      systemAgent?.agentId,
+      heartbeat?.agentId,
+      ...agentEntriesFromLooseConfig(config).map((entry) => entry.id),
+    ].find((agentId): agentId is string => typeof agentId === 'string' && isValidAgentId(agentId))
+    if (preferredAgentId) sessionStore.agentId = preferredAgentId
+  }
+  defaultsRecord.sessionStore = sessionStore
 
   defaults.sandbox = { mode: 'off', scope: 'agent', workspaceAccess: 'rw' }
   config.tools ??= {}
@@ -11400,7 +11414,7 @@ function patchedTelegramBotRuntimeSource(source: string) {
     'chatId,',
     'isGroup,',
     'resolvedThreadId,',
-    'dmThreadId,',
+    'dmThreadId: threadSpec.scope === "dm" ? threadSpec.id : void 0,',
     'routeAgentId: route.agentId,',
     'rawText: telegramAgentsCommandMatch[1] || ""',
     '});',
@@ -11622,7 +11636,12 @@ function patchedTelegramBotRuntimeSource(source: string) {
     if (next.includes(pipelineInitializationEnd)) {
       next = next.replace(pipelineInitializationEnd, `\n\t\t});\n\t\t${modelSelectedDeclaration}\n\t\tconst turnResult = await runChannelInboundEvent({`)
     } else {
-      console.warn('[plugins/telegram] model-selection callback wrapper skipped: reply-pipeline completion marker not found')
+      const deliveryErrorMarker = '\t\tconst handleDeliveryError = async (err, info) => {'
+      if (next.includes(deliveryErrorMarker)) {
+        next = next.replace(deliveryErrorMarker, `\t\t${modelSelectedDeclaration}\n${deliveryErrorMarker}`)
+      } else {
+        console.warn('[plugins/telegram] model-selection callback wrapper skipped: no stable dispatch marker found')
+      }
     }
     next = next.replace('\n\t\t\t\t\t\tonModelSelected\n', '\n\t\t\t\t\t\ttelegramModelSelected\n')
   }
@@ -11651,7 +11670,7 @@ function patchedTelegramBotRuntimeSource(source: string) {
     ].join('\n\t\t\t\t');
     if (next.includes(nativeAgentsCommandMarker)) {
       next = next.replace(nativeAgentsCommandMarker, nativeAgentsCommandBlock);
-    } else if (source.includes(nativeAgentsCommandMarker) || source.includes(currentNativeAgentsCommandMarker) || source.includes('bot.command(')) {
+    } else {
       console.warn('[plugins/telegram] agents command patch skipped: native command marker not found');
     }
   }
@@ -11695,26 +11714,22 @@ function patchedTelegramBotRuntimeSource(source: string) {
     console.warn('[plugins/telegram] agent route patch skipped: no current routing or native-command insertion point was patched')
     return source
   }
-  const identityDeliveryMarker = /([ \t]*)beforeDeliver: async \(payload\) => payload,/u
+  const identityDeliveryMarker = /([ \t]*)beforeDeliver: async \(payload\) => payload,\r?\n[ \t]*onBeforeDeliverCancelled: \(payload, info\) => \{/u
   const identityDeliveryMatch = next.match(identityDeliveryMarker)
   if (identityDeliveryMatch) {
     const indent = identityDeliveryMatch[1]
     const nestedIndent = `${indent}\t`
-    const dispatchTurnStart = next.lastIndexOf('async function runTelegramDispatchTurn(turn)', identityDeliveryMatch.index)
-    const usesTurnContext = dispatchTurnStart >= 0
-    const identityConfig = usesTurnContext ? 'turn.cfg' : 'cfg'
-    const identityAgentId = usesTurnContext ? 'context.route.agentId' : 'route.agentId'
-    const identityPrompt = usesTurnContext ? 'context.ctxPayload.RawBody' : 'ctxPayload.RawBody'
     next = next.replace(
       identityDeliveryMarker,
       [
         `${indent}beforeDeliver: async (payload, info) => applyTelegramVerifiedIdentityDeliveryGuard({`,
         `${nestedIndent}payload,`,
         `${nestedIndent}info,`,
-        `${nestedIndent}config: ${identityConfig},`,
-        `${nestedIndent}agentId: ${identityAgentId},`,
-        `${nestedIndent}prompt: ${identityPrompt}`,
+        `${nestedIndent}config: cfg,`,
+        `${nestedIndent}agentId: route.agentId,`,
+        `${nestedIndent}prompt: ctxPayload.RawBody`,
         `${indent}}),`,
+        `${indent}onBeforeDeliverCancelled: (payload, info) => {`,
       ].join('\n'),
     )
   } else if (!next.includes('applyTelegramVerifiedIdentityDeliveryGuard({') && source.includes('beforeDeliver: async (payload) => payload,')) {
@@ -16809,7 +16824,7 @@ function listMissionCronReconciliationSnapshotFromStateDb(): MissionCronReconcil
         enabled,
         ${payloadMessageColumn.select},
         job_json
-      FROM cron_jobs
+      FROM ${cronJobsCompatibleSource(db)}
       WHERE description LIKE '%control-center mission=%'
         ${payloadMessageColumn.missionPredicate}
         OR job_json LIKE '%control-center mission=%'
@@ -16857,7 +16872,7 @@ function listActiveControlCenterCronExpiryRowsFromStateDb(): ControlCenterCronEx
         description,
         ${payloadMessageColumn.select},
         job_json
-      FROM cron_jobs
+      FROM ${cronJobsCompatibleSource(db)}
       WHERE enabled = 1
         AND (
           description LIKE '%control-center mission=%'
@@ -17151,7 +17166,7 @@ function listRehydratableControlCenterShiftsFromStateDb(): Shift[] {
         payload_timeout_seconds,
         delivery_mode,
         job_json
-      FROM cron_jobs
+      FROM ${cronJobsCompatibleSource(db)}
       WHERE enabled = 1
         AND (
           description LIKE '%control-center shift=%'

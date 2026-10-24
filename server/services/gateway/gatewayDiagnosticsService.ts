@@ -327,24 +327,31 @@ export function createGatewayDiagnosticsService(options: GatewayDiagnosticsServi
   }
 
   async function fetchGatewayHealthPayload(): Promise<{ healthy: boolean; payload: GatewayHealthPayload | null }> {
-    try {
-      const res = await fetchImpl(`http://127.0.0.1:${options.gatewayHttpPort}/health`, {
-        signal: AbortSignal.timeout(healthTimeoutMs),
-      })
-      if (!res.ok) return { healthy: false, payload: null }
-      const text = await res.text()
+    // OpenClaw 2026.10.x exposes the liveness probe at /healthz. Keep a
+    // narrow /health fallback for older bundled runtimes, but never make the
+    // legacy path the primary probe: on newer runtimes it is a protected
+    // Gateway route that can leave a plain HTTP client waiting until timeout.
+    for (const path of ['/healthz', '/health']) {
       try {
-        const body = JSON.parse(text) as GatewayHealthPayload
-        const healthy = body.ok === true || /^ok$/i.test(String(body.status || ''))
-        if (healthy) options.onHealthy?.()
-        return { healthy, payload: body }
+        const res = await fetchImpl(`http://127.0.0.1:${options.gatewayHttpPort}${path}`, {
+          signal: AbortSignal.timeout(healthTimeoutMs),
+        })
+        if (!res.ok) continue
+        const text = await res.text()
+        try {
+          const body = JSON.parse(text) as GatewayHealthPayload
+          const healthy = body.ok === true || /^ok$/i.test(String(body.status || ''))
+          if (healthy) options.onHealthy?.()
+          return { healthy, payload: body }
+        } catch {
+          const healthy = /\bok\b/i.test(text)
+          if (healthy) options.onHealthy?.()
+          return { healthy, payload: null }
+        }
       } catch {
-        const healthy = /\bok\b/i.test(text)
-        if (healthy) options.onHealthy?.()
-        return { healthy, payload: null }
+        // Gateway may be offline or still starting; try the compatibility path
+        // once before surfacing the structured unhealthy status.
       }
-    } catch {
-      // Gateway may be offline or still starting; callers surface the structured status.
     }
     return { healthy: false, payload: null }
   }

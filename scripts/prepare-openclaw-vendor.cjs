@@ -296,6 +296,133 @@ async function hydratePublishedPackageArtifacts(packageJson) {
   }
 }
 
+function ensureGatewayLifecycleStartupImportIsDeferred() {
+  const distRoot = path.join(vendorRoot, 'dist')
+  const cliRoot = path.join(distRoot, 'cli')
+  if (!fs.existsSync(distRoot)) throw new Error('[openclaw-vendor] Missing OpenClaw dist directory for Gateway lifecycle startup patch')
+  if (!fs.existsSync(cliRoot)) throw new Error('[openclaw-vendor] Missing OpenClaw dist/cli directory for Gateway lifecycle startup patch')
+
+  const runBundleName = fs.readdirSync(distRoot).find((name) => {
+    if (!/^run-[^/]+\.mjs$/.test(name)) return false
+    const source = fs.readFileSync(path.join(distRoot, name), 'utf8')
+    return source.includes('async function prepareGatewayRunLoop(params)') && source.includes('import("./cli/gateway-lifecycle.runtime.js")')
+  })
+  if (!runBundleName) throw new Error('[openclaw-vendor] Could not locate OpenClaw Gateway run bundle for lifecycle startup patch')
+
+  const lifecyclePath = path.join(cliRoot, 'gateway-lifecycle.runtime.js')
+  if (!fs.existsSync(lifecyclePath)) throw new Error('[openclaw-vendor] Missing OpenClaw Gateway lifecycle runtime bundle')
+  const lifecycleSource = fs.readFileSync(lifecyclePath, 'utf8')
+  const findImport = (exportName) => {
+    const line = lifecycleSource.split(/\r?\n/).find((candidate) => candidate.includes(` as ${exportName}`))
+    if (!line) throw new Error(`[openclaw-vendor] Could not resolve lifecycle bootstrap import ${exportName}`)
+    const aliasMatch = line.match(new RegExp(`\\b([A-Za-z_$][\\w$]*)\\s+as\\s+${exportName}\\b`))
+    const moduleMatch = line.match(/from "\.\.\/([^"]+)"/)
+    if (!aliasMatch || !moduleMatch) throw new Error(`[openclaw-vendor] Could not parse lifecycle bootstrap import ${exportName}`)
+    return { alias: aliasMatch[1], module: moduleMatch[1] }
+  }
+  const truthyEnv = findImport('isTruthyEnvValue')
+  const containerEnvironment = findImport('isContainerEnvironment')
+  const detectSupervisor = findImport('detectGatewayRespawnSupervisor')
+  const detectSupervisorIdentity = findImport('detectGatewayRespawnSupervisorIdentity')
+  if (detectSupervisor.module !== detectSupervisorIdentity.module) {
+    throw new Error('[openclaw-vendor] Gateway supervisor bootstrap imports are split unexpectedly')
+  }
+
+  const bootstrapPath = path.join(cliRoot, 'gateway-lifecycle-bootstrap.runtime.js')
+  fs.writeFileSync(bootstrapPath, [
+    `import { ${truthyEnv.alias} as isTruthyEnvValue } from "../${truthyEnv.module}";`,
+    `import { ${containerEnvironment.alias} as isContainerEnvironment } from "../${containerEnvironment.module}";`,
+    `import { ${detectSupervisor.alias} as detectGatewayRespawnSupervisor, ${detectSupervisorIdentity.alias} as detectGatewayRespawnSupervisorIdentity } from "../${detectSupervisor.module}";`,
+    '',
+    'function resolveGatewayRestartDecision() {',
+    '\tif (isTruthyEnvValue(process.env.OPENCLAW_NO_RESPAWN)) return {',
+    '\t\tmode: "disabled",',
+    '\t\treason: "no-respawn"',
+    '\t};',
+    '\tconst supervisor = detectGatewayRespawnSupervisor(process.env);',
+    '\tif (supervisor) return {',
+    '\t\tmode: "supervised",',
+    '\t\tsupervisor',
+    '\t};',
+    '\treturn {',
+    '\t\tmode: "disabled",',
+    '\t\treason: "unmanaged",',
+    '\t\tdetail: process.platform === "win32" ? "win32: detached respawn unsupported without Scheduled Task markers" : isContainerEnvironment() ? "container: use in-process restart to keep PID 1 alive" : "unmanaged: use in-process restart to keep custom supervisor PID tracking stable"',
+    '\t};',
+    '}',
+    '',
+    'export { detectGatewayRespawnSupervisorIdentity, resolveGatewayRestartDecision };',
+    '',
+  ].join('\n'))
+
+  const runPath = path.join(distRoot, runBundleName)
+  let runSource = fs.readFileSync(runPath, 'utf8')
+  const bootstrapLoader = 'const lifecycleBootstrapRuntimeLoader = createLazyImportLoader(() => import("./cli/gateway-lifecycle-bootstrap.runtime.js"));'
+  if (!runSource.includes(bootstrapLoader)) {
+    const lifecycleLoader = 'const lifecycleRuntimeLoader = createLazyImportLoader(() => import("./cli/gateway-lifecycle.runtime.js"));'
+    if (!runSource.includes(lifecycleLoader)) throw new Error('[openclaw-vendor] Gateway lifecycle runtime loader marker changed')
+    runSource = runSource.replace(lifecycleLoader, `${bootstrapLoader}\n${lifecycleLoader}`)
+
+    const functionStart = runSource.indexOf('async function prepareGatewayRunLoop(params) {')
+    const functionEnd = runSource.indexOf('\nfunction createGatewayRestartRecovery', functionStart)
+    if (functionStart < 0 || functionEnd < 0) throw new Error('[openclaw-vendor] Gateway run-loop preparation markers changed')
+    const lineEnding = runSource.includes('\r\n') ? '\r\n' : '\n'
+    const replacement = [
+      'async function prepareGatewayRunLoop(params) {',
+      '\tconst lifecycleBootstrapRuntime = await measureGatewayBootstrapStep("cli.bootstrap.lifecycle-runtime", () => lifecycleBootstrapRuntimeLoader.load());',
+      '\tconst supervisor = lifecycleBootstrapRuntime.detectGatewayRespawnSupervisorIdentity(process.env, process.platform, { includeLinuxOpenClawGatewayServiceMarker: true });',
+      '\tconst supervisorMode = supervisor?.kind ?? null;',
+      '\tconst restartDecision = lifecycleBootstrapRuntime.resolveGatewayRestartDecision();',
+      '\tconst lock = await measureGatewayBootstrapStep("cli.bootstrap.gateway-lock", () => acquireGatewayLock({',
+      '\t\tport: params.lockPort,',
+      '\t\tlistenerMode: supervisorMode ? "supervised" : "foreground",',
+      '\t\tsupervisor,',
+      '\t\t...params.lifecycleLockDeadlineMs !== void 0 ? { lifecycleDeadlineMs: params.lifecycleLockDeadlineMs } : {}',
+      '\t}));',
+      '\tconst lifecycleRuntime = await measureGatewayBootstrapStep("cli.bootstrap.lifecycle-runtime-post-lock", () => lifecycleRuntimeLoader.load());',
+      '\treturn {',
+      '\t\tlifecycleRuntime,',
+      '\t\tsupervisor,',
+      '\t\tsupervisorMode,',
+      '\t\trestartDecision,',
+      '\t\tlock',
+      '\t};',
+      '}',
+    ].join(lineEnding)
+    runSource = `${runSource.slice(0, functionStart)}${replacement}${runSource.slice(functionEnd)}`
+  }
+  const sidecarStartupMarker = 'const envSidecarStartupMode = isChannelStartupSuppressedByEnvironment() ? "defer" : "start";'
+  const managedSidecarStartupMarker = 'const envSidecarStartupMode = isChannelStartupSuppressedByEnvironment() || process.env.AUTOMNIA_MANAGED_GATEWAY_STARTUP === "defer" ? "defer" : "start";'
+  if (runSource.includes(sidecarStartupMarker)) {
+    runSource = runSource.replace(sidecarStartupMarker, managedSidecarStartupMarker)
+  } else if (!runSource.includes(managedSidecarStartupMarker)) {
+    throw new Error('[openclaw-vendor] Gateway sidecar startup mode marker changed')
+  }
+  fs.writeFileSync(runPath, runSource)
+}
+
+function ensureGatewayManagedSidecarStartupGrace() {
+  const distRoot = path.join(vendorRoot, 'dist')
+  const startupBundleName = fs.readdirSync(distRoot).find((name) => {
+    if (!/^server-startup-post-attach-[^/]+\.mjs$/.test(name)) return false
+    const source = fs.readFileSync(path.join(distRoot, name), 'utf8')
+    return source.includes('const startSidecars = () => params.minimalTestGateway ? startStartupLog().then(() => pluginRegistry) : setImmediate$1().then(async () => {')
+  })
+  if (!startupBundleName) {
+    const alreadyPatched = fs.readdirSync(distRoot).some((name) => {
+      if (!/^server-startup-post-attach-[^/]+\.mjs$/.test(name)) return false
+      return fs.readFileSync(path.join(distRoot, name), 'utf8').includes('params.sidecarStartup === "defer" ? new Promise((resolve) => globalThis.setTimeout(resolve, 5000))')
+    })
+    if (alreadyPatched) return
+    throw new Error('[openclaw-vendor] Gateway post-attach sidecar startup marker changed')
+  }
+  const startupPath = path.join(distRoot, startupBundleName)
+  const source = fs.readFileSync(startupPath, 'utf8')
+  const marker = 'const startSidecars = () => params.minimalTestGateway ? startStartupLog().then(() => pluginRegistry) : setImmediate$1().then(async () => {'
+  const replacement = 'const startSidecars = () => params.minimalTestGateway ? startStartupLog().then(() => pluginRegistry) : (params.sidecarStartup === "defer" ? new Promise((resolve) => globalThis.setTimeout(resolve, 5000)) : Promise.resolve()).then(() => setImmediate$1()).then(async () => {'
+  fs.writeFileSync(startupPath, source.replace(marker, replacement))
+}
+
 function ensureAutomniaRelayThoughtSignatureSupport() {
   // OpenClaw moved the OpenAI-compatible serializer into @openclaw/ai.
   // That path is patched after production dependencies are validated below.
@@ -799,6 +926,8 @@ async function main() {
   const shrinkwrapSha256 = sha256File(shrinkwrapPath)
   validateVendorSource(lock)
   const packageArtifacts = await hydratePublishedPackageArtifacts(packageJson)
+  ensureGatewayLifecycleStartupImportIsDeferred()
+  ensureGatewayManagedSidecarStartupGrace()
   ensureAutomniaRelayThoughtSignatureSupport()
   ensureAutomniaRelayRetrySafetySupport()
   ensureAutomniaRelayCompactContextSupport()

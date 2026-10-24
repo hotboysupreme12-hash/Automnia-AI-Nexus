@@ -20,7 +20,7 @@ assert.match(
 assert.match(
   diagnosticsService,
   /fetchGatewayHealthPayload/,
-  'Gateway diagnostics service should own /health probing',
+  'Gateway diagnostics service should own /healthz probing',
 )
 assert.match(
   diagnosticsService,
