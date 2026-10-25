@@ -12,9 +12,9 @@ test('signature patch is idempotent and rejects incompatible runtime updates', (
 
 test('bundled serializer preserves Gemini signature and tool result across multiple tool steps', async () => {
   const root = new URL('../vendor/openclaw/node_modules/@openclaw/ai/dist/', import.meta.url)
-  const name = readdirSync(root).find((entry) => /^openai-completions-stream-.*\.mjs$/.test(entry))
+  const name = readdirSync(root).find((entry) => /^openai-completions-transport-.*\.mjs$/.test(entry))
   assert.ok(name)
-  const { g: convertMessages } = await import(new URL(name, root).href)
+  const { c: convertMessages } = await import(new URL(name, root).href)
   const model = { id: 'gemini-3.8-flash', provider: 'automnia-cloud', api: 'openai-completions', input: ['text'], reasoning: true }
   const messages = [{ role: 'user', content: 'Run a diagnostic', timestamp: 1 }]
   for (let step = 0; step < 2; step++) {

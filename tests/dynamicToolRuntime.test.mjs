@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict'
+import { readdirSync } from 'node:fs'
 import test from 'node:test'
-import { c as compact, l as controls, x as catalogRef } from '../vendor/openclaw/dist/local-model-lean-B52ThaBJ.js'
 
 test('bundled runtime defers schemas, discovers and executes an authorized tool, rejects missing tools', async () => {
+  const root = new URL('../vendor/openclaw/dist/', import.meta.url)
+  const name = readdirSync(root).find((entry) => /^tool-search-(?!index-).*\.mjs$/.test(entry))
+  assert.ok(name)
+  const { t: compact, n: controls, m: catalogRef } = await import(new URL(name, root).href)
   const config = { tools: { toolSearch: { enabled: true, mode: 'tools', searchDefaultLimit: 3, maxSearchLimit: 8 } } }
   const ref = catalogRef()
   const bridge = controls({ config, catalogRef: ref })

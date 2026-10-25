@@ -51,9 +51,27 @@ const args = [
   ...tests,
 ]
 
+const testEnv = {
+  ...process.env,
+  NO_PROXY: '127.0.0.1,localhost,::1',
+  no_proxy: '127.0.0.1,localhost,::1',
+}
+for (const key of [
+  'HTTP_PROXY',
+  'HTTPS_PROXY',
+  'ALL_PROXY',
+  'http_proxy',
+  'https_proxy',
+  'all_proxy',
+  'NODE_USE_ENV_PROXY',
+  'NODE_EXTRA_CA_CERTS',
+]) {
+  delete testEnv[key]
+}
+
 const result = spawnSync(process.execPath, args, {
   cwd: root,
-  env: process.env,
+  env: testEnv,
   stdio: 'inherit',
   windowsHide: true,
 })
