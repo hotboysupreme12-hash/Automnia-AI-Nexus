@@ -1,35 +1,34 @@
 export const AUTOMNIA_CREDITS_PROVIDER_ID = 'automnia-cloud'
-export const AUTOMNIA_CREDITS_MODEL_ID = `${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-3.8-flash`
-export const AUTOMNIA_FRONTIER_MODEL_ID = `${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-4-argon`
+export const AUTOMNIA_SWIFT_MODEL_ID = `${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-3.8-flash`
+export const AUTOMNIA_CREDITS_MODEL_ID = `${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-4-hydrogen`
+export const AUTOMNIA_PRO_MODEL_ID = `${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-4-argon`
+export const AUTOMNIA_FRONTIER_MODEL_ID = `${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-4-carbon`
 
 // The relay can serve these named Automnia tiers for accounts using hosted
 // credits. Credits users may choose any of the named Automnia tiers; the
 // fallback chain remains bounded to Automnia-hosted candidates.
 export const AUTOMNIA_RELAY_MODEL_IDS = [
   AUTOMNIA_FRONTIER_MODEL_ID,
+  AUTOMNIA_PRO_MODEL_ID,
   AUTOMNIA_CREDITS_MODEL_ID,
-  `${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-3.7-flash`,
-  `${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-3.6-flash`,
+  AUTOMNIA_SWIFT_MODEL_ID,
 ] as const
 
 export const AUTOMNIA_RELAY_MODEL_LABELS: Record<string, string> = {
   [AUTOMNIA_FRONTIER_MODEL_ID]: 'Automnia Frontier',
-  [`${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-3.8-flash`]: 'Automnia Prime',
-  [`${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-3.7-flash`]: 'Automnia Balanced',
-  [`${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-3.6-flash`]: 'Automnia Swift',
-  [`${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-2.5-flash`]: 'Automnia Classic',
+  [AUTOMNIA_PRO_MODEL_ID]: 'Automnia Pro',
+  [AUTOMNIA_CREDITS_MODEL_ID]: 'Automnia Balanced',
+  [AUTOMNIA_SWIFT_MODEL_ID]: 'Automnia Swift',
 }
 
 // These are hosted relay model IDs, not direct Google/Vertex routes. Keeping
 // the fallback chain in this policy makes the credits-only boundary explicit
 // everywhere the route is projected (Gateway, Telegram menus, and billing).
 export const AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS = [
-  `${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-3.6-flash`,
-  `${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-2.5-flash`,
+  AUTOMNIA_SWIFT_MODEL_ID,
 ] as const
 export const AUTOMNIA_CREDITS_MODEL_IDS = [
   AUTOMNIA_CREDITS_MODEL_ID,
-  `${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-3.7-flash`,
   ...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS,
 ] as const
 
@@ -66,15 +65,24 @@ export function isAutomniaFrontierModelId(value: unknown) {
   return value.trim().toLowerCase() === AUTOMNIA_FRONTIER_MODEL_ID
 }
 
+export function isAutomniaProModelId(value: unknown) {
+  if (typeof value !== 'string') return false
+  return value.trim().toLowerCase() === AUTOMNIA_PRO_MODEL_ID
+}
+
 export function automniaHostedModelIdsForTier(tier: unknown) {
-  return AUTOMNIA_RELAY_MODEL_IDS.filter((modelId) => !isAutomniaFrontierModelId(modelId) || isAutomniaFrontierEligibleTier(tier))
+  return AUTOMNIA_RELAY_MODEL_IDS.filter((modelId) =>
+    (!isAutomniaFrontierModelId(modelId) && !isAutomniaProModelId(modelId)) || isAutomniaFrontierEligibleTier(tier),
+  )
 }
 
 export const CREDITS_ONLY_MODEL_ACCESS_MESSAGE =
   'Starter Subscription is locked to Automnia credits only. Connect your own provider or choose a provider model after upgrading to a BYOK-eligible tier.'
 
 export const AUTOMNIA_FRONTIER_MODEL_ACCESS_MESSAGE =
-  'Automnia Frontier requires a Pro, Enterprise, or Automnia Frontier entitlement. Choose Automnia Prime or connect an eligible provider instead.'
+  'Automnia Frontier requires a Pro, Enterprise, or Automnia Frontier entitlement. Choose Automnia Balanced or connect an eligible provider instead.'
+export const AUTOMNIA_PRO_MODEL_ACCESS_MESSAGE =
+  'Automnia Pro requires a Pro, Enterprise, or Automnia Frontier entitlement. Choose Automnia Balanced or connect an eligible provider instead.'
 
 export type CreditsOnlyModelSelection = {
   primary: string

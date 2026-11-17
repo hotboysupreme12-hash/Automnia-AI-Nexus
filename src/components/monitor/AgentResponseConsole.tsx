@@ -25,6 +25,7 @@ import { useLicense } from '../../context/useLicense'
 import { redactDiagnosticText } from '../../utils/diagnosticRedaction'
 import { agentPortraitSrc } from '../../utils/portrait'
 import { runOutcomeLabel } from '../../utils/runOutcome'
+import { failureRecoveryForKind, type FailureRecovery, type FailureRecoveryAction } from '../../utils/failureRecovery'
 import { createSseFrameParser } from '../../utils/sseStream'
 import { automniaRelayModelLabel, resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
 import { formatAutomniaCredits } from '../../utils/creditDisplay'
@@ -552,11 +553,7 @@ function backgroundTaskResponse(task: AgentBackgroundTask, fallbackAgentId: stri
   }
 }
 
-type ResponseCta = {
-  label: string
-  detail?: string
-  action?: 'restart-gateway' | 'cancel-queued' | 'open-settings'
-}
+type ResponseCta = Omit<FailureRecovery, 'action'> & { action?: FailureRecoveryAction | 'cancel-queued' }
 
 function responseCta(entry: AgentResponse): ResponseCta | null {
   if (entry.streaming && entry.transport === 'command-console-queue') {
@@ -571,34 +568,7 @@ function responseCta(entry: AgentResponse): ResponseCta | null {
   }
   if (entry.streaming && (entry.runtimeNoticeActive || isRuntimeNoticeTransport(entry.transport))) return null
   if (entry.streaming) return null
-
-  switch (entry.failureKind) {
-    case 'insufficient_credits':
-    case 'credits_exhausted':
-      return {
-        label: 'Manage credits or routing',
-        detail: 'Open Account to add Automnia credits or choose your connected provider.',
-        action: 'open-settings',
-      }
-    case 'auth_missing':
-    case 'auth_expired':
-      return { label: 'Connect provider', detail: 'Refresh credentials, then retry this turn.' }
-    case 'gateway_disconnect':
-    case 'gateway_unavailable':
-      return { label: 'Restart gateway', detail: 'Gateway is unavailable. Restart it, then retry.', action: 'restart-gateway' }
-    case 'network_error':
-      return { label: 'Restart gateway', detail: 'Local backend connection dropped. Restart the gateway, then retry.', action: 'restart-gateway' }
-    case 'sandbox_unavailable':
-      return { label: 'Fix sandbox', detail: 'Disable sandbox or install the required Docker image.' }
-    case 'provider_unsupported':
-      return { label: 'Change model', detail: 'Pick a supported model or provider fallback, then retry.' }
-    case 'timeout':
-      return { label: 'Raise timeout', detail: 'Close stale sessions or allow more time before retrying.' }
-    case 'rate_limit':
-      return { label: 'Retry later', detail: 'Provider quota is limiting this turn.' }
-    default:
-      return null
-  }
+  return failureRecoveryForKind(entry.failureKind)
 }
 
 

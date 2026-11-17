@@ -55,6 +55,7 @@ function createHarness(options: {
   const finishes: FinishLog[] = []
   const logs: Array<{ stream: string; message: string; level?: string }> = []
   let clientOptions: LightweightGatewayClientOptions | null = null
+  let gatewayClient: GatewayClientLike | null = null
   let stopped = false
   let ensuredGateway = 0
   let healthChecks = 0
@@ -138,6 +139,9 @@ function createHarness(options: {
             return { accepted: true }
           }
           if (method === 'chat.history') {
+            if (typeof options.history === 'function') {
+              return (options.history as (params: unknown) => unknown)(params)
+            }
             return options.history ?? {
               messages: [
                 { role: 'user', text: 'hello' },
@@ -153,6 +157,7 @@ function createHarness(options: {
           throw new Error(`unexpected method ${method}`)
         },
       }
+      gatewayClient = client
       return client
     },
   })
@@ -164,6 +169,9 @@ function createHarness(options: {
     logs,
     get clientOptions() {
       return clientOptions
+    },
+    get client() {
+      return gatewayClient
     },
     get stopped() {
       return stopped
@@ -277,6 +285,52 @@ test('runTurn sends Gateway chat payloads and uses a visible terminal reply with
   assert.equal(events.some((entry) => entry.event === 'progress' && entry.data.text === 'Marcus is using files.search.'), true)
   assert.equal(events.some((entry) => entry.event === 'progress' && entry.data.agentName === 'Marcus'), true)
   assert.equal(events.some((entry) => entry.event === 'progress' && /Gateway agent event/.test(String(entry.data.text))), false)
+})
+
+test('streamed terminal reply matches chat.history for the same Gateway session', async () => {
+  const streamedFinal = 'The task completed with verified output.'
+  const sessionKey = 'agent:agent-consistency:consistency'
+  const harness = createHarness({
+    finalPayload: (runId) => ({ runId, state: 'final', message: { text: streamedFinal } }),
+    history: (params: unknown) => isRecord(params) && params.sessionKey === sessionKey
+      ? { messages: [
+          { role: 'user', text: 'Check the current task.' },
+          { role: 'assistant', text: streamedFinal },
+        ] }
+      : { messages: [{ role: 'assistant', text: 'Reply from a different session.' }] },
+  })
+
+  const result = await harness.service.runTurn({
+    agentId: 'agent-consistency',
+    message: 'Check the current task.',
+    sessionId: 'consistency-session',
+    requestedSessionKey: 'consistency',
+    thinking: 'off',
+    timeoutMs: 100,
+    cwd: process.cwd(),
+  })
+
+  const send = harness.requests.find((request) => request.method === 'chat.send')
+  assert.ok(send)
+  assert.equal(isRecord(send.params) && send.params.sessionKey, sessionKey)
+  const streamed = JSON.parse(result.stdout) as { text: string; sessionKey: string }
+  assert.equal(streamed.sessionKey, sessionKey)
+
+  const client = harness.client
+  assert.ok(client)
+  const history = await client.request('chat.history', {
+    sessionKey: streamed.sessionKey,
+    agentId: 'agent-consistency',
+    limit: 2,
+    maxChars: 12_000,
+  })
+  const historyParams = harness.requests.at(-1)?.params
+  assert.equal(isRecord(historyParams) && historyParams.sessionKey, streamed.sessionKey)
+  const historyMessages = isRecord(history) && Array.isArray(history.messages) ? history.messages : []
+  const historyFinal = [...historyMessages].reverse().find((message) => isRecord(message) && message.role === 'assistant')
+  assert.ok(isRecord(historyFinal))
+  assert.equal(streamed.text, historyFinal.text, 'streamed final diverged from chat.history for the same session')
+  harness.service.stopClient('consistency check complete')
 })
 
 test('runTurn falls back to chat.message.get for placeholder history rows', async () => {

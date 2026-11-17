@@ -1194,7 +1194,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
                 <p>Get full access and the flexibility to use your own AI provider.</p>
                 <ul>
                   <li>Everything in Starter</li>
-                  <li>Prime, Frontier, and core Automnia models</li>
+                  <li>Swift, Balanced, Pro, and Frontier Automnia models</li>
                   <li>Use your own AI provider</li>
                   <li>Choose which service is used first</li>
                 </ul>

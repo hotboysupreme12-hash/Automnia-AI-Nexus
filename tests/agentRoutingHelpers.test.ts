@@ -391,21 +391,24 @@ test('Telegram identity replies are verified against the selected agent profile 
   assert.equal(guarded.text, 'I am Marcus Chen, Lead Alpha Hunter (agent id: hn-crypto-lead). I am the Automnia agent selected for this Telegram message.')
 })
 
-test('Telegram model callbacks are locked to Automnia credits for Starter runtime config', () => {
+test('Telegram model callbacks allow only Swift and Balanced for Starter runtime config', () => {
   const selectionAllowed = new Function(`
     ${TELEGRAM_AGENT_ROUTING_HELPER}
     return telegramCreditsOnlyModelSelectionAllowed
   `)() as (config: unknown, callback: unknown) => boolean
 
   const starterConfig = { env: { vars: { AUTOMNIA_CREDITS_ONLY: '1' } } }
-  assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'automnia-cloud', model: 'gemini-3.7-flash' }), true)
+  assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'automnia-cloud', model: 'gemini-3.8-flash' }), true)
+  assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'automnia-cloud', model: 'gemini-4-hydrogen' }), true)
+  assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'automnia-cloud', model: 'gemini-3.7-flash' }), false)
   assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'automnia-cloud', model: 'gemini-4-argon' }), false)
+  assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'automnia-cloud', model: 'gemini-4-carbon' }), false)
   assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'google', model: 'gemini-2.5-pro' }), false)
   assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'openai', model: 'gpt-5.5' }), false)
   assert.equal(selectionAllowed({}, { type: 'select', provider: 'google', model: 'gemini-2.5-pro' }), true)
 })
 
-test('Telegram model menus expose Frontier for eligible hosted routes and never for Starter', () => {
+test('Telegram model menus expose Pro and Frontier for eligible hosted routes and never for Starter', () => {
   const billingModelData = new Function(`
     ${TELEGRAM_AGENT_ROUTING_HELPER}
     return telegramBillingModelData
@@ -419,12 +422,16 @@ test('Telegram model menus expose Frontier for eligible hosted routes and never 
     { byProvider: new Map([['automnia-cloud', new Set(['gemini-3.8-flash'])]]), providers: ['automnia-cloud'] },
   )
   assert.equal(eligible.byProvider.get('automnia-cloud')?.has('gemini-4-argon'), true)
+  assert.equal(eligible.byProvider.get('automnia-cloud')?.has('gemini-4-carbon'), true)
+  assert.equal(eligible.byProvider.get('automnia-cloud')?.has('gemini-4-hydrogen'), true)
+  assert.equal(eligible.byProvider.get('automnia-cloud')?.has('gemini-3.8-flash'), true)
 
   const starter = billingModelData(
     { env: { vars: { AUTOMNIA_CREDITS_ONLY: '1', AUTOMNIA_FRONTIER_ALLOWED: '1' } } },
     { byProvider: new Map([['google', new Set(['gemini-2.5-pro'])]]), providers: ['google'] },
   )
   assert.equal(starter.byProvider.get('automnia-cloud')?.has('gemini-4-argon'), false)
+  assert.equal(starter.byProvider.get('automnia-cloud')?.has('gemini-4-carbon'), false)
 })
 
 test('Telegram Automnia model detection does not leak a regex flag as a variable', () => {
@@ -433,11 +440,11 @@ test('Telegram Automnia model detection does not leak a regex flag as a variable
     return isTelegramAutomniaCreditsModel
   `)() as (value: unknown) => boolean
 
-  assert.equal(isAutomniaCreditsModel('automnia-cloud/gemini-3.7-flash'), true)
+  assert.equal(isAutomniaCreditsModel('automnia-cloud/gemini-4-hydrogen'), true)
   assert.equal(isAutomniaCreditsModel('openai/gpt-5.5'), false)
 })
 
-test('Telegram model menus expose only Automnia credits for Starter runtime config', () => {
+test('Telegram model menus expose only Swift and Balanced for Starter runtime config', () => {
   const restrictModelData = new Function(`
     ${TELEGRAM_AGENT_ROUTING_HELPER}
     return telegramCreditsOnlyModelData
@@ -453,10 +460,20 @@ test('Telegram model menus expose only Automnia credits for Starter runtime conf
   assert.deepEqual(restricted.providers, ['automnia-cloud'])
   assert.deepEqual(Array.from(restricted.byProvider.get('automnia-cloud') || []), [
     'gemini-3.8-flash',
-    'gemini-3.7-flash',
-    'gemini-3.6-flash',
-    'gemini-2.5-flash',
+    'gemini-4-hydrogen',
   ])
+})
+
+test('Telegram saved Automnia routes use the new tier labels', () => {
+  const labelForModel = new Function(`
+    ${TELEGRAM_AGENT_ROUTING_HELPER}
+    return telegramAutomniaModelLabel
+  `)() as (modelId: string) => string
+
+  assert.equal(labelForModel('automnia-cloud/gemini-3.8-flash'), 'Automnia Swift')
+  assert.equal(labelForModel('automnia-cloud/gemini-4-hydrogen'), 'Automnia Balanced')
+  assert.equal(labelForModel('automnia-cloud/gemini-4-argon'), 'Automnia Pro')
+  assert.equal(labelForModel('automnia-cloud/gemini-4-carbon'), 'Automnia Frontier')
 })
 
 test('Telegram route construction is self-contained in the injected runtime bundle', () => {

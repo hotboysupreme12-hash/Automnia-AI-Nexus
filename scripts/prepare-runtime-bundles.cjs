@@ -13,10 +13,10 @@ const installWorkRoot = path.join(bundleRoot, '.work')
 
 const RUNTIME_BUNDLE_METADATA_FILE = '.automnia-runtime-bundle.json'
 const DEFAULT_BUNDLED_NODE_VERSION = 'v24.22.1'
-const DEFAULT_BUNDLED_CODEX_VERSION = '2026.10.6'
+const DEFAULT_BUNDLED_CODEX_VERSION = '2026.11.5'
 const DEFAULT_BUNDLED_CODEX_SPEC = `@openclaw/codex@${DEFAULT_BUNDLED_CODEX_VERSION}`
-const DEFAULT_BUNDLED_CODEX_INTEGRITY = 'sha512-TxcJYkPQyjPOa+/nrx/2LsAlHKNgE7PpI13HM1CZiDmpqO7aJYWeIjjgpkl8Z9nHcJ6OV4ChTM4qnoHkFPotqg=='
-const DEFAULT_BUNDLED_CODEX_TARBALL = 'https://registry.npmjs.org/@openclaw/codex/-/codex-2026.10.6.tgz'
+const DEFAULT_BUNDLED_CODEX_INTEGRITY = 'sha512-RmMrIH+drET1QyWDRG8FLLbgHX3YKGxfqawu3HIHsuwOFRm1/MuaO3hIb+8GjICM3Y/1eff5kl2aaNEnHk4GTA=='
+const DEFAULT_BUNDLED_CODEX_TARBALL = 'https://registry.npmjs.org/@openclaw/codex/-/codex-2026.11.5.tgz'
 const targetArch = String(process.env.AUTOMNIA_TARGET_ARCH || process.arch).trim().toLowerCase()
 
 if (!['x64', 'arm64'].includes(targetArch)) {

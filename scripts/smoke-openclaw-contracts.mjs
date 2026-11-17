@@ -72,7 +72,16 @@ const uiSmoke = read('scripts/smoke-ui-render.mjs')
 const agentTurnStreamSmoke = read('scripts/smoke-agent-turn-stream.ts')
 const sseStream = read('src/utils/sseStream.ts')
 const packageJson = read('package.json')
-const gatewayProtocolDocs = read('docs/openclaw-latest/pages/gateway/protocol.md')
+// OpenClaw 2026.11.5 split the former protocol reference into focused pages.
+// Keep the app contract smoke pointed at those authoritative sections rather
+// than relying on the now-link-only protocol index.
+const gatewayProtocolDocs = [
+  read('docs/openclaw-latest/pages/gateway/protocol.md'),
+  read('docs/openclaw-latest/pages/gateway/protocol/transport.md'),
+  read('docs/openclaw-latest/pages/gateway/protocol/rpc-session-control.md'),
+  read('docs/openclaw-latest/pages/gateway/protocol/rpc-bootstrap-and-events.md'),
+].join('\n')
+const gatewaySessionControlDocs = read('docs/openclaw-latest/pages/gateway/protocol/rpc-session-control.md')
 const commandConsoleGuide = read('docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md')
 const openclawVendorPrep = read('scripts/prepare-openclaw-vendor.cjs')
 const relayTokenOptimization = read('infra/gcloud/service/tokenOptimization.js')
@@ -359,10 +368,10 @@ assertOrderedIncludes(nexusStore, [
   'onStreamComplete: streamProjector.complete',
 ], 'Command Console frontend SSE projection')
 
-assertRegex(gatewayProtocolDocs, /Side-effecting methods require (?:\*\*)?idempotency keys(?:\*\*)?(?: \(see schema\))?\./u, 'Gateway protocol idempotency requirement')
+assertIncludes(gatewaySessionControlDocs, '`chat.send.idempotencyKey` identifies one submission in the current session.', 'Gateway protocol per-method chat.send idempotency contract')
 assertRegex(gatewayProtocolDocs, /Chat execution (?:still )?uses `chat\.history`, `chat\.send`, `chat\.abort`, and `chat\.inject`/u, 'Gateway protocol chat execution methods')
 assertIncludes(gatewayProtocolDocs, '`chat.message.get`', 'Gateway protocol bounded full-message reader')
-assertIncludes(gatewayProtocolDocs, 'delta payloads carry `deltaText`', 'Gateway protocol chat delta text')
+assertIncludes(gatewayProtocolDocs, 'A `state: "delta"` payload carries the append in `deltaText`.', 'Gateway protocol chat delta text')
 assertIncludes(gatewayProtocolDocs, '`runId`', 'Gateway protocol run id references')
 assertIncludes(gatewayProtocolDocs, '`sessionKey`', 'Gateway protocol session key references')
 assertIncludes(commandConsoleGuide, 'Stream matching `chat` `delta` events by `runId`', 'Command Console guide delta/runId contract')

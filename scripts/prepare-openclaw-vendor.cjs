@@ -20,9 +20,9 @@ function isJavaScriptBundle(name) {
   return name.endsWith('.js') || name.endsWith('.mjs')
 }
 
-const DEFAULT_OPENCLAW_PACKAGE_VERSION = '2026.10.6'
-const DEFAULT_OPENCLAW_PACKAGE_TARBALL = 'https://registry.npmjs.org/openclaw/-/openclaw-2026.10.6.tgz'
-const DEFAULT_OPENCLAW_PACKAGE_INTEGRITY = 'sha512-jSpQPa2Jw5rG0J2GC07j9+qHtVYIuoHjgccU88JeS+p7188sBCnvIJeuaiNPHj1zsWkuHcBv443QiEUh7qrxwA=='
+const DEFAULT_OPENCLAW_PACKAGE_VERSION = '2026.11.5'
+const DEFAULT_OPENCLAW_PACKAGE_TARBALL = 'https://registry.npmjs.org/openclaw/-/openclaw-2026.11.5.tgz'
+const DEFAULT_OPENCLAW_PACKAGE_INTEGRITY = 'sha512-mqPlsGLOe8NS85BfP1vWW9YVwFXchsV75QTkEbyR4csylORxts+fmfZp9+qbD7aPbXQIctyjRk+CPL91fDvxBA=='
 
 const installArgs = [
   'ci',
@@ -305,7 +305,7 @@ function ensureGatewayLifecycleStartupImportIsDeferred() {
   const runBundleName = fs.readdirSync(distRoot).find((name) => {
     if (!/^run-[^/]+\.mjs$/.test(name)) return false
     const source = fs.readFileSync(path.join(distRoot, name), 'utf8')
-    return source.includes('async function prepareGatewayRunLoop(params)') && source.includes('import("./cli/gateway-lifecycle.runtime.js")')
+    return source.includes('prepareGatewayRunLoop(') && source.includes('import("./cli/gateway-lifecycle.runtime.js")')
   })
   if (!runBundleName) throw new Error('[openclaw-vendor] Could not locate OpenClaw Gateway run bundle for lifecycle startup patch')
 
@@ -363,21 +363,36 @@ function ensureGatewayLifecycleStartupImportIsDeferred() {
     if (!runSource.includes(lifecycleLoader)) throw new Error('[openclaw-vendor] Gateway lifecycle runtime loader marker changed')
     runSource = runSource.replace(lifecycleLoader, `${bootstrapLoader}\n${lifecycleLoader}`)
 
-    const functionStart = runSource.indexOf('async function prepareGatewayRunLoop(params) {')
+    const functionStart = runSource.indexOf('async function prepareGatewayRunLoop(')
     const functionEnd = runSource.indexOf('\nfunction createGatewayRestartRecovery', functionStart)
     if (functionStart < 0 || functionEnd < 0) throw new Error('[openclaw-vendor] Gateway run-loop preparation markers changed')
+    const signatureMatch = /^async function prepareGatewayRunLoop\(([^)]*)\) \{/u.exec(runSource.slice(functionStart))
+    if (!signatureMatch) throw new Error('[openclaw-vendor] Gateway run-loop preparation signature changed')
+    const runLoopParams = signatureMatch[1].split(',').map((value) => value.trim()).filter(Boolean)
+    if (runLoopParams.length < 1 || runLoopParams.length > 2 || !runLoopParams.every((value) => /^[A-Za-z_$][\w$]*$/u.test(value))) {
+      throw new Error('[openclaw-vendor] Gateway run-loop preparation parameters changed')
+    }
+    const [configParam, startupBudgetParam] = runLoopParams
+    const originalRunLoop = runSource.slice(functionStart, functionEnd)
+    const hasStartupBudget = originalRunLoop.includes('startupBudget:')
     const lineEnding = runSource.includes('\r\n') ? '\r\n' : '\n'
-    const replacement = [
-      'async function prepareGatewayRunLoop(params) {',
+    const replacementLines = [
+      `async function prepareGatewayRunLoop(${runLoopParams.join(', ')}) {`,
       '\tconst lifecycleBootstrapRuntime = await measureGatewayBootstrapStep("cli.bootstrap.lifecycle-runtime", () => lifecycleBootstrapRuntimeLoader.load());',
       '\tconst supervisor = lifecycleBootstrapRuntime.detectGatewayRespawnSupervisorIdentity(process.env, process.platform, { includeLinuxOpenClawGatewayServiceMarker: true });',
       '\tconst supervisorMode = supervisor?.kind ?? null;',
       '\tconst restartDecision = lifecycleBootstrapRuntime.resolveGatewayRestartDecision();',
+    ]
+    if (hasStartupBudget) {
+      if (!startupBudgetParam) throw new Error('[openclaw-vendor] Gateway run-loop startup budget argument is missing')
+      replacementLines.push(`\tconst startupBudget = await resolveGatewayShutdownBudget(supervisorMode, ${startupBudgetParam});`)
+    }
+    replacementLines.push(
       '\tconst lock = await measureGatewayBootstrapStep("cli.bootstrap.gateway-lock", () => acquireGatewayLock({',
-      '\t\tport: params.lockPort,',
+      `\t\tport: ${configParam}.lockPort,`,
       '\t\tlistenerMode: supervisorMode ? "supervised" : "foreground",',
       '\t\tsupervisor,',
-      '\t\t...params.lifecycleLockDeadlineMs !== void 0 ? { lifecycleDeadlineMs: params.lifecycleLockDeadlineMs } : {}',
+      `\t\t...${configParam}.lifecycleLockDeadlineMs !== void 0 ? { lifecycleDeadlineMs: ${configParam}.lifecycleLockDeadlineMs } : {}`,
       '\t}));',
       '\tconst lifecycleRuntime = await measureGatewayBootstrapStep("cli.bootstrap.lifecycle-runtime-post-lock", () => lifecycleRuntimeLoader.load());',
       '\treturn {',
@@ -385,18 +400,26 @@ function ensureGatewayLifecycleStartupImportIsDeferred() {
       '\t\tsupervisor,',
       '\t\tsupervisorMode,',
       '\t\trestartDecision,',
+      ...(hasStartupBudget ? ['\t\tstartupBudget,'] : []),
       '\t\tlock',
       '\t};',
       '}',
-    ].join(lineEnding)
+    )
+    const replacement = replacementLines.join(lineEnding)
     runSource = `${runSource.slice(0, functionStart)}${replacement}${runSource.slice(functionEnd)}`
   }
   const sidecarStartupMarker = 'const envSidecarStartupMode = isChannelStartupSuppressedByEnvironment() ? "defer" : "start";'
   const managedSidecarStartupMarker = 'const envSidecarStartupMode = isChannelStartupSuppressedByEnvironment() || process.env.AUTOMNIA_MANAGED_GATEWAY_STARTUP === "defer" ? "defer" : "start";'
+  const managedMinifiedSidecarStartupMarker = /const [A-Za-z_$][\w$]* = isChannelStartupSuppressedByEnvironment\(\) \|\| process\.env\.AUTOMNIA_MANAGED_GATEWAY_STARTUP === "defer" \? "defer" : "start";/u
   if (runSource.includes(sidecarStartupMarker)) {
     runSource = runSource.replace(sidecarStartupMarker, managedSidecarStartupMarker)
-  } else if (!runSource.includes(managedSidecarStartupMarker)) {
-    throw new Error('[openclaw-vendor] Gateway sidecar startup mode marker changed')
+  } else if (!runSource.includes(managedSidecarStartupMarker) && !managedMinifiedSidecarStartupMarker.test(runSource)) {
+    const minifiedSidecarStartupMarker = /const ([A-Za-z_$][\w$]*) = isChannelStartupSuppressedByEnvironment\(\) \? "defer" : "start";/u
+    if (minifiedSidecarStartupMarker.test(runSource)) {
+      runSource = runSource.replace(minifiedSidecarStartupMarker, 'const $1 = isChannelStartupSuppressedByEnvironment() || process.env.AUTOMNIA_MANAGED_GATEWAY_STARTUP === "defer" ? "defer" : "start";')
+    } else {
+      throw new Error('[openclaw-vendor] Gateway sidecar startup mode marker changed')
+    }
   }
   fs.writeFileSync(runPath, runSource)
 }
@@ -406,21 +429,36 @@ function ensureGatewayManagedSidecarStartupGrace() {
   const startupBundleName = fs.readdirSync(distRoot).find((name) => {
     if (!/^server-startup-post-attach-[^/]+\.mjs$/.test(name)) return false
     const source = fs.readFileSync(path.join(distRoot, name), 'utf8')
-    return source.includes('const startSidecars = () => params.minimalTestGateway ? startStartupLog().then(() => pluginRegistry) : setImmediate$1().then(async () => {')
+    return source.includes('const startSidecars = () => params.minimalTestGateway ? startStartupLog().then(() => pluginRegistry) : setImmediate$1().then(async () => {') || /const startSidecars = \(\) => [A-Za-z_$][\w$]*\.minimalTestGateway \? startStartupLog\(\)\.then\(\(\) => \{/u.test(source)
   })
   if (!startupBundleName) {
     const alreadyPatched = fs.readdirSync(distRoot).some((name) => {
       if (!/^server-startup-post-attach-[^/]+\.mjs$/.test(name)) return false
-      return fs.readFileSync(path.join(distRoot, name), 'utf8').includes('params.sidecarStartup === "defer" ? new Promise((resolve) => globalThis.setTimeout(resolve, 5000))')
+      return fs.readFileSync(path.join(distRoot, name), 'utf8').includes('sidecarStartup === "defer" ? new Promise((resolve) => globalThis.setTimeout(resolve, 5000))')
     })
     if (alreadyPatched) return
     throw new Error('[openclaw-vendor] Gateway post-attach sidecar startup marker changed')
   }
   const startupPath = path.join(distRoot, startupBundleName)
-  const source = fs.readFileSync(startupPath, 'utf8')
+  let source = fs.readFileSync(startupPath, 'utf8')
   const marker = 'const startSidecars = () => params.minimalTestGateway ? startStartupLog().then(() => pluginRegistry) : setImmediate$1().then(async () => {'
   const replacement = 'const startSidecars = () => params.minimalTestGateway ? startStartupLog().then(() => pluginRegistry) : (params.sidecarStartup === "defer" ? new Promise((resolve) => globalThis.setTimeout(resolve, 5000)) : Promise.resolve()).then(() => setImmediate$1()).then(async () => {'
-  fs.writeFileSync(startupPath, source.replace(marker, replacement))
+  if (source.includes(marker)) {
+    source = source.replace(marker, replacement)
+  } else {
+    const runLoopParam = source.match(/async function startGatewayPostAttachRuntime\(([A-Za-z_$][\w$]*)\) \{/u)?.[1]
+    const minifiedMarker = `const startSidecars = () => ${runLoopParam}.minimalTestGateway ? startStartupLog().then(() => {`
+    const markerIndex = runLoopParam ? source.indexOf(minifiedMarker) : -1
+    const continuation = ': setImmediate$1().then(async () => {'
+    const continuationIndex = markerIndex < 0 ? -1 : source.indexOf(continuation, markerIndex + minifiedMarker.length)
+    if (markerIndex < 0 || continuationIndex < 0) {
+      if (source.includes('sidecarStartup === "defer" ? new Promise((resolve) => globalThis.setTimeout(resolve, 5000))')) return
+      throw new Error('[openclaw-vendor] Gateway post-attach sidecar startup marker changed')
+    }
+    const deferredContinuation = `: (${runLoopParam}.sidecarStartup === "defer" ? new Promise((resolve) => globalThis.setTimeout(resolve, 5000)) : Promise.resolve()).then(() => setImmediate$1()).then(async () => {`
+    source = `${source.slice(0, continuationIndex)}${deferredContinuation}${source.slice(continuationIndex + continuation.length)}`
+  }
+  fs.writeFileSync(startupPath, source)
 }
 
 function ensureAutomniaRelayThoughtSignatureSupport() {
@@ -577,6 +615,7 @@ function ensureAutomniaRelayCompactContextSupport() {
   const promptMarker = 'const isTokenEfficientPromptMode = true;'
   const promptPattern = /const effectivePromptMode = params\.toolsAllow\?\.length \? "minimal" : promptMode;\n\t\tconst effectiveSkillsPrompt = params\.toolsAllow\?\.length \? void 0 : skillsPrompt;/
   const currentPromptPattern = /const effectivePromptMode = toolPolicyRestricted \? "minimal" : promptMode;\n\tconst effectiveSkillsPrompt = toolPolicyRestricted \? void 0 : params\.skillsPrompt;/
+  const currentRuntimePromptPattern = /const _ = !isHostSystemTurn\(n\) && toolPolicyRestrictsTools\(\{ allow: n\.toolsAllow \}\) \? "minimal" : h;/
   const promptReplacement = `${promptMarker}\n\t\tconst effectivePromptMode = isTokenEfficientPromptMode || params.toolsAllow?.length ? "minimal" : promptMode;\n\t\tconst effectiveSkillsPrompt = isTokenEfficientPromptMode || params.toolsAllow?.length ? void 0 : skillsPrompt;`
   const legacyPromptPattern = /const isAutomniaCompactPromptProvider = params\.provider === "automnia-cloud";\n\t\tconst effectivePromptMode = isAutomniaCompactPromptProvider \|\| params\.toolsAllow\?\.length \? "minimal" : promptMode;\n\t\tconst effectiveSkillsPrompt = isAutomniaCompactPromptProvider \|\| params\.toolsAllow\?\.length \? void 0 : skillsPrompt;/
   const historyMarker = 'const historyLimit = Math.min(4, Math.max(1, getHistoryLimitFromSessionKey(params.sessionKey, params.config)));'
@@ -604,6 +643,9 @@ function ensureAutomniaRelayCompactContextSupport() {
       promptPatched = true
     } else if (currentPromptPattern.test(next)) {
       next = next.replace(currentPromptPattern, `const isTokenEfficientPromptMode = true;\n\tconst effectivePromptMode = isTokenEfficientPromptMode || toolPolicyRestricted ? "minimal" : promptMode;\n\tconst effectiveSkillsPrompt = isTokenEfficientPromptMode || toolPolicyRestricted ? void 0 : params.skillsPrompt;`)
+      promptPatched = true
+    } else if (currentRuntimePromptPattern.test(next)) {
+      next = next.replace(currentRuntimePromptPattern, `const isTokenEfficientPromptMode = true;\n\t\tconst _ = isHostSystemTurn(n) || h === "none" ? h : isTokenEfficientPromptMode ? "minimal" : h;`)
       promptPatched = true
     } else if (next.includes(promptMarker)) {
       promptPatched = true
@@ -667,7 +709,7 @@ function ensureAutomniaRelayToolResultBudgetSupport() {
   // A 1M-token model must not replay half a million tokens of old tool output
   // alongside the conversation. Keep this projection budget near 5% of the
   // context window; the full tool results remain persisted in the transcript.
-  const aggregateMarker = 'function resolveLiveToolResultAggregateMaxChars(params) {'
+  const aggregateMarker = /function resolveLiveToolResultAggregateMaxChars\([A-Za-z_$][\w$]*\) \{/u
   const legacyBudgetPattern = /const PROMPT_TOOL_RESULT_AGGREGATE_CAP_MULTIPLIER = 4;\r?\nconst AGGREGATE_TOOL_RESULT_CONTEXT_SHARE = \.5;/
   const boundedBudgetPattern = /const PROMPT_TOOL_RESULT_AGGREGATE_CAP_MULTIPLIER = 2;\r?\nconst AGGREGATE_TOOL_RESULT_CONTEXT_SHARE = \.05;/
   let patched = false
@@ -676,7 +718,7 @@ function ensureAutomniaRelayToolResultBudgetSupport() {
     if (!isJavaScriptBundle(name)) continue
     const filePath = path.join(distRoot, name)
     const source = fs.readFileSync(filePath, 'utf8')
-    if (!source.includes(aggregateMarker)) continue
+    if (!aggregateMarker.test(source)) continue
 
     let next = source
     if (legacyBudgetPattern.test(next)) {
@@ -797,7 +839,21 @@ function ensureAutomniaSettledTurnFinalizationSupport() {
       next = next.replace(strictGuard, guardedReplacement)
       resultPatched = true
     } else {
-      throw new Error(`[openclaw-vendor] Settled-turn finalization guard changed; cannot patch ${name}`)
+      const signature = /function projectSettledTurnFinalizationAttemptResult\(([A-Za-z_$][\w$]*)\) \{/u.exec(next)
+      if (!signature) throw new Error(`[openclaw-vendor] Settled-turn finalization guard changed; cannot patch ${name}`)
+      const param = signature[1]
+      const functionStart = signature.index
+      const bodyStart = functionStart + signature[0].length
+      const bodyEnd = next.indexOf('\n}', bodyStart)
+      if (bodyEnd < 0) throw new Error(`[openclaw-vendor] Settled-turn finalization body changed; cannot patch ${name}`)
+      const body = next.slice(bodyStart, bodyEnd)
+      const activityGuard = /if \([^;\n]*\) throw new Error\("Settled-turn finalization attempt reported capability activity"\);/u
+      if (!activityGuard.test(body)) throw new Error(`[openclaw-vendor] Settled-turn finalization capability guard changed; cannot patch ${name}`)
+      const conditionForParam = capabilityCondition.replaceAll('result.', `${param}.`)
+      const replacement = `\n\tif ((${conditionForParam}) && !isSafeRejectedToolOnlyFinalization(${param})) throw new Error("Settled-turn finalization attempt reported capability activity");`
+      const patchedBody = body.replace(activityGuard, replacement)
+      next = `${next.slice(0, functionStart)}${safeRecoveryHelper}\n${next.slice(functionStart, bodyStart)}${patchedBody}${next.slice(bodyEnd)}`
+      resultPatched = true
     }
     if (next !== source) fs.writeFileSync(filePath, next)
   }
@@ -805,10 +861,11 @@ function ensureAutomniaSettledTurnFinalizationSupport() {
 
   const continuationInstruction = 'const SETTLED_TOOL_TERMINAL_CONTINUATION_INSTRUCTION = "The previous assistant turn completed its tool calls but did not produce a user-visible answer. Continue from the current transcript and produce the final user-visible answer now. Do not repeat completed tool calls or restart from scratch.";'
   const currentContinuationInstruction = 'const SETTLED_TOOL_TERMINAL_CONTINUATION_INSTRUCTION = "The previous assistant turn completed its tool calls but did not produce a user-visible answer. Continue from the current transcript and produce the final user-visible answer now. Do not repeat completed tool calls or restart from scratch. Tools are unavailable in this step: it is a text-only pass, so reply with plain text and do not attempt any tool call.";'
-  const patchedContinuationInstruction = 'const SETTLED_TOOL_TERMINAL_CONTINUATION_INSTRUCTION = "The previous assistant turn completed its tool calls but did not produce a user-visible answer. Continue from the current transcript and produce the final user-visible answer now. Do not repeat completed tool calls or restart from scratch. This is a tool-disabled recovery pass: return plain user-visible text only; never emit tool calls, exec, tool_call, or any new action. Use only evidence already present in the transcript.";'
+  const latestContinuationInstruction = 'const SETTLED_TOOL_TERMINAL_CONTINUATION_INSTRUCTION = "Your turn ended without a final reply. If the user still needs a reply, write it now. If your completed actions already answered the request, answer exactly NO_REPLY. Continue from the current transcript. Do not repeat completed tool calls or restart from scratch. Do not call tools in this step. Summarize the recorded results in plain text.";'
+  const patchedContinuationInstruction = 'const SETTLED_TOOL_TERMINAL_CONTINUATION_INSTRUCTION = "Your turn ended without a final reply. If the user still needs a reply, write it now. If your completed actions already answered the request, answer exactly NO_REPLY. Continue from the current transcript. Do not repeat completed tool calls or restart from scratch. This is a tool-disabled recovery pass: return plain user-visible text only; never emit tool calls, exec, tool_call, or any new action. Use only evidence already present in the transcript.";'
   let continuationPatched = false
   for (const name of fs.readdirSync(distRoot)) {
-    if (!/^builtin-openclaw-.*\.(?:m?js)$/.test(name)) continue
+    if (!isJavaScriptBundle(name)) continue
     const filePath = path.join(distRoot, name)
     const source = fs.readFileSync(filePath, 'utf8')
     let next = source
@@ -819,6 +876,9 @@ function ensureAutomniaSettledTurnFinalizationSupport() {
       continuationPatched = true
     } else if (next.includes(currentContinuationInstruction)) {
       next = next.replace(currentContinuationInstruction, patchedContinuationInstruction)
+      continuationPatched = true
+    } else if (next.includes(latestContinuationInstruction)) {
+      next = next.replace(latestContinuationInstruction, patchedContinuationInstruction)
       continuationPatched = true
     } else {
       continue
@@ -913,6 +973,215 @@ function writeMetadata(packageJson, shrinkwrapSha256, mode, packageArtifacts) {
   }, null, 2)}\n`)
 }
 
+const GOOGLE_GEMINI_4_MODELS = [
+  {
+    id: 'gemini-4-carbon',
+    name: 'Gemini 4 Carbon',
+    reasoning: true,
+    input: ['text', 'image', 'audio', 'video'],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 1048576,
+    maxTokens: 65536,
+    thinkingLevelMap: { minimal: null },
+    compat: { codeMode: 'preferred' },
+  },
+  {
+    id: 'gemini-4-hydrogen',
+    name: 'Gemini 4 Hydrogen',
+    reasoning: true,
+    input: ['text', 'image', 'audio', 'video'],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 1048576,
+    maxTokens: 65536,
+    thinkingLevelMap: { minimal: null },
+    compat: { codeMode: 'preferred' },
+  },
+]
+
+function findMatchingBracket(source, openIndex, openChar, closeChar) {
+  let depth = 0
+  let quote = ''
+  let escaped = false
+  for (let index = openIndex; index < source.length; index += 1) {
+    const char = source[index]
+    if (quote) {
+      if (escaped) escaped = false
+      else if (char === '\\') escaped = true
+      else if (char === quote) quote = ''
+      continue
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char
+      continue
+    }
+    if (char === openChar) depth += 1
+    else if (char === closeChar && --depth === 0) return index
+  }
+  return -1
+}
+
+function validateGoogleGemini4Model(model, sourceLabel) {
+  const expected = GOOGLE_GEMINI_4_MODELS.find((entry) => entry.id === model?.id)
+  if (!expected) return
+  for (const key of ['name', 'reasoning', 'contextWindow', 'maxTokens']) {
+    if (model[key] !== expected[key]) {
+      throw new Error(`[openclaw-vendor] ${sourceLabel} ${expected.id} has unexpected ${key}: ${JSON.stringify(model[key])}`)
+    }
+  }
+  if (JSON.stringify(model.input) !== JSON.stringify(expected.input)) {
+    throw new Error(`[openclaw-vendor] ${sourceLabel} ${expected.id} input modalities changed unexpectedly`)
+  }
+  if (model.thinkingLevelMap?.minimal !== null || model.compat?.codeMode !== 'preferred') {
+    throw new Error(`[openclaw-vendor] ${sourceLabel} ${expected.id} reasoning/compat metadata changed unexpectedly`)
+  }
+}
+
+function insertGoogleGemini4ModelsInDiscovery(source) {
+  const modelCatalogStart = source.indexOf('var modelCatalog = {')
+  const googleProviderStart = source.indexOf('"providers": { "google": {', modelCatalogStart)
+  const modelsToken = source.indexOf('"models": [', googleProviderStart)
+  const modelsStart = source.indexOf('[', modelsToken)
+  if (modelCatalogStart < 0 || googleProviderStart < 0 || modelsToken < 0 || modelsStart < 0) {
+    throw new Error('[openclaw-vendor] Google provider discovery model catalog structure changed')
+  }
+  const modelsEnd = findMatchingBracket(source, modelsStart, '[', ']')
+  if (modelsEnd < 0) throw new Error('[openclaw-vendor] Could not parse Google provider discovery model list')
+  const modelArraySource = source.slice(modelsStart, modelsEnd + 1)
+
+  const missing = []
+  for (const expected of GOOGLE_GEMINI_4_MODELS) {
+    const idMarker = `"id": "${expected.id}"`
+    const firstIndex = modelArraySource.indexOf(idMarker)
+    if (firstIndex >= 0 && modelArraySource.indexOf(idMarker, firstIndex + idMarker.length) >= 0) {
+      throw new Error(`[openclaw-vendor] Duplicate ${expected.id} rows in Google provider discovery catalog`)
+    }
+    if (firstIndex < 0) {
+      missing.push(expected)
+      continue
+    }
+    const objectAnchor = `\n\t\t\t{\n\t\t\t\t"id": "${expected.id}"`
+    const objectStart = source.indexOf(objectAnchor, modelsStart)
+    const objectEndMarker = source.indexOf('\n\t\t\t},', objectStart)
+    if (objectStart < 0 || objectStart > modelsEnd || objectEndMarker < 0 || objectEndMarker > modelsEnd) {
+      throw new Error(`[openclaw-vendor] Could not safely validate existing ${expected.id} provider discovery row`)
+    }
+    const objectText = source.slice(objectStart + 1, objectEndMarker + 5)
+    let existing
+    try {
+      existing = JSON.parse(objectText)
+    } catch (error) {
+      throw new Error(`[openclaw-vendor] Existing ${expected.id} provider discovery row is not JSON-compatible: ${String(error)}`)
+    }
+    validateGoogleGemini4Model(existing, 'provider discovery')
+  }
+  if (!missing.length) return source
+
+  const anchor = '\n\t\t\t{\n\t\t\t\t"id": "gemini-2.5-pro"'
+  const anchorIndex = source.indexOf(anchor, modelsStart)
+  if (anchorIndex < 0 || anchorIndex > modelsEnd) {
+    throw new Error('[openclaw-vendor] Could not locate stable Google model catalog insertion anchor')
+  }
+  const formatted = missing.map((model) => JSON.stringify(model, null, '\t')
+    .split('\n')
+    .map((line) => `\t\t\t${line}`)
+    .join('\n'))
+    .join(',\n')
+  return source.slice(0, anchorIndex) + `\n${formatted},` + source.slice(anchorIndex)
+}
+
+function prepareGoogleGemini4AudioCatalogSupport(distRoot) {
+  const catalogTypeFiles = fs.readdirSync(distRoot)
+    .filter((name) => name.startsWith('model-catalog-types-') && name.endsWith('.mjs'))
+  if (catalogTypeFiles.length !== 1) {
+    throw new Error(`[openclaw-vendor] Expected one model-catalog-types bundle, found ${catalogTypeFiles.length}`)
+  }
+  const filePath = path.join(distRoot, catalogTypeFiles[0])
+  const source = fs.readFileSync(filePath, 'utf8')
+  const marker = 'const MODEL_CATALOG_INPUTS = ['
+  const modelInputsStart = source.indexOf(marker)
+  if (modelInputsStart < 0) throw new Error('[openclaw-vendor] OpenClaw model catalog input modality list changed')
+  const openIndex = source.indexOf('[', modelInputsStart)
+  const closeIndex = findMatchingBracket(source, openIndex, '[', ']')
+  if (closeIndex < 0) throw new Error('[openclaw-vendor] OpenClaw model catalog input modality list is malformed')
+  const inputList = source.slice(openIndex, closeIndex + 1)
+  if (/"audio"/.test(inputList)) return { filePath, source }
+  const modalityPattern = /(const MODEL_CATALOG_INPUTS = \[\r?\n)([ \t]*)"text",\r?\n\2"image",\r?\n\2"video",/
+  if (!modalityPattern.test(source)) {
+    throw new Error('[openclaw-vendor] OpenClaw model catalog input list has an unexpected shape; refusing to add audio support')
+  }
+  const patched = source.replace(modalityPattern, (_match, prefix, indent) =>
+    `${prefix}${indent}"text",\n${indent}"image",\n${indent}"audio",\n${indent}"video",`)
+  return { filePath, source: patched }
+}
+
+function ensureGoogleGemini4Models() {
+  const googleDistRoot = path.join(vendorRoot, 'dist', 'extensions', 'google')
+  const discoveryPath = path.join(googleDistRoot, 'provider-discovery.js')
+  const manifestPath = path.join(googleDistRoot, 'openclaw.plugin.json')
+  if (!fs.existsSync(discoveryPath) || !fs.existsSync(manifestPath)) {
+    throw new Error('[openclaw-vendor] OpenClaw Google plugin catalog files are missing')
+  }
+
+  let discovery = fs.readFileSync(discoveryPath, 'utf8')
+  const previousDiscovery = discovery
+  discovery = insertGoogleGemini4ModelsInDiscovery(discovery)
+  const directBuilderPatch = 'input: e.input.includes("video") ? [...e.input] : [...e.input, "video"]'
+  if (!discovery.includes(directBuilderPatch)) {
+    const directBuilderPattern = /input: \[\.\.\.e\.input, "video"\]/
+    if (!directBuilderPattern.test(discovery)) {
+      throw new Error('[openclaw-vendor] Google direct catalog video modality builder changed; refusing broad patch')
+    }
+    discovery = discovery.replace(directBuilderPattern, directBuilderPatch)
+  }
+  const directEndpointMarker = '"baseUrl": "https://generativelanguage.googleapis.com/v1beta"'
+  const vertexEndpointMarker = 'const GOOGLE_VERTEX_BASE_URL = "https://{location}-aiplatform.googleapis.com";'
+  if (!discovery.includes(directEndpointMarker) || !discovery.includes(vertexEndpointMarker) || !discovery.includes('api: "google-vertex"')) {
+    throw new Error('[openclaw-vendor] Google direct/Vertex provider endpoint contract changed; refusing model-catalog patch')
+  }
+
+  let pluginManifest
+  try {
+    pluginManifest = readJson(manifestPath)
+  } catch (error) {
+    throw new Error(`[openclaw-vendor] Google plugin manifest is invalid JSON: ${String(error)}`)
+  }
+  const directProvider = pluginManifest?.modelCatalog?.providers?.google
+  if (directProvider?.api !== 'google-generative-ai' || directProvider?.baseUrl !== 'https://generativelanguage.googleapis.com/v1beta') {
+    throw new Error('[openclaw-vendor] Google plugin manifest direct endpoint changed; refusing model-catalog patch')
+  }
+  const manifestModels = directProvider.models
+  if (!Array.isArray(manifestModels)) throw new Error('[openclaw-vendor] Google plugin manifest model list is missing')
+  const missingManifestModels = []
+  for (const expected of GOOGLE_GEMINI_4_MODELS) {
+    const matches = manifestModels.filter((model) => model.id === expected.id)
+    if (matches.length > 1) throw new Error(`[openclaw-vendor] Duplicate ${expected.id} rows in Google plugin manifest`)
+    if (matches.length === 1) validateGoogleGemini4Model(matches[0], 'plugin manifest')
+    else missingManifestModels.push(expected)
+  }
+  if (missingManifestModels.length) {
+    const anchorIndex = manifestModels.findIndex((model) => model.id === 'gemini-2.5-pro')
+    if (anchorIndex < 0) throw new Error('[openclaw-vendor] Could not locate stable Google plugin manifest insertion anchor')
+    manifestModels.splice(anchorIndex, 0, ...missingManifestModels)
+  }
+
+  const transportFile = fs.readdirSync(path.join(vendorRoot, 'dist'))
+    .find((name) => name.startsWith('transport-stream-') && name.endsWith('.mjs'))
+  if (!transportFile) throw new Error('[openclaw-vendor] Google provider transport bundle is missing')
+  const transportSource = fs.readFileSync(path.join(vendorRoot, 'dist', transportFile), 'utf8')
+  if (!transportSource.includes('const GOOGLE_VERTEX_DEFAULT_API_VERSION = "v1";') ||
+    !transportSource.includes('${GOOGLE_VERTEX_DEFAULT_API_VERSION}/projects/${e}/locations/${t}/publishers/google/models/${n}:streamGenerateContent?alt=sse') ||
+    !transportSource.includes('${normalizeGoogleApiBaseUrl(i.baseUrl)}/${resolveGoogleModelPath(i.id)}:streamGenerateContent?alt=sse')) {
+    throw new Error('[openclaw-vendor] Google Generative Language / Vertex v1 request routes changed; refusing model-catalog patch')
+  }
+  const catalogTypePatch = prepareGoogleGemini4AudioCatalogSupport(path.join(vendorRoot, 'dist'))
+
+  if (discovery !== previousDiscovery) fs.writeFileSync(discoveryPath, discovery)
+  if (missingManifestModels.length) fs.writeFileSync(manifestPath, `${JSON.stringify(pluginManifest, null, 2)}\n`)
+  if (catalogTypePatch.source !== fs.readFileSync(catalogTypePatch.filePath, 'utf8')) {
+    fs.writeFileSync(catalogTypePatch.filePath, catalogTypePatch.source)
+  }
+}
+
 async function main() {
   if (!fs.existsSync(packageJsonPath)) {
     throw new Error(`[openclaw-vendor] Missing vendored OpenClaw package at ${packageJsonPath}`)
@@ -935,6 +1204,7 @@ async function main() {
   ensureAutomniaRelayPayloadCompactionSupport()
   ensureAutomniaSettledTurnFinalizationSupport()
   ensureRestartRecoveryClaimStartupRepair(vendorRoot)
+  ensureGoogleGemini4Models()
 
   if (!refresh && fs.existsSync(nodeModulesRoot)) {
     const missing = validateInstalledPackages(lock)

@@ -24,6 +24,7 @@ import {
   isAutomniaCreditsModelSelectionRoute,
   isAutomniaFrontierModelId,
   isAutomniaFrontierEligibleTier,
+  isAutomniaProModelId,
   resolveAgentRoutePresentation,
   resolveLicenseEntitlement,
 } from '../../utils/licenseEntitlement'
@@ -93,8 +94,17 @@ const modelOptionFromId = (modelId: string): AvailableModel | null => {
 
 function modelBrief(modelId: string): { title: string; description: string; tone: string } | null {
   const normalized = modelId.toLowerCase()
+  if (normalized.includes('automnia-cloud/gemini-4-carbon')) {
+    return { title: 'Automnia Frontier reasoning', description: 'Automnia’s highest hosted tier, powered by Google Gemini 4 Carbon for deep research, software engineering, and long-horizon agent work.', tone: 'cyan' }
+  }
   if (normalized.includes('automnia-cloud/gemini-4-argon')) {
-    return { title: 'Automnia Frontier reasoning', description: 'Automnia’s highest hosted tier, powered by Google Gemini 4 Argon for deep research, software engineering, and long-horizon agent work.', tone: 'cyan' }
+    return { title: 'Automnia Pro reasoning', description: 'Automnia Pro is powered by Google Gemini 4 Argon for demanding reasoning, coding, and agent work.', tone: 'cyan' }
+  }
+  if (normalized.includes('automnia-cloud/gemini-4-hydrogen')) {
+    return { title: 'Automnia Balanced reasoning', description: 'Automnia Balanced uses Google Gemini 4 Hydrogen as the default hosted model for strong everyday reasoning and agent work.', tone: 'emerald' }
+  }
+  if (normalized.includes('automnia-cloud/gemini-3.8-flash')) {
+    return { title: 'Automnia Swift execution', description: 'Automnia Swift uses Google Gemini 3.8 Flash for fast, efficient hosted tasks.', tone: 'amber' }
   }
   if (normalized.includes('gpt-6-astra')) {
     return { title: 'Frontier research and agent work', description: 'OpenAI\'s highest-capability API model for complex research, reasoning, and tool-assisted work. Requires an OpenAI API key.', tone: 'cyan' }
@@ -132,8 +142,11 @@ function modelBrief(modelId: string): { title: string; description: string; tone
   return null
 }
 
+const isAutomniaPaidTierModel = (modelId: string) =>
+  isAutomniaFrontierModelId(modelId) || isAutomniaProModelId(modelId)
+
 const isAllowedAutomniaHostedModel = (modelId: string, frontierAllowed: boolean) =>
-  isAutomniaCreditsModelId(modelId) || (frontierAllowed && isAutomniaFrontierModelId(modelId))
+  isAutomniaCreditsModelId(modelId) || (frontierAllowed && isAutomniaPaidTierModel(modelId))
 
 const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: string[], creditsOnly = false, frontierAllowed = false) => {
   const merged = new Map<string, AvailableModel>()
@@ -142,7 +155,7 @@ const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: strin
         ...AUTOMNIA_MODEL_OPTIONS.filter((model) => isAllowedAutomniaHostedModel(model.id, frontierAllowed)),
         ...catalog.filter((model) => isAllowedAutomniaHostedModel(model.id, frontierAllowed)),
       ]
-    : catalog.filter((model) => frontierAllowed || !isAutomniaFrontierModelId(model.id))
+    : catalog.filter((model) => frontierAllowed || !isAutomniaPaidTierModel(model.id))
   const seededCatalog = creditsOnly
     ? allowedCatalog
     : catalog.some((model) => model.id === CODEX_5_3_SPARK_MODEL_ID)
@@ -153,7 +166,7 @@ const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: strin
   }
   for (const selectedId of creditsOnly
     ? selectedIds.filter((modelId) => isAllowedAutomniaHostedModel(modelId, frontierAllowed))
-    : selectedIds.filter((modelId) => frontierAllowed || !isAutomniaFrontierModelId(modelId))) {
+    : selectedIds.filter((modelId) => frontierAllowed || !isAutomniaPaidTierModel(modelId))) {
     if (!isSelectableModelId(selectedId)) continue
     const synthetic = modelOptionFromId(selectedId)
     if (synthetic && !merged.has(synthetic.id)) merged.set(synthetic.id, synthetic)
@@ -225,9 +238,9 @@ export function ModelSelectorModal({
       if (creditsOnly) {
         setSelectedPrimary(isAllowedAutomniaHostedModel(currentModel, frontierAllowed) ? currentModel : AUTOMNIA_CREDITS_MODEL_ID)
         setSelectedFallbacks(currentFallbacks.filter((modelId) => isAllowedAutomniaHostedModel(modelId, frontierAllowed)))
-      } else if (!frontierAllowed && isAutomniaFrontierModelId(currentModel)) {
+      } else if (!frontierAllowed && isAutomniaPaidTierModel(currentModel)) {
         setSelectedPrimary(AUTOMNIA_CREDITS_MODEL_ID)
-        setSelectedFallbacks(currentFallbacks.filter((modelId) => !isAutomniaFrontierModelId(modelId)))
+        setSelectedFallbacks(currentFallbacks.filter((modelId) => !isAutomniaPaidTierModel(modelId)))
       } else if (!currentModel && models.length) {
         setSelectedPrimary(models[0].id)
       }
@@ -264,12 +277,12 @@ export function ModelSelectorModal({
     if (!isOpen) return
     setSelectedPrimary(creditsOnly && !isAllowedAutomniaHostedModel(currentModel, frontierAllowed)
       ? AUTOMNIA_CREDITS_MODEL_ID
-      : !frontierAllowed && isAutomniaFrontierModelId(currentModel)
+      : !frontierAllowed && isAutomniaPaidTierModel(currentModel)
         ? AUTOMNIA_CREDITS_MODEL_ID
         : currentModel)
     setSelectedFallbacks(creditsOnly
       ? currentFallbacks.filter((modelId) => isAllowedAutomniaHostedModel(modelId, frontierAllowed))
-      : currentFallbacks.filter((modelId) => frontierAllowed || !isAutomniaFrontierModelId(modelId)))
+      : currentFallbacks.filter((modelId) => frontierAllowed || !isAutomniaPaidTierModel(modelId)))
     setThinkingEnabled(currentThinking !== 'off')
     setThinkingLevel(currentThinking === 'off' ? 'minimal' : currentThinking)
     authRefreshKeyRef.current = ''
@@ -303,10 +316,10 @@ export function ModelSelectorModal({
         : 'Starter subscriptions can use Automnia credits only.')
       return
     }
-    if (!frontierAllowed && isAutomniaFrontierModelId(selectedPrimary)) {
+    if (!frontierAllowed && isAutomniaPaidTierModel(selectedPrimary)) {
       setSelectedPrimary(AUTOMNIA_CREDITS_MODEL_ID)
-      setSelectedFallbacks((current) => current.filter((modelId) => !isAutomniaFrontierModelId(modelId)))
-      setStatus('Automnia Frontier requires a Pro, Enterprise, or Automnia Frontier entitlement.')
+      setSelectedFallbacks((current) => current.filter((modelId) => !isAutomniaPaidTierModel(modelId)))
+      setStatus('Automnia Pro and Frontier models require a Pro, Enterprise, or Automnia Frontier entitlement.')
       return
     }
     const primaryProvider = providerForModel(selectedPrimary)

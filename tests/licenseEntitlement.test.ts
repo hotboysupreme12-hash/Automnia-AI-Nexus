@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import type { LicenseInfo } from '../src/context/licenseContextValue'
-import { isAutomniaCreditsModelSelectionRoute, isAutomniaFrontierEligibleTier, isAutomniaFrontierModelId, isAutomniaFrontierTier, isStarterSubscriptionOnly, mergeHostedCreditBalance, resolveAgentRoutePresentation, resolveLicenseEntitlement } from '../src/utils/licenseEntitlement'
+import { AUTOMNIA_CREDITS_MODEL_ID, AUTOMNIA_FRONTIER_MODEL_ID, AUTOMNIA_PRO_MODEL_ID, isAutomniaCreditsModelSelectionRoute, isAutomniaFrontierEligibleTier, isAutomniaFrontierModelId, isAutomniaFrontierTier, isAutomniaProModelId, isStarterSubscriptionOnly, mergeHostedCreditBalance, resolveAgentRoutePresentation, resolveLicenseEntitlement } from '../src/utils/licenseEntitlement'
 
 function license(overrides: Partial<LicenseInfo> = {}): LicenseInfo {
   return {
@@ -27,7 +27,10 @@ test('presents permanent hosted tiers as their highest account access and Automn
     ['pro', 'Pro Access'],
     ['enterprise', 'Pro Access'],
   ] as const) {
-    const entitlement = resolveLicenseEntitlement(license({ tier }))
+    const entitlement = resolveLicenseEntitlement(license({
+      tier,
+      ...(tier === 'pro' ? { permanentAccess: true, planPriceCents: null } : {}),
+    }))
     assert.equal(entitlement.tierLabel, expected)
     assert.equal(entitlement.isHosted, true)
     assert.equal(entitlement.isByok, false)
@@ -45,7 +48,11 @@ test('exposes Frontier to Pro, Enterprise, and the dedicated Automnia Frontier t
   assert.equal(isAutomniaFrontierTier('automnia-frontier'), true)
   assert.equal(isAutomniaFrontierEligibleTier('pro'), true)
   assert.equal(isAutomniaFrontierEligibleTier('enterprise'), true)
-  assert.equal(isAutomniaFrontierModelId('automnia-cloud/gemini-4-argon'), true)
+  assert.equal(isAutomniaProModelId(AUTOMNIA_PRO_MODEL_ID), true)
+  assert.equal(isAutomniaFrontierModelId(AUTOMNIA_FRONTIER_MODEL_ID), true)
+  assert.equal(AUTOMNIA_CREDITS_MODEL_ID, 'automnia-cloud/gemini-4-hydrogen')
+  assert.equal(AUTOMNIA_PRO_MODEL_ID, 'automnia-cloud/gemini-4-argon')
+  assert.equal(AUTOMNIA_FRONTIER_MODEL_ID, 'automnia-cloud/gemini-4-carbon')
 
   const prime = resolveLicenseEntitlement(license({ tier: 'pro', permanentAccess: true, byokAllowed: true }))
   assert.equal(prime.automniaFrontierAllowed, true)

@@ -14,8 +14,8 @@ function load(name, context = {}) {
 }
 test('projection removes retired per-agent limits on repeated saves without losing supported limits', () => {
   const project = load('projectConfigForOpenClaw2026_10_6', {
-    RECOMMENDED_OPENCLAW_VERSION: '2026.10.6',
-    resolvedOpenClawRuntimeInfo: () => ({ version: '2026.10.6' }),
+    RECOMMENDED_OPENCLAW_VERSION: '2026.11.5',
+    resolvedOpenClawRuntimeInfo: () => ({ version: '2026.11.5' }),
     isLooseRecord: x => x !== null && typeof x === 'object' && !Array.isArray(x),
   })
   const config = { agents: { entries: { existing: { contextLimits: { memoryGetDefaultLines: 20, toolResultMaxChars: 1000, memoryGetMaxChars: 500 } } }, list: [{ id: 'new', contextLimits: { toolResultMaxChars: 1000, postCompactionMaxChars: 800 } }] } }
@@ -31,8 +31,8 @@ test('projection removes retired per-agent limits on repeated saves without losi
 })
 test('canonical agents hydrate for billing sync and round-trip selected tiers and deletions', () => {
   const context = {
-    RECOMMENDED_OPENCLAW_VERSION: '2026.10.6',
-    resolvedOpenClawRuntimeInfo: () => ({ version: '2026.10.6' }),
+    RECOMMENDED_OPENCLAW_VERSION: '2026.11.5',
+    resolvedOpenClawRuntimeInfo: () => ({ version: '2026.11.5' }),
     isLooseRecord: x => x !== null && typeof x === 'object' && !Array.isArray(x),
   }
   const hydrate = load('hydrateOpenClawAgentEntries', context)
@@ -104,15 +104,45 @@ test('Telegram runtime repair produces a declaration in the actual bundled dispa
     console: { warn() {} },
   })
   const dist = require('node:path').join(__dirname, '../vendor/openclaw/dist')
-  const bundle = fs.readdirSync(dist).find(name => /^bot-message-[^/]+\.mjs$/.test(name))
-  assert.ok(bundle, 'Telegram message bundle exists')
-  const patched = patchTelegram(fs.readFileSync(require('node:path').join(dist, bundle), 'utf8'))
-  const declaration = patched.indexOf('const telegramModelSelected = typeof onModelSelected === "function"')
-  const dispatch = patched.indexOf('\n\t\tconst turnResult = await runChannelInboundEvent({', declaration)
-  const callbackUse = patched.indexOf('telegramModelSelected', dispatch)
+  const bundles = fs.readdirSync(dist)
+    .filter(name => /^bot-message-[^/]+\.mjs$/.test(name))
+    .map(name => ({ name, source: fs.readFileSync(require('node:path').join(dist, name), 'utf8') }))
+  const dispatchBundle = bundles.find(({ source }) =>
+    /const\s*\{\s*onModelSelected(?::\s*[A-Za-z_$][\w$]*)?\s*,\s*\.\.\./u.test(source)
+      && source.includes('runChannelInboundEvent({'),
+  )
+  assert.ok(dispatchBundle, 'Telegram dispatch bundle exists')
+  const patched = patchTelegram(dispatchBundle.source)
+  const declarationMatch = /const telegramModelSelected = typeof ([A-Za-z_$][\w$]*) === "function"/u.exec(patched)
+  const declaration = declarationMatch?.index ?? -1
+  const callbackName = declarationMatch?.[1]
+  const dispatchMatch = declaration >= 0
+    ? /\n\t\tconst [A-Za-z_$][\w$]* = await runChannelInboundEvent\(\{/u.exec(patched.slice(declaration))
+    : null
+  const dispatch = dispatchMatch ? declaration + dispatchMatch.index : -1
+  const callbackUse = dispatch >= 0
+    ? patched.indexOf('onModelSelected: telegramModelSelected', dispatch)
+    : -1
   assert.ok(declaration >= 0, 'actual bundle receives the callback declaration')
+  assert.ok(callbackName, 'actual bundle callback binding is captured')
   assert.ok(dispatch > declaration, 'declaration is inside the dispatch function before the turn begins')
   assert.ok(callbackUse > dispatch, 'dispatch callback use follows its declaration')
+  assert.ok(patched.includes(`return ${callbackName}(...args);`), 'wrapper returns through the original callback')
+})
+test('OpenClaw exposes native thinking-level controls for Telegram sessions', () => {
+  const dist = require('node:path').join(__dirname, '../vendor/openclaw/dist')
+  const commandRegistry = fs.readdirSync(dist).find(name => /^commands-registry\.data-[^/]+\.mjs$/.test(name))
+  const statusCommands = fs.readdirSync(dist).find(name => /^command-status-builders-[^/]+\.mjs$/.test(name))
+  assert.ok(commandRegistry, 'bundled command registry exists')
+  assert.ok(statusCommands, 'bundled command status metadata exists')
+  const registrySource = fs.readFileSync(require('node:path').join(dist, commandRegistry), 'utf8')
+  const statusSource = fs.readFileSync(require('node:path').join(dist, statusCommands), 'utf8')
+  const telegramDocs = fs.readFileSync(require('node:path').join(__dirname, '../vendor/openclaw/docs/channels/telegram/messaging.md'), 'utf8')
+  const thinkingDocs = fs.readFileSync(require('node:path').join(__dirname, '../vendor/openclaw/docs/tools/thinking.md'), 'utf8')
+  assert.match(registrySource, /defineBuiltinCommand\("think",\s*"Set thinking level\."/u)
+  assert.match(statusSource, /"\/think <level\|default>"/u)
+  assert.match(telegramDocs, /`commands\.native: "auto"` enables native commands for Telegram/u)
+  assert.match(thinkingDocs, /\/think default/u)
 })
 test('cron projection reads runtime state from schema-15 JSON and supports legacy columns', () => {
   const project = load('cronJobsCompatibleSource')

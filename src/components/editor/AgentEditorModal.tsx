@@ -24,9 +24,11 @@ import {
   AUTOMNIA_CREDITS_MODEL_ID,
   AUTOMNIA_RELAY_MODEL_IDS,
   AUTOMNIA_RELAY_MODEL_LABELS,
+  automniaRelayModelLabel,
   isAutomniaCreditsModelId,
   isAutomniaCreditsModelSelectionRoute,
   isAutomniaFrontierModelId,
+  isAutomniaProModelId,
   resolveAgentRoutePresentation,
   resolveLicenseEntitlement,
 } from '../../utils/licenseEntitlement'
@@ -119,11 +121,15 @@ const modelOptionFromId = (modelId: string): AvailableModel | null => {
   const [rawProvider = '', ...modelParts] = id.split('/')
   const provider = isOpenAiCodexSubscriptionModel(id) ? 'openai' : rawProvider || 'model'
   const name = modelParts.join('/') || id
-  return { id, alias: name, provider, name }
+  const managedName = provider.toLowerCase() === 'automnia-cloud' ? automniaRelayModelLabel(id) : name
+  return { id, alias: managedName, provider, name: managedName }
 }
 
+const isAutomniaPaidTierModel = (modelId: string) =>
+  isAutomniaFrontierModelId(modelId) || isAutomniaProModelId(modelId)
+
 const isAllowedAutomniaHostedModel = (modelId: string, frontierAllowed: boolean) =>
-  isAutomniaCreditsModelId(modelId) || (frontierAllowed && isAutomniaFrontierModelId(modelId))
+  isAutomniaCreditsModelId(modelId) || (frontierAllowed && isAutomniaPaidTierModel(modelId))
 
 const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: string[], creditsOnly = false, frontierAllowed = false) => {
   const merged = new Map<string, AvailableModel>()
@@ -132,7 +138,7 @@ const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: strin
         ...AUTOMNIA_MODEL_OPTIONS.filter((model) => isAllowedAutomniaHostedModel(model.id, frontierAllowed)),
         ...catalog.filter((model) => isAllowedAutomniaHostedModel(model.id, frontierAllowed)),
       ]
-    : catalog.filter((model) => frontierAllowed || !isAutomniaFrontierModelId(model.id))
+    : catalog.filter((model) => frontierAllowed || !isAutomniaPaidTierModel(model.id))
   const seededCatalog = creditsOnly
     ? allowedCatalog
     : catalog.some((model) => model.id === CODEX_5_3_SPARK_MODEL_ID)
@@ -143,7 +149,7 @@ const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: strin
   }
   for (const selectedId of creditsOnly
     ? selectedIds.filter((modelId) => isAllowedAutomniaHostedModel(modelId, frontierAllowed))
-    : selectedIds.filter((modelId) => frontierAllowed || !isAutomniaFrontierModelId(modelId))) {
+    : selectedIds.filter((modelId) => frontierAllowed || !isAutomniaPaidTierModel(modelId))) {
     if (!isSelectableModelId(selectedId)) continue
     const synthetic = modelOptionFromId(selectedId)
     if (synthetic && !merged.has(synthetic.id)) merged.set(synthetic.id, synthetic)
@@ -724,7 +730,7 @@ export function AgentEditorModal() {
     if (!automniaCreditsOnlyRoute) return mergeSelectedModelOptions(models, selectedModelIds, false, entitlement.automniaFrontierAllowed)
     const routeModels = [
       ...AUTOMNIA_MODEL_OPTIONS.filter((model) => isAllowedAutomniaHostedModel(model.id, entitlement.automniaFrontierAllowed)),
-      ...models.filter((model) => AUTOMNIA_MODEL_IDS.has(model.id) || (entitlement.automniaFrontierAllowed && isAutomniaFrontierModelId(model.id))),
+      ...models.filter((model) => AUTOMNIA_MODEL_IDS.has(model.id) && isAllowedAutomniaHostedModel(model.id, entitlement.automniaFrontierAllowed)),
     ]
     const routeSelectedModelIds = selectedModelIds.filter((modelId) => isAllowedAutomniaHostedModel(modelId, entitlement.automniaFrontierAllowed))
     return mergeSelectedModelOptions(routeModels, routeSelectedModelIds, true, entitlement.automniaFrontierAllowed)
@@ -1547,8 +1553,8 @@ export function AgentEditorModal() {
   },[isOpen,automniaCreditsOnlyRoute,entitlement.automniaFrontierAllowed,primary,fallbacks])
   useEffect(()=>{
     if(!isOpen||automniaCreditsOnlyRoute||entitlement.automniaFrontierAllowed)return
-    const normalizedPrimary=isAutomniaFrontierModelId(primary)?AUTOMNIA_CREDITS_MODEL_ID:primary
-    const normalizedFallbacks=fallbacks.filter((modelId)=>!isAutomniaFrontierModelId(modelId))
+    const normalizedPrimary=isAutomniaPaidTierModel(primary)?AUTOMNIA_CREDITS_MODEL_ID:primary
+    const normalizedFallbacks=fallbacks.filter((modelId)=>!isAutomniaPaidTierModel(modelId))
     if(normalizedPrimary!==primary)setPrimary(normalizedPrimary)
     if(normalizedFallbacks.length!==fallbacks.length)setFallbacks(normalizedFallbacks)
   },[isOpen,automniaCreditsOnlyRoute,entitlement.automniaFrontierAllowed,primary,fallbacks])

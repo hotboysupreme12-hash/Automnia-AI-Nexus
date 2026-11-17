@@ -1,5 +1,4 @@
 import {
-  AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS,
   AUTOMNIA_CREDITS_MODEL_ID,
   AUTOMNIA_CREDITS_PROVIDER_ID,
   AUTOMNIA_RELAY_MODEL_IDS,
@@ -100,126 +99,82 @@ export type ModelCatalogServiceOptions = {
   writeOpenclawConfig: (config: ModelCatalogOpenClawConfig) => Promise<unknown>
 }
 
-// These IDs are present in the bundled OpenClaw Anthropic provider/runtime
-// and in Anthropic's current model catalog. Account-specific availability is
-// still determined by `openclaw models list`; this set only prevents fallback
-// mode from inventing or surfacing unverified Anthropic IDs.
+// These are the current Anthropic model IDs included in fallback mode.
+// Account-specific availability is still determined by `openclaw models list`;
+// this set prevents fallback mode from surfacing unverified Anthropic IDs.
 export const OPENCLAW_VERIFIED_ANTHROPIC_MODEL_IDS = new Set([
-  'claude-fable-5-1',
-  'claude-fable-5',
-  'claude-mythos-5',
-  'claude-opus-5',
-  'claude-sonnet-5',
-  'claude-haiku-4-5',
-  'claude-opus-4-8',
-  'claude-opus-4-7',
-  'claude-opus-4-6',
-  'claude-sonnet-4-6',
+  'claude-fable-5-2',
+  'claude-opus-5-5',
+  'claude-sonnet-5-5',
+  'claude-haiku-5-5',
 ])
 
 export const FALLBACK_MODELS: Array<{ id: string; alias?: string }> = [
-  // Keep the local picker useful while OpenClaw is starting or the catalog is
-  // temporarily unavailable. These are individually verified current model IDs.
-  { id: 'openai/gpt-6-astra', alias: 'GPT-6 Astra (flagship)' },
-  { id: 'openai/gpt-6.1-sol', alias: 'GPT-6.1 Sol (balanced)' },
-  { id: 'openai/gpt-6-luna', alias: 'GPT-6 Luna (high-volume)' },
-  { id: 'openai/gpt-5.6-sol', alias: 'GPT-5.6 Sol (flagship)' },
-  { id: 'openai/gpt-5.6-terra', alias: 'GPT-5.6 Terra (balanced)' },
-  { id: 'openai/gpt-5.6-luna', alias: 'GPT-5.6 Luna (high-volume)' },
-  { id: 'openai/gpt-5.6', alias: 'GPT-5.6 (current alias)' },
-  { id: 'openai/gpt-5.5', alias: 'gpt-5.5' },
-  { id: 'openai/gpt-5.5-pro', alias: 'gpt-5.5-pro' },
-  { id: 'openai/gpt-5.4', alias: 'gpt-5.4' },
-  { id: 'openai/gpt-5.4-pro', alias: 'gpt-5.4-pro' },
-  { id: 'openai/gpt-5.4-mini', alias: 'gpt-5.4-mini' },
-  { id: 'openai/gpt-5.4-nano', alias: 'gpt-5.4-nano' },
-  { id: 'openai/gpt-5.3-codex-spark', alias: 'gpt-5.3-codex-spark' },
-  { id: 'openai/gpt-5.3-chat-latest', alias: 'gpt-5.3-chat-latest' },
-  { id: 'openai/o4-mini', alias: 'o4-mini' },
-  { id: 'openai/o4-mini-deep-research', alias: 'o4-mini-deep-research' },
-  { id: 'openai/o3', alias: 'o3' },
-  { id: 'openai/o3-pro', alias: 'o3-pro' },
-  { id: 'openai/o3-mini', alias: 'o3-mini' },
-  { id: 'openai/o3-deep-research', alias: 'o3-deep-research' },
-  { id: 'openai/o1', alias: 'o1' },
-  { id: 'openai/o1-pro', alias: 'o1-pro' },
-  { id: 'openai/gpt-4.1-mini', alias: 'gpt-4.1-mini' },
-  { id: 'openai/gpt-5.2', alias: 'gpt-5.2' },
-  { id: 'openai/gpt-5.1', alias: 'gpt-5.1' },
+  // This is an offline/startup hint only. Authenticated provider discovery
+  // remains authoritative for account and deployment availability.
+  { id: 'openai/gpt-6.2-astra', alias: 'GPT-6.2 Astra (frontier)' },
+  { id: 'openai/gpt-6.2-sol', alias: 'GPT-6.2 Sol (balanced)' },
   // Automnia is a provider-backed billing route. Keep its bounded hosted
   // fallback chain in the shared catalog so the Gateway can fail over without
   // ever leaving the hosted credits boundary.
   ...AUTOMNIA_RELAY_MODEL_IDS.map((id) => ({ id, alias: AUTOMNIA_RELAY_MODEL_LABELS[id] })),
-  { id: AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS[1], alias: 'Automnia Classic' },
-  { id: 'anthropic/claude-fable-5-1', alias: 'Claude Fable 5.1 (flagship)' },
-  { id: 'anthropic/claude-fable-5', alias: 'Claude Fable 5 (flagship)' },
-  { id: 'anthropic/claude-sonnet-5', alias: 'Claude Sonnet 5' },
-  { id: 'anthropic/claude-opus-5', alias: 'Claude Opus 5' },
-  { id: 'anthropic/claude-opus-4-8', alias: 'Claude Opus 4.8' },
-  { id: 'anthropic/claude-opus-4-7', alias: 'Claude Opus 4.7' },
-  { id: 'anthropic/claude-haiku-4-5', alias: 'Claude Haiku 4.5' },
-  { id: 'anthropic/claude-opus-4-6', alias: 'Claude Opus 4.6' },
-  { id: 'anthropic/claude-sonnet-4-6', alias: 'Claude Sonnet 4.6' },
-  { id: 'opencode/claude-opus-4-6', alias: 'opencode-opus' },
-  { id: 'google/gemini-3.1-pro-preview', alias: 'gemini-3.1-pro' },
-  { id: 'google/gemini-3.1-pro-preview-customtools', alias: 'gemini-3.1-pro-tools' },
-  { id: 'google/gemini-3.8-flash', alias: 'Gemini 3.8 Flash (GA)' },
-  { id: 'google/gemini-3.7-flash', alias: 'Gemini 3.7 Flash (GA)' },
-  { id: 'google/gemini-3.6-flash', alias: 'Gemini 3.6 Flash (GA)' },
-  { id: 'google/gemini-3.5-flash', alias: 'gemini-3.5-flash' },
-  { id: 'google/gemini-3.5-flash-lite', alias: 'Gemini 3.5 Flash-Lite (GA)' },
-  { id: 'google/gemini-3-flash-preview', alias: 'gemini-3-flash' },
-  { id: 'google/gemini-3.1-flash-lite', alias: 'gemini-3.1-flash-lite' },
-  { id: 'google/gemini-3.1-flash-lite-preview', alias: 'gemini-3.1-flash-lite-preview' },
-  { id: 'google/gemini-3-pro-preview', alias: 'gemini-3-pro' },
-  { id: 'google/gemini-2.5-pro', alias: 'gemini-2.5-pro' },
-  { id: 'google/gemini-2.5-flash', alias: 'flash' },
-  { id: 'google/gemini-2.5-flash-lite', alias: 'flash-lite' },
-  { id: 'google-vertex/gemini-2.5-pro', alias: 'vertex-gemini-2.5-pro' },
-  { id: 'google-vertex/gemini-2.5-flash', alias: 'vertex-flash' },
-  { id: 'google-vertex/gemini-2.5-flash-lite', alias: 'vertex-flash-lite' },
-  { id: 'google-vertex/gemini-3.8-flash', alias: 'Vertex Gemini 3.8 Flash (GA)' },
-  { id: 'google-vertex/gemini-3.7-flash', alias: 'Vertex Gemini 3.7 Flash (GA)' },
-  { id: 'google-vertex/gemini-3.6-flash', alias: 'Vertex Gemini 3.6 Flash (GA)' },
-  { id: 'google-vertex/gemini-3.5-flash', alias: 'vertex-gemini-3.5-flash' },
-  { id: 'google-vertex/gemini-3.5-flash-lite', alias: 'Vertex Gemini 3.5 Flash-Lite (GA)' },
-  { id: 'google-vertex/gemini-3.1-pro-preview', alias: 'vertex-gemini-3.1-pro' },
-  { id: 'google-vertex/gemini-3-flash-preview', alias: 'vertex-gemini-3-flash' },
-  { id: 'google-vertex/gemini-3.1-flash-lite', alias: 'vertex-gemini-3.1-flash-lite' },
-  { id: 'google-vertex/gemini-3.1-flash-lite-preview', alias: 'vertex-gemini-3.1-flash-lite' },
-  { id: 'google-vertex/gemini-3-pro-preview', alias: 'vertex-gemini-3-pro' },
-  { id: 'deepseek/deepseek-v4-pro', alias: 'deepseek-v4-pro' },
-  { id: 'deepseek/deepseek-v4-flash', alias: 'deepseek-v4-flash' },
-  { id: 'deepseek/deepseek-chat', alias: 'deepseek-chat' },
-  { id: 'deepseek/deepseek-reasoner', alias: 'deepseek-r1' },
-  { id: 'meta/muse-spark-1.1', alias: 'Muse Spark 1.1 (Meta)' },
-  { id: 'openrouter/deepseek/deepseek-v4-pro', alias: 'openrouter-deepseek-v4-pro' },
-  { id: 'openrouter/deepseek/deepseek-v4-flash', alias: 'openrouter-deepseek-v4-flash' },
+  { id: 'anthropic/claude-fable-5-2', alias: 'Claude Fable 5.2 (frontier)' },
+  { id: 'anthropic/claude-opus-5-5', alias: 'Claude Opus 5.5' },
+  { id: 'anthropic/claude-sonnet-5-5', alias: 'Claude Sonnet 5.5 (balanced)' },
+  { id: 'anthropic/claude-haiku-5-5', alias: 'Claude Haiku 5.5 (fast)' },
+  { id: 'google/gemini-4-carbon', alias: 'Gemini 4 Carbon (frontier)' },
+  { id: 'google/gemini-4-argon', alias: 'Gemini 4 Argon (Pro)' },
+  { id: 'google/gemini-4-hydrogen', alias: 'Gemini 4 Hydrogen (balanced)' },
+  { id: 'google/gemini-3.8-flash', alias: 'Gemini 3.8 Flash' },
+  { id: 'google-vertex/gemini-4-carbon', alias: 'Vertex Gemini 4 Carbon (frontier)' },
+  { id: 'google-vertex/gemini-4-argon', alias: 'Vertex Gemini 4 Argon (Pro)' },
+  { id: 'google-vertex/gemini-4-hydrogen', alias: 'Vertex Gemini 4 Hydrogen (balanced)' },
+  { id: 'google-vertex/gemini-3.8-flash', alias: 'Vertex Gemini 3.8 Flash' },
+  { id: 'xai/grok-4.7', alias: 'Grok 4.7 (xAI)' },
+  { id: 'deepseek/deepseek-flash', alias: 'DeepSeek V4.1 Flash' },
+  { id: 'deepseek/deepseek-v4-pro', alias: 'DeepSeek V4 Pro' },
+  { id: 'mistral/mistral-large-4-0', alias: 'Mistral Large 4' },
+  { id: 'meta/muse-wonder-1.0', alias: 'Muse Wonder 1.0 (frontier)' },
+  { id: 'meta/muse-spark-1.3', alias: 'Muse Spark 1.3' },
+  { id: 'qwen/qwen4-max', alias: 'Qwen4 Max (frontier)' },
+  { id: 'qwen/qwen3.7-plus', alias: 'Qwen3.7 Plus (balanced)' },
+  { id: 'qwen/qwen3.8-flash', alias: 'Qwen3.8 Flash (fast)' },
+  { id: 'moonshot/kimi-k3.1-pro', alias: 'Kimi K3.1 Pro (frontier)' },
+  { id: 'moonshot/kimi-k3.1-pro-highspeed', alias: 'Kimi K3.1 Pro Highspeed' },
 ]
 
 export const KNOWN_UNAVAILABLE_MODEL_IDS = new Set<string>([
   'openai/gpt-5.3-chat-latest',
   'google/gemini-3.1-pro-preview-customtools',
+  'deepseek/deepseek-chat',
+  'deepseek/deepseek-reasoner',
+  'deepseek/deepseek-v4-flash',
+  'deepseek/deepseek-v4-flash-vision-exp',
 ])
 
 export const OPENCLAW_CONFIG_SUPPRESSED_MODEL_IDS = new Set([
   'openai/gpt-5.3-chat-latest',
   'google/gemini-3.1-pro-preview-customtools',
+  'deepseek/deepseek-chat',
+  'deepseek/deepseek-reasoner',
+  'deepseek/deepseek-v4-flash',
+  'deepseek/deepseek-v4-flash-vision-exp',
 ])
 
-// Keep the newest production Gemini Flash release readily visible even if
-// OpenClaw is still warming up or returns a sparse catalog. Pin both native
-// Google transports so users can choose API-key Gemini or project-scoped
-// Vertex without waiting for dynamic catalog discovery.
+// Keep current Google models visible during startup while preserving provider
+// discovery as the authority for account-specific availability.
 const PINNED_MODEL_IDS = [
+  'google-vertex/gemini-4-carbon',
+  'google/gemini-4-carbon',
+  'google-vertex/gemini-4-argon',
+  'google/gemini-4-argon',
+  'google-vertex/gemini-4-hydrogen',
+  'google/gemini-4-hydrogen',
   'google-vertex/gemini-3.8-flash',
   'google/gemini-3.8-flash',
-  'google-vertex/gemini-3.7-flash',
-  'google/gemini-3.7-flash',
+  ...AUTOMNIA_RELAY_MODEL_IDS.slice().reverse(),
 ]
 const OPENROUTER_PROVIDER_WILDCARD_MODEL_ID = 'openrouter/*'
-const OPENROUTER_DEEPSEEK_V4_PRO_MODEL_ID = 'openrouter/deepseek/deepseek-v4-pro'
-const OPENROUTER_DEEPSEEK_V4_FLASH_MODEL_ID = 'openrouter/deepseek/deepseek-v4-flash'
 const AVAILABLE_MODELS_CACHE_MS = 5 * 60 * 1000
 
 function defaultWarning(message: string, error: unknown) {
@@ -234,10 +189,16 @@ export function splitModelId(modelId: string) {
   }
 }
 
-function isUnsupportedGoogleGemini37Model(modelId: string) {
+function isSupersededGoogleGeminiModel(modelId: string) {
   const { provider, model } = splitModelId(modelId)
   if (!['google', 'google-vertex'].includes(provider.toLowerCase())) return false
-  return /^gemini-3\.7(?:$|[-@])/i.test(model) && !/^gemini-3\.7-flash(?:$|[-@])/i.test(model)
+  if (!/^gemini-/i.test(model)) return false
+  return !/^gemini-(?:3\.8-flash|4-(?:hydrogen|argon|carbon))(?:$|[-@])/i.test(model)
+}
+
+function isSupersededModelId(modelId: string) {
+  const canonicalModelId = canonicalAgentModelId(modelId)
+  return KNOWN_UNAVAILABLE_MODEL_IDS.has(canonicalModelId) || isSupersededGoogleGeminiModel(canonicalModelId)
 }
 
 function automniaRelayModelLabel(modelId: string) {
@@ -249,7 +210,7 @@ function automniaRelayModelLabel(modelId: string) {
 }
 
 export function isOpenAiCodexSubscriptionModelName(model: string) {
-  return /^gpt-5(?:\.\d+)?(?:-[a-z0-9][a-z0-9.-]*)?$/i.test(model.trim())
+  return /^gpt-(?:5|6)(?:\.\d+)?(?:-[a-z0-9][a-z0-9.-]*)?$/i.test(model.trim())
 }
 
 export function canonicalAgentModelId(modelId: string | undefined) {
@@ -280,7 +241,8 @@ export function isModelSafeForOpenClawConfig(modelId: string) {
     canonicalModelId &&
       canonicalModelId.includes('/') &&
       !KNOWN_UNAVAILABLE_MODEL_IDS.has(canonicalModelId) &&
-      !OPENCLAW_CONFIG_SUPPRESSED_MODEL_IDS.has(canonicalModelId),
+      !OPENCLAW_CONFIG_SUPPRESSED_MODEL_IDS.has(canonicalModelId) &&
+      !isSupersededGoogleGeminiModel(canonicalModelId),
   )
 }
 
@@ -302,7 +264,7 @@ function displayProviderForAvailableModel(model: AvailableModelInput, id: string
 function fallbackAvailableModels(streamingCapabilityForModel: ModelCatalogServiceOptions['streamingCapabilityForModel']): AvailableModelOutput[] {
   return FALLBACK_MODELS
     .filter((model) => {
-      if (KNOWN_UNAVAILABLE_MODEL_IDS.has(model.id) || isUnsupportedGoogleGemini37Model(model.id)) return false
+      if (isSupersededModelId(model.id)) return false
       const [provider, modelId] = model.id.split('/')
       return provider !== 'anthropic' || OPENCLAW_VERIFIED_ANTHROPIC_MODEL_IDS.has(modelId || '')
     })
@@ -323,7 +285,7 @@ function mergeAvailableModels(
   const addModel = (model: AvailableModelInput) => {
     const id = canonicalAgentModelId(modelIdFor(model))
     if (!id) return
-    if (KNOWN_UNAVAILABLE_MODEL_IDS.has(id) || isUnsupportedGoogleGemini37Model(id)) return
+    if (isSupersededModelId(id)) return
     const provider = displayProviderForAvailableModel(model, id)
     const fallbackEntry = FALLBACK_MODELS.find((entry) => entry.id === id)
     const managedLabel = automniaRelayModelLabel(id)
@@ -386,7 +348,7 @@ export function ensureConfiguredProviderModel(config: ModelCatalogOpenClawConfig
   if (!isModelSafeForOpenClawConfig(modelId)) return
   const { provider, model } = splitModelId(canonicalAgentModelId(modelId))
   if (!provider || !model) return
-  if (!['openai', 'anthropic', 'google', 'google-vertex', 'deepseek'].includes(provider)) return
+  if (!['openai', 'anthropic', 'google', 'google-vertex', 'deepseek', 'xai', 'mistral', 'meta', 'qwen', 'moonshot', AUTOMNIA_CREDITS_PROVIDER_ID].includes(provider)) return
 
   if (!config.models) config.models = {}
   if (!config.models.providers) config.models.providers = {}
@@ -412,10 +374,43 @@ export function ensureConfiguredProviderModel(config: ModelCatalogOpenClawConfig
     providerConfig.api = 'google-vertex'
     if (!providerConfig.apiKey) providerConfig.apiKey = 'gcp-vertex-credentials'
   }
-  if (provider === 'deepseek') {
-    if (!providerConfig.baseUrl) providerConfig.baseUrl = 'https://api.deepseek.com'
-    providerConfig.api = 'openai-completions'
-    if (!providerConfig.apiKey) providerConfig.apiKey = 'DEEPSEEK_API_KEY'
+  const directApiProviders: Record<string, { api: string; baseUrl: string; apiKey: string }> = {
+    deepseek: {
+      api: 'openai-completions',
+      baseUrl: 'https://api.deepseek.com',
+      apiKey: '${DEEPSEEK_API_KEY}',
+    },
+    mistral: {
+      api: 'openai-completions',
+      baseUrl: 'https://api.mistral.ai/v1',
+      apiKey: '${MISTRAL_API_KEY}',
+    },
+    meta: {
+      api: 'openai-responses',
+      baseUrl: 'https://api.meta.ai/v1',
+      apiKey: '${MODEL_API_KEY}',
+    },
+    qwen: {
+      api: 'openai-completions',
+      baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+      apiKey: '${QWEN_API_KEY}',
+    },
+    moonshot: {
+      api: 'openai-completions',
+      baseUrl: 'https://api.moonshot.ai/v1',
+      apiKey: '${MOONSHOT_API_KEY}',
+    },
+  }
+  const directApi = directApiProviders[provider]
+  if (directApi) {
+    // These current providers expose OpenAI-compatible endpoints. OpenClaw's
+    // first-party plugins add provider-specific discovery and media features,
+    // but static Automnia model rows can execute through the documented API
+    // without depending on an uninstalled external plugin. Respect an
+    // explicit deployment endpoint, including Qwen/Moonshot regional routes.
+    if (!providerConfig.baseUrl) providerConfig.baseUrl = directApi.baseUrl
+    providerConfig.api = directApi.api
+    if (!providerConfig.apiKey) providerConfig.apiKey = directApi.apiKey
   }
   if (!Array.isArray(providerConfig.models)) {
     if (providerConfig.models && typeof providerConfig.models === 'object') return
@@ -429,9 +424,16 @@ export function ensureConfiguredProviderModel(config: ModelCatalogOpenClawConfig
       ? 'anthropic-messages'
     : provider === 'google-vertex'
       ? 'google-vertex'
-      : provider === 'deepseek'
-        ? 'openai-completions'
+    : directApiProviders[provider]
+        ? directApiProviders[provider].api
         : undefined
+  const managedAutomniaThinking = provider === AUTOMNIA_CREDITS_PROVIDER_ID
+    ? model === 'gemini-4-hydrogen'
+      ? 'high'
+      : model === 'gemini-4-argon' || model === 'gemini-4-carbon'
+        ? 'medium'
+        : undefined
+    : undefined
   for (const [index, entry] of models.entries()) {
     if (typeof entry === 'string') {
       if (entry === model) {
@@ -443,10 +445,22 @@ export function ensureConfiguredProviderModel(config: ModelCatalogOpenClawConfig
     if (entry?.id === model || entry?.model === model || entry?.name === model) {
       if (!entry.name) entry.name = model
       if (providerApi) entry.api = providerApi
+      if (managedAutomniaThinking && entry && typeof entry === 'object') {
+        const configured = entry as unknown as Record<string, unknown>
+        const params = configured.params && typeof configured.params === 'object' && !Array.isArray(configured.params)
+          ? configured.params as Record<string, unknown>
+          : {}
+        configured.params = { ...params, thinking: managedAutomniaThinking }
+      }
       return
     }
   }
-  models.push(providerApi ? { id: model, name: model, api: providerApi } : { id: model, name: model })
+  models.push({
+    id: model,
+    name: model,
+    ...(providerApi ? { api: providerApi } : {}),
+    ...(managedAutomniaThinking ? { params: { thinking: managedAutomniaThinking } } : {}),
+  })
 }
 
 export function createModelCatalogService(options: ModelCatalogServiceOptions) {
@@ -488,10 +502,6 @@ export function createModelCatalogService(options: ModelCatalogServiceOptions) {
 
   function ensureOpenRouterModelCatalogAllowlist(config: ModelCatalogOpenClawConfig) {
     ensureModelAllowlistEntry(config, OPENROUTER_PROVIDER_WILDCARD_MODEL_ID, options, 'OpenRouter catalog')
-    ensureConfiguredModelAllowlist(config, [
-      OPENROUTER_DEEPSEEK_V4_PRO_MODEL_ID,
-      OPENROUTER_DEEPSEEK_V4_FLASH_MODEL_ID,
-    ])
   }
 
   async function loadAvailableModelsFromOpenClaw(): Promise<{ models: AvailableModelOutput[]; source: AvailableModelCatalogCache['source'] }> {

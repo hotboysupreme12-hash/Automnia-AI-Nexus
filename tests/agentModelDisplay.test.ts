@@ -5,11 +5,10 @@ import { describeAgentModel } from '../src/utils/agentModelDisplay'
 
 test('agent cards use customer-facing Automnia model classes', () => {
   const cases = [
-    ['automnia-cloud/gemini-4-argon', 'Automnia Frontier'],
-    ['automnia-cloud/gemini-3.8-flash', 'Automnia Prime'],
-    ['automnia-cloud/gemini-3.7-flash', 'Automnia Balanced'],
-    ['automnia-cloud/gemini-3.6-flash', 'Automnia Swift'],
-    ['automnia-cloud/gemini-2.5-flash', 'Automnia Classic'],
+    ['automnia-cloud/gemini-4-carbon', 'Automnia Frontier'],
+    ['automnia-cloud/gemini-4-argon', 'Automnia Pro'],
+    ['automnia-cloud/gemini-4-hydrogen', 'Automnia Balanced'],
+    ['automnia-cloud/gemini-3.8-flash', 'Automnia Swift'],
   ] as const
 
   for (const [modelId, expected] of cases) {

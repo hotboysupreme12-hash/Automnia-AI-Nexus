@@ -90,6 +90,7 @@ import {
   AUTOMNIA_CREDITS_MODEL_ID,
   AUTOMNIA_CREDITS_PROVIDER_ID,
   AUTOMNIA_FRONTIER_MODEL_ACCESS_MESSAGE,
+  AUTOMNIA_PRO_MODEL_ACCESS_MESSAGE,
   AUTOMNIA_RELAY_MODEL_IDS,
   AUTOMNIA_RELAY_MODEL_LABELS,
   automniaHostedModelIdsForTier,
@@ -97,6 +98,7 @@ import {
   creditsOnlyModelSelection,
   isAutomniaCreditsModelId,
   isAutomniaFrontierModelId,
+  isAutomniaProModelId,
   isAutomniaRelayModelId,
 } from './services/license/creditsOnlyModelPolicy'
 import { createAccountAuthService } from './services/auth/accountAuthService'
@@ -123,8 +125,11 @@ import {
   type ModelProviderConfig,
 } from './services/providers/modelCatalogService'
 import {
-  AUTOMNIA_GEMINI_37_OPENAI_REASONING_COMPAT,
-  AUTOMNIA_GEMINI_37_OPENCLAW_THINKING_LEVEL_MAP,
+  automniaThinkingDefaultForModel,
+  AUTOMNIA_GEMINI_4_HYDROGEN_OPENAI_REASONING_COMPAT,
+  AUTOMNIA_GEMINI_4_HYDROGEN_OPENCLAW_THINKING_LEVEL_MAP,
+  AUTOMNIA_GEMINI_4_OPENAI_REASONING_COMPAT,
+  AUTOMNIA_GEMINI_4_OPENCLAW_THINKING_LEVEL_MAP,
   thinkingForAutomniaGeminiRuntimeModel,
 } from './services/providers/automniaGeminiThinking'
 import { applyGoogleVertexModelLimits } from './services/providers/googleVertexModelPolicy'
@@ -144,6 +149,7 @@ import {
   type ProviderAuthOpenClawConfig,
   type ProviderAuthService,
 } from './services/providers/providerAuthService'
+import { createModelCenterService, type ModelCapabilityStoreState } from './services/providers/modelCenterService'
 import {
   createProviderSetupService,
   GOOGLE_VERTEX_ACCESS_TOKEN_KEYS,
@@ -378,7 +384,7 @@ const CODEX_LEGACY_AGENT_PROFILE_ROOT = path.join(HOME_DIR, '.codex', 'agent-pro
 const LOCAL_AUTH_PATH = path.join(OPENCLAW_STATE_ROOT, 'local-auth.json')
 const CONTROL_CENTER_LEDGER_PATHS = runtimeLedgerPathsForStateRoot(OPENCLAW_STATE_ROOT)
 const RUNTIME_MONITOR_CLEAR_MARKER_PATH = runtimeMonitorClearMarkerPath(CONTROL_CENTER_LEDGER_PATHS)
-const RECOMMENDED_OPENCLAW_VERSION = '2026.10.6'
+const RECOMMENDED_OPENCLAW_VERSION = '2026.11.5'
 const DEFAULT_OPENCLAW_FAST_MODE = 'auto'
 const DEFAULT_OPENCLAW_FAST_AUTO_ON_SECONDS = 60
 const FAST_MODE_MODEL_PARAM_PROVIDERS = new Set(['openai', 'openai-codex', 'anthropic', 'xai', 'minimax'])
@@ -1806,127 +1812,39 @@ const OPENCLAW_AGENT_TURN_TIMEOUT_FLOOR_SECONDS = 10 * 60
 const OPENCLAW_TIMEOUT_RECOVERY_SECONDS = 15 * 60
 const MODEL_RESILIENCE_FALLBACKS: Record<string, string[]> = {
   [AUTOMNIA_CREDITS_MODEL_ID]: [...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS],
-  'openai/gpt-6-astra': [
-    'openai/gpt-5.6-sol',
-    'openai/gpt-5.6-terra',
+  'openai/gpt-6.2-astra': [
+    'openai/gpt-6.2-sol',
   ],
-  'openai/gpt-5.6-sol': [
-    'openai/gpt-5.6-terra',
-    'openai/gpt-5.6-luna',
+  'openai/gpt-6.2-sol': [
+    'openai/gpt-6.2-astra',
   ],
-  'openai/gpt-5.6-terra': [
-    'openai/gpt-5.6-sol',
-    'openai/gpt-5.6-luna',
+  'google/gemini-4-carbon': [
+    'google/gemini-4-argon',
+    'google/gemini-4-hydrogen',
   ],
-  'openai/gpt-5.6-luna': [
-    'openai/gpt-5.6-terra',
-    'openai/gpt-5.6-sol',
+  'google/gemini-4-argon': [
+    'google/gemini-4-hydrogen',
+    'google/gemini-3.8-flash',
   ],
-  'google/gemini-3.8-flash': [
-    'google/gemini-3.7-flash',
-    'google/gemini-3.6-flash',
-    'google/gemini-3.5-flash',
-    'google/gemini-3.5-flash-lite',
-    'google/gemini-3.1-flash-lite',
+  'google/gemini-4-hydrogen': [
+    'google/gemini-3.8-flash',
   ],
-  'google/gemini-3.7-flash': [
-    'google/gemini-3.6-flash',
-    'google/gemini-3.5-flash',
-    'google/gemini-3.5-flash-lite',
-    'google/gemini-3.1-flash-lite',
+  'google-vertex/gemini-4-carbon': [
+    'google-vertex/gemini-4-argon',
+    'google-vertex/gemini-4-hydrogen',
   ],
-  'google/gemini-3.6-flash': [
-    'google/gemini-3.5-flash',
-    'google/gemini-3.5-flash-lite',
-    'google/gemini-3.1-flash-lite',
-    'google/gemini-2.5-flash',
-    'google/gemini-2.5-flash-lite',
+  'google-vertex/gemini-4-argon': [
+    'google-vertex/gemini-4-hydrogen',
+    'google-vertex/gemini-3.8-flash',
   ],
-  'google/gemini-3.5-flash': [
-    'google/gemini-3.5-flash-lite',
-    'google/gemini-3.1-flash-lite',
-    'google/gemini-2.5-flash',
-    'google/gemini-2.5-flash-lite',
+  'google-vertex/gemini-4-hydrogen': [
+    'google-vertex/gemini-3.8-flash',
   ],
-  'google/gemini-3.5-flash-lite': [
-    'google/gemini-3.1-flash-lite',
-    'google/gemini-2.5-flash-lite',
-  ],
-  'google-vertex/gemini-3.8-flash': [
-    'google-vertex/gemini-3.7-flash',
-    'google-vertex/gemini-3.6-flash',
-    'google-vertex/gemini-3.5-flash',
-    'google-vertex/gemini-3.5-flash-lite',
-    'google-vertex/gemini-3.1-flash-lite',
-  ],
-  'google-vertex/gemini-3.7-flash': [
-    'google-vertex/gemini-3.6-flash',
-    'google-vertex/gemini-3.5-flash',
-    'google-vertex/gemini-3.5-flash-lite',
-    'google-vertex/gemini-3.1-flash-lite',
-  ],
-  'google-vertex/gemini-3.6-flash': [
-    'google-vertex/gemini-3.5-flash',
-    'google-vertex/gemini-3.5-flash-lite',
-    'google-vertex/gemini-3.1-flash-lite',
-    'google-vertex/gemini-2.5-flash',
-    'google-vertex/gemini-2.5-flash-lite',
-  ],
-  'google-vertex/gemini-3.5-flash': [
-    'google-vertex/gemini-3.5-flash-lite',
-    'google-vertex/gemini-3.1-flash-lite',
-    'google-vertex/gemini-2.5-flash',
-    'google-vertex/gemini-2.5-flash-lite',
-  ],
-  'google-vertex/gemini-3.5-flash-lite': [
-    'google-vertex/gemini-3.1-flash-lite',
-    'google-vertex/gemini-2.5-flash-lite',
-  ],
-  'google-vertex/gemini-3-flash-preview': [
-    'google-vertex/gemini-3.1-flash-lite',
-    'google-vertex/gemini-2.5-flash',
-    'google-vertex/gemini-2.5-flash-lite',
-  ],
-  'google-vertex/gemini-3.1-flash-lite': [
-    'google-vertex/gemini-2.5-flash',
-    'google-vertex/gemini-2.5-flash-lite',
-  ],
-  'deepseek/deepseek-v4-flash': [
-    'deepseek/deepseek-v4-pro',
-    'deepseek/deepseek-chat',
-    'deepseek/deepseek-reasoner',
-  ],
-  'deepseek/deepseek-v4-pro': [
-    'deepseek/deepseek-v4-flash',
-    'deepseek/deepseek-chat',
-    'deepseek/deepseek-reasoner',
-  ],
-  'deepseek/deepseek-chat': [
-    'deepseek/deepseek-v4-flash',
-    'deepseek/deepseek-v4-pro',
-    'deepseek/deepseek-reasoner',
-  ],
-  'deepseek/deepseek-reasoner': [
-    'deepseek/deepseek-v4-pro',
-    'deepseek/deepseek-v4-flash',
-    'deepseek/deepseek-chat',
-  ],
-  'openrouter/deepseek/deepseek-v4-flash': [
-    'openrouter/deepseek/deepseek-v4-pro',
-  ],
-  'openrouter/deepseek/deepseek-v4-pro': [
-    'openrouter/deepseek/deepseek-v4-flash',
-  ],
+  'deepseek/deepseek-flash': [],
 }
-const OPENROUTER_DEEPSEEK_V4_PRO_MODEL_ID = 'openrouter/deepseek/deepseek-v4-pro'
-const OPENROUTER_DEEPSEEK_V4_FLASH_MODEL_ID = 'openrouter/deepseek/deepseek-v4-flash'
-const OPENAI_DEFAULT_MODEL_ID = 'openai/gpt-5.6-terra'
-const DEEPSEEK_DEFAULT_MODEL_ID = 'deepseek/deepseek-v4-flash'
-const DEEPSEEK_DEFAULT_FALLBACKS = MODEL_RESILIENCE_FALLBACKS[DEEPSEEK_DEFAULT_MODEL_ID] || [
-  'deepseek/deepseek-chat',
-  'deepseek/deepseek-reasoner',
-  'deepseek/deepseek-v4-pro',
-]
+const OPENAI_DEFAULT_MODEL_ID = 'openai/gpt-6.2-sol'
+const DEEPSEEK_DEFAULT_MODEL_ID = 'deepseek/deepseek-flash'
+const DEEPSEEK_DEFAULT_FALLBACKS = MODEL_RESILIENCE_FALLBACKS[DEEPSEEK_DEFAULT_MODEL_ID] || []
 const DEEPSEEK_ONLY_DEFAULTS = /^(1|true|yes)$/i.test(process.env.AUTOMNIA_DEEPSEEK_ONLY_DEFAULTS || '')
 const DEFAULT_AGENT_MODEL_ID = process.env.AUTOMNIA_DEFAULT_AGENT_MODEL?.trim() || OPENAI_DEFAULT_MODEL_ID
 const GENERATED_DEEPSEEK_DEFAULT_MODEL_IDS = new Set([
@@ -1934,8 +1852,7 @@ const GENERATED_DEEPSEEK_DEFAULT_MODEL_IDS = new Set([
   ...DEEPSEEK_DEFAULT_FALLBACKS,
 ])
 const GENERATED_OPENROUTER_DEEPSEEK_DEFAULT_MODEL_IDS = new Set([
-  OPENROUTER_DEEPSEEK_V4_PRO_MODEL_ID,
-  OPENROUTER_DEEPSEEK_V4_FLASH_MODEL_ID,
+  'openrouter/deepseek/deepseek-flash',
 ])
 const GENERATED_DEEPSEEK_ROUTE_MODEL_IDS = new Set([
   ...GENERATED_DEEPSEEK_DEFAULT_MODEL_IDS,
@@ -6438,7 +6355,10 @@ function geminiThinkingConfig(model: string, thinking: ThinkingLevel) {
     return { thinkingBudget: geminiThinkingBudget(model, thinking) }
   }
   const effectiveThinking = googleGeminiThinkingForModel(model, thinking)
-  const nativeThinking = effectiveThinking === 'xhigh' || effectiveThinking === 'max' ? 'high' : effectiveThinking
+  // The model policy already clamps unsupported levels. Preserve Hydrogen's
+  // native XHIGH value; earlier Gemini generations have already been reduced
+  // to HIGH by googleGeminiThinkingForModel.
+  const nativeThinking = effectiveThinking
   if (/gemini-3(?:\.\d+)?-flash/.test(normalized)) {
     return { thinkingLevel: nativeThinking === 'off' ? 'minimal' : nativeThinking }
   }
@@ -9986,7 +9906,10 @@ function modelSelectionForActiveBillingRoute(selection: OpenClawModelSelection) 
   const creditsOnly = licenseService.isUsagePriorityLocked()
   const hasExplicitFallbacks = Array.isArray(selection?.fallbacks)
   const requestedPrimary = typeof selection?.primary === 'string' ? selection.primary : ''
-  const primary = !frontierAllowed && isAutomniaFrontierModelId(canonicalAgentModelId(requestedPrimary))
+  const primary = !frontierAllowed && (
+    isAutomniaFrontierModelId(canonicalAgentModelId(requestedPrimary))
+    || isAutomniaProModelId(canonicalAgentModelId(requestedPrimary))
+  )
     ? AUTOMNIA_OPENCLAW_MODEL
     : creditsOnly && !isAutomniaCreditsModelId(canonicalAgentModelId(requestedPrimary))
       ? AUTOMNIA_OPENCLAW_MODEL
@@ -9995,7 +9918,7 @@ function modelSelectionForActiveBillingRoute(selection: OpenClawModelSelection) 
     ...(Array.isArray(selection?.fallbacks) ? selection.fallbacks : []),
   ).filter((modelId) => {
     const canonical = canonicalAgentModelId(modelId)
-    if (!frontierAllowed && isAutomniaFrontierModelId(canonical)) return false
+    if (!frontierAllowed && (isAutomniaFrontierModelId(canonical) || isAutomniaProModelId(canonical))) return false
     return !creditsOnly || isAutomniaCreditsModelId(canonical)
   }).filter((modelId) => modelId !== primary)
   if (!creditsOnly && frontierAllowed && primary === requestedPrimary) return selection
@@ -10007,6 +9930,9 @@ function modelSelectionForActiveBillingRoute(selection: OpenClawModelSelection) 
 
 function modelSelectionBlocked(modelId: string) {
   const canonical = canonicalAgentModelId(modelId)
+  if (isAutomniaProModelId(canonical) && !licenseService.isAutomniaFrontierAccessAllowed()) {
+    return AUTOMNIA_PRO_MODEL_ACCESS_MESSAGE
+  }
   if (isAutomniaFrontierModelId(canonical) && !licenseService.isAutomniaFrontierAccessAllowed()) {
     return AUTOMNIA_FRONTIER_MODEL_ACCESS_MESSAGE
   }
@@ -10185,10 +10111,18 @@ function enforceActiveBillingRouteModelOrder(config: OpenClawConfigFile) {
   if (creditsOnly) {
     const existingAutomniaEntries = AUTOMNIA_CREDITS_MODEL_IDS.reduce<Record<string, OpenClawModelAllowlistEntry>>((entries, modelId) => {
       const existing = config.agents?.defaults?.models?.[modelId]
+      const thinkingDefault = automniaThinkingDefaultForModel(modelId)
+      const existingParams = isLooseRecord(existing) && isLooseRecord(existing.params)
+        ? existing.params
+        : {}
       entries[modelId] = {
         ...(isLooseRecord(existing) ? existing as OpenClawModelAllowlistEntry : {}),
         alias: AUTOMNIA_RELAY_MODEL_LABELS[modelId]
           || (modelId === AUTOMNIA_OPENCLAW_MODEL ? 'Automnia credits' : 'Automnia hosted class'),
+        params: {
+          ...existingParams,
+          ...(thinkingDefault ? { thinking: thinkingDefault } : {}),
+        },
       }
       return entries
     }, {})
@@ -10307,8 +10241,12 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
         // The relay translates the request for the selected Vertex model and
         // never sends a direct-provider request.
         reasoning: true,
-        thinkingLevelMap: AUTOMNIA_GEMINI_37_OPENCLAW_THINKING_LEVEL_MAP,
-        compat: AUTOMNIA_GEMINI_37_OPENAI_REASONING_COMPAT,
+        thinkingLevelMap: bareModelId === 'gemini-4-hydrogen'
+          ? AUTOMNIA_GEMINI_4_HYDROGEN_OPENCLAW_THINKING_LEVEL_MAP
+          : AUTOMNIA_GEMINI_4_OPENCLAW_THINKING_LEVEL_MAP,
+        compat: bareModelId === 'gemini-4-hydrogen'
+          ? AUTOMNIA_GEMINI_4_HYDROGEN_OPENAI_REASONING_COMPAT
+          : AUTOMNIA_GEMINI_4_OPENAI_REASONING_COMPAT,
         input: ['text', 'image'],
         contextWindow: 1_000_000,
         contextTokens: AUTOMNIA_OPENCLAW_CONTEXT_TOKENS,
@@ -10365,10 +10303,14 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
     if (!modelIdsForConfigSet.has(modelId)) delete config.agents.defaults.models[modelId]
   }
   for (const modelId of modelIdsForConfig) {
+    const thinkingDefault = automniaThinkingDefaultForModel(modelId)
     config.agents.defaults.models[modelId] = {
       alias: AUTOMNIA_RELAY_MODEL_LABELS[modelId]
         || (modelId === AUTOMNIA_OPENCLAW_MODEL ? 'Automnia credits' : 'Automnia hosted class'),
-      params: { transport: 'sse' },
+      params: {
+        transport: 'sse',
+        ...(thinkingDefault ? { thinking: thinkingDefault } : {}),
+      },
     }
   }
   await writeOpenclawConfig(config, { allowDuringAgentTurn: true })
@@ -11625,25 +11567,43 @@ function patchedTelegramBotRuntimeSource(source: string) {
       'onAssistantMessageStart: turn.answerLane.stream ? () => {\n\t\t\t\t\t\t\treturn enqueueDraftEvent(turn, async () => {\n\t\t\t\t\t\t\t\tturn.telegramProgressStatus?.thinking();\n\t\t\t\t\t\t\t\tresetReasoningStepState(turn);',
     )
   }
-  if (next.includes('const { onModelSelected, ...replyPipeline }') && !next.includes('const telegramModelSelected =')) {
+  const modelSelectedBindingPattern = /const\s*\{\s*onModelSelected(?::\s*([A-Za-z_$][\w$]*))?\s*,\s*\.\.\.\s*[A-Za-z_$][\w$]*\s*\}\s*=/u
+  const modelSelectedBinding = next.match(modelSelectedBindingPattern)
+  if (modelSelectedBinding && !next.includes('const telegramModelSelected =')) {
+    const callbackName = modelSelectedBinding[1] || 'onModelSelected'
+    const turnName = /\basync function runTelegramDispatchTurn\(([A-Za-z_$][\w$]*)\)/u.exec(next)?.[1]
+      || (/\bturn\.telegramDeps\b/u.test(next) ? 'turn' : undefined)
     const modelSelectedDeclaration = [
-      'const telegramModelSelected = typeof onModelSelected === "function" ? (...args) => {',
-      '\tturn.telegramProgressStatus?.thinking("Waiting for the selected model to return the next step.");',
-      '\treturn onModelSelected(...args);',
-      '} : onModelSelected;',
+      `const telegramModelSelected = typeof ${callbackName} === "function" ? (...args) => {`,
+      ...(turnName ? [`\t${turnName}.telegramProgressStatus?.thinking("Waiting for the selected model to return the next step.");`] : []),
+      `\treturn ${callbackName}(...args);`,
+      `} : ${callbackName};`,
     ].join('\n\t\t')
-    const pipelineInitializationEnd = '\n\t\t});\n\t\tconst turnResult = await runChannelInboundEvent({'
-    if (next.includes(pipelineInitializationEnd)) {
-      next = next.replace(pipelineInitializationEnd, `\n\t\t});\n\t\t${modelSelectedDeclaration}\n\t\tconst turnResult = await runChannelInboundEvent({`)
-    } else {
-      const deliveryErrorMarker = '\t\tconst handleDeliveryError = async (err, info) => {'
-      if (next.includes(deliveryErrorMarker)) {
-        next = next.replace(deliveryErrorMarker, `\t\t${modelSelectedDeclaration}\n${deliveryErrorMarker}`)
+    const dispatchMarker = /\n([\t ]*)const\s+[A-Za-z_$][\w$]*\s*=\s*await runChannelInboundEvent\(\{/u
+    const bindingOffset = modelSelectedBinding.index || 0
+    const dispatchMatch = dispatchMarker.exec(next.slice(bindingOffset))
+    if (dispatchMatch) {
+      const dispatchOffset = bindingOffset + dispatchMatch.index
+      const indent = dispatchMatch[1]
+      next = `${next.slice(0, dispatchOffset)}\n${indent}${modelSelectedDeclaration}\n${indent}${next.slice(dispatchOffset + 1 + indent.length)}`
+      const updatedDispatchMatch = dispatchMarker.exec(next.slice(dispatchOffset))
+      const updatedDispatchOffset = updatedDispatchMatch ? dispatchOffset + updatedDispatchMatch.index : -1
+      const dispatchTail = updatedDispatchOffset >= 0 ? next.slice(updatedDispatchOffset) : ''
+      const aliasProperty = `onModelSelected: ${callbackName}`
+      if (updatedDispatchOffset >= 0 && dispatchTail.includes(aliasProperty)) {
+        next = next.slice(0, updatedDispatchOffset) + dispatchTail.replace(aliasProperty, 'onModelSelected: telegramModelSelected')
       } else {
-        console.warn('[plugins/telegram] model-selection callback wrapper skipped: no stable dispatch marker found')
+        const shorthandProperty = /(\n[\t ]*)onModelSelected(?=[\t ]*(?:,|\r?\n|\}))/u
+        const replacementTail = dispatchTail.replace(shorthandProperty, '$1onModelSelected: telegramModelSelected')
+        if (updatedDispatchOffset < 0 || replacementTail === dispatchTail) {
+          console.warn('[plugins/telegram] model-selection callback wrapper skipped: callback use not found after dispatch start')
+        } else {
+          next = next.slice(0, updatedDispatchOffset) + replacementTail
+        }
       }
+    } else {
+      console.warn('[plugins/telegram] model-selection callback wrapper skipped: no stable dispatch marker found')
     }
-    next = next.replace('\n\t\t\t\t\t\tonModelSelected\n', '\n\t\t\t\t\t\ttelegramModelSelected\n')
   }
   const nativeAgentsCommandMarker = 'const commandDefinition = findCommandByNativeName(command.name, "telegram");\n\t\t\t\tconst rawText = ctx.match?.trim() ?? "";'
   if (!next.includes('const telegramAgentsCommandText = resolveTelegramAgentsCommandResponse({')) {
@@ -11710,7 +11670,9 @@ function patchedTelegramBotRuntimeSource(source: string) {
   }
   const routePatchInserted = next.includes(routeApplicationMarker)
   const nativeAgentsPatchInserted = next.includes(currentNativeAgentsPatchMarker) || next.includes('const telegramAgentsCommandText = resolveTelegramAgentsCommandResponse({')
-  if (next !== source && !routePatchInserted && !nativeAgentsPatchInserted) {
+  const modelSelectionCallbackPatchInserted = next.includes('onModelSelected: telegramModelSelected')
+    || next.includes('\n\t\t\t\t\t\ttelegramModelSelected\n')
+  if (next !== source && !routePatchInserted && !nativeAgentsPatchInserted && !modelSelectionCallbackPatchInserted) {
     console.warn('[plugins/telegram] agent route patch skipped: no current routing or native-command insertion point was patched')
     return source
   }
@@ -13602,7 +13564,7 @@ async function runOpenClawWithManagedSkillsWorkspace(args: string[], timeoutMs =
   const model = defaults?.model || defaultAgentModelSelection()
   // Managed skill commands run against a standalone config. Keep that config
   // on OpenClaw's current schema even while Automnia retains compatibility
-  // fields in its in-memory config model. OpenClaw 2026.10.6 rejects
+  // fields in its in-memory config model. OpenClaw 2026.11.5 rejects
   // skills.load.watchDebounceMs and agents.list before it can run an install.
   const skillsLoad = { ...(config.skills?.load || {}) }
   delete skillsLoad.watchDebounceMs
@@ -19834,6 +19796,13 @@ registerShiftRoutes(app, {
   writeHeartbeatRuntimePerAgent,
 })
 
+const modelCenterService = createModelCenterService({
+  isProviderConfigured,
+  readState: () => readControlCenterStateRecord<ModelCapabilityStoreState>(CONTROL_CENTER_STATE_KEYS.modelCenter),
+  runOpenClaw,
+  writeState: (state) => writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.modelCenter, state),
+})
+
 registerProviderAuthRoutes(app, {
   anthropicOAuthRedirectUri: ANTHROPIC_OAUTH_REDIRECT_URI,
   authEnvMap: AUTH_ENV_MAP,
@@ -19864,6 +19833,7 @@ registerProviderAuthRoutes(app, {
   startOpenAICodexOAuthSession,
   submitAnthropicOAuthManualInput,
   providerAccessAllowed: () => licenseService.getTrafficGate().providerAccessAllowed,
+  modelCenter: modelCenterService,
 })
 
 const speechTranscriptionService = createSpeechTranscriptionService({

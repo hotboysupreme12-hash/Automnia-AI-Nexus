@@ -65,7 +65,7 @@ export type OpenClawOptimizationScorecard = {
 }
 
 const OPENCLAW_OPTIMIZATION_GUIDE = 'docs/OPENCLAW_BETA_OPTIMIZATION_GUIDE.md'
-const OPENCLAW_TARGET_VERSION = '2026.10.6'
+const OPENCLAW_TARGET_VERSION = '2026.11.5'
 
 export const OPENCLAW_OPTIMIZATION_CATEGORIES: OpenClawOptimizationSourceCategory[] = [
   {
@@ -390,10 +390,10 @@ export const OPENCLAW_OPTIMIZATION_CATEGORIES: OpenClawOptimizationSourceCategor
       },
       {
         title: 'Keep tools.effective diagnostic only',
-        status: 'planned',
+        status: 'implemented',
         priority: 'p2',
-        evidence: 'The guide warns against using tools.effective as the primary run path.',
-        nextAction: 'Add a console smoke that rejects tools.effective as the default transport.',
+        evidence: 'gatewayChatService invokes tools.effective only when toolsEffectiveDiagnostic is explicitly enabled; normal turns use chat.send.',
+        nextAction: 'Keep the diagnostic behind its explicit opt-in and cover it with a source assertion.',
       },
       {
         title: 'Fallback from Gateway to CLI intentionally',
@@ -467,10 +467,10 @@ export const OPENCLAW_OPTIMIZATION_CATEGORIES: OpenClawOptimizationSourceCategor
       },
       {
         title: 'Persist draft inputs across refresh',
-        status: 'planned',
+        status: 'implemented',
         priority: 'p1',
-        evidence: 'The guide calls for draft persistence; no durable draft store is exposed yet.',
-        nextAction: 'Persist drafts per workspace, mission, and agent target.',
+        evidence: 'AgentResponseConsole stores prompt drafts and uploaded attachment drafts per target in remembered local state, flushing prompt text on pagehide and beforeunload.',
+        nextAction: 'Keep per-target draft restoration covered as console state evolves.',
       },
       {
         title: 'Virtualize large transcripts',
@@ -866,10 +866,10 @@ export const OPENCLAW_OPTIMIZATION_CATEGORIES: OpenClawOptimizationSourceCategor
       },
       {
         title: 'Expose post-upgrade readiness',
-        status: 'partial',
+        status: 'implemented',
         priority: 'p1',
-        evidence: 'Version, Doctor, disk, and scorecard diagnostics exist; no single upgrade checklist is exposed.',
-        nextAction: 'Add a post-upgrade checklist endpoint that references Doctor and scorecard results.',
+        evidence: 'scripts/post-upgrade-openclaw-readiness.mjs validates the OpenClaw and Codex bundle versions/dependencies, API and Gateway health, live runtime version, and secret-free provider auth status, then runs bounded OpenClaw/provider/Gateway smokes; its contract smoke verifies metadata and output redaction.',
+        nextAction: 'Keep the version pins, provider status whitelist, and bounded smoke list synchronized with each OpenClaw/Codex release.',
       },
       {
         title: 'Reduce grey theme drift in OpenClaw controls',
@@ -943,7 +943,7 @@ export function buildOpenClawOptimizationScorecard(): OpenClawOptimizationScorec
     source: {
       guide: OPENCLAW_OPTIMIZATION_GUIDE,
       targetOpenClawVersion: OPENCLAW_TARGET_VERSION,
-      note: 'OpenClaw optimization scorecard based on the local beta optimization guide.',
+      note: 'OpenClaw 2026.11.5 source audit; see the guide for 44 app-adoption items, evidence, and actions.',
     },
     itemCount: items.length,
     implemented,

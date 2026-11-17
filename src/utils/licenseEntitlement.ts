@@ -3,28 +3,27 @@ import { usageBaseline } from './usageRemaining'
 
 export const LICENSE_STATUS_UPDATED_EVENT = 'automnia-license-updated'
 
-export const AUTOMNIA_CREDITS_MODEL_ID = 'automnia-cloud/gemini-3.8-flash'
-export const AUTOMNIA_FRONTIER_MODEL_ID = 'automnia-cloud/gemini-4-argon'
+export const AUTOMNIA_SWIFT_MODEL_ID = 'automnia-cloud/gemini-3.8-flash'
+export const AUTOMNIA_CREDITS_MODEL_ID = 'automnia-cloud/gemini-4-hydrogen'
+export const AUTOMNIA_PRO_MODEL_ID = 'automnia-cloud/gemini-4-argon'
+export const AUTOMNIA_FRONTIER_MODEL_ID = 'automnia-cloud/gemini-4-carbon'
 export const AUTOMNIA_RELAY_MODEL_IDS = [
   AUTOMNIA_FRONTIER_MODEL_ID,
+  AUTOMNIA_PRO_MODEL_ID,
   AUTOMNIA_CREDITS_MODEL_ID,
-  'automnia-cloud/gemini-3.7-flash',
-  'automnia-cloud/gemini-3.6-flash',
+  AUTOMNIA_SWIFT_MODEL_ID,
 ] as const
 export const AUTOMNIA_RELAY_MODEL_LABELS: Record<string, string> = {
   [AUTOMNIA_FRONTIER_MODEL_ID]: 'Automnia Frontier',
-  [AUTOMNIA_CREDITS_MODEL_ID]: 'Automnia Prime',
-  'automnia-cloud/gemini-3.7-flash': 'Automnia Balanced',
-  'automnia-cloud/gemini-3.6-flash': 'Automnia Swift',
-  'automnia-cloud/gemini-2.5-flash': 'Automnia Classic',
+  [AUTOMNIA_PRO_MODEL_ID]: 'Automnia Pro',
+  [AUTOMNIA_CREDITS_MODEL_ID]: 'Automnia Balanced',
+  [AUTOMNIA_SWIFT_MODEL_ID]: 'Automnia Swift',
 }
 export const AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS = [
-  'automnia-cloud/gemini-3.6-flash',
-  'automnia-cloud/gemini-2.5-flash',
+  AUTOMNIA_SWIFT_MODEL_ID,
 ] as const
 export const AUTOMNIA_CREDITS_MODEL_IDS = [
   AUTOMNIA_CREDITS_MODEL_ID,
-  'automnia-cloud/gemini-3.7-flash',
   ...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS,
 ] as const
 
@@ -48,6 +47,10 @@ export function isAutomniaFrontierEligibleTier(value: string | null | undefined)
 
 export function isAutomniaFrontierModelId(value: string | null | undefined) {
   return value?.trim().toLowerCase() === AUTOMNIA_FRONTIER_MODEL_ID
+}
+
+export function isAutomniaProModelId(value: string | null | undefined) {
+  return value?.trim().toLowerCase() === AUTOMNIA_PRO_MODEL_ID
 }
 
 export function isAutomniaRelayModelId(value: string | null | undefined) {
@@ -173,7 +176,9 @@ export function resolveLicenseEntitlement(license: LicenseInfo | null | undefine
   const usagePriorityLocked = isCreditsOnlyEntitlement(license)
   const automniaFrontierAllowed = active && isAutomniaFrontierEligibleTier(license?.tier)
   const byokAllowed = active && !usagePriorityLocked && (license?.byokAllowed === true || isByok || tierAllowsByok(tier))
-  const permanentAccess = active && !usagePriorityLocked && (license?.permanentAccess === true || isByok || isAutomniaFrontierTier(tier) || tier.includes('pro') || tier.includes('enterprise'))
+  const isProSubscription = isHosted && tier.includes('pro') && Number.isSafeInteger(Number(license?.planPriceCents)) && Number(license?.planPriceCents) > 0
+  const permanentAccess = active && !usagePriorityLocked && !isProSubscription
+    && (license?.permanentAccess === true || isByok || isAutomniaFrontierTier(tier) || tier.includes('enterprise'))
 
   if (isByok) {
     const providerFirst = license?.usagePriority === 'provider_first' || license?.usagePriority === 'byok_only'

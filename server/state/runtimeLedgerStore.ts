@@ -51,6 +51,7 @@ export const CONTROL_CENTER_STATE_KEYS = {
   heartbeatPerAgent: 'runtime:heartbeat-per-agent',
   agencyAgentTemplates: 'agents:agency-templates',
   localAuth: 'auth:local',
+  modelCenter: 'models:center',
   licenseActivation: 'license:activation',
   partyProfiles: 'agents:party-profiles',
   pluginListCache: 'plugins:list-cache',

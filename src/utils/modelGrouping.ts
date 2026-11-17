@@ -1,3 +1,5 @@
+import { isAutomniaRelayModelId } from './licenseEntitlement'
+
 export type ModelOptionLike = {
   id: string
   alias?: string
@@ -11,13 +13,18 @@ export type ModelOptionGroup<T extends ModelOptionLike> = {
   models: T[]
 }
 
-const isUnsupportedGoogleGemini37Model = (modelId: string) => {
+const isSupersededGoogleGeminiModel = (modelId: string) => {
   const [provider = '', model = ''] = modelId.trim().toLowerCase().split('/')
   if (!['google', 'google-vertex'].includes(provider)) return false
-  return /^gemini-3\.7(?:$|[-@])/.test(model) && !/^gemini-3\.7-flash(?:$|[-@])/.test(model)
+  if (!/^gemini-/.test(model)) return false
+  return !/^gemini-(?:3\.8-flash|4-(?:hydrogen|argon|carbon))(?:$|[-@])/.test(model)
 }
 
-export const isSelectableModelId = (modelId: string) => !isUnsupportedGoogleGemini37Model(modelId)
+export const isSelectableModelId = (modelId: string) => {
+  if (isSupersededGoogleGeminiModel(modelId)) return false
+  if (modelId.trim().toLowerCase().startsWith('automnia-cloud/')) return isAutomniaRelayModelId(modelId)
+  return true
+}
 
 const PROVIDER_LABELS: Record<string, string> = {
   'automnia-cloud': 'Automnia',

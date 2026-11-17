@@ -46,6 +46,21 @@ function ensureRestartRecoveryClaimStartupRepair(vendorRoot) {
   const candidates = fs.readdirSync(dist)
     .filter((name) => /^main-session-restart-recovery-marking-.*\.(?:m?js)$/.test(name))
   if (!candidates.length) {
+    const packageJson = JSON.parse(fs.readFileSync(path.join(vendorRoot, 'package.json'), 'utf8'))
+    const nativeRestartResume = packageJson.version === '2026.11.5' && fs.readdirSync(dist)
+      .filter((name) => /^session-restart-resume-.*\.mjs$/.test(name))
+      .some((name) => {
+        const source = fs.readFileSync(path.join(dist, name), 'utf8')
+        return source.includes('async function persistRunningSessionsForRestart(') &&
+          source.includes('async function resumeMarkedSessions(') &&
+          source.includes('resumeAfterRestart: {') &&
+          source.includes('mainRestartRecovery') &&
+          source.includes('const LEGACY_RESTART_RESUME_WINDOW_MS = 216e5;')
+      })
+    if (nativeRestartResume) {
+      console.log('[openclaw-vendor] OpenClaw 2026.11.5 uses the native session-restart-resume path; the retired startup-marker repair bundle is absent, and legacy mainRestartRecovery markers remain handled by resumeMarkedSessions')
+      return
+    }
     throw new Error('Missing OpenClaw startup restart-recovery marker runtime for stale-claim repair')
   }
 

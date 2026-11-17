@@ -2,6 +2,7 @@ import type { Express } from 'express'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
 import type { ProviderOAuthSession } from '../services/providers/oauthCallbackService'
+import type { ModelCenterService } from '../services/providers/modelCenterService'
 import { CREDITS_ONLY_MODEL_ACCESS_MESSAGE } from '../services/license/creditsOnlyModelPolicy'
 
 type OAuthLaunchResult = {
@@ -49,6 +50,7 @@ type ProviderAuthRoutesOptions = {
   isCreditsOnlyEntitlement?: () => boolean
   providerAccessAllowed?: () => boolean
   creditsOnlyAvailableModels?: () => unknown
+  modelCenter?: Pick<ModelCenterService, 'getCapabilitySnapshots' | 'probeModel' | 'refreshProviderCapabilities'>
 }
 
 async function ensureProviderAuthReady(options: ProviderAuthRoutesOptions) {
@@ -306,6 +308,65 @@ export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRo
         detail: String(error),
         models: options.fallbackAvailableModels(),
       })
+    }
+  })
+
+  app.get('/api/models/capabilities', async (req, res) => {
+    if (!options.modelCenter) return apiFailure(res, 503, 'model_catalog_failed', 'Model capability snapshots are unavailable')
+    try {
+      await ensureProviderAuthReady(options)
+      if (providerAccessBlocked()) return rejectCreditsOnlyProviderAccess(res)
+      const queryProvider = req.query.provider
+      if (Array.isArray(queryProvider) || (queryProvider !== undefined && typeof queryProvider !== 'string')) {
+        return apiFailure(res, 400, 'invalid_payload', 'Specify one provider ID')
+      }
+      const provider = typeof queryProvider === 'string' ? queryProvider.trim() : ''
+      if (provider && !/^[a-z0-9][a-z0-9-]{0,63}$/i.test(provider)) {
+        return apiFailure(res, 400, 'invalid_payload', 'Invalid provider ID')
+      }
+      const refresh = req.query.refresh === '1'
+      if (refresh && !provider) {
+        return apiFailure(res, 400, 'invalid_payload', 'A provider ID is required for a capability refresh')
+      }
+      if (refresh) {
+        const result = await options.modelCenter.refreshProviderCapabilities(provider)
+        return apiSuccess(res, {
+          refreshed: result.ok,
+          reason: result.ok ? null : result.reason,
+          snapshot: result.snapshot,
+        })
+      }
+      return apiSuccess(res, { snapshots: await options.modelCenter.getCapabilitySnapshots(provider || undefined) })
+    } catch (error) {
+      return apiFailure(res, 500, 'model_catalog_failed', 'Failed to read model capability snapshots', String(error))
+    }
+  })
+
+  app.post('/api/models/probe', async (req, res) => {
+    if (!options.modelCenter) return apiFailure(res, 503, 'model_catalog_failed', 'Model probes are unavailable')
+    if (providerAccessBlocked()) return rejectCreditsOnlyProviderAccess(res)
+    const schema = z.object({
+      modelId: z.string().trim().min(1).max(384),
+      confirm: z.literal(true),
+    })
+    const parsed = schema.safeParse(req.body)
+    if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'A model ID and explicit probe confirmation are required', parsed.error.flatten())
+    try {
+      await ensureProviderAuthReady(options)
+      const result = await options.modelCenter.probeModel(parsed.data.modelId)
+      if (result.reason === 'invalid_model_id') return apiFailure(res, 400, 'invalid_payload', 'Invalid model ID')
+      if (result.reason === 'model_not_snapshotted') {
+        return apiFailure(res, 409, 'model_catalog_failed', 'Refresh this provider’s capability snapshot before probing the model', { reason: result.reason })
+      }
+      if (result.reason === 'provider_not_configured') {
+        return apiFailure(res, 409, 'model_auth_required', 'Configure provider authentication before probing this model', { reason: result.reason })
+      }
+      if (result.reason === 'cooldown' || result.reason === 'probe_in_progress') {
+        return apiFailure(res, 429, 'resource_conflict', 'A recent or active model probe prevents another probe', { reason: result.reason })
+      }
+      return apiSuccess(res, { passed: result.ok, reason: result.reason, probe: result.result })
+    } catch (error) {
+      return apiFailure(res, 502, 'model_catalog_failed', 'Model probe could not be completed', String(error))
     }
   })
 }

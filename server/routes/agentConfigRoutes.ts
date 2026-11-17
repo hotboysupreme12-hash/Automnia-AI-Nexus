@@ -4,6 +4,7 @@ import type { Express } from 'express'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
 import { CREDITS_ONLY_MODEL_ACCESS_MESSAGE } from '../services/license/creditsOnlyModelPolicy'
+import { explainModelFallback } from '../services/providers/modelCenterService'
 import type { AgentConfigRoutesContext } from '../controlPlane'
 
 /**
@@ -500,7 +501,19 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
         defaultsSandbox: config.agents?.defaults?.sandbox,
       })
       const model = normalizeModelWithFallback(local.model, defaults)
-      return apiSuccess(res, { model: modelSelectionForActiveBillingRoute?.(model) || model })
+      const effectiveModel = modelSelectionForActiveBillingRoute?.(model) || model
+      const requestedModel = local.model.primary || defaults.primary || null
+      const resolution = explainModelFallback({
+        requestedModel,
+        resolvedModel: effectiveModel.primary || model.primary,
+        fallbacks: effectiveModel.fallbacks || model.fallbacks,
+        defaultModel: defaults.primary || null,
+        requestedModelUnavailable: Boolean(
+          requestedModel && KNOWN_UNAVAILABLE_MODEL_IDS.has(canonicalAgentModelId(requestedModel)),
+        ),
+        billingPolicyOverride: effectiveModel.primary !== model.primary,
+      })
+      return apiSuccess(res, { model: effectiveModel, resolution })
     } catch (error) {
       return apiFailure(res, 500, 'model_operation_failed', 'Failed to read agent model', { agentId: requestedAgent, detail: String(error) })
     }

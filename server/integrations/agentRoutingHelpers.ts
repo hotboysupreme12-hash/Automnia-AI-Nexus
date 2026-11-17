@@ -714,13 +714,13 @@ function telegramCreditsOnlyModelSelectionAllowed(config, callback) {
     if (!creditsOnly || !callback || callback.type !== 'select') return true;
     var provider = String(callback.provider || '').trim().toLowerCase();
     var model = String(callback.model || '').trim().toLowerCase();
-    return provider === 'automnia-cloud' && new Set(['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.5-flash']).has(model);
+    return provider === 'automnia-cloud' && new Set(['gemini-3.8-flash', 'gemini-4-hydrogen']).has(model);
 }
 function telegramCreditsOnlyModelData(config, data) {
     var vars = config && config.env && config.env.vars;
     if (!vars || String(vars.AUTOMNIA_CREDITS_ONLY || '') !== '1' || !data) return data;
     var byProvider = new Map();
-    byProvider.set('automnia-cloud', new Set(['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.5-flash']));
+    byProvider.set('automnia-cloud', new Set(['gemini-3.8-flash', 'gemini-4-hydrogen']));
     return Object.assign({}, data, {
         byProvider: byProvider,
         providers: ['automnia-cloud']
@@ -729,15 +729,18 @@ function telegramCreditsOnlyModelData(config, data) {
 function telegramBillingModelData(config, data) {
     var vars = config && config.env && config.env.vars;
     if (!data || !vars) return data;
-    // Starter/refill access remains hard-locked to the non-Frontier credits
-    // set above. Eligible Pro, Enterprise, and Frontier routes may expose the
-    // named Frontier relay even when OpenClaw returned a sparse model catalog.
+    // Starter/refill access remains hard-locked to the two credits models
+    // above. Eligible Pro, Enterprise, and Frontier routes may expose both
+    // named Pro and Frontier models even when OpenClaw returned a sparse catalog.
     var restricted = telegramCreditsOnlyModelData(config, data);
     if (restricted !== data) return restricted;
     if (String(vars.AUTOMNIA_FRONTIER_ALLOWED || '') !== '1') return data;
     var byProvider = new Map(data.byProvider || []);
     var automniaModels = new Set(byProvider.get('automnia-cloud') || []);
+    automniaModels.add('gemini-4-hydrogen');
+    automniaModels.add('gemini-3.8-flash');
     automniaModels.add('gemini-4-argon');
+    automniaModels.add('gemini-4-carbon');
     byProvider.set('automnia-cloud', automniaModels);
     var providers = Array.isArray(data.providers) ? data.providers.slice() : [];
     if (providers.indexOf('automnia-cloud') === -1) providers.push('automnia-cloud');
@@ -1216,11 +1219,10 @@ function isTelegramAutomniaCreditsModel(value) {
 }
 function telegramAutomniaModelLabel(value) {
     var normalized = String(value == null ? '' : value).trim().toLowerCase();
-    if (/^automnia-cloud\/gemini-4-argon(?:$|[-@])/i.test(normalized)) return 'Automnia Frontier';
-    if (/^automnia-cloud\/gemini-3\.8-flash(?:$|[-@])/i.test(normalized)) return 'Automnia Prime';
-    if (/^automnia-cloud\/gemini-3\.7-flash(?:$|[-@])/i.test(normalized)) return 'Automnia Balanced';
-    if (/^automnia-cloud\/gemini-3\.6-flash(?:$|[-@])/i.test(normalized)) return 'Automnia Swift';
-    if (/^automnia-cloud\/gemini-2\.5-flash(?:$|[-@])/i.test(normalized)) return 'Automnia Classic';
+    if (/^automnia-cloud\/gemini-4-carbon(?:$|[-@])/i.test(normalized)) return 'Automnia Frontier';
+    if (/^automnia-cloud\/gemini-4-argon(?:$|[-@])/i.test(normalized)) return 'Automnia Pro';
+    if (/^automnia-cloud\/gemini-4-hydrogen(?:$|[-@])/i.test(normalized)) return 'Automnia Balanced';
+    if (/^automnia-cloud\/gemini-3\.8-flash(?:$|[-@])/i.test(normalized)) return 'Automnia Swift';
     return 'Automnia hosted class';
 }
 function telegramDisplayModelRef(value) {
