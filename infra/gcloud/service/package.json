@@ -20,6 +20,6 @@
   "overrides": {
     "gaxios": "^7.3.0",
     "google-auth-library": "^10.9.1",
-    "qs": "^6.16.0"
+    "qs": "^6.17.1"
   }
 }
