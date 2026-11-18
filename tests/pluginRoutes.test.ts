@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict'
+import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import type { AddressInfo } from 'node:net'
+import os from 'node:os'
+import path from 'node:path'
 import test from 'node:test'
 import express, { type Express } from 'express'
-import { registerPluginRoutes } from '../server/routes/pluginRoutes'
+import { registerPluginRoutes, type PluginRepairPolicy } from '../server/routes/pluginRoutes'
 import type { PluginRuntimeService } from '../server/services/plugins/pluginRuntimeService'
 
 function pluginEntry(id: string, overrides: Partial<PluginControlEntryLike> = {}): PluginControlEntryLike {
@@ -38,13 +41,14 @@ function controlsPayload(entries: Array<string | PluginControlEntryLike>) {
   }
 }
 
-type RouteError = Error & { code?: number }
+type RouteError = Error & { code?: number | string; timedOut?: boolean; failureKind?: string }
 
 type PluginRouteErrorSurface =
   | 'clawTalkSetup'
   | 'config'
   | 'gatewayRestart'
   | 'inspect'
+  | 'repair'
   | 'install'
   | 'list'
   | 'search'
@@ -57,6 +61,8 @@ type PluginRouteErrorSurface =
 function createRuntimeStub(
   calls: Record<string, number>,
   errors: Partial<Record<PluginRouteErrorSurface, RouteError>> = {},
+  repairFailures: RouteError[] = [],
+  onRepairSuccess?: () => void,
 ): PluginRuntimeService {
   return {
     inspectOpenClawPluginRuntime: async (pluginId) => {
@@ -70,6 +76,13 @@ function createRuntimeStub(
         runtimeLoaded: true,
         surfaces: [],
       }
+    },
+    repairPluginLoaderFailure: async (pluginId) => {
+      calls.repair += 1
+      const repairError = repairFailures.shift() || errors.repair
+      if (repairError) throw repairError
+      onRepairSuccess?.()
+      return { command: `openclaw plugins reload ${pluginId} --wait --json`, code: 0, stdout: '', stderr: '', output: 'reloaded' }
     },
     pluginRuntimeInspectReady: (inspect) => inspect.runtimeLoaded !== false,
     startPluginSetupTerminalSession: (params) => {
@@ -99,6 +112,9 @@ function createRuntimeStub(
 type PluginRoutesHarnessOptions = {
   errors?: Partial<Record<PluginRouteErrorSurface, RouteError>>
   installError?: RouteError
+  repairFailures?: RouteError[]
+  pluginRepairPolicy?: Partial<PluginRepairPolicy>
+  onRepairSuccess?: (setPluginEntries: (entries: PluginControlEntryLike[]) => void) => void
 }
 
 function createPluginRoutesHarness(pluginEntries: Array<string | PluginControlEntryLike>, options: PluginRoutesHarnessOptions = {}) {
@@ -115,12 +131,14 @@ function createPluginRoutesHarness(pluginEntries: Array<string | PluginControlEn
     uninstall: 0,
     update: 0,
     updateAll: 0,
+    repair: 0,
   }
   const redactSensitiveText = (value: string) => value
     .replace(/apiKey=[^\s"'&]+/g, 'apiKey=[redacted]')
     .replace(/token=[^\s"'&]+/gi, 'token=[redacted]')
     .replace(/cc_(?:live|test)_[A-Za-z0-9_-]+/g, '[redacted-clawtalk-key]')
     .replace(/sk-[A-Za-z0-9_-]+/g, '[redacted]')
+  const pluginRuntimeStatePath = path.join(os.tmpdir(), `automnia-plugin-routes-${randomUUID()}`, 'plugins-runtime.json')
   const app = express()
   app.use(express.json())
   registerPluginRoutes(app, {
@@ -139,8 +157,9 @@ function createPluginRoutesHarness(pluginEntries: Array<string | PluginControlEn
     pluginErrorDetail: (error) => redactSensitiveText(error instanceof Error ? error.message : String(error)),
     pluginErrorStatus: (error) => typeof (error as Error & { code?: unknown }).code === 'number' ? 502 : 500,
     pluginIdPattern: /^[a-z0-9][a-z0-9._-]{0,79}$/,
-    pluginRuntime: createRuntimeStub(calls, errors),
-    pluginRuntimeStatePath: '/tmp/plugins-runtime.json',
+    pluginRuntime: createRuntimeStub(calls, errors, options.repairFailures, () => options.onRepairSuccess?.((entries) => { currentPluginEntries = entries })),
+    pluginRuntimeStatePath,
+    pluginRepairPolicy: options.pluginRepairPolicy,
     redactSensitiveText,
     savePluginDirectConfig: async () => {
       calls.config += 1
@@ -213,7 +232,7 @@ function createPluginRoutesHarness(pluginEntries: Array<string | PluginControlEn
     },
     writeSseEvent: (res, event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
   })
-  return { app, calls }
+  return { app, calls, pluginRuntimeStatePath }
 }
 
 function routeError(surface: PluginRouteErrorSurface, code?: number): RouteError {
@@ -453,7 +472,7 @@ test('plugin routes return canonical not-found before mutating missing plugins',
 })
 
 test('plugin routes preserve disabled plugin state and enable known disabled plugins', async () => {
-  const { app, calls } = createPluginRoutesHarness([
+  const { app, calls, pluginRuntimeStatePath } = createPluginRoutesHarness([
     pluginEntry('disabled-one', {
       enabled: false,
       configuredEnabled: false,
@@ -495,7 +514,7 @@ test('plugin routes preserve disabled plugin state and enable known disabled plu
     assert.equal(toggled.data.plugin?.status, 'enabled')
     assert.equal(toggled.data.plugins[0]?.enabled, true)
     assert.equal(toggled.data.plugins[0]?.status, 'enabled')
-    assert.equal(toggled.data.runtimeStatePath, '/tmp/plugins-runtime.json')
+    assert.equal(toggled.data.runtimeStatePath, pluginRuntimeStatePath)
   })
 
   assert.equal(calls.toggle, 1)
@@ -603,4 +622,135 @@ test('plugin routes still run known plugin mutations after the not-found guard',
 
   assert.equal(calls.update, 1)
   assert.ok(calls.list >= 1)
+})
+
+test('plugin loader repair is idempotent by plugin and failure class and records append-only evidence', async () => {
+  const { app, calls } = createPluginRoutesHarness([
+    pluginEntry('codex', { status: 'failed', loaderErrorSummary: 'OpenClaw reports that this plugin failed to load.' }),
+  ], {
+    onRepairSuccess: (setPluginEntries) => setPluginEntries([pluginEntry('codex', { status: 'enabled', loaderErrorSummary: undefined })]),
+  })
+
+  await withRouteServer(app, async (baseUrl) => {
+    const first = await requestJson(baseUrl, 'POST', '/api/plugins/codex/repair', { failureClass: 'loader_error' })
+    const firstPayload = JSON.parse(first.text) as { ok: boolean; data: { deduped: boolean; repair: { outcome: string; actionId: string } } }
+    assert.equal(first.status, 200)
+    assert.equal(firstPayload.ok, true)
+    assert.equal(firstPayload.data.deduped, false)
+    assert.equal(firstPayload.data.repair.outcome, 'succeeded')
+
+    const duplicate = await requestJson(baseUrl, 'POST', '/api/plugins/codex/repair', { failureClass: 'loader_error' })
+    const duplicatePayload = JSON.parse(duplicate.text) as { ok: boolean; data: { deduped: boolean; repair: { actionId: string } } }
+    assert.equal(duplicate.status, 200)
+    assert.equal(duplicatePayload.data.deduped, true)
+    assert.equal(duplicatePayload.data.repair.actionId, firstPayload.data.repair.actionId)
+
+    const listing = await requestJson(baseUrl, 'GET', '/api/plugins')
+    const listed = JSON.parse(listing.text) as { data: { actionLedger: Array<{ action: string; outcome: string; pluginId: string }> } }
+    assert.deepEqual(listed.data.actionLedger.map(({ action, outcome, pluginId }) => ({ action, outcome, pluginId })), [
+      { action: 'repair', outcome: 'started', pluginId: 'codex' },
+      { action: 'repair', outcome: 'succeeded', pluginId: 'codex' },
+    ])
+  })
+
+  assert.equal(calls.repair, 1)
+})
+
+test('plugin loader repair requires a manual retry, enforces cooldown and attempt budget, and deduplicates concurrent retries', async () => {
+  let nowMs = Date.UTC(2026, 10, 17, 12, 0, 0)
+  const processStartError = Object.assign(new Error('spawn permission denied'), { code: 'EACCES' })
+  const { app, calls } = createPluginRoutesHarness([
+    pluginEntry('codex', { status: 'failed', loaderErrorSummary: 'OpenClaw reports that this plugin failed to load.' }),
+  ], {
+    repairFailures: [processStartError],
+    pluginRepairPolicy: {
+      maxAttempts: 2,
+      cooldownMs: 1_000,
+      now: () => new Date(nowMs),
+    },
+  })
+
+  await withRouteServer(app, async (baseUrl) => {
+    const first = await requestJson(baseUrl, 'POST', '/api/plugins/codex/repair', { failureClass: 'loader_error' })
+    assert.equal(first.status, 500)
+    assert.equal(calls.repair, 1)
+
+    const implicitRetry = await requestJson(baseUrl, 'POST', '/api/plugins/codex/repair', { failureClass: 'loader_error' })
+    assert.equal(implicitRetry.status, 409)
+    assert.equal(calls.repair, 1)
+
+    const cooldownRetry = await requestJson(baseUrl, 'POST', '/api/plugins/codex/repair', { failureClass: 'loader_error', retry: true })
+    assert.equal(cooldownRetry.status, 429)
+    assert.equal(calls.repair, 1)
+
+    nowMs += 1_001
+    const [retryA, retryB] = await Promise.all([
+      requestJson(baseUrl, 'POST', '/api/plugins/codex/repair', { failureClass: 'loader_error', retry: true }),
+      requestJson(baseUrl, 'POST', '/api/plugins/codex/repair', { failureClass: 'loader_error', retry: true }),
+    ])
+    assert.equal(retryA.status, 200)
+    assert.equal(retryB.status, 200)
+    assert.equal(calls.repair, 2)
+
+    const outcomes = [JSON.parse(retryA.text), JSON.parse(retryB.text)] as Array<{ data: { deduped: boolean; repair: { attempt: number; terminal: boolean } } }>
+    assert.equal(outcomes.filter((outcome) => !outcome.data.deduped).length, 1)
+    assert.equal(outcomes.every((outcome) => outcome.data.repair.attempt === 2 && outcome.data.repair.terminal), true)
+
+    const listing = await requestJson(baseUrl, 'GET', '/api/plugins')
+    const entries = (JSON.parse(listing.text) as { data: { actionLedger: Array<{ outcome: string; attempt?: number; retryable?: boolean; terminal?: boolean }> } }).data.actionLedger
+    assert.deepEqual(entries.map(({ outcome, attempt, retryable, terminal }) => ({ outcome, attempt, retryable, terminal })), [
+      { outcome: 'started', attempt: 1, retryable: false, terminal: false },
+      { outcome: 'failed', attempt: 1, retryable: true, terminal: false },
+      { outcome: 'started', attempt: 2, retryable: false, terminal: false },
+      { outcome: 'succeeded', attempt: 2, retryable: false, terminal: true },
+    ])
+  })
+})
+
+test('plugin loader repair treats timed out and failed CLI outcomes as terminal uncertain results', async () => {
+  const uncertainErrors = [
+    Object.assign(new Error('command timed out'), { code: 1, timedOut: true, failureKind: 'timeout' }),
+    Object.assign(new Error('reload exited with failure'), { code: 1 }),
+  ]
+
+  for (const [index, uncertainError] of uncertainErrors.entries()) {
+    const { app, calls } = createPluginRoutesHarness([
+      pluginEntry(`uncertain-${index}`, { status: 'failed', loaderErrorSummary: 'OpenClaw reports that this plugin failed to load.' }),
+    ], {
+      repairFailures: [uncertainError],
+      pluginRepairPolicy: { cooldownMs: 0 },
+    })
+
+    await withRouteServer(app, async (baseUrl) => {
+      const route = `/api/plugins/uncertain-${index}/repair`
+      const first = await requestJson(baseUrl, 'POST', route, { failureClass: 'loader_error' })
+      assert.equal(first.status, 502)
+      const listing = await requestJson(baseUrl, 'GET', '/api/plugins')
+      const entries = (JSON.parse(listing.text) as { data: { actionLedger: Array<{ outcome: string; retryable?: boolean; terminal?: boolean }> } }).data.actionLedger
+      assert.equal(entries[1]?.outcome, 'uncertain')
+      assert.equal(entries[1]?.retryable, false)
+      assert.equal(entries[1]?.terminal, true)
+
+      const retry = await requestJson(baseUrl, 'POST', route, { failureClass: 'loader_error', retry: true })
+      assert.equal(retry.status, 409)
+      assert.equal(calls.repair, 1)
+    })
+  }
+})
+
+test('plugin loader repair refuses attempts beyond the durable maximum', async () => {
+  const { app, calls } = createPluginRoutesHarness([
+    pluginEntry('codex', { status: 'failed', loaderErrorSummary: 'OpenClaw reports that this plugin failed to load.' }),
+  ], {
+    repairFailures: [Object.assign(new Error('spawn failed'), { code: 'ENOENT' })],
+    pluginRepairPolicy: { maxAttempts: 1, cooldownMs: 0 },
+  })
+
+  await withRouteServer(app, async (baseUrl) => {
+    const first = await requestJson(baseUrl, 'POST', '/api/plugins/codex/repair', { failureClass: 'loader_error' })
+    assert.equal(first.status, 500)
+    const retry = await requestJson(baseUrl, 'POST', '/api/plugins/codex/repair', { failureClass: 'loader_error', retry: true })
+    assert.equal(retry.status, 409)
+    assert.equal(calls.repair, 1)
+  })
 })

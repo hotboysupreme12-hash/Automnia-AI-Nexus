@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import test from 'node:test'
-import type { ChildProcess } from 'node:child_process'
+import type { ChildProcess, SpawnOptions } from 'node:child_process'
 import {
   buildGatewayRunArgs,
   createGatewayLifecycleService,
@@ -54,6 +54,7 @@ function createHarness(config: HarnessOptions = {}) {
   const logs: GatewayLogEntry[] = []
   const lifecycleEvents: Record<string, unknown>[] = []
   const spawnSpecs: GatewaySpawnSpec[] = []
+  const spawnOptionsSeen: SpawnOptions[] = []
   const envOverrides: Record<string, string | undefined>[] = []
   const registryRefreshReasons: string[] = []
   const startupRepairSummaries: unknown[] = []
@@ -95,8 +96,9 @@ function createHarness(config: HarnessOptions = {}) {
       code: 0,
       timedOut: false,
     }),
-    spawnProcess: () => {
+    spawnProcess: (_command, _args, spawnOptions) => {
       spawnCalls += 1
+      spawnOptionsSeen.push(spawnOptions)
       const pid = 4242 + spawnCalls
       processEvents.push(`spawn:${pid}`)
       return fakeChildProcess((child) => {
@@ -204,6 +206,7 @@ function createHarness(config: HarnessOptions = {}) {
     service,
     spawnedChildren,
     spawnSpecs,
+    spawnOptionsSeen,
     get releaseCalls() {
       return releaseCalls
     },
@@ -415,6 +418,7 @@ test('normal startup spawns without rebuilding the persisted plugin registry', a
 
   assert.equal(harness.spawnCalls, 1)
   assert.deepEqual(harness.registryRefreshReasons, [])
+  assert.equal(harness.spawnOptionsSeen[0]?.detached, process.platform !== 'win32')
 })
 
 test('ensureGatewayRunning does not spawn over a stale listener that remains busy after release fails', async () => {

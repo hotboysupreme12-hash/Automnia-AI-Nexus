@@ -1,7 +1,10 @@
 import type { Express, Response } from 'express'
+import { createHash, randomUUID } from 'node:crypto'
+import path from 'node:path'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
-import { missingRequiredPluginConfigFields } from '../services/plugins/pluginInventoryService'
+import { missingRequiredPluginConfigFields, pluginIdFromPackageName } from '../services/plugins/pluginInventoryService'
+import { createPluginActionLedgerService, type PluginActionKind, type PluginActionLedgerEntry } from '../services/plugins/pluginActionLedgerService'
 import type { PluginRuntimeService, PluginSetupTerminalClient } from '../services/plugins/pluginRuntimeService'
 
 type PluginControlEntryLike = {
@@ -55,6 +58,23 @@ type ClawTalkSetupResult = {
   controls: PluginControlsPayload
 }
 
+export type PluginRepairPolicy = {
+  maxAttempts: number
+  cooldownMs: number
+  now: () => Date
+}
+
+export const DEFAULT_PLUGIN_REPAIR_POLICY = {
+  maxAttempts: 3,
+  cooldownMs: 30_000,
+} as const
+
+type PluginRepairAttemptResult = {
+  entry: PluginActionLedgerEntry
+  command?: unknown
+  error?: unknown
+}
+
 type PluginRoutesOptions = {
   clawTalkPluginId: string
   isCreditsOnlyEntitlement?: () => boolean
@@ -73,6 +93,7 @@ type PluginRoutesOptions = {
   pluginIdPattern: RegExp
   pluginRuntime: PluginRuntimeService
   pluginRuntimeStatePath: string
+  pluginRepairPolicy?: Partial<PluginRepairPolicy>
   redactSensitiveText: (value: string) => string
   savePluginDirectConfig: (pluginId: string, values: Record<string, string>, providerAuth: Record<string, string>) => Promise<void>
   schedulePluginGatewayRestart: () => GatewayRestartRequest
@@ -104,7 +125,82 @@ function pluginResponseDetails(controls: PluginControlsPayload) {
   }
 }
 
+function pluginRepairFailureDisposition(error: unknown): {
+  outcome: 'failed' | 'uncertain'
+  retryable: boolean
+  summary: string
+} {
+  const failure = error && typeof error === 'object'
+    ? error as { code?: unknown; timedOut?: unknown; failureKind?: unknown }
+    : {}
+  if (failure.timedOut === true || failure.failureKind === 'timeout') {
+    return {
+      outcome: 'uncertain',
+      retryable: false,
+      summary: 'Plugin reload outcome is uncertain after timeout; inspect plugin status before acting again.',
+    }
+  }
+
+  const processStartErrors = new Set(['ENOENT', 'EACCES', 'EPERM', 'ENOTDIR', 'ENOEXEC', 'E2BIG', 'ENAMETOOLONG'])
+  const code = typeof failure.code === 'string' ? failure.code.toUpperCase() : ''
+  if (processStartErrors.has(code)) {
+    return {
+      outcome: 'failed',
+      retryable: true,
+      summary: 'Plugin reload process did not start; a manual retry may be safe after correcting the process launch issue.',
+    }
+  }
+
+  return {
+    outcome: 'uncertain',
+    retryable: false,
+    summary: 'Plugin reload may have been accepted; inspect plugin status before retrying.',
+  }
+}
+
+function pluginRepairBudgetDetails(params: {
+  attempt: number
+  maxAttempts: number
+  retryable: boolean
+  terminal: boolean
+  retryAfterAt?: string
+}) {
+  return {
+    attempt: params.attempt,
+    maxAttempts: params.maxAttempts,
+    remainingAttempts: Math.max(0, params.maxAttempts - params.attempt),
+    retryable: params.retryable,
+    terminal: params.terminal,
+    ...(params.retryAfterAt ? { retryAfterAt: params.retryAfterAt } : {}),
+  }
+}
+
 export function registerPluginRoutes(app: Express, options: PluginRoutesOptions) {
+  const repairPolicy = {
+    maxAttempts: Math.max(1, Math.min(3, Math.round(options.pluginRepairPolicy?.maxAttempts ?? DEFAULT_PLUGIN_REPAIR_POLICY.maxAttempts))),
+    cooldownMs: Math.max(0, Math.min(30 * 60_000, Math.round(options.pluginRepairPolicy?.cooldownMs ?? DEFAULT_PLUGIN_REPAIR_POLICY.cooldownMs))),
+    now: options.pluginRepairPolicy?.now || (() => new Date()),
+  }
+  const actionLedger = createPluginActionLedgerService(
+    path.join(path.dirname(options.pluginRuntimeStatePath), 'plugin-actions.jsonl'),
+    repairPolicy.now,
+  )
+  const repairInFlight = new Map<string, Promise<PluginRepairAttemptResult>>()
+
+  async function runAuditedPluginAction<T>(action: PluginActionKind, pluginId: string, run: () => Promise<T>) {
+    const actionId = randomUUID()
+    await actionLedger.append({ actionId, action, pluginId, outcome: 'started', summary: `${action} request accepted.` })
+    let result: T
+    try {
+      result = await run()
+    } catch (error) {
+      await actionLedger.append({ actionId, action, pluginId, outcome: 'failed', summary: `${action} failed.` }).catch(() => undefined)
+      throw error
+    }
+    await actionLedger.append({ actionId, action, pluginId, outcome: 'succeeded', summary: `${action} completed.` })
+    return result
+  }
+
   async function requirePluginControl(pluginId: string, res: Response): Promise<PluginControlsPayload | null> {
     try {
       const controls = await options.listPluginControls()
@@ -123,7 +219,9 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
   app.get('/api/plugins', async (req, res) => {
     try {
       const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
-      return apiSuccess(res, await options.listPluginControls({ forceRefresh }))
+      const controls = await options.listPluginControls({ forceRefresh })
+      const actionLedgerTail = await actionLedger.readTail(100)
+      return apiSuccess(res, { ...controls, actionLedger: actionLedgerTail })
     } catch (error) {
       return apiFailure(res, 500, 'plugin_operation_failed', 'Failed to list plugins', options.pluginErrorDetail(error))
     }
@@ -155,7 +253,9 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     try {
-      const result = await options.installOpenClawPlugin(parsed.data)
+      const suggestedPluginId = parsed.data.pluginId || pluginIdFromPackageName(parsed.data.spec)
+      const pluginId = options.pluginIdPattern.test(suggestedPluginId) ? suggestedPluginId : 'unspecified'
+      const result = await runAuditedPluginAction('install', pluginId, () => options.installOpenClawPlugin(parsed.data))
       options.invalidateRuntimeStatusCache()
       return apiSuccess(res, {
         install: result.install,
@@ -181,7 +281,7 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     try {
-      const result = await options.updateAllOpenClawPlugins(parsed.data.restart)
+      const result = await runAuditedPluginAction('update-all', '*', () => options.updateAllOpenClawPlugins(parsed.data.restart))
       options.invalidateRuntimeStatusCache()
       return apiSuccess(res, {
         command: result.command,
@@ -222,7 +322,9 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     try {
-      const result = await options.setupClawTalkPlugin(parsed.data)
+      const result = parsed.data.install
+        ? await runAuditedPluginAction('install', options.clawTalkPluginId, () => options.setupClawTalkPlugin(parsed.data))
+        : await options.setupClawTalkPlugin(parsed.data)
       options.invalidateRuntimeStatusCache()
       return apiSuccess(res, {
         install: result.installResult?.install,
@@ -267,7 +369,7 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
 
     try {
       if (!await requirePluginControl(pluginId, res)) return
-      const result = await options.updateOpenClawPlugin(pluginId, parsed.data.restart)
+      const result = await runAuditedPluginAction('update', pluginId, () => options.updateOpenClawPlugin(pluginId, parsed.data.restart))
       options.invalidateRuntimeStatusCache()
       return apiSuccess(res, {
         command: result.command,
@@ -278,6 +380,239 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
       })
     } catch (error) {
       return apiFailure(res, options.pluginErrorStatus(error), 'plugin_command_failed', 'Plugin update failed', options.pluginErrorDetail(error))
+    }
+  })
+
+  app.post('/api/plugins/:pluginId/repair', async (req, res) => {
+    const pluginId = (req.params.pluginId || '').trim().toLowerCase()
+    if (!options.pluginIdPattern.test(pluginId)) {
+      return apiFailure(res, 400, 'invalid_payload', 'Invalid plugin id.')
+    }
+    const schema = z.object({
+      failureClass: z.literal('loader_error'),
+      retry: z.boolean().optional().default(false),
+    })
+    const parsed = schema.safeParse(req.body || {})
+    if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Unsupported plugin repair class.', parsed.error.flatten())
+
+    try {
+      const idempotencyKey = createHash('sha256').update(`plugin-repair\0${pluginId}\0${parsed.data.failureClass}`).digest('hex')
+      const pendingBeforeRead = repairInFlight.get(idempotencyKey)
+      if (pendingBeforeRead) {
+        const previous = await pendingBeforeRead
+        if (previous.error !== undefined) {
+          return apiFailure(res, options.pluginErrorStatus(previous.error), 'plugin_command_failed', 'Plugin repair failed', {
+            error: options.pluginErrorDetail(previous.error),
+            repair: pluginRepairBudgetDetails({
+              attempt: previous.entry.attempt || 1,
+              maxAttempts: repairPolicy.maxAttempts,
+              retryable: previous.entry.retryable === true,
+              terminal: previous.entry.terminal !== false,
+            }),
+            deduped: true,
+          })
+        }
+        return apiSuccess(res, { deduped: true, repair: previous.entry, command: previous.command })
+      }
+
+      const history = await actionLedger.readRepairHistory(idempotencyKey)
+      if (!history.complete) {
+        return apiFailure(res, 503, 'plugin_command_failed', 'Plugin repair history is incomplete; no retry was started.', {
+          repair: { terminal: true, reason: 'history_incomplete', maxAttempts: repairPolicy.maxAttempts },
+        })
+      }
+
+      const starts = history.entries.filter((entry) => entry.outcome === 'started')
+      const attemptsUsed = starts.length
+      const latestStart = starts.at(-1)
+      const latestResult = latestStart
+        ? history.entries.slice().reverse().find((entry) => entry.actionId === latestStart.actionId && entry.outcome !== 'started')
+        : undefined
+
+      const secondPendingCheck = repairInFlight.get(idempotencyKey)
+      if (secondPendingCheck) {
+        const previous = await secondPendingCheck
+        if (previous.error !== undefined) {
+          return apiFailure(res, options.pluginErrorStatus(previous.error), 'plugin_command_failed', 'Plugin repair failed', {
+            error: options.pluginErrorDetail(previous.error),
+            repair: pluginRepairBudgetDetails({
+              attempt: previous.entry.attempt || 1,
+              maxAttempts: repairPolicy.maxAttempts,
+              retryable: previous.entry.retryable === true,
+              terminal: previous.entry.terminal !== false,
+            }),
+            deduped: true,
+          })
+        }
+        return apiSuccess(res, { deduped: true, repair: previous.entry, command: previous.command })
+      }
+
+      if (latestResult?.outcome === 'succeeded') {
+        return apiSuccess(res, {
+          deduped: true,
+          repair: latestResult,
+          command: { command: `openclaw plugins reload ${pluginId} --wait --json`, code: 0, output: latestResult.summary || 'Plugin reload already completed.' },
+        })
+      }
+
+      if (latestStart && (!latestResult || latestResult.outcome === 'uncertain' || latestResult.retryable !== true)) {
+        return apiFailure(res, 409, 'plugin_command_failed', 'The previous plugin reload may still have taken effect. Inspect plugin status before starting another action.', {
+          repair: pluginRepairBudgetDetails({
+            attempt: attemptsUsed,
+            maxAttempts: repairPolicy.maxAttempts,
+            retryable: false,
+            terminal: true,
+          }),
+          actionId: latestStart.actionId,
+          outcome: latestResult?.outcome || 'started',
+        })
+      }
+
+      if (parsed.data.retry && !latestResult) {
+        return apiFailure(res, 409, 'plugin_command_failed', 'There is no prior safe failed attempt to retry.', {
+          repair: pluginRepairBudgetDetails({ attempt: 0, maxAttempts: repairPolicy.maxAttempts, retryable: false, terminal: true }),
+        })
+      }
+
+      if (latestResult?.outcome === 'failed') {
+        if (attemptsUsed >= repairPolicy.maxAttempts || latestResult.terminal === true) {
+          return apiFailure(res, 409, 'plugin_command_failed', 'The plugin repair retry budget is exhausted.', {
+            repair: pluginRepairBudgetDetails({ attempt: attemptsUsed, maxAttempts: repairPolicy.maxAttempts, retryable: false, terminal: true }),
+          })
+        }
+        if (!parsed.data.retry) {
+          return apiFailure(res, 409, 'plugin_command_failed', 'A retry must be explicitly requested after a safe process-start failure.', {
+            repair: pluginRepairBudgetDetails({ attempt: attemptsUsed, maxAttempts: repairPolicy.maxAttempts, retryable: true, terminal: false }),
+          })
+        }
+        const retryAt = Date.parse(latestResult.timestamp) + repairPolicy.cooldownMs
+        if (repairPolicy.now().getTime() < retryAt) {
+          return apiFailure(res, 429, 'plugin_command_failed', 'Plugin repair is cooling down before the next manual attempt.', {
+            repair: pluginRepairBudgetDetails({
+              attempt: attemptsUsed,
+              maxAttempts: repairPolicy.maxAttempts,
+              retryable: true,
+              terminal: false,
+              retryAfterAt: new Date(retryAt).toISOString(),
+            }),
+          })
+        }
+      }
+
+      if (!latestStart && parsed.data.retry) {
+        return apiFailure(res, 409, 'plugin_command_failed', 'There is no prior repair attempt to retry.', {
+          repair: pluginRepairBudgetDetails({ attempt: 0, maxAttempts: repairPolicy.maxAttempts, retryable: false, terminal: true }),
+        })
+      }
+
+      const controls = await requirePluginControl(pluginId, res)
+      if (!controls) return
+      const plugin = controls.plugins.find((entry) => entry.id === pluginId)
+      if (!plugin?.enabled || !plugin.loaderErrorSummary) {
+        return apiFailure(res, 409, 'plugin_command_failed', 'A repairable loader failure is not currently reported for this enabled plugin. Refresh plugin status and inspect it first.')
+      }
+
+      const pendingBeforeStart = repairInFlight.get(idempotencyKey)
+      if (pendingBeforeStart) {
+        const previous = await pendingBeforeStart
+        if (previous.error !== undefined) {
+          return apiFailure(res, options.pluginErrorStatus(previous.error), 'plugin_command_failed', 'Plugin repair failed', {
+            error: options.pluginErrorDetail(previous.error),
+            repair: pluginRepairBudgetDetails({
+              attempt: previous.entry.attempt || 1,
+              maxAttempts: repairPolicy.maxAttempts,
+              retryable: previous.entry.retryable === true,
+              terminal: previous.entry.terminal !== false,
+            }),
+            deduped: true,
+          })
+        }
+        return apiSuccess(res, { deduped: true, repair: previous.entry, command: previous.command })
+      }
+
+      const attempt = attemptsUsed + 1
+      const actionId = randomUUID()
+      const actionPromise = (async () => {
+        await actionLedger.append({
+          actionId,
+          action: 'repair',
+          pluginId,
+          outcome: 'started',
+          failureClass: parsed.data.failureClass,
+          idempotencyKey,
+          attempt,
+          retryable: false,
+          terminal: false,
+          summary: 'Targeted plugin reload attempt started for a reported loader failure.',
+        })
+        try {
+          const command = await options.pluginRuntime.repairPluginLoaderFailure(pluginId)
+          const entry = await actionLedger.append({
+            actionId,
+            action: 'repair',
+            pluginId,
+            outcome: 'succeeded',
+            failureClass: parsed.data.failureClass,
+            idempotencyKey,
+            attempt,
+            retryable: false,
+            terminal: true,
+            summary: 'Targeted plugin reload completed.',
+          })
+          options.invalidateRuntimeStatusCache()
+          return { command, entry }
+        } catch (error) {
+          const disposition = pluginRepairFailureDisposition(error)
+          const terminal = disposition.outcome === 'uncertain' || attempt >= repairPolicy.maxAttempts
+          const entry = await actionLedger.append({
+            actionId,
+            action: 'repair',
+            pluginId,
+            outcome: disposition.outcome,
+            failureClass: parsed.data.failureClass,
+            idempotencyKey,
+            attempt,
+            retryable: disposition.retryable,
+            terminal,
+            summary: terminal && disposition.retryable
+              ? 'Plugin repair retry budget is exhausted.'
+              : disposition.summary,
+          })
+          return { error, entry }
+        }
+      })()
+      repairInFlight.set(idempotencyKey, actionPromise)
+      try {
+        const result = await actionPromise
+        if (result.error !== undefined) {
+          const retryAt = result.entry.retryable && !result.entry.terminal
+            ? Date.parse(result.entry.timestamp) + repairPolicy.cooldownMs
+            : undefined
+          return apiFailure(res, options.pluginErrorStatus(result.error), 'plugin_command_failed', 'Plugin repair failed', {
+            error: options.pluginErrorDetail(result.error),
+            repair: pluginRepairBudgetDetails({
+              attempt,
+              maxAttempts: repairPolicy.maxAttempts,
+              retryable: result.entry.retryable === true && result.entry.terminal !== true,
+              terminal: result.entry.terminal === true,
+              ...(retryAt !== undefined ? { retryAfterAt: new Date(retryAt).toISOString() } : {}),
+            }),
+          })
+        }
+        const refreshed = await options.listPluginControls({ forceRefresh: true }).catch(() => controls)
+        return apiSuccess(res, {
+          deduped: false,
+          repair: result.entry,
+          command: result.command,
+          plugin: refreshed.plugins.find((entry) => entry.id === pluginId) || null,
+          ...pluginResponseDetails(refreshed),
+          runtimeStatePath: options.pluginRuntimeStatePath,
+        })
+      } finally {
+        if (repairInFlight.get(idempotencyKey) === actionPromise) repairInFlight.delete(idempotencyKey)
+      }
+    } catch (error) {
+      return apiFailure(res, options.pluginErrorStatus(error), 'plugin_command_failed', 'Plugin repair failed', options.pluginErrorDetail(error))
     }
   })
 
@@ -296,7 +631,7 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
 
     try {
       if (!await requirePluginControl(pluginId, res)) return
-      const result = await options.uninstallOpenClawPlugin(pluginId, parsed.data)
+      const result = await runAuditedPluginAction('uninstall', pluginId, () => options.uninstallOpenClawPlugin(pluginId, parsed.data))
       options.invalidateRuntimeStatusCache()
       return apiSuccess(res, {
         command: result.command,

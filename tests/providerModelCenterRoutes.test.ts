@@ -76,6 +76,24 @@ test('provider model-center endpoints require an explicit bounded probe request'
     assert.equal(refreshBody.data?.refreshed, true)
     assert.equal(refreshBody.data?.snapshot?.models?.[0]?.id, 'xai/grok-4.7')
 
+    const onboardingResponse = await fetch(`${baseUrl}/api/models/onboarding?provider=xai`)
+    const onboardingBody = await onboardingResponse.json() as {
+      data?: {
+        onboarding?: {
+          status?: string
+          probeContract?: { executed?: boolean; requiresExplicitConfirmation?: boolean; mayBeBillable?: boolean }
+          advertisedCapabilities?: { toolCapableModelCount?: number }
+        }
+      }
+    }
+    assert.equal(onboardingResponse.status, 200)
+    assert.equal(onboardingBody.data?.onboarding?.status, 'ready_for_opt_in_probe')
+    assert.equal(onboardingBody.data?.onboarding?.probeContract?.executed, false)
+    assert.equal(onboardingBody.data?.onboarding?.probeContract?.requiresExplicitConfirmation, true)
+    assert.equal(onboardingBody.data?.onboarding?.probeContract?.mayBeBillable, true)
+    assert.equal(onboardingBody.data?.onboarding?.advertisedCapabilities?.toolCapableModelCount, 1)
+    assert.equal(calls.length, 1)
+
     const noConfirmation = await fetch(`${baseUrl}/api/models/probe`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -105,6 +123,10 @@ test('provider model-center capability refresh requires one valid provider', asy
     assert.equal(missingProvider.status, 400)
     const invalidProvider = await fetch(`${baseUrl}/api/models/capabilities?provider=bad%20provider&refresh=1`)
     assert.equal(invalidProvider.status, 400)
+    const missingOnboardingProvider = await fetch(`${baseUrl}/api/models/onboarding`)
+    assert.equal(missingOnboardingProvider.status, 400)
+    const invalidOnboardingProvider = await fetch(`${baseUrl}/api/models/onboarding?provider=bad%20provider`)
+    assert.equal(invalidOnboardingProvider.status, 400)
     assert.equal(calls.length, 0)
   })
 })

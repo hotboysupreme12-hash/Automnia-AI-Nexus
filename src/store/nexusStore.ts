@@ -83,6 +83,8 @@ import {
 import {
   MAX_COMMAND_CONSOLE_RESPONSES,
   applyQueuedCommandConsoleResponsePatch,
+  commandConsoleQueueCancellationPatch,
+  commandConsoleQueueCancellationForFollowup,
   commandConsoleSessionKey,
   createQueuedCommandConsoleResponse,
   makeCommandConsoleResponseState,
@@ -2739,22 +2741,12 @@ export const useNexusStore = create<NexusState>()(
           }
 
           const completedAt = new Date().toISOString()
-          updateQueuedCommandConsoleResponse(normalized, {
-            response: 'Queued Command Console follow-up was cancelled before it started.',
-            ok: false,
-            streaming: false,
-            failureKind: 'aborted',
-            completedAt,
-            queuePosition: undefined,
-            queueDepth: undefined,
-            progressLabel: 'Cancelled',
-            progressLines: ['Queued turn cancelled by operator.'],
-            progressUpdatedAt: completedAt,
-          })
+          const cancellation = commandConsoleQueueCancellationForFollowup(queued.queuedAt, queued.createdAt, agentId)
+          updateQueuedCommandConsoleResponse(normalized, commandConsoleQueueCancellationPatch(cancellation, completedAt))
           if (remaining.length) refreshQueuedCommandConsolePositions(agentId)
           addMissionFeedEvent(
             get().activeMission?.id || 'direct-query',
-            `Queued Command Console follow-up cancelled for ${agentId}.`,
+            cancellation.feedMessage,
             'coordination',
             agentId,
           )

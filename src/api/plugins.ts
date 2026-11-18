@@ -33,6 +33,8 @@ export type PluginEntry = {
   providers: string[]
   channels: string[]
   missingDependencies: string[]
+  loaderErrorSummary?: string
+  recoveryHint?: string
   configFields: PluginConfigField[]
   guidance: string[]
   needsSetup: boolean
@@ -41,12 +43,28 @@ export type PluginEntry = {
 
 export type PluginsResponse = {
   plugins: PluginEntry[]
+  actionLedger?: Array<{
+    id: string
+    actionId: string
+    timestamp: string
+    pluginId: string
+    action: 'install' | 'update' | 'update-all' | 'uninstall' | 'repair'
+    outcome: 'started' | 'succeeded' | 'failed' | 'uncertain'
+    failureClass?: string
+    idempotencyKey?: string
+    attempt?: number
+    retryable?: boolean
+    terminal?: boolean
+    summary?: string
+  }>
   configPath?: string
   cliError?: string
   cache?: {
     source: 'openclaw' | 'bundled'
     refreshedAt: number
     refreshing: boolean
+    scanDurationMs: number
+    scanComplete: boolean
   }
 }
 

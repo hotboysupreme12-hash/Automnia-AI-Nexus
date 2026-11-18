@@ -7,6 +7,11 @@ import { ConfigEditConflict, configSnapshot, mergeConfigEdit, rememberConfigSnap
 import { writeBoundedSseEvent } from './services/agents/downstreamSse'
 import { boundConversationMessages } from './services/agents/conversationBudgetService'
 import { readCompatibleSseCompletion, readUpstreamSse } from './services/agents/upstreamSseService'
+import {
+  appendBoundedProcessOutput,
+  DEFAULT_PROCESS_OUTPUT_LIMIT_CHARS,
+  runBoundedTextProcess,
+} from './services/process/boundedProcessService'
 import express from 'express'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, promises as fs } from 'node:fs'
@@ -392,7 +397,7 @@ const RECOMMENDED_OPENCLAW_VERSION = '2026.11.5'
 const DEFAULT_OPENCLAW_FAST_MODE = 'auto'
 const DEFAULT_OPENCLAW_FAST_AUTO_ON_SECONDS = 60
 const FAST_MODE_MODEL_PARAM_PROVIDERS = new Set(['openai', 'openai-codex', 'anthropic', 'xai', 'minimax'])
-const MAX_RUNTIME_OUTPUT_CHARS = 1_200_000
+const MAX_RUNTIME_OUTPUT_CHARS = DEFAULT_PROCESS_OUTPUT_LIMIT_CHARS
 const MAX_LOCAL_JSON_RESPONSE_CHARS = 1_200_000
 const FOLDER_PICKER_TIMEOUT_MS = (() => {
   const configured = Number(process.env.CONTROL_CENTER_FOLDER_PICKER_TIMEOUT_MS || 60000)
@@ -501,6 +506,7 @@ const pickerSessionService = createPickerSessionService({
   stateRoot: OPENCLAW_STATE_ROOT,
   workspaceRoot: WORKSPACE_ROOT,
   timeoutMs: FOLDER_PICKER_TIMEOUT_MS,
+  terminateProcessTree,
   persistAgentAvatarFromPath,
 })
 const OPENCLAW_BOOTSTRAP_FILES = ['AGENTS.md', 'SOUL.md', 'TOOLS.md', 'IDENTITY.md', 'USER.md', 'HEARTBEAT.md', 'BOOTSTRAP.md'] as const
@@ -659,11 +665,18 @@ type OpenClawResult = {
 
 function openClawErrorResult(error: unknown): OpenClawResult {
   const text = error instanceof Error ? error.message : String(error)
+  const errorCode = error && typeof error === 'object' && 'code' in error
+    ? String((error as NodeJS.ErrnoException).code || '')
+    : ''
   return {
     stdout: '',
     stderr: text,
     code: 1,
-    failureKind: classifyFailureKind(text, 'failed') || 'unknown',
+    failureKind: errorCode === 'ENOENT'
+      ? 'runtime_unavailable'
+      : errorCode
+        ? 'process_error'
+        : classifyFailureKind(text, 'failed') || 'unknown',
   }
 }
 
@@ -761,11 +774,7 @@ function classifyFailureKind(text: string, status?: OpenClawRunStatus | null): F
 }
 
 function appendBoundedRuntimeOutput(current: string, chunk: unknown) {
-  if (current.length >= MAX_RUNTIME_OUTPUT_CHARS) return current
-  const text = String(chunk || '')
-  if (current.length + text.length <= MAX_RUNTIME_OUTPUT_CHARS) return current + text
-  const remaining = Math.max(0, MAX_RUNTIME_OUTPUT_CHARS - current.length)
-  return `${current}${text.slice(0, remaining)}\n\n[Output truncated by Control Center at ${MAX_RUNTIME_OUTPUT_CHARS} chars.]`
+  return appendBoundedProcessOutput(current, chunk, MAX_RUNTIME_OUTPUT_CHARS)
 }
 
 function appendBoundedLocalJsonResponse(current: string, chunk: unknown) {
@@ -3846,42 +3855,10 @@ function spawnText(
   command: string,
   args: string[],
   options: { timeoutMs?: number; windowsHide?: boolean } = {},
-): Promise<{ stdout: string; stderr: string; code: number | null; timedOut: boolean }> {
-  return new Promise((resolve) => {
-    const child = spawn(command, args, {
-      shell: false,
-      ...(process.platform === 'win32' ? { windowsHide: options.windowsHide ?? true } : {}),
-    })
-    let stdout = ''
-    let stderr = ''
-    let settled = false
-    const timeout = options.timeoutMs
-      ? setTimeout(() => {
-          if (settled) return
-          settled = true
-          void terminateProcessTree(child.pid, `${command} helper timeout`, true)
-          resolve({ stdout, stderr, code: null, timedOut: true })
-        }, options.timeoutMs)
-      : null
-
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk.toString()
-    })
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk.toString()
-    })
-    child.on('error', (error) => {
-      if (settled) return
-      settled = true
-      if (timeout) clearTimeout(timeout)
-      resolve({ stdout, stderr: stderr || String(error), code: 1, timedOut: false })
-    })
-    child.on('close', (code) => {
-      if (settled) return
-      settled = true
-      if (timeout) clearTimeout(timeout)
-      resolve({ stdout, stderr, code, timedOut: false })
-    })
+): Promise<{ stdout: string; stderr: string; code: number | null; timedOut: boolean; failureKind?: 'timeout' | 'process_error' }> {
+  return runBoundedTextProcess(command, args, {
+    ...options,
+    terminateProcessTree,
   })
 }
 
@@ -5651,6 +5628,7 @@ async function runOpenClaw(
       cwd: runCwd,
       env: spawnEnv,
       shell: spec.shell,
+      detached: process.platform !== 'win32',
       ...(process.platform === 'win32' ? { windowsHide: true } : {}),
     })
     updateOpenClawRunPid(runRecord, child.pid)
@@ -5708,7 +5686,8 @@ async function runOpenClaw(
       if (settled) return
       settled = true
       cleanup()
-      const failureKind = classifyFailureKind(`${stderr}\n${String(err)}`, 'failed') || 'process_error'
+      const errorCode = (err as NodeJS.ErrnoException).code
+      const failureKind = errorCode === 'ENOENT' ? 'runtime_unavailable' : 'process_error'
       finishOpenClawRun(runRecord, 'failed', { stdout, stderr: stderr || String(err), code: 1, failureKind })
       reject(err)
     })
@@ -8067,54 +8046,22 @@ async function tryReleaseBrowserRelayPort(): Promise<{ released: boolean; detail
     return tryReleaseTcpPortUnix(18792)
   }
 
-  return new Promise((resolve) => {
-    let settled = false
-    const command = [
-      "$listeners = Get-NetTCPConnection -State Listen -LocalPort 18792 -ErrorAction SilentlyContinue;",
-      'if (-not $listeners) { Write-Output "PORT_CLEAR"; exit 0 };',
-      '$pids = $listeners | Select-Object -ExpandProperty OwningProcess -Unique;',
-      'Stop-Process -Id $pids -Force -ErrorAction SilentlyContinue;',
-      'Start-Sleep -Milliseconds 500;',
-      '$still = Get-NetTCPConnection -State Listen -LocalPort 18792 -ErrorAction SilentlyContinue;',
-      'if ($still) { Write-Output "PORT_STILL_BUSY"; exit 1 } else { Write-Output "PORT_RELEASED"; exit 0 }',
-    ].join(' ')
-
-    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], {
-      shell: false,
-      windowsHide: true,
-    })
-    const timeout = setTimeout(() => {
-      try {
-        child.kill()
-      } catch {
-        // Process may have already exited.
-      }
-      settle({ released: false, detail: 'PORT_RELEASE_TIMEOUT:18792' })
-    }, 5000)
-    const settle = (result: { released: boolean; detail: string }) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timeout)
-      resolve(result)
-    }
-
-    let stdout = ''
-    let stderr = ''
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk.toString()
-    })
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk.toString()
-    })
-    child.on('error', (error) => {
-      settle({ released: false, detail: String(error) })
-    })
-    child.on('close', (code) => {
-      const combined = `${stdout}\n${stderr}`.trim()
-      const released = code === 0 && /PORT_RELEASED|PORT_CLEAR/i.test(combined)
-      settle({ released, detail: combined || `exit:${code ?? 1}` })
-    })
-  })
+  const command = [
+    "$listeners = Get-NetTCPConnection -State Listen -LocalPort 18792 -ErrorAction SilentlyContinue;",
+    'if (-not $listeners) { Write-Output "PORT_CLEAR"; exit 0 };',
+    '$pids = $listeners | Select-Object -ExpandProperty OwningProcess -Unique;',
+    'Stop-Process -Id $pids -Force -ErrorAction SilentlyContinue;',
+    'Start-Sleep -Milliseconds 500;',
+    '$still = Get-NetTCPConnection -State Listen -LocalPort 18792 -ErrorAction SilentlyContinue;',
+    'if ($still) { Write-Output "PORT_STILL_BUSY"; exit 1 } else { Write-Output "PORT_RELEASED"; exit 0 }',
+  ].join(' ')
+  const result = await spawnText('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { timeoutMs: 5000 })
+  if (result.timedOut) return { released: false, detail: 'PORT_RELEASE_TIMEOUT:18792' }
+  const combined = `${result.stdout}\n${result.stderr}`.trim()
+  return {
+    released: result.code === 0 && /PORT_RELEASED|PORT_CLEAR/i.test(combined),
+    detail: combined || `exit:${result.code ?? 1}`,
+  }
 }
 
 async function tryReleaseGatewayPort(): Promise<{ released: boolean; detail: string }> {
@@ -8123,77 +8070,35 @@ async function tryReleaseGatewayPort(): Promise<{ released: boolean; detail: str
     return tryReleaseTcpPortUnix(port)
   }
 
-  return new Promise((resolve) => {
-    let settled = false
-    const command = [
-      `$listeners = Get-NetTCPConnection -State Listen -LocalPort ${port} -ErrorAction SilentlyContinue;`,
-      'if (-not $listeners) { Write-Output "PORT_CLEAR"; exit 0 };',
-      '$pids = $listeners | Select-Object -ExpandProperty OwningProcess -Unique;',
-      'Stop-Process -Id $pids -Force -ErrorAction SilentlyContinue;',
-      'Start-Sleep -Milliseconds 700;',
-      `$still = Get-NetTCPConnection -State Listen -LocalPort ${port} -ErrorAction SilentlyContinue;`,
-      'if ($still) { Write-Output "PORT_STILL_BUSY"; exit 1 } else { Write-Output "PORT_RELEASED"; exit 0 }',
-    ].join(' ')
-
-    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], {
-      shell: false,
-      windowsHide: true,
-    })
-    const timeout = setTimeout(() => {
-      try {
-        child.kill()
-      } catch {
-        // Process may have already exited.
-      }
-      settle({ released: false, detail: `PORT_RELEASE_TIMEOUT:${port}` })
-    }, 5000)
-    const settle = (result: { released: boolean; detail: string }) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timeout)
-      resolve(result)
-    }
-
-    let stdout = ''
-    let stderr = ''
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk.toString()
-    })
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk.toString()
-    })
-    child.on('error', (error) => {
-      settle({ released: false, detail: String(error) })
-    })
-    child.on('close', (code) => {
-      const combined = `${stdout}\n${stderr}`.trim()
-      const released = code === 0 && /PORT_RELEASED|PORT_CLEAR/i.test(combined)
-      settle({ released, detail: combined || `exit:${code ?? 1}` })
-    })
-  })
+  const command = [
+    `$listeners = Get-NetTCPConnection -State Listen -LocalPort ${port} -ErrorAction SilentlyContinue;`,
+    'if (-not $listeners) { Write-Output "PORT_CLEAR"; exit 0 };',
+    '$pids = $listeners | Select-Object -ExpandProperty OwningProcess -Unique;',
+    'Stop-Process -Id $pids -Force -ErrorAction SilentlyContinue;',
+    'Start-Sleep -Milliseconds 700;',
+    `$still = Get-NetTCPConnection -State Listen -LocalPort ${port} -ErrorAction SilentlyContinue;`,
+    'if ($still) { Write-Output "PORT_STILL_BUSY"; exit 1 } else { Write-Output "PORT_RELEASED"; exit 0 }',
+  ].join(' ')
+  const result = await spawnText('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { timeoutMs: 5000 })
+  if (result.timedOut) return { released: false, detail: `PORT_RELEASE_TIMEOUT:${port}` }
+  const combined = `${result.stdout}\n${result.stderr}`.trim()
+  return {
+    released: result.code === 0 && /PORT_RELEASED|PORT_CLEAR/i.test(combined),
+    detail: combined || `exit:${result.code ?? 1}`,
+  }
 }
 
 async function tryReleaseTcpPortUnix(port: number): Promise<{ released: boolean; detail: string }> {
   if (process.platform === 'win32') return { released: false, detail: 'unsupported-platform' }
 
-  const run = (cmd: string, args: string[]) =>
-    new Promise<{ code: number; stdout: string; stderr: string }>((resolve) => {
-      const child = spawn(cmd, args, { shell: false })
-      let stdout = ''
-      let stderr = ''
-      child.stdout.on('data', (chunk) => {
-        stdout += chunk.toString()
-      })
-      child.stderr.on('data', (chunk) => {
-        stderr += chunk.toString()
-      })
-      child.on('error', (error) => {
-        resolve({ code: 127, stdout, stderr: String(error) })
-      })
-      child.on('close', (code) => {
-        resolve({ code: code ?? 1, stdout, stderr })
-      })
-    })
+  const run = async (cmd: string, args: string[]) => {
+    const result = await spawnText(cmd, args, { timeoutMs: 5000 })
+    return {
+      code: result.code ?? (result.timedOut ? 124 : 127),
+      stdout: result.stdout,
+      stderr: result.stderr,
+    }
+  }
 
   const before = await checkTcpPort('127.0.0.1', port, 500)
   if (!before) return { released: true, detail: `PORT_CLEAR:${port}` }
@@ -11321,8 +11226,12 @@ function patchedTelegramBotRuntimeSource(source: string) {
     if (progressStatusPattern.test(next)) {
       next = next.replace(progressStatusPattern, TELEGRAM_PROGRESS_STATUS_HELPER)
     } else if (!next.includes(progressStatusPatchVersion)) {
-      const progressStatusMarker = '//#region extensions/telegram/src/bot-message-dispatch-status.ts'
-      if (next.includes(progressStatusMarker)) {
+      const progressStatusMarkers = [
+        '//#region extensions/telegram/src/bot-message-dispatch-status.ts',
+        '//#region extensions/telegram/src/bot-message-dispatch-turn.ts',
+      ]
+      const progressStatusMarker = progressStatusMarkers.find((marker) => next.includes(marker))
+      if (progressStatusMarker && next.includes(progressStatusMarker)) {
         next = next.replace(progressStatusMarker, `${TELEGRAM_PROGRESS_STATUS_HELPER}\n${progressStatusMarker}`)
       } else {
         console.warn('[plugins/telegram] progress status patch skipped: no stable Telegram dispatch marker found')
@@ -11372,7 +11281,7 @@ function patchedTelegramBotRuntimeSource(source: string) {
     'return null;',
     '}',
   ]
-  if (!next.includes(routeApplicationMarker)) {
+  if (!next.includes(routeApplicationMarker) && next.includes('const buildTelegramMessageContext = async (')) {
     const bodyResultMarker = 'if (!bodyResult) return null;'
     const routeApplicationBlock = [
       ...trafficGateRecoveryLines,
@@ -11407,7 +11316,76 @@ function patchedTelegramBotRuntimeSource(source: string) {
     if (next.includes(bodyResultMarker)) {
       next = next.replace(bodyResultMarker, `${bodyResultMarker}\n\t${routeApplicationBlock}`)
     } else {
-      console.warn('[plugins/telegram] agent route patch skipped: inbound body marker not found')
+      const messageContextStart = next.indexOf('const buildTelegramMessageContext = async (')
+      const messageContextEnd = messageContextStart >= 0 ? next.indexOf('//#endregion', messageContextStart) : -1
+      const messageContext = messageContextEnd > messageContextStart
+        ? next.slice(messageContextStart, messageContextEnd)
+        : ''
+      const inboundBodyMatch = /const\s+([\w$]+)\s*=\s*await resolveTelegramInboundBody\(\{([\s\S]*?)\}\);\s*if\s*\(!\1\)\s*return null;/u.exec(messageContext)
+      const baseObjectName = inboundBodyMatch && /^\s*\.\.\.([\w$]+)/u.exec(inboundBodyMatch[2])?.[1]
+      const baseObjectMatch = baseObjectName
+        ? new RegExp(`const\\s+${baseObjectName}\\s*=\\s*\\{([^;]+)\\};`, 'u').exec(messageContext)
+        : null
+      const baseObject = baseObjectMatch?.[1] || ''
+      const baseAlias = (property: string) => new RegExp(`\\b${property}:\\s*([\\w$]+)\\b`, 'u').exec(baseObject)?.[1]
+      const messageContextHeader = messageContextStart >= 0
+        ? messageContext.slice(0, messageContext.indexOf('}) => {', 0))
+        : ''
+      const parameterAlias = (property: string) => new RegExp(`\\b${property}:\\s*([\\w$]+)\\b`, 'u').exec(messageContextHeader)?.[1]
+      const currentRouteAlias = /\blet\s*\{\s*route:\s*([\w$]+)\s*\}\s*=\s*[\w$]+/u.exec(messageContext)?.[1]
+      const dmThreadAlias = /\bconst\s+([\w$]+)\s*=\s*[\w$]+\.scope\s*===\s*"dm"\s*\?\s*[\w$]+\.id\s*:\s*void 0/u.exec(messageContext)?.[1]
+      const currentBodyAlias = inboundBodyMatch?.[1]
+      const currentConfigAlias = parameterAlias('cfg')
+      const currentAccountAlias = parameterAlias('account')
+      const currentPrimaryContextAlias = parameterAlias('primaryCtx')
+      const currentChatAlias = baseAlias('chatId')
+      const currentGroupAlias = baseAlias('isGroup')
+      const currentThreadAlias = baseAlias('threadSpec')
+      const currentResolvedThreadAlias = baseAlias('resolvedThreadId')
+      const currentSenderAlias = baseAlias('senderId')
+      const currentMessageAlias = baseAlias('msg')
+      const currentApplyTargetSessionMatch = /([\w$]+)\s*=\s*applyTelegramTargetSession\(\{\s*cfg:\s*([\w$]+),\s*route:\s*([\w$]+),\s*chatId:\s*([\w$]+),\s*isGroup:\s*([\w$]+),\s*senderId:\s*([\w$]+),\s*dmThreadId:\s*([\w$]+),\s*botHasTopicsEnabled:/u.exec(messageContext)
+      if (inboundBodyMatch && currentRouteAlias && currentConfigAlias && currentAccountAlias
+        && currentPrimaryContextAlias && currentChatAlias && currentGroupAlias
+        && currentThreadAlias && currentResolvedThreadAlias && currentSenderAlias && currentMessageAlias
+        && dmThreadAlias && currentApplyTargetSessionMatch) {
+        const [, , applyConfigAlias, applyRouteAlias, applyChatAlias, applyGroupAlias, applySenderAlias, applyDmThreadAlias] = currentApplyTargetSessionMatch
+        if (applyRouteAlias !== currentRouteAlias) {
+          console.warn('[plugins/telegram] agent route patch skipped: current route/session aliases diverged')
+        } else {
+          const currentInboundRoutePrelude = [
+            'const automniaTelegramAgentRoute = resolveTelegramAgentRouteForMessage({',
+            `cfg: ${currentConfigAlias},`,
+            `route: ${currentRouteAlias},`,
+            `accountId: ${currentAccountAlias}.accountId,`,
+            `chatId: ${applyChatAlias},`,
+            `isGroup: ${applyGroupAlias},`,
+            `resolvedThreadId: ${currentResolvedThreadAlias},`,
+            `dmThreadId: ${applyDmThreadAlias},`,
+            `senderId: ${applySenderAlias},`,
+            `botHasTopicsEnabled: ${currentThreadAlias}.scope === "dm" && (${currentMessageAlias}.is_topic_message === true || isTelegramForumTopicTitleUpdate(${currentMessageAlias})) || resolveTelegramBotHasTopicsEnabled(${currentPrimaryContextAlias}.me),`,
+            `rawBody: getTelegramTextParts(${currentMessageAlias}).text,`,
+            `bodyText: getTelegramTextParts(${currentMessageAlias}).text`,
+            '});',
+            `if (automniaTelegramAgentRoute.changed) ${currentRouteAlias} = automniaTelegramAgentRoute.route;`,
+          ].join('\n\t')
+          const currentApplyTargetSessionMarker = currentApplyTargetSessionMatch[0]
+          if (!next.includes('const automniaTelegramAgentRoute = resolveTelegramAgentRouteForMessage({')) {
+            next = next.replace(currentApplyTargetSessionMarker, `${currentInboundRoutePrelude}\n\t${currentApplyTargetSessionMarker}`)
+          }
+          const currentInboundRouteBlock = [
+            'if (automniaTelegramAgentRoute.changed) {',
+            `${currentBodyAlias}.rawBody = automniaTelegramAgentRoute.rawBody;`,
+            `${currentBodyAlias}.bodyText = automniaTelegramAgentRoute.bodyText;`,
+            '}',
+            `${currentBodyAlias}.bodyText = withTelegramAgentRouteContext({ config: ${applyConfigAlias}, agentId: ${currentRouteAlias}.agentId, sessionKey: ${currentRouteAlias}.sessionKey, prompt: ${currentBodyAlias}.bodyText });`,
+          ].join('\n\t')
+          const currentInboundBodyGuard = inboundBodyMatch[0].slice(inboundBodyMatch[0].lastIndexOf('if (!'))
+          next = next.replace(currentInboundBodyGuard, `${currentInboundBodyGuard}\n\t${currentInboundRouteBlock}`)
+        }
+      } else {
+        console.warn('[plugins/telegram] agent route patch skipped: inbound body marker not found')
+      }
     }
   }
   const telegramAgentsCommandGuardMarker = 'const telegramAgentsCommandBody = String(bodyResult.rawBody || "").trim();'
@@ -11505,6 +11483,42 @@ function patchedTelegramBotRuntimeSource(source: string) {
   }
   if (next.includes('\tlet isFirstTurnInSession = false;') && !next.includes('turn.telegramProgressStatus?.start();')) {
     next = next.replace('\tlet isFirstTurnInSession = false;', '\tturn.telegramProgressStatus?.start();\n\tlet isFirstTurnInSession = false;')
+  }
+  const currentDispatchTurnStartPattern = /async function runTelegramDispatchTurn\(([\w$]+)\) \{\s*const \{\s*context:\s*([\w$]+)\s*\} = \1;/u
+  const currentDispatchTurnStart = currentDispatchTurnStartPattern.exec(next)
+  if (currentDispatchTurnStart && !/async function runTelegramDispatchTurn\([\w$]+\) \{[\s\S]*?telegramProgressStatus\?\.start\(\)/u.test(next)) {
+    const [, dispatchTurnAlias, dispatchContextAlias] = currentDispatchTurnStart
+    next = next.replace(currentDispatchTurnStart[0], [
+      currentDispatchTurnStart[0],
+      `if (!${dispatchTurnAlias}.telegramProgressStatus && typeof createAutomniaTelegramProgressStatus === "function") ${dispatchTurnAlias}.telegramProgressStatus = createAutomniaTelegramProgressStatus({ context: ${dispatchContextAlias}, bot: ${dispatchTurnAlias}.bot, replyToMode: ${dispatchTurnAlias}.replyToMode, runtime: ${dispatchTurnAlias}.runtime });`,
+      `await ${dispatchTurnAlias}.telegramProgressStatus?.start();`,
+    ].join('\n\t'))
+  }
+  if (!next.includes('telegramProgressStatus?.toolStart(')) {
+    next = next.replace(/async function handleToolStart\(([\w$]+),\s*([\w$]+)\) \{/u, (match, turnAlias: string, payloadAlias: string) => `${match}\n\t${turnAlias}.telegramProgressStatus?.toolStart(${payloadAlias}.name?.trim());`)
+  }
+  if (!next.includes('telegramProgressStatus?.compaction(true);')) {
+    next = next.replace(/async function handleCompactionStart\(([\w$]+)\) \{/u, '$&\n\t$1.telegramProgressStatus?.compaction(true);')
+  }
+  if (!next.includes('telegramProgressStatus?.compaction(false);')) {
+    next = next.replace(/async function handleCompactionEnd\(([\w$]+),\s*[\w$]+\) \{/u, '$&\n\t$1.telegramProgressStatus?.compaction(false);')
+  }
+  if (!next.includes('telegramProgressStatus?.item();')) {
+    next = next.replace(/async function handleItemEvent\(([\w$]+),\s*[\w$]+\) \{/u, '$&\n\t$1.telegramProgressStatus?.item();')
+  }
+  if (!next.includes('telegramProgressStatus?.thinking();')) {
+    next = next.replace(/onAssistantMessageStart: ([\w$]+)\.answerLane\.stream \? \(\) => queueDraftProgress\(async \(\) => \{\s*resetReasoningStepState\(\1\);/u, '$&\n\t\t\t\t$1.telegramProgressStatus?.thinking();')
+  }
+  const finalTelegramStatusPattern = /if \(([\w$]+)\) finalizeStatusInBackground\(([\w$]+)\.agentRunFailed \|\| [\w$]+\.dispatchError != null \|\| [\w$]+\.previewLifecycle\.finalFailed \|\| [\w$]+\.previewLifecycle\.finalDelivered && ![\w$]+\.previewLifecycle\.finalSucceeded \|\| ([\w$]+) \? "error" : "done", "finalize"\);\s*return \{ kind: "completed" \};/u
+  const finalTelegramStatusMatch = finalTelegramStatusPattern.exec(next)
+  if (finalTelegramStatusMatch && !next.includes('telegramProgressStatus?.finalize(telegramStatusOutcome')) {
+    const [, , dispatchTurnAlias, failedFinalAlias] = finalTelegramStatusMatch
+    const statusFinalizeBlock = [
+      `const telegramStatusOutcome = ${dispatchTurnAlias}.previewLifecycle.finalDelivered && ${dispatchTurnAlias}.previewLifecycle.finalSucceeded && !${dispatchTurnAlias}.agentRunFailed && !${dispatchTurnAlias}.dispatchError && !${dispatchTurnAlias}.previewLifecycle.finalFailed && !${failedFinalAlias} ? "done" : "error";`,
+      `await ${dispatchTurnAlias}.telegramProgressStatus?.finalize(telegramStatusOutcome, telegramStatusOutcome === "done" ? "Final answer delivered below." : "The Telegram turn ended without a final answer; retrying is safe.");`,
+      finalTelegramStatusMatch[0],
+    ].join('\n\t')
+    next = next.replace(finalTelegramStatusMatch[0], statusFinalizeBlock)
   }
   if (!next.includes('turn.deferredToActiveRun = turnResult.dispatchResult.deferredToActiveRun;')) {
     next = next.replace(
@@ -11638,8 +11652,6 @@ function patchedTelegramBotRuntimeSource(source: string) {
     ].join('\n\t\t\t\t');
     if (next.includes(nativeAgentsCommandMarker)) {
       next = next.replace(nativeAgentsCommandMarker, nativeAgentsCommandBlock);
-    } else {
-      console.warn('[plugins/telegram] agents command patch skipped: native command marker not found');
     }
   }
   const currentNativeAgentsCommandMarker = 'for (const pluginCommand of pluginCatalog.selectedCommands) bot.command(pluginCommand.command, async (ctx) => {'
@@ -11676,6 +11688,79 @@ function patchedTelegramBotRuntimeSource(source: string) {
     ].join('\n\t')
     next = next.replace(currentNativeAgentsCommandMarker, `${currentNativeAgentsCommandBlock}\n\t${currentNativeAgentsCommandMarker}`)
   }
+  const currentNativeCommandRegionStart = next.indexOf('const registerTelegramNativeCommands = async')
+  const currentNativeCommandRegionEnd = currentNativeCommandRegionStart >= 0
+    ? next.indexOf('//#endregion', currentNativeCommandRegionStart)
+    : -1
+  const currentNativeCommandRegion = currentNativeCommandRegionEnd > currentNativeCommandRegionStart
+    ? next.slice(currentNativeCommandRegionStart, currentNativeCommandRegionEnd)
+    : ''
+  const currentNativeLoopPattern = /for\s*\(const\s+([\w$]+)\s+of\s+([\w$]+)\)\s+([\w$]+)\.command\(normalizeTelegramCommandName\(\1\.name\),\s*async\s*\(([\w$]+),\s*([\w$]+)\)\s*=>\s*\{/u
+  const currentNativeLoopMatch = currentNativeLoopPattern.exec(currentNativeCommandRegion)
+  const currentNativeFunctionHeader = currentNativeCommandRegion.slice(0, currentNativeCommandRegion.indexOf('=> {'))
+  const nativeParameterAlias = (property: string) => new RegExp(`\\b${property}:\\s*([\\w$]+)\\b`, 'u').exec(currentNativeFunctionHeader)?.[1]
+  const nativeLocalAlias = (property: string) => new RegExp(`\\b${property}:\\s*([\\w$]+)\\b`, 'u').exec(currentNativeCommandRegion)?.[1]
+  if (currentNativeLoopMatch && !next.includes(currentNativeAgentsPatchMarker)) {
+    const [loopMarker, nativeCommandAlias, , , commandContextAlias] = currentNativeLoopMatch
+    const currentCfgAlias = nativeParameterAlias('cfg')
+    const currentAccountAlias = nativeLocalAlias('accountId')
+    const currentBotAlias = nativeLocalAlias('bot')
+    const currentRuntimeAlias = nativeLocalAlias('runtime')
+    const currentSkipAlias = nativeParameterAlias('shouldSkipUpdate')
+    const agentsCommandHandlerName = 'runAutomniaTelegramAgentsCommand'
+    if (currentCfgAlias && currentAccountAlias && currentBotAlias && currentRuntimeAlias && currentSkipAlias) {
+      const nativeAgentsCommandHelper = [
+        currentNativeAgentsPatchMarker,
+        `const ${agentsCommandHandlerName} = async (${commandContextAlias}) => {`,
+        `if (${currentSkipAlias}(${commandContextAlias}) || !${commandContextAlias}.message) return;`,
+        `const msg = ${commandContextAlias}.message;`,
+        'const chatId = msg.chat?.id;',
+        'if (chatId == null) return;',
+        'const isGroup = msg.chat.type === "group" || msg.chat.type === "supergroup";',
+        'const threadSpec = resolveTelegramMessageThreadSpec(msg);',
+        'const resolvedThreadId = threadSpec.scope === "forum" || threadSpec.scope === "direct-messages" ? threadSpec.id : void 0;',
+        'const dmThreadId = threadSpec.scope === "dm" ? threadSpec.id : void 0;',
+        `const routeAgentId = resolveAgentRoute({ cfg: ${currentCfgAlias}, channel: "telegram", accountId: ${currentAccountAlias} })?.agentId || "main";`,
+        'const telegramAgentsCommandText = resolveTelegramAgentsCommandResponse({',
+        `cfg: ${currentCfgAlias},`,
+        `accountId: ${currentAccountAlias},`,
+        'chatId,',
+        'isGroup,',
+        'resolvedThreadId,',
+        'dmThreadId,',
+        'routeAgentId,',
+        `rawText: typeof ${commandContextAlias}.match === "string" ? ${commandContextAlias}.match.trim() : ""`,
+        '});',
+        `await withTelegramApiErrorLogging({ operation: "sendMessage", runtime: ${currentRuntimeAlias}, fn: () => ${currentBotAlias}.api.sendMessage(chatId, telegramAgentsCommandText, { ...buildTelegramThreadParams(threadSpec), reply_parameters: { message_id: msg.message_id, allow_sending_without_reply: true } }) });`,
+        '};',
+      ].join('\n\t')
+      const nativeLoopAgentsGuard = [
+        `if (normalizeTelegramCommandName(${nativeCommandAlias}.name) === "agents") {`,
+        `await ${agentsCommandHandlerName}(${commandContextAlias});`,
+        'return;',
+        '}',
+      ].join('\n\t\t\t')
+      const helperInsertionMarker = 'const handleNativeCommand = async ('
+      const updatedNativeLoop = `${loopMarker}\n\t\t\t${nativeLoopAgentsGuard}`
+      if (next.includes(helperInsertionMarker)) {
+        next = next.replace(helperInsertionMarker, `${nativeAgentsCommandHelper}\n\t${helperInsertionMarker}`)
+        next = next.replace(loopMarker, updatedNativeLoop)
+        const nativeSpecsAlias = /const\s+([\w$]+)\s*=\s*[\w$]+\s*\?\s*listNativeCommandSpecsForConfig\(/u.exec(currentNativeCommandRegion)?.[1]
+        const nativeEnabledAlias = nativeParameterAlias('nativeEnabled')
+        const selectedPluginCommandLoopPattern = /for\s*\(const\s+([\w$]+)\s+of\s+([\w$]+)\.selectedCommands\)\s+([\w$]+)\.command\(\1\.command,\s*async\s*\(([\w$]+)\)\s*=>\s*\{/u
+        const selectedPluginCommandLoopMatch = selectedPluginCommandLoopPattern.exec(currentNativeCommandRegion)
+        if (selectedPluginCommandLoopMatch && nativeSpecsAlias && nativeEnabledAlias) {
+          const [selectedPluginCommandLoop] = selectedPluginCommandLoopMatch
+          const nativeAgentsFallbackRegistration = `if (${nativeEnabledAlias} && !${nativeSpecsAlias}.some((command) => normalizeTelegramCommandName(command.name) === "agents")) ${currentBotAlias}.command("agents", ${agentsCommandHandlerName});`
+          next = next.replace(selectedPluginCommandLoop, `${nativeAgentsFallbackRegistration}\n\t${selectedPluginCommandLoop}`)
+        }
+      } else {
+        console.warn('[plugins/telegram] agents command patch skipped: native command helper marker not found')
+      }
+    } else {
+      console.warn('[plugins/telegram] agents command patch skipped: current native-command aliases not found')
+    }
+  }
   const routePatchInserted = next.includes(routeApplicationMarker)
   const nativeAgentsPatchInserted = next.includes(currentNativeAgentsPatchMarker) || next.includes('const telegramAgentsCommandText = resolveTelegramAgentsCommandResponse({')
   const modelSelectionCallbackPatchInserted = next.includes('onModelSelected: telegramModelSelected')
@@ -11704,6 +11789,15 @@ function patchedTelegramBotRuntimeSource(source: string) {
     )
   } else if (!next.includes('applyTelegramVerifiedIdentityDeliveryGuard({') && source.includes('beforeDeliver: async (payload) => payload,')) {
     console.warn('[plugins/telegram] identity delivery guard skipped: reply delivery marker not found')
+  }
+  if (!next.includes('applyTelegramVerifiedIdentityDeliveryGuard({')) {
+    const currentDispatchTurnStart = /async function runTelegramDispatchTurn\(([\w$]+)\) \{\s*const \{\s*context:\s*([\w$]+)\s*\} = \1;/u.exec(next)
+    const currentIdentityDeliveryMarker = /beforeDeliver: async \(([\w$]+)\) => \1,/u
+    const currentIdentityDeliveryMatch = currentIdentityDeliveryMarker.exec(next)
+    if (currentDispatchTurnStart && currentIdentityDeliveryMatch) {
+      const [, dispatchTurnAlias, dispatchContextAlias] = currentDispatchTurnStart
+      next = next.replace(currentIdentityDeliveryMatch[0], `beforeDeliver: async (payload, info) => applyTelegramVerifiedIdentityDeliveryGuard({ payload, info, config: ${dispatchTurnAlias}.cfg, agentId: ${dispatchContextAlias}.route.agentId, prompt: ${dispatchContextAlias}.ctxPayload.RawBody }),`)
+    }
   }
   const modelDataMarker = 'const { byProvider, providers, modelNames, resolvedDefault: activeResolvedDefault } = modelData;'
   if (!next.includes('telegramBillingModelData(runtimeCfg, modelData)')) {

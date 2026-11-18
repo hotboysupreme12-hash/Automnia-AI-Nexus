@@ -14,6 +14,8 @@ export type PluginOpenClawResult = {
   stderr: string
   code: number
   elapsedMs?: number
+  timedOut?: boolean
+  failureKind?: string
 }
 
 export type PluginCommandResult = {
@@ -433,7 +435,10 @@ function throwPluginCommandError(
 ): never {
   const detail = redactSensitiveText(stripAnsi(`${result.stdout || ''}\n${result.stderr || ''}`).trim() || `${pluginCommandString(args)} exited ${result.code}`)
   const error = new Error(detail)
-  ;(error as Error & { code?: number }).code = result.code
+  const pluginError = error as Error & { code?: number; timedOut?: boolean; failureKind?: string }
+  pluginError.code = result.code
+  if (result.timedOut) pluginError.timedOut = true
+  if (result.failureKind) pluginError.failureKind = result.failureKind
   throw error
 }
 

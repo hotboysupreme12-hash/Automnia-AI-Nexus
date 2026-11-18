@@ -25,6 +25,8 @@ export type PluginRuntimeInspectResult = {
   surfaces: PluginRuntimeSurfaceSummary[]
 }
 
+export type PluginRepairFailureClass = 'loader_error'
+
 export type PluginSetupTerminalCommand = 'plugins' | 'model' | 'full' | 'doctor' | 'registry'
 export type PluginSetupTerminalStatus = 'running' | 'completed' | 'failed' | 'stopped'
 export type PluginSetupTerminalEvent = 'data' | 'status'
@@ -101,6 +103,7 @@ export type PluginRuntimeServiceOptions = {
 
 export type PluginRuntimeService = {
   inspectOpenClawPluginRuntime: (pluginId: string) => Promise<PluginRuntimeInspectResult>
+  repairPluginLoaderFailure: (pluginId: string) => Promise<PluginCommandResult>
   pluginRuntimeInspectReady: (inspect: PluginRuntimeInspectResult) => boolean
   startPluginSetupTerminalSession: (params: {
     command: PluginSetupTerminalCommand
@@ -224,7 +227,10 @@ function pluginCommandString(args: string[]) {
 function throwPluginCommandError(args: string[], result: PluginOpenClawResult, redactSensitiveText: (value: string) => string): never {
   const detail = redactSensitiveText(stripAnsi(`${result.stdout || ''}\n${result.stderr || ''}`).trim() || `${pluginCommandString(args)} exited ${result.code}`)
   const error = new Error(detail)
-  ;(error as Error & { code?: number }).code = result.code
+  const pluginError = error as Error & { code?: number; timedOut?: boolean; failureKind?: string }
+  pluginError.code = result.code
+  if (result.timedOut) pluginError.timedOut = true
+  if (result.failureKind) pluginError.failureKind = result.failureKind
   throw error
 }
 
@@ -416,6 +422,15 @@ export function createPluginRuntimeService(options: PluginRuntimeServiceOptions)
     }
   }
 
+  async function repairPluginLoaderFailure(pluginId: string): Promise<PluginCommandResult> {
+    const id = pluginId.trim().toLowerCase()
+    if (!PLUGIN_ID_PATTERN.test(id)) throw new Error('Invalid plugin id.')
+    const args = ['plugins', 'reload', id, '--wait', '--json']
+    const command = await options.runOpenClaw(args, 120_000)
+    if (command.code !== 0) throwPluginCommandError(args, command, options.redactSensitiveText)
+    return pluginCommandResult(args, command, options.redactSensitiveText)
+  }
+
   function pluginRuntimeInspectReady(inspect: PluginRuntimeInspectResult) {
     const status = inspect.status.trim().toLowerCase()
     return inspect.runtimeLoaded !== false && !/\b(?:failed|error|not loaded|missing)\b/.test(status)
@@ -549,6 +564,7 @@ export function createPluginRuntimeService(options: PluginRuntimeServiceOptions)
 
   return {
     inspectOpenClawPluginRuntime,
+    repairPluginLoaderFailure,
     pluginRuntimeInspectReady,
     startPluginSetupTerminalSession,
     getPluginSetupTerminalSnapshot,

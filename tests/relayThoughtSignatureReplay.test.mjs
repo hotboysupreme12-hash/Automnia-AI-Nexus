@@ -14,7 +14,10 @@ test('bundled serializer preserves Gemini signature and tool result across multi
   const root = new URL('../vendor/openclaw/node_modules/@openclaw/ai/dist/', import.meta.url)
   const name = readdirSync(root).find((entry) => /^openai-completions-transport-.*\.mjs$/.test(entry))
   assert.ok(name)
-  const { c: convertMessages } = await import(new URL(name, root).href)
+  const module = await import(new URL(name, root).href)
+  const convertMessages = Object.values(module)
+    .find((value) => typeof value === 'function' && value.name === 'convertMessages')
+  assert.equal(typeof convertMessages, 'function')
   const model = { id: 'gemini-3.8-flash', provider: 'automnia-cloud', api: 'openai-completions', input: ['text'], reasoning: true }
   const messages = [{ role: 'user', content: 'Run a diagnostic', timestamp: 1 }]
   for (let step = 0; step < 2; step++) {
@@ -23,7 +26,7 @@ test('bundled serializer preserves Gemini signature and tool result across multi
       stopReason: 'toolUse', timestamp: 2 + step * 2 })
     messages.push({ role: 'toolResult', toolCallId: `call_${step}`, toolName: 'exec', content: [{ type: 'text', text: '/workspace' }], isError: false, timestamp: 3 + step * 2 })
   }
-  const converted = convertMessages(model, { messages }, {})
+  const converted = convertMessages(model, { messages, tools: [{ name: 'exec' }] }, {})
   const calls = converted.flatMap((message) => message.tool_calls || [])
   assert.deepEqual(calls.map((call) => call.function.thought_signature), ['opaque-signature-0==', 'opaque-signature-1=='])
   assert.deepEqual(converted.filter((message) => message.role === 'tool').map((message) => message.tool_call_id), ['call_0', 'call_1'])

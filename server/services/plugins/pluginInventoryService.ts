@@ -1,4 +1,5 @@
 import { promises as fs } from 'node:fs'
+import type { Dirent } from 'node:fs'
 import path from 'node:path'
 import { AUTH_ENV_MAP, AUTH_PROVIDER_CATALOG } from '../../catalogs/providerCatalog'
 import { hasTelegramChannelCredential } from './telegramConfigMapping'
@@ -38,6 +39,8 @@ export type PluginControlEntry = {
   providers: string[]
   channels: string[]
   missingDependencies: string[]
+  loaderErrorSummary?: string
+  recoveryHint?: string
   configFields: PluginConfigField[]
   guidance: string[]
   needsSetup: boolean
@@ -86,6 +89,8 @@ export type PluginListCacheEntry = {
   cliError?: string
   refreshedAt: number
   expiresAt: number
+  scanDurationMs: number
+  scanComplete: boolean
   source: 'openclaw' | 'bundled'
 }
 
@@ -100,6 +105,8 @@ export type PluginControlsPayload = {
     source: PluginListResult['source']
     refreshedAt: number
     refreshing: boolean
+    scanDurationMs: number
+    scanComplete: boolean
   }
   cliError?: string
 }
@@ -172,6 +179,14 @@ export const PLUGIN_CATALOG: Record<string, { name: string; description: string;
 }
 
 const DEFAULT_PLUGIN_LIST_CACHE_MS = 12 * 60 * 60 * 1000
+export const PLUGIN_INVENTORY_LIMITS = {
+  bundledPluginDirectories: 512,
+  metadataFileBytes: 256 * 1024,
+  catalogFileBytes: 4 * 1024 * 1024,
+  cliJsonBytes: 4 * 1024 * 1024,
+  cacheFileBytes: 4 * 1024 * 1024,
+  scanDurationMs: 30_000,
+} as const
 const OFFICIAL_EXTERNAL_CATALOG_FILES = [
   'official-external-plugin-catalog.json',
   'official-external-provider-catalog.json',
@@ -323,8 +338,14 @@ function parseOpenClawJsonOutput(stdout: string): unknown {
 }
 
 export function parsePluginList(stdout: string): Record<string, unknown>[] {
+  if (Buffer.byteLength(stdout || '', 'utf8') > PLUGIN_INVENTORY_LIMITS.cliJsonBytes) {
+    throw new Error('Plugin list output exceeded the inventory size limit; scan is incomplete.')
+  }
   const parsed = parseOpenClawJsonOutput(stdout)
   if (!isLooseRecord(parsed) || !Array.isArray(parsed.plugins)) return []
+  if (parsed.plugins.length > PLUGIN_INVENTORY_LIMITS.bundledPluginDirectories) {
+    throw new Error('Plugin list exceeded the inventory entry limit; scan is incomplete.')
+  }
   return parsed.plugins.filter(isLooseRecord)
 }
 
@@ -548,13 +569,37 @@ function pluginRawFromExternalCatalogEntry(entry: Record<string, unknown>): Reco
   }
 }
 
-async function readJsonRecord(filePath: string): Promise<Record<string, unknown>> {
+type BoundedJsonRecord = {
+  value: Record<string, unknown>
+  complete: boolean
+}
+
+async function readJsonRecord(filePath: string, maxBytes = PLUGIN_INVENTORY_LIMITS.metadataFileBytes): Promise<BoundedJsonRecord> {
   try {
-    const raw = await fs.readFile(filePath, 'utf-8')
+    const raw = await readBoundedUtf8File(filePath, maxBytes)
+    if (raw === null) return { value: {}, complete: false }
     const parsed = JSON.parse(raw.replace(/^\uFEFF/, '')) as unknown
-    return isLooseRecord(parsed) ? parsed : {}
-  } catch {
-    return {}
+    return isLooseRecord(parsed) ? { value: parsed, complete: true } : { value: {}, complete: false }
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ENOENT'
+      ? { value: {}, complete: true }
+      : { value: {}, complete: false }
+  }
+}
+
+async function readBoundedUtf8File(filePath: string, maxBytes: number): Promise<string | null> {
+  const linkStat = await fs.lstat(filePath)
+  if (!linkStat.isFile() || linkStat.size > maxBytes) return null
+  const handle = await fs.open(filePath, 'r')
+  try {
+    const stat = await handle.stat()
+    if (!stat.isFile() || stat.size > maxBytes || stat.dev !== linkStat.dev || stat.ino !== linkStat.ino) return null
+    const buffer = Buffer.alloc(maxBytes + 1)
+    const { bytesRead } = await handle.read(buffer, 0, maxBytes + 1, 0)
+    if (bytesRead > maxBytes) return null
+    return buffer.subarray(0, bytesRead).toString('utf8')
+  } finally {
+    await handle.close()
   }
 }
 
@@ -794,6 +839,8 @@ function pluginGuidance(
   const guidance: string[] = []
   const missingFields = configFields.filter((field) => field.required && !field.present)
 
+  if (entry.loaderErrorSummary) guidance.push(entry.loaderErrorSummary)
+  if (entry.recoveryHint) guidance.push(entry.recoveryHint)
   if (entry.missingDependencies.length) {
     guidance.push(`Missing dependencies: ${entry.missingDependencies.slice(0, 4).join(', ')}.`)
   }
@@ -811,6 +858,27 @@ function pluginGuidance(
   }
 
   return guidance
+}
+
+function pluginLoaderRecovery(raw: Record<string, unknown>, status: string, missingDependencies: string[]) {
+  if (missingDependencies.length) {
+    return {
+      loaderErrorSummary: 'OpenClaw reports missing plugin dependencies.',
+      recoveryHint: 'Inspect the missing dependency names, then update or reinstall this plugin from its verified source.',
+    }
+  }
+  const diagnostics = Array.isArray(raw.diagnostics) ? raw.diagnostics.filter(isLooseRecord) : []
+  const hasErrorDiagnostic = diagnostics.some((entry) => /error|failed|fatal/i.test(stringField(entry, ['level', 'severity', 'type'])))
+  const hasLoaderError = raw.runtimeLoaded === false || raw.loaderError === true ||
+    (typeof raw.loaderError === 'string' && Boolean(raw.loaderError.trim())) ||
+    (typeof raw.loadError === 'string' && Boolean(raw.loadError.trim())) ||
+    (typeof raw.error === 'string' && Boolean(raw.error.trim())) ||
+    hasErrorDiagnostic || /\b(?:failed|error|unavailable)\b/i.test(status)
+  if (!hasLoaderError) return {}
+  return {
+    loaderErrorSummary: 'OpenClaw reports that this plugin failed to load.',
+    recoveryHint: 'Inspect the plugin runtime, then use the targeted loader repair action. Review plugin diagnostics if the issue persists.',
+  }
 }
 
 function buildPluginControlEntry(
@@ -839,6 +907,8 @@ function buildPluginControlEntry(
         ? (/^disabled$/i.test(rawStatus) ? 'enabled' : rawStatus || 'enabled')
         : rawStatus || 'disabled'
 
+  const missingDependencies = uniqueStrings(...pluginMissingDependencies(raw))
+  const loaderRecovery = pluginLoaderRecovery(raw, status, missingDependencies)
   const base = {
     id,
     name: displayPluginName(id, raw.name),
@@ -871,7 +941,8 @@ function buildPluginControlEntry(
       ...pluginStringArray(raw.channels),
       ...pluginStringArray(raw.gatewayMethods),
     ).slice(0, 12),
-    missingDependencies: uniqueStrings(...pluginMissingDependencies(raw)),
+    missingDependencies,
+    ...loaderRecovery,
     restartRequired: typeof raw.restartRequired === 'boolean' ? raw.restartRequired : false,
   }
   const installable = base.origin === 'official-catalog' && Boolean(base.installSpec)
@@ -895,48 +966,87 @@ export function createPluginInventoryService(options: PluginInventoryServiceOpti
   let pluginListRefreshPromise: Promise<PluginListCacheEntry> | null = null
   const warn = options.warn || ((message, error) => console.warn(message, error))
 
-  async function loadBundledPluginManifestsFromRoot(openclawRoot: string): Promise<Record<string, unknown>[]> {
+  type PluginManifestScanResult = { plugins: Record<string, unknown>[]; complete: boolean }
+
+  async function loadBundledPluginManifestsFromRoot(openclawRoot: string, deadlineAt: number): Promise<PluginManifestScanResult> {
     const root = path.join(openclawRoot, 'dist', 'extensions')
-    const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => [])
-    if (!entries.length) return []
+    const entries: Dirent[] = []
+    let directory: Awaited<ReturnType<typeof fs.opendir>>
+    try {
+      directory = await fs.opendir(root)
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === 'ENOENT'
+        ? { plugins: [], complete: true }
+        : { plugins: [], complete: false }
+    }
+    try {
+      let observedEntries = 0
+      for await (const entry of directory) {
+        observedEntries += 1
+        if (observedEntries > PLUGIN_INVENTORY_LIMITS.bundledPluginDirectories || Date.now() >= deadlineAt) {
+          return { plugins: [], complete: false }
+        }
+        if (entry.isDirectory()) entries.push(entry)
+      }
+    } catch {
+      return { plugins: [], complete: false }
+    }
+    if (!entries.length) return { plugins: [], complete: true }
+    entries.sort((left, right) => left.name.localeCompare(right.name))
 
-    const plugins = await Promise.all(
-      entries
-        .filter((entry) => entry.isDirectory())
-        .map(async (entry) => {
-          const pluginDir = path.join(root, entry.name)
-          const [manifest, packageJson] = await Promise.all([
-            readJsonRecord(path.join(pluginDir, 'openclaw.plugin.json')),
-            readJsonRecord(path.join(pluginDir, 'package.json')),
-          ])
-          return pluginRawFromManifest(manifest, packageJson)
-        }),
-    )
+    const plugins: Record<string, unknown>[] = []
+    const concurrency = 8
+    for (let index = 0; index < entries.length; index += concurrency) {
+      const batch = await Promise.all(entries.slice(index, index + concurrency).map(async (entry) => {
+        const pluginDir = path.join(root, entry.name)
+        const [manifestResult, packageResult] = await Promise.all([
+          readJsonRecord(path.join(pluginDir, 'openclaw.plugin.json')),
+          readJsonRecord(path.join(pluginDir, 'package.json')),
+        ])
+        return {
+          complete: manifestResult.complete && packageResult.complete,
+          plugin: pluginRawFromManifest(manifestResult.value, packageResult.value),
+        }
+        }))
+      if (Date.now() >= deadlineAt || batch.some((result) => !result.complete)) return { plugins: [], complete: false }
+      plugins.push(...batch.map((result) => result.plugin).filter((plugin): plugin is Record<string, unknown> => Boolean(plugin)))
+    }
 
-    return plugins.filter((plugin): plugin is Record<string, unknown> => Boolean(plugin))
+    return { plugins, complete: true }
   }
 
-  async function loadOfficialExternalCatalogPluginsFromRoot(openclawRoot: string): Promise<Record<string, unknown>[]> {
+  async function loadOfficialExternalCatalogPluginsFromRoot(openclawRoot: string, deadlineAt: number): Promise<PluginManifestScanResult> {
     const plugins: Record<string, unknown>[] = []
     for (const fileName of OFFICIAL_EXTERNAL_CATALOG_FILES) {
-      const catalog = await readJsonRecord(path.join(openclawRoot, 'scripts', 'lib', fileName))
-      const entries = Array.isArray(catalog.entries) ? catalog.entries.filter(isLooseRecord) : []
+      if (Date.now() >= deadlineAt) return { plugins: [], complete: false }
+      const catalogResult = await readJsonRecord(
+        path.join(openclawRoot, 'scripts', 'lib', fileName),
+        PLUGIN_INVENTORY_LIMITS.catalogFileBytes,
+      )
+      if (!catalogResult.complete) return { plugins: [], complete: false }
+      const catalog = catalogResult.value
+      const entries = Array.isArray(catalog.entries)
+        ? catalog.entries.filter(isLooseRecord)
+        : []
+      if (entries.length > PLUGIN_INVENTORY_LIMITS.bundledPluginDirectories) return { plugins: [], complete: false }
       plugins.push(...entries.map(pluginRawFromExternalCatalogEntry).filter((plugin): plugin is Record<string, unknown> => Boolean(plugin)))
+      if (plugins.length > PLUGIN_INVENTORY_LIMITS.bundledPluginDirectories) return { plugins: [], complete: false }
     }
-    return plugins
+    return { plugins, complete: true }
   }
 
-  function mergePluginRawEntries(...groups: Record<string, unknown>[][]): Record<string, unknown>[] {
+  function mergePluginRawEntries(...groups: Record<string, unknown>[][]): PluginManifestScanResult {
     const byId = new Map<string, Record<string, unknown>>()
     for (const raw of groups.flat()) {
       const id = typeof raw.id === 'string' ? raw.id.trim().toLowerCase() : ''
       if (!PLUGIN_ID_PATTERN.test(id) || byId.has(id)) continue
+      if (byId.size >= PLUGIN_INVENTORY_LIMITS.bundledPluginDirectories) return { plugins: [], complete: false }
       byId.set(id, raw)
     }
-    return [...byId.values()]
+    return { plugins: [...byId.values()], complete: true }
   }
 
-  async function loadBundledPluginManifestList(): Promise<Record<string, unknown>[]> {
+  async function loadBundledPluginManifestList(deadlineAt = Date.now() + PLUGIN_INVENTORY_LIMITS.scanDurationMs): Promise<PluginManifestScanResult> {
     const openclawDir = options.openclawBin && options.openclawBin !== 'openclaw'
       ? path.dirname(path.resolve(options.openclawBin))
       : ''
@@ -949,20 +1059,25 @@ export function createPluginInventoryService(options: PluginInventoryServiceOpti
     )
 
     for (const root of openclawRoots) {
-      const bundled = await loadBundledPluginManifestsFromRoot(root)
-      const external = await loadOfficialExternalCatalogPluginsFromRoot(root)
-      const plugins = mergePluginRawEntries(bundled, external)
-      if (plugins.length) return plugins
+      if (Date.now() >= deadlineAt) return { plugins: [], complete: false }
+      const bundled = await loadBundledPluginManifestsFromRoot(root, deadlineAt)
+      if (!bundled.complete) return { plugins: [], complete: false }
+      const external = await loadOfficialExternalCatalogPluginsFromRoot(root, deadlineAt)
+      if (!external.complete) return { plugins: [], complete: false }
+      const merged = mergePluginRawEntries(bundled.plugins, external.plugins)
+      if (!merged.complete) return { plugins: [], complete: false }
+      if (merged.plugins.length) return merged
     }
 
-    return []
+    return { plugins: [], complete: true }
   }
 
   async function readLegacyPluginListCache(
     normalize: (value: unknown) => PluginListCacheEntry | null,
   ): Promise<PluginListCacheEntry | null> {
     try {
-      const raw = await fs.readFile(options.listCachePath, 'utf-8')
+      const raw = await readBoundedUtf8File(options.listCachePath, PLUGIN_INVENTORY_LIMITS.cacheFileBytes)
+      if (raw === null) return null
       return normalize(JSON.parse(raw.replace(/^\uFEFF/, '')))
     } catch {
       return null
@@ -974,17 +1089,29 @@ export function createPluginInventoryService(options: PluginInventoryServiceOpti
       const parsed = value
       if (!isLooseRecord(parsed) || parsed.version !== 1 || !Array.isArray(parsed.rawPlugins)) return null
 
-      const rawPlugins = parsed.rawPlugins.filter(isLooseRecord)
-      if (!rawPlugins.length) return null
+      const cachedPluginCountExceeded = parsed.rawPlugins.length > PLUGIN_INVENTORY_LIMITS.bundledPluginDirectories
+      const hasCompletenessEvidence = parsed.scanComplete === true
+      const rawPlugins = cachedPluginCountExceeded || !hasCompletenessEvidence
+        ? []
+        : parsed.rawPlugins.filter(isLooseRecord)
+      const scanComplete = hasCompletenessEvidence && !cachedPluginCountExceeded
+      if (!rawPlugins.length && scanComplete) return null
 
       const refreshedAt = typeof parsed.refreshedAt === 'number' ? parsed.refreshedAt : Date.now()
       const source = parsed.source === 'bundled' ? 'bundled' : 'openclaw'
-      const cliError = sanitizePluginCliError(parsed.cliError, options.redactSensitiveText)
+      const cliError = sanitizePluginCliError(parsed.cliError, options.redactSensitiveText) || (!hasCompletenessEvidence
+        ? 'Cached plugin inventory has no completeness evidence; scan is incomplete.'
+        : '')
       return {
         rawPlugins,
         ...(cliError ? { cliError } : {}),
+        ...(cachedPluginCountExceeded ? { cliError: 'Cached plugin inventory exceeded the safe entry limit; scan is incomplete.' } : {}),
         refreshedAt,
         expiresAt: refreshedAt + cacheMs,
+        scanDurationMs: typeof parsed.scanDurationMs === 'number' && Number.isFinite(parsed.scanDurationMs)
+          ? Math.max(0, Math.min(PLUGIN_INVENTORY_LIMITS.scanDurationMs, parsed.scanDurationMs))
+          : 0,
+        scanComplete,
         source,
       }
     }
@@ -999,6 +1126,8 @@ export function createPluginInventoryService(options: PluginInventoryServiceOpti
         source: legacyCache.source,
         refreshedAt: legacyCache.refreshedAt,
         rawPlugins: legacyCache.rawPlugins,
+        scanDurationMs: legacyCache.scanDurationMs,
+        scanComplete: legacyCache.scanComplete,
         ...(legacyCache.cliError ? { cliError: legacyCache.cliError } : {}),
       }, options.listCachePath)
     }
@@ -1006,13 +1135,15 @@ export function createPluginInventoryService(options: PluginInventoryServiceOpti
   }
 
   async function writePluginListDiskCache(cache: PluginListCacheEntry) {
-    if (!cache.rawPlugins.length) return
+    if (!cache.rawPlugins.length && cache.scanComplete) return
     const cliError = sanitizePluginCliError(cache.cliError, options.redactSensitiveText)
     const payload = {
       version: 1,
       source: cache.source,
       refreshedAt: cache.refreshedAt,
       rawPlugins: cache.rawPlugins,
+      scanDurationMs: cache.scanDurationMs,
+      scanComplete: cache.scanComplete,
       ...(cliError ? { cliError } : {}),
     }
     if (options.writeControlCenterStateRecord(options.pluginListCacheStateKey, payload, options.listCachePath)) return
@@ -1026,39 +1157,62 @@ export function createPluginInventoryService(options: PluginInventoryServiceOpti
     pluginListRefreshPromise = (async () => {
       let rawPlugins: Record<string, unknown>[] = []
       let cliError = ''
+      let scanComplete = true
+      let rejectPartialCliResult = false
       let source: PluginListCacheEntry['source'] = 'openclaw'
+      const scanStartedAt = Date.now()
+      const deadlineAt = scanStartedAt + PLUGIN_INVENTORY_LIMITS.scanDurationMs
 
       try {
-        const result = await options.runOpenClaw(['plugins', 'list', '--json'], 90_000)
+        const result = await options.runOpenClaw(['plugins', 'list', '--json'], 30_000)
         try {
           rawPlugins = parsePluginList(result.stdout)
         } catch (error) {
           cliError = sanitizePluginCliError(String(error), options.redactSensitiveText)
+          scanComplete = false
+          rejectPartialCliResult = true
         }
-        const warning = pluginCliWarningFromOutput(result, 'openclaw plugins list', options.redactSensitiveText)
+        const cliOutputWithinLimit = Buffer.byteLength(`${result.stdout || ''}${result.stderr || ''}`, 'utf8') <= PLUGIN_INVENTORY_LIMITS.cliJsonBytes
+        const warning = cliOutputWithinLimit
+          ? pluginCliWarningFromOutput(result, 'openclaw plugins list', options.redactSensitiveText)
+          : 'OpenClaw plugin list output exceeded the safe inventory size limit; scan is incomplete.'
         if (warning) {
           cliError = uniqueStrings(cliError, warning).join(' ')
-        } else {
-          cliError = sanitizePluginCliError(cliError, options.redactSensitiveText)
+        }
+        if (!cliOutputWithinLimit) {
+          rawPlugins = []
+          scanComplete = false
+          rejectPartialCliResult = true
         }
       } catch (error) {
         cliError = sanitizePluginCliError(String(error), options.redactSensitiveText)
       }
 
-      if (!rawPlugins.length) {
-        const bundledPlugins = await loadBundledPluginManifestList()
-        if (bundledPlugins.length) {
-          rawPlugins = bundledPlugins
-          source = 'bundled'
+      if (!rawPlugins.length && !rejectPartialCliResult) {
+        const bundledScan = await loadBundledPluginManifestList(deadlineAt)
+        source = 'bundled'
+        if (bundledScan.complete) {
+          rawPlugins = bundledScan.plugins
+        } else {
+          scanComplete = false
+          cliError = uniqueStrings(cliError, 'Bundled plugin inventory scan exceeded a safe size or time limit; no partial inventory was returned.').join(' ')
         }
       }
 
-      const now = Date.now()
+      const refreshedAt = Date.now()
+      const scanDurationMs = Math.max(0, refreshedAt - scanStartedAt)
+      if (scanDurationMs > PLUGIN_INVENTORY_LIMITS.scanDurationMs) {
+        scanComplete = false
+        rawPlugins = []
+        cliError = uniqueStrings(cliError, 'Plugin inventory scan exceeded the safe duration limit; no partial inventory was returned.').join(' ')
+      }
       const cache: PluginListCacheEntry = {
         rawPlugins,
         ...(cliError ? { cliError } : {}),
-        refreshedAt: now,
-        expiresAt: now + cacheMs,
+        refreshedAt,
+        expiresAt: refreshedAt + cacheMs,
+        scanDurationMs: Math.min(scanDurationMs, PLUGIN_INVENTORY_LIMITS.scanDurationMs),
+        scanComplete,
         source,
       }
 
@@ -1080,29 +1234,40 @@ export function createPluginInventoryService(options: PluginInventoryServiceOpti
     })
   }
 
+  async function createBundledCache(refreshedAt: number, cliError?: string): Promise<PluginListCacheEntry> {
+    const startedAt = Date.now()
+    const scan = await loadBundledPluginManifestList(startedAt + PLUGIN_INVENTORY_LIMITS.scanDurationMs)
+    const scanDurationMs = Math.max(0, Date.now() - startedAt)
+    const scanComplete = scan.complete && scanDurationMs <= PLUGIN_INVENTORY_LIMITS.scanDurationMs
+    return {
+      rawPlugins: scanComplete ? scan.plugins : [],
+      ...(cliError || !scanComplete
+        ? { cliError: uniqueStrings(cliError, 'Bundled plugin inventory scan exceeded a safe size or time limit; no partial inventory was returned.').join(' ') }
+        : {}),
+      refreshedAt,
+      expiresAt: refreshedAt + cacheMs,
+      scanDurationMs: Math.min(scanDurationMs, PLUGIN_INVENTORY_LIMITS.scanDurationMs),
+      scanComplete,
+      source: 'bundled',
+    }
+  }
+
   async function getPluginList(listOptions: { forceRefresh?: boolean } = {}): Promise<PluginListResult> {
     if (listOptions.forceRefresh) {
       const now = Date.now()
-      if (pluginListCache?.rawPlugins.length) {
+      if (pluginListCache) {
         refreshPluginListCacheInBackground()
         return { ...pluginListCache, refreshing: true }
       }
 
       const diskCache = await readPluginListDiskCache()
-      if (diskCache?.rawPlugins.length) {
+      if (diskCache) {
         pluginListCache = diskCache
         refreshPluginListCacheInBackground()
         return { ...diskCache, refreshing: true }
       }
 
-      const bundledPlugins = await loadBundledPluginManifestList()
-      const cache: PluginListCacheEntry = {
-        rawPlugins: bundledPlugins,
-        refreshedAt: now,
-        expiresAt: now + cacheMs,
-        source: 'bundled',
-        cliError: 'OpenClaw plugin refresh is running in the background.',
-      }
+      const cache = await createBundledCache(now, 'OpenClaw plugin refresh is running in the background.')
       pluginListCache = cache
       await writePluginListDiskCache(cache).catch((error) => {
         warn('Failed to write bundled plugin list cache:', error)
@@ -1112,25 +1277,19 @@ export function createPluginInventoryService(options: PluginInventoryServiceOpti
     }
 
     const now = Date.now()
-    if (pluginListCache?.rawPlugins.length) {
+    if (pluginListCache) {
       if (pluginListCache.expiresAt <= now) refreshPluginListCacheInBackground()
       return { ...pluginListCache, refreshing: Boolean(pluginListRefreshPromise) }
     }
 
     const diskCache = await readPluginListDiskCache()
-    if (diskCache?.rawPlugins.length) {
+    if (diskCache) {
       pluginListCache = diskCache
       if (diskCache.expiresAt <= now) refreshPluginListCacheInBackground()
       return { ...diskCache, refreshing: Boolean(pluginListRefreshPromise) }
     }
 
-    const bundledPlugins = await loadBundledPluginManifestList()
-    const cache: PluginListCacheEntry = {
-      rawPlugins: bundledPlugins,
-      refreshedAt: now,
-      expiresAt: now + cacheMs,
-      source: 'bundled',
-    }
+    const cache = await createBundledCache(now)
     pluginListCache = cache
     await writePluginListDiskCache(cache).catch((error) => {
       warn('Failed to write bundled plugin list cache:', error)
@@ -1204,6 +1363,8 @@ export function createPluginInventoryService(options: PluginInventoryServiceOpti
         source: pluginList.source,
         refreshedAt: pluginList.refreshedAt,
         refreshing: pluginList.refreshing,
+        scanDurationMs: pluginList.scanDurationMs,
+        scanComplete: pluginList.scanComplete,
       },
       ...(pluginList.cliError ? { cliError: pluginList.cliError } : {}),
     }

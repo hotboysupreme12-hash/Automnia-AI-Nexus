@@ -318,6 +318,35 @@ test('uses authorized-user ADC directly without waiting for the gcloud token com
   }
 })
 
+test('rejects an oversized Google ADC token response without caching its payload', async () => {
+  const processEnv: NodeJS.ProcessEnv = {}
+  let requests = 0
+  const harness = await createHarness({
+    processEnv,
+    fetch: async () => {
+      requests += 1
+      return new Response(JSON.stringify({ access_token: 'x'.repeat(33 * 1024) }), { status: 200 })
+    },
+    spawnSync: () => ({ status: 1, stdout: '', stderr: 'gcloud must not be called for direct ADC refresh' }),
+  })
+  try {
+    const adcPath = path.join(harness.workspaceRoot, 'application_default_credentials.json')
+    await writeFile(adcPath, JSON.stringify({
+      type: 'authorized_user',
+      client_id: 'adc-client-id',
+      client_secret: 'adc-client-secret',
+      refresh_token: 'adc-refresh-token',
+    }), 'utf-8')
+    processEnv.GOOGLE_APPLICATION_CREDENTIALS = adcPath
+
+    assert.equal(await harness.service.resolveGoogleVertexRequestAuth({}), null)
+    assert.equal(await harness.service.resolveGoogleVertexRequestAuth({}), null)
+    assert.equal(requests, 2)
+  } finally {
+    await harness.cleanup()
+  }
+})
+
 test('resolves provider request auth through env keys and refreshed OAuth credentials', async () => {
   const harness = await createHarness({
     localOAuth: {

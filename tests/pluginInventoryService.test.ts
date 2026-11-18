@@ -11,6 +11,7 @@ import {
   pluginIdFromPackageName,
   pluginStringArray,
   sanitizePluginCliError,
+  PLUGIN_INVENTORY_LIMITS,
   type PluginInventoryOpenClawConfig,
   type PluginRuntimeState,
 } from '../server/services/plugins/pluginInventoryService'
@@ -308,6 +309,93 @@ test('plugin inventory falls back to bundled manifests and redacts CLI warnings'
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true })
   }
+})
+
+test('plugin inventory scan caps plugin directories and per-plugin metadata bytes', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'automnia-plugin-bounded-scan-'))
+  try {
+    const extensionsRoot = path.join(workspaceRoot, 'vendor', 'openclaw', 'dist', 'extensions')
+    await mkdir(extensionsRoot, { recursive: true })
+    const createPlugin = async (index: number) => {
+      const id = `bounded-${String(index).padStart(3, '0')}`
+      const pluginRoot = path.join(extensionsRoot, id)
+      await mkdir(pluginRoot, { recursive: true })
+      await Promise.all([
+        writeFile(path.join(pluginRoot, 'openclaw.plugin.json'), JSON.stringify({ id }), 'utf-8'),
+        writeFile(path.join(pluginRoot, 'package.json'), JSON.stringify({ name: `@automnia/${id}` }), 'utf-8'),
+      ])
+    }
+    await Promise.all(Array.from({ length: PLUGIN_INVENTORY_LIMITS.bundledPluginDirectories + 1 }, (_, index) => createPlugin(index)))
+    const { service } = createHarness({
+      workspaceRoot,
+      runResult: { code: 1, stdout: '', stderr: 'plugin registry unavailable' },
+    })
+    const scanned = await service.refreshPluginListCache()
+    assert.equal(scanned.source, 'bundled')
+    assert.equal(scanned.rawPlugins.length, 0)
+    assert.equal(scanned.scanComplete, false)
+    assert.ok(scanned.scanDurationMs <= PLUGIN_INVENTORY_LIMITS.scanDurationMs)
+    const controls = await service.listPluginControls()
+    assert.equal(controls.cache.scanComplete, false)
+    assert.ok(controls.cache.scanDurationMs <= PLUGIN_INVENTORY_LIMITS.scanDurationMs)
+
+    const hugeWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'automnia-plugin-huge-metadata-'))
+    try {
+      const hugeRoot = path.join(hugeWorkspaceRoot, 'vendor', 'openclaw', 'dist', 'extensions', 'too-large')
+      await mkdir(hugeRoot, { recursive: true })
+      await writeFile(path.join(hugeRoot, 'openclaw.plugin.json'), `{"id":"too-large","padding":"${'x'.repeat(PLUGIN_INVENTORY_LIMITS.metadataFileBytes)}"}`, 'utf-8')
+      await writeFile(path.join(hugeRoot, 'package.json'), JSON.stringify({ name: '@automnia/too-large' }), 'utf-8')
+      const { service: hugeService } = createHarness({
+        workspaceRoot: hugeWorkspaceRoot,
+        runResult: { code: 1, stdout: '', stderr: 'plugin registry unavailable' },
+      })
+      const tooLarge = await hugeService.refreshPluginListCache()
+      assert.equal(tooLarge.rawPlugins.some((plugin) => plugin.id === 'too-large'), false)
+      assert.equal(tooLarge.rawPlugins.length, 0)
+      assert.equal(tooLarge.scanComplete, false)
+    } finally {
+      await rm(hugeWorkspaceRoot, { recursive: true, force: true })
+    }
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true })
+  }
+})
+
+test('plugin list parser rejects oversized output and caps decoded entries', () => {
+  const plugins = Array.from({ length: PLUGIN_INVENTORY_LIMITS.bundledPluginDirectories + 20 }, (_, index) => ({ id: `plugin-${index}` }))
+  assert.throws(() => parsePluginList(JSON.stringify({ plugins })), /entry limit; scan is incomplete/)
+  assert.throws(
+    () => parsePluginList(' '.repeat(PLUGIN_INVENTORY_LIMITS.cliJsonBytes + 1)),
+    /inventory size limit; scan is incomplete/,
+  )
+})
+
+test('plugin inventory marks over-limit CLI results incomplete without returning partial entries', async () => {
+  const plugins = Array.from({ length: PLUGIN_INVENTORY_LIMITS.bundledPluginDirectories + 1 }, (_, index) => ({ id: `too-many-${index}` }))
+  const { service } = createHarness({ runResult: { code: 0, stdout: JSON.stringify({ plugins }), stderr: '' } })
+
+  const scanned = await service.refreshPluginListCache()
+
+  assert.deepEqual(scanned.rawPlugins, [])
+  assert.equal(scanned.scanComplete, false)
+  assert.equal(scanned.source, 'openclaw')
+  assert.match(scanned.cliError || '', /entry limit/)
+})
+
+test('plugin inventory surfaces safe loader failure summaries and recovery hints', async () => {
+  const { service } = createHarness({
+    runResult: {
+      code: 0,
+      stdout: JSON.stringify({ plugins: [{ id: 'broken', status: 'failed', error: 'C:\\private\\plugin.js token=secret-value' }] }),
+      stderr: '',
+    },
+  })
+  await service.refreshPluginListCache()
+  const plugin = (await service.listPluginControls()).plugins[0]
+  assert.equal(plugin?.loaderErrorSummary, 'OpenClaw reports that this plugin failed to load.')
+  assert.match(plugin?.recoveryHint || '', /targeted loader repair action/)
+  assert.equal(plugin?.guidance[0], plugin?.loaderErrorSummary)
+  assert.doesNotMatch(JSON.stringify(plugin), /private\\plugin\.js|secret-value/)
 })
 
 test('plugin inventory force refresh returns cached controls while background refresh runs', async () => {

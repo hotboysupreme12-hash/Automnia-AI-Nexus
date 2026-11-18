@@ -81,6 +81,33 @@ test('fetchGatewayReadinessPayload normalizes degraded readiness details', async
   assert.equal(result.eventLoop?.delayP99Ms, 42)
 })
 
+test('Gateway HTTP probes reject responses over their configured byte budget', async () => {
+  const urls: string[] = []
+  const service = createGatewayDiagnosticsService({
+    gatewayHttpPort: 19998,
+    fetch: async (url) => {
+      urls.push(url)
+      return new Response('x'.repeat(32))
+    },
+    getGatewayClient: () => null,
+    sanitizeGatewayMessage: (message, max = 180) => message.slice(0, max),
+    redactSensitiveText: (value) => value,
+    healthTimeoutMs: 50,
+    readinessTimeoutMs: 50,
+    stabilityTimeoutMs: 50,
+    healthMaxResponseBytes: 8,
+    readinessMaxResponseBytes: 8,
+  })
+
+  const health = await service.fetchGatewayHealthPayload()
+  const readiness = await service.fetchGatewayReadinessPayload()
+
+  assert.equal(health.healthy, false)
+  assert.equal(urls.filter((url) => url.endsWith('/healthz') || url.endsWith('/health')).length, 2)
+  assert.equal(readiness.reachable, false)
+  assert.match(readiness.error || '', /response exceeded its size limit/)
+})
+
 test('readGatewayStabilitySnapshot returns unavailable when the Gateway client is missing', async () => {
   const service = createService()
 

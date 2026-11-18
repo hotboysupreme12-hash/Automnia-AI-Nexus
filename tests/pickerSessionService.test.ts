@@ -4,11 +4,13 @@ import { EventEmitter } from 'node:events'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { PassThrough } from 'node:stream'
 import test from 'node:test'
 import { pathToFileURL } from 'node:url'
 
 import {
   createPickerSessionService,
+  MAX_PICKER_COMMAND_OUTPUT_CHARS,
   parseWindowsPickerOutput,
   windowsPickerLauncherContents,
 } from '../server/services/filesystem/pickerSessionService'
@@ -72,6 +74,73 @@ test('picker session service normalizes start paths, serializes cancellation, an
   currentTime = 2_000
   service.pruneFolderPickerSessions()
   assert.equal(service.getFolderPickerSession('folder-session'), undefined)
+})
+
+test('picker command diagnostics cap captured stdout and stderr', async (t) => {
+  const workspaceRoot = await createTempRoot(t, 'automnia-picker-output-cap-')
+  const service = createPickerSessionService({
+    stateRoot: path.join(workspaceRoot, '.openclaw'),
+    workspaceRoot,
+    platform: 'linux',
+    optionalRequire: () => { throw new Error('Electron is unavailable') },
+    spawnProcess: () => {
+      const child = Object.assign(new EventEmitter(), {
+        pid: 9876,
+        stdout: new PassThrough(),
+        stderr: new PassThrough(),
+        stdin: null,
+        kill: () => true,
+      }) as unknown as ChildProcess
+      queueMicrotask(() => {
+        child.stdout?.emit('data', Buffer.from('picker stdout '.repeat(10_000)))
+        child.stderr?.emit('data', Buffer.from('picker stderr '.repeat(10_000)))
+        child.emit('close', 1)
+      })
+      return child
+    },
+  })
+  t.after(() => service.dispose())
+
+  const result = await service.pickFolderWithOsDialog(workspaceRoot)
+
+  assert.equal(result.ok, false)
+  assert.ok((result.detail || '').length <= MAX_PICKER_COMMAND_OUTPUT_CHARS)
+  assert.match(result.detail || '', /Output truncated/u)
+})
+
+test('picker command timeout requests platform-aware child-tree termination', async (t) => {
+  const workspaceRoot = await createTempRoot(t, 'automnia-picker-process-tree-')
+  const spawnOptionsSeen: SpawnOptions[] = []
+  const terminated: Array<{ pid: number | undefined; reason: string | undefined; force: boolean | undefined }> = []
+  const service = createPickerSessionService({
+    stateRoot: path.join(workspaceRoot, '.openclaw'),
+    workspaceRoot,
+    platform: 'linux',
+    timeoutMs: 10,
+    optionalRequire: () => { throw new Error('Electron is unavailable') },
+    spawnProcess: (_command, _args, options) => {
+      spawnOptionsSeen.push(options || {})
+      return Object.assign(new EventEmitter(), {
+        pid: 9877,
+        stdout: new PassThrough(),
+        stderr: new PassThrough(),
+        stdin: null,
+        kill: () => true,
+      }) as unknown as ChildProcess
+    },
+    terminateProcessTree: (pid, reason, force) => {
+      terminated.push({ pid, reason, force })
+      return { ok: true }
+    },
+  })
+  t.after(() => service.dispose())
+
+  const result = await service.pickFolderWithOsDialog(workspaceRoot)
+
+  assert.equal(result.ok, false)
+  assert.match(result.detail || '', /timed out/u)
+  assert.equal(spawnOptionsSeen[0]?.detached, true)
+  assert.deepEqual(terminated, [{ pid: 9877, reason: 'Folder picker timeout', force: true }])
 })
 
 test('picker session service resolves relative start paths under fallback and rejects traversal starts', async (t) => {

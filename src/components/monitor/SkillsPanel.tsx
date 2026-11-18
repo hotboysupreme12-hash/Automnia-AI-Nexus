@@ -51,6 +51,48 @@ type ClawHubSearchPayload = {
 type ClawHubInstallPayload = {
   skill?: AgentSkillEntry
   output?: string
+  quarantined?: string[]
+}
+
+type SkillPreviewFile = { path: string; sizeBytes: number; mode: number; sha256: string }
+type SkillPreviewChange = {
+  path: string
+  change: 'added' | 'removed' | 'modified'
+  before?: SkillPreviewFile
+  after?: SkillPreviewFile
+  contentPreview?: {
+    kind: 'text' | 'binary' | 'omitted' | 'permission-only'
+    before?: { text: string; truncated: boolean }
+    after?: { text: string; truncated: boolean }
+  }
+}
+type ClawHubPreviewPayload = {
+  previewId: string
+  operation: 'install' | 'update'
+  skillRef: string
+  version: string
+  expiresAt: string
+  currentSha256: string | null
+  stagedSha256: string
+  totalBytes: number
+  files: number
+  changes: SkillPreviewChange[]
+}
+
+type QuarantinedSkillEntry = {
+  skillId: string
+  source: 'library' | 'agent'
+  agentId: string | null
+  reason: string
+  movedAt: string
+}
+
+type SkillIntegrityState = {
+  status: 'unverified' | 'unchanged' | 'changed'
+  canRollback: boolean
+  added: string[]
+  removed: string[]
+  modified: string[]
 }
 
 function clawHubSkillReference(skill: ClawHubSkillResult) {
@@ -202,11 +244,16 @@ export function SkillsPanel() {
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [library, setLibrary] = useState<AgentSkillEntry[]>([])
+  const [quarantinedSkills, setQuarantinedSkills] = useState<QuarantinedSkillEntry[]>([])
+  const [skillIntegrity, setSkillIntegrity] = useState<Record<string, SkillIntegrityState>>({})
+  const [restoringSkillId, setRestoringSkillId] = useState('')
   const [clawHubQuery, setClawHubQuery] = useState('ui')
   const [clawHubResults, setClawHubResults] = useState<ClawHubSkillResult[]>([])
   const [loadingClawHubSearch, setLoadingClawHubSearch] = useState(false)
   const [installingClawHubSlug, setInstallingClawHubSlug] = useState('')
   const [updatingClawHubSlug, setUpdatingClawHubSlug] = useState('')
+  const [clawHubPreview, setClawHubPreview] = useState<ClawHubPreviewPayload | null>(null)
+  const [applyingClawHubPreview, setApplyingClawHubPreview] = useState(false)
   const [libraryQuery, setLibraryQuery] = useState('')
   const [sourceFilter, setSourceFilter] = useState<SkillSourceFilter>('all')
   const [newSkillName, setNewSkillName] = useState('')
@@ -295,6 +342,11 @@ export function SkillsPanel() {
       }
       const nextLibrary = Array.from(merged.values()).sort((a, b) => a.name.localeCompare(b.name))
       setLibrary(nextLibrary)
+      const quarantined = await apiRequest<{ skills?: QuarantinedSkillEntry[] }>(`/api/skills/quarantine?agentId=${encodeURIComponent(agentId)}`, {
+        cache: 'no-store',
+        timeoutMs: 20_000,
+      })
+      setQuarantinedSkills(quarantined.ok ? quarantined.data.skills || [] : [])
       setError('')
       setStatus(`Library synced: ${nextLibrary.length} indexed skill${nextLibrary.length === 1 ? '' : 's'}.`)
     } catch (syncError) {
@@ -303,6 +355,77 @@ export function SkillsPanel() {
       setLoadingLibrary(false)
     }
   }, [])
+
+  const skillLifecycleSource = (skill: AgentSkillEntry): 'library' | 'agent' =>
+    skill.source === 'agent' || skill.source === 'learned' ? 'agent' : 'library'
+
+  const lifecycleKey = (skill: AgentSkillEntry) => `${skillLifecycleSource(skill)}:${skill.id}`
+
+  const inspectSkillIntegrity = async (skill: AgentSkillEntry) => {
+    if (!activeAgentId) return
+    try {
+      const result = await apiRequest<{ comparison: SkillIntegrityState }>(
+        `/api/skills/library/${encodeURIComponent(skill.id)}/integrity?agentId=${encodeURIComponent(activeAgentId)}`,
+        { cache: 'no-store', timeoutMs: 30_000 },
+      )
+      if (!result.ok) { setError(apiErrorMessage(result.error)); return }
+      setSkillIntegrity((current) => ({ ...current, [lifecycleKey(skill)]: result.data.comparison }))
+      const { status, added, removed, modified } = result.data.comparison
+      setStatus(`Integrity ${status}${added.length || removed.length || modified.length ? ` · +${added.length} −${removed.length} ~${modified.length}` : ''}: ${skill.name}.`)
+      setError('')
+    } catch (integrityError) {
+      setError(`Failed to inspect skill integrity: ${String(integrityError)}`)
+    }
+  }
+
+  const verifySkillBaseline = async (skill: AgentSkillEntry) => {
+    if (!activeAgentId) return
+    if (!window.confirm(`Trust the current files for ${skill.name} as a verified baseline?`)) return
+    const source = skillLifecycleSource(skill)
+    const result = await apiRequest<{ revision?: { revisionId: string } }>(`/api/skills/library/${encodeURIComponent(skill.id)}/verify`, {
+      method: 'POST',
+      timeoutMs: 30_000,
+      body: { source, agentId: activeAgentId },
+    })
+    if (!result.ok) { setError(apiErrorMessage(result.error)); return }
+    setStatus(`Verified a support-file baseline for ${skill.name}.`)
+    setError('')
+    await inspectSkillIntegrity(skill)
+  }
+
+  const rollbackSkill = async (skill: AgentSkillEntry) => {
+    if (!activeAgentId) return
+    if (!window.confirm(`Restore ${skill.name} to its prior verified revision?`)) return
+    const result = await apiRequest(`/api/skills/library/${encodeURIComponent(skill.id)}/rollback`, {
+      method: 'POST',
+      timeoutMs: 30_000,
+      body: { source: skillLifecycleSource(skill), agentId: activeAgentId },
+    })
+    if (!result.ok) { setError(apiErrorMessage(result.error)); return }
+    setStatus(`Rolled ${skill.name} back to its prior verified revision.`)
+    setError('')
+    await runLibrary(activeAgentId)
+  }
+
+  const restoreQuarantinedSkill = async (skill: QuarantinedSkillEntry) => {
+    if (!activeAgentId) return
+    setRestoringSkillId(`${skill.source}:${skill.skillId}`)
+    try {
+      const result = await apiRequest(`/api/skills/quarantine/${encodeURIComponent(skill.skillId)}/restore`, {
+        method: 'POST',
+        timeoutMs: 30_000,
+        body: { source: skill.source, ...(skill.agentId ? { agentId: skill.agentId } : {}) },
+      })
+      if (!result.ok) { setError(apiErrorMessage(result.error)); return }
+      setStatus(`Restored ${skill.skillId}. Check its integrity before using it.`)
+      setError('')
+      await runLibrary(activeAgentId)
+    } catch (restoreError) {
+      setError(`Failed to restore ${skill.skillId}: ${String(restoreError)}`)
+    } finally {
+      setRestoringSkillId('')
+    }
+  }
 
   const searchClawHub = useCallback(async () => {
     setLoadingClawHubSearch(true)
@@ -327,78 +450,102 @@ export function SkillsPanel() {
   }, [clawHubQuery])
 
   const installClawHubSkill = useCallback(async (skill: ClawHubSkillResult) => {
-    if (!activeAgentId) return
     const skillRef = clawHubSkillReference(skill)
     setInstallingClawHubSlug(skillRef)
+    setClawHubPreview(null)
     try {
-      const installRequest = (confirmation?: { confirmationId: string }) => apiRequest<ClawHubInstallPayload>('/api/skills/clawhub/install', {
+      const result = await apiRequest<ClawHubPreviewPayload>('/api/skills/clawhub/preview', {
         method: 'POST',
-        timeoutMs: 120_000,
+        timeoutMs: 180_000,
         body: {
+          operation: 'install',
           skillRef,
           ...(skill.version ? { version: skill.version } : {}),
-          ...(confirmation ? { confirmReview: true, confirmationId: confirmation.confirmationId } : {}),
         },
       })
-      let result = await installRequest()
-      if (!result.ok && result.error.code === 'skill_install_confirmation_required') {
-        const confirmation = parseClawHubInstallConfirmation(result.error.detail)
-        if (!confirmation || !window.confirm(clawHubInstallConfirmationPrompt(confirmation))) {
-          setStatus('Install canceled; the ClawHub review was not acknowledged.')
-          return
-        }
-        result = await installRequest(confirmation)
-      }
       if (!result.ok) {
         setError(apiErrorMessage(result.error))
         return
       }
-      const payload = result.data
+      setClawHubPreview(result.data)
       setError('')
-      setStatus(`Installed ${payload.skill?.name || skill.displayName || skill.slug} into the shared OpenClaw skills folder.`)
-      setInfoOutput(stripAnsi(payload.output || `Installed ${skill.slug}.`))
-      await runLibrary(activeAgentId)
-    } catch (installError) {
-      setError(`Failed to install ClawHub skill: ${String(installError)}`)
+      setStatus(`Review the ${result.data.changes.length} staged file change${result.data.changes.length === 1 ? '' : 's'} for ${skillRef}@${result.data.version} before installing.`)
+    } catch (previewError) {
+      setError(`Failed to preview ClawHub skill: ${String(previewError)}`)
     } finally {
       setInstallingClawHubSlug('')
     }
-  }, [activeAgentId, runLibrary])
+  }, [])
 
   const updateClawHubSkill = useCallback(async (skill: ClawHubSkillResult) => {
-    if (!activeAgentId) return
     const skillRef = clawHubSkillReference(skill)
     setUpdatingClawHubSlug(skillRef)
+    setClawHubPreview(null)
     try {
-      const updateRequest = (confirmation?: { confirmationId: string }) => apiRequest<ClawHubInstallPayload>('/api/skills/clawhub/update', {
+      const result = await apiRequest<ClawHubPreviewPayload>('/api/skills/clawhub/preview', {
         method: 'POST',
         timeoutMs: 180_000,
-        body: { skillRef, ...(confirmation ? { confirmReview: true, confirmationId: confirmation.confirmationId } : {}) },
+        body: { operation: 'update', skillRef, ...(skill.version ? { version: skill.version } : {}) },
       })
-      let result = await updateRequest()
-      if (!result.ok && result.error.code === 'skill_install_confirmation_required') {
-        const confirmation = parseClawHubInstallConfirmation(result.error.detail)
-        if (!confirmation || !window.confirm(clawHubInstallConfirmationPrompt(confirmation))) {
-          setStatus('Update canceled; the ClawHub review was not acknowledged.')
-          return
-        }
-        result = await updateRequest(confirmation)
-      }
       if (!result.ok) {
         setError(apiErrorMessage(result.error))
         return
       }
-      const payload = result.data
+      setClawHubPreview(result.data)
       setError('')
-      setStatus(`Updated ${skill.displayName || skill.slug}.`)
-      setInfoOutput(stripAnsi(payload.output || `Updated ${skill.slug}.`))
-      await runLibrary(activeAgentId)
-    } catch (updateError) {
-      setError(`Failed to update ClawHub skill: ${String(updateError)}`)
+      setStatus(`Review the ${result.data.changes.length} staged file change${result.data.changes.length === 1 ? '' : 's'} for ${skillRef}@${result.data.version} before updating.`)
+    } catch (previewError) {
+      setError(`Failed to preview ClawHub update: ${String(previewError)}`)
     } finally {
       setUpdatingClawHubSlug('')
     }
-  }, [activeAgentId, runLibrary])
+  }, [])
+
+  const applyClawHubPreview = useCallback(async () => {
+    if (!clawHubPreview) return
+    const preview = clawHubPreview
+    setApplyingClawHubPreview(true)
+    try {
+      const path = preview.operation === 'install' ? '/api/skills/clawhub/install' : '/api/skills/clawhub/update'
+      const applyRequest = (confirmation?: { confirmationId: string }) => apiRequest<ClawHubInstallPayload>(path, {
+        method: 'POST',
+        timeoutMs: 180_000,
+        body: {
+          skillRef: preview.skillRef,
+          version: preview.version,
+          previewId: preview.previewId,
+          confirmPreview: true,
+          ...(confirmation ? { confirmReview: true, confirmationId: confirmation.confirmationId } : {}),
+        },
+      })
+      let result = await applyRequest()
+      if (!result.ok && result.error.code === 'skill_install_confirmation_required') {
+        const confirmation = parseClawHubInstallConfirmation(result.error.detail)
+        if (!confirmation || !window.confirm(clawHubInstallConfirmationPrompt(confirmation))) {
+          setStatus(`${preview.operation === 'install' ? 'Install' : 'Update'} canceled; the ClawHub security review was not acknowledged.`)
+          return
+        }
+        result = await applyRequest(confirmation)
+      }
+      if (!result.ok) {
+        setError(apiErrorMessage(result.error))
+        if (result.error.code === 'invalid_payload') setClawHubPreview(null)
+        return
+      }
+      const payload = result.data
+      setClawHubPreview(null)
+      setError('')
+      setStatus(payload.quarantined?.length
+        ? `${preview.operation === 'install' ? 'Installed' : 'Updated'} ${preview.skillRef}; quarantined ${payload.quarantined.join(', ')} after integrity checks.`
+        : `${preview.operation === 'install' ? 'Installed' : 'Updated'} ${preview.skillRef} at version ${preview.version}.`)
+      setInfoOutput(stripAnsi(payload.output || `${preview.operation === 'install' ? 'Installed' : 'Updated'} ${preview.skillRef}.`))
+      await runLibrary(activeAgentId)
+    } catch (applyError) {
+      setError(`Failed to apply the reviewed ClawHub ${preview.operation}: ${String(applyError)}`)
+    } finally {
+      setApplyingClawHubPreview(false)
+    }
+  }, [activeAgentId, clawHubPreview, runLibrary])
 
   const runInfo = useCallback(async (agentId: string, name: string) => {
     const safe = name.trim()
@@ -697,6 +844,54 @@ export function SkillsPanel() {
                 <p className="rounded-lg border border-dashed border-white/[0.05] py-4 text-center text-[11px] text-slate-600">No ClawHub search results loaded.</p>
               )}
             </div>
+            {clawHubPreview && (
+              <div className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/[0.035] p-3" role="dialog" aria-label="Review staged skill changes">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-100/90">Review before {clawHubPreview.operation}</p>
+                    <p className="mt-1 font-mono text-[9px] text-slate-300">{clawHubPreview.skillRef}@{clawHubPreview.version}</p>
+                    <p className="mt-1 break-all font-mono text-[8px] text-slate-500">Current {clawHubPreview.currentSha256 || 'not installed'} → staged {clawHubPreview.stagedSha256}</p>
+                    <p className="mt-1 text-[8px] text-slate-500">{clawHubPreview.files} files · {clawHubPreview.totalBytes.toLocaleString()} bytes · expires {new Date(clawHubPreview.expiresAt).toLocaleTimeString()}</p>
+                  </div>
+                  <div className="flex shrink-0 gap-1.5">
+                    <button type="button" onClick={() => { setClawHubPreview(null); setStatus('Preview dismissed; its staged files will expire automatically.') }} disabled={applyingClawHubPreview}
+                      className="rounded-md border border-white/[0.08] bg-white/[0.02] px-2.5 py-1.5 text-[8px] font-semibold uppercase tracking-[0.10em] text-slate-400 hover:text-slate-200 disabled:opacity-40">
+                      Dismiss
+                    </button>
+                    <button type="button" onClick={() => void applyClawHubPreview()} disabled={applyingClawHubPreview}
+                      className="rounded-md border border-amber-200/25 bg-amber-300/[0.10] px-2.5 py-1.5 text-[8px] font-semibold uppercase tracking-[0.10em] text-amber-100 hover:bg-amber-300/[0.16] disabled:opacity-40">
+                      {applyingClawHubPreview ? 'Rechecking…' : `Confirm ${clawHubPreview.operation}`}
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-2 max-h-56 overflow-y-auto rounded-md border border-white/[0.05] bg-black/20">
+                  {clawHubPreview.changes.length ? clawHubPreview.changes.map((change) => (
+                    <div key={`${change.change}:${change.path}`} className="border-b border-white/[0.04] px-2.5 py-2 last:border-b-0">
+                      <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
+                        <span className={`shrink-0 text-[8px] font-bold uppercase ${change.change === 'removed' ? 'text-rose-300' : change.change === 'added' ? 'text-emerald-300' : 'text-amber-200'}`}>{change.change}</span>
+                        <code className="min-w-0 break-all text-[9px] text-slate-200">{change.path}</code>
+                      </div>
+                      <div className="mt-1 grid gap-1 font-mono text-[7px] leading-relaxed text-slate-500">
+                        {change.before && <span className="break-all">before · mode {(change.before.mode & 0o777).toString(8).padStart(3, '0')} · sha256 {change.before.sha256}</span>}
+                        {change.after && <span className="break-all">after · mode {(change.after.mode & 0o777).toString(8).padStart(3, '0')} · sha256 {change.after.sha256}</span>}
+                      </div>
+                      {change.contentPreview?.kind === 'text' && (
+                        <div className="mt-1 grid gap-1 sm:grid-cols-2">
+                          {change.contentPreview.before && <div className="min-w-0 rounded bg-rose-400/[0.04] p-1.5"><span className="text-[7px] font-bold uppercase text-rose-200/70">Before</span><pre className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap break-words text-[8px] leading-relaxed text-slate-400">{change.contentPreview.before.text}{change.contentPreview.before.truncated ? '\n… preview truncated …' : ''}</pre></div>}
+                          {change.contentPreview.after && <div className="min-w-0 rounded bg-emerald-400/[0.04] p-1.5"><span className="text-[7px] font-bold uppercase text-emerald-200/70">After</span><pre className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap break-words text-[8px] leading-relaxed text-slate-300">{change.contentPreview.after.text}{change.contentPreview.after.truncated ? '\n… preview truncated …' : ''}</pre></div>}
+                        </div>
+                      )}
+                      {change.contentPreview?.kind === 'binary' && <p className="mt-1 text-[7px] text-slate-500">Binary or non-UTF-8 content omitted.</p>}
+                      {change.contentPreview?.kind === 'omitted' && <p className="mt-1 text-[7px] text-slate-500">Text preview omitted to stay within the response budget.</p>}
+                      {change.contentPreview?.kind === 'permission-only' && <p className="mt-1 text-[7px] text-slate-500">File content is unchanged; only its permission mode changed.</p>}
+                    </div>
+                  )) : (
+                    <p className="px-2.5 py-3 text-[9px] text-slate-500">The staged version has no file or permission changes.</p>
+                  )}
+                </div>
+                <p className="mt-2 text-[8px] leading-relaxed text-slate-500">Confirm applies this exact reviewed version only after Automnia rechecks the staged hash, current installed files, and ClawHub’s latest version.</p>
+              </div>
+            )}
           </div>
 
           <div className="rounded-xl border border-emerald-400/10 bg-emerald-400/[0.025] p-3.5">
@@ -723,8 +918,30 @@ export function SkillsPanel() {
                 ))}
               </div>
             </div>
+            {quarantinedSkills.length > 0 && (
+              <div className="mb-3 rounded-lg border border-rose-400/15 bg-rose-400/[0.035] p-3">
+                <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-rose-200/90">Quarantined skills</p>
+                <p className="mt-1 text-[9px] text-slate-500">These skills are kept outside their loadable roots. Restore is explicit; inspect and verify before running.</p>
+                <div className="mt-2 grid gap-2">
+                  {quarantinedSkills.map((skill) => (
+                    <div key={`${skill.source}:${skill.agentId || ''}:${skill.skillId}`} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-white/[0.04] bg-black/15 px-2.5 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-[10px] font-semibold text-slate-200">{skill.skillId} · {skill.source}</p>
+                        <p className="mt-0.5 text-[9px] text-slate-500">{skill.reason}</p>
+                      </div>
+                      <button type="button" onClick={() => void restoreQuarantinedSkill(skill)} disabled={restoringSkillId === `${skill.source}:${skill.skillId}`}
+                        className="rounded-md border border-rose-400/20 bg-rose-400/[0.06] px-2.5 py-1 text-[8px] font-semibold uppercase tracking-[0.10em] text-rose-100/90 hover:bg-rose-400/[0.12] disabled:opacity-40">
+                        {restoringSkillId === `${skill.source}:${skill.skillId}` ? 'Restoring...' : 'Restore'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="grid gap-2">
-              {filteredLibrary.slice(0, 16).map((skill) => (
+              {filteredLibrary.slice(0, 16).map((skill) => {
+                const integrity = skillIntegrity[lifecycleKey(skill)]
+                return (
                 <div key={skill.id} className="rounded-lg border border-white/[0.04] bg-black/15 px-3 py-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-[11px] font-bold text-slate-100">{skill.name}</p>
@@ -734,6 +951,9 @@ export function SkillsPanel() {
                   </div>
                   <p className="mt-1 text-[10px] leading-relaxed text-slate-400">{skill.description}</p>
                   {skill.path && <p className="mt-1 truncate font-mono text-[8px] text-slate-600">{skill.path}</p>}
+                  {integrity && <p className={`mt-1 text-[9px] font-semibold ${integrity.status === 'changed' ? 'text-amber-200' : integrity.status === 'unchanged' ? 'text-emerald-200/80' : 'text-slate-500'}`}>
+                    File baseline: {integrity.status}{integrity.added.length || integrity.removed.length || integrity.modified.length ? ` · +${integrity.added.length} −${integrity.removed.length} ~${integrity.modified.length}` : ''}
+                  </p>}
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     <button type="button" onClick={() => void loadLibrarySkill(skill, 'view')} disabled={Boolean(loadingSkillId)}
                       className="rounded-md border border-cyan-400/15 bg-cyan-400/[0.04] px-2.5 py-1 text-[8px] font-semibold uppercase tracking-[0.10em] text-cyan-200/80 transition hover:bg-cyan-400/[0.08] disabled:opacity-40">
@@ -743,9 +963,21 @@ export function SkillsPanel() {
                       className="rounded-md border border-emerald-400/15 bg-emerald-400/[0.04] px-2.5 py-1 text-[8px] font-semibold uppercase tracking-[0.10em] text-emerald-200/80 transition hover:bg-emerald-400/[0.08] disabled:opacity-40">
                       Draft
                     </button>
+                    <button type="button" onClick={() => void inspectSkillIntegrity(skill)}
+                      className="rounded-md border border-amber-400/15 bg-amber-400/[0.04] px-2.5 py-1 text-[8px] font-semibold uppercase tracking-[0.10em] text-amber-200/80 transition hover:bg-amber-400/[0.08]">
+                      Check files
+                    </button>
+                    <button type="button" onClick={() => void verifySkillBaseline(skill)}
+                      className="rounded-md border border-violet-400/15 bg-violet-400/[0.04] px-2.5 py-1 text-[8px] font-semibold uppercase tracking-[0.10em] text-violet-200/80 transition hover:bg-violet-400/[0.08]">
+                      Verify baseline
+                    </button>
+                    {integrity?.canRollback && <button type="button" onClick={() => void rollbackSkill(skill)}
+                      className="rounded-md border border-rose-400/15 bg-rose-400/[0.04] px-2.5 py-1 text-[8px] font-semibold uppercase tracking-[0.10em] text-rose-200/80 transition hover:bg-rose-400/[0.08]">
+                      Roll back
+                    </button>}
                   </div>
                 </div>
-              ))}
+              )})}
               {filteredLibrary.length > 16 && <p className="text-center text-[10px] text-slate-600">{filteredLibrary.length - 16} more hidden by the current view.</p>}
               {!library.length && <p className="rounded-lg border border-dashed border-white/[0.05] py-4 text-center text-[11px] text-slate-600">No learned skills indexed yet.</p>}
               {library.length > 0 && !filteredLibrary.length && <p className="rounded-lg border border-dashed border-white/[0.05] py-4 text-center text-[11px] text-slate-600">No skills match this filter.</p>}

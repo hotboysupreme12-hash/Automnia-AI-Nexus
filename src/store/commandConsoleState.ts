@@ -44,6 +44,57 @@ export type QueuedCommandConsoleResponseInput = {
   sourceLabel: string
 }
 
+export const STALE_COMMAND_CONSOLE_QUEUE_AGE_MS = 15 * 60 * 1000
+
+export function commandConsoleQueueAgeMs(queuedAt: string | undefined, nowMs = Date.now()): number | null {
+  if (!queuedAt || !Number.isFinite(nowMs)) return null
+  const queuedAtMs = Date.parse(queuedAt)
+  if (!Number.isFinite(queuedAtMs)) return null
+  return Math.max(0, nowMs - queuedAtMs)
+}
+
+export function isCommandConsoleQueueStale(queuedAt: string | undefined, nowMs = Date.now()): boolean {
+  const ageMs = commandConsoleQueueAgeMs(queuedAt, nowMs)
+  return ageMs !== null && ageMs >= STALE_COMMAND_CONSOLE_QUEUE_AGE_MS
+}
+
+export function commandConsoleQueueCancellation(waitedMs: number): { stale: boolean; message: string } {
+  const boundedWaitMs = Number.isFinite(waitedMs) ? Math.max(0, waitedMs) : 0
+  const stale = boundedWaitMs >= STALE_COMMAND_CONSOLE_QUEUE_AGE_MS
+  return {
+    stale,
+    message: stale
+      ? `Stale queued Command Console follow-up cancelled by operator after waiting ${Math.floor(boundedWaitMs / 60_000)} minutes.`
+      : 'Queued Command Console follow-up was cancelled before it started.',
+  }
+}
+
+export function commandConsoleQueueCancellationForFollowup(queuedAt: string | undefined, createdAt: number, agentId: string, nowMs = Date.now()) {
+  const waitedMs = commandConsoleQueueAgeMs(queuedAt, nowMs) ?? Math.max(0, nowMs - createdAt)
+  const cancellation = commandConsoleQueueCancellation(waitedMs)
+  return {
+    ...cancellation,
+    feedMessage: cancellation.stale
+      ? `Stale queued Command Console follow-up cancelled by operator for ${agentId} after waiting ${Math.floor(waitedMs / 60_000)} minutes.`
+      : `Queued Command Console follow-up cancelled for ${agentId}.`,
+  }
+}
+
+export function commandConsoleQueueCancellationPatch(cancellation: ReturnType<typeof commandConsoleQueueCancellationForFollowup>, completedAt: string) {
+  return {
+    response: cancellation.message,
+    ok: false as const,
+    streaming: false,
+    failureKind: 'aborted' as const,
+    completedAt,
+    queuePosition: undefined,
+    queueDepth: undefined,
+    progressLabel: 'Cancelled',
+    progressLines: [cancellation.message],
+    progressUpdatedAt: completedAt,
+  }
+}
+
 function browserDraftStorage(): CommandConsoleDraftStorage | null {
   if (typeof window === 'undefined') return null
   try {

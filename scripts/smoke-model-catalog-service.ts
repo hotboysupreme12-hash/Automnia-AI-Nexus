@@ -63,10 +63,10 @@ assert.ok(agentConfigRoutes.includes('ensureConfiguredModelAllowlist'), 'agent c
 assert.ok(partyManagementRoutes.includes('ensureConfiguredModelAllowlist'), 'party management routes should receive model allowlist normalization through options')
 
 for (const coverage of [
-  'fallback catalog canonicalizes Codex subscription models',
-  'refresh loads OpenClaw catalog and normalizes OpenRouter allowlist',
-  'refresh falls back to configured models',
-  'configured model allowlist normalizes provider entries',
+  'fallback catalog exposes current pinned models and suppresses unavailable ids',
+  'refresh loads OpenClaw catalog and normalizes OpenRouter allowlist through the service',
+  'refresh falls back to configured models when OpenClaw listing is unavailable',
+  'configured model allowlist normalizes provider entries and skips unsafe models',
 ]) {
   assert.ok(modelCatalogTest.includes(coverage), `modelCatalogService.test.ts is missing coverage: ${coverage}`)
 }

@@ -128,6 +128,19 @@ test('failed capability refresh keeps the last durable snapshot', async () => {
   assert.equal((await harness.service.getCapabilitySnapshots('xai'))[0]?.stale, false)
 })
 
+test('capability refresh refuses oversized catalog output and preserves the last good snapshot', async () => {
+  const harness = createHarness()
+  harness.responses.push({ code: 0, stdout: JSON.stringify({ models: [{ id: 'xai/grok-4.7', provider: 'xai' }] }) })
+  const initial = await harness.service.refreshProviderCapabilities('xai')
+  assert.equal(initial.ok, true)
+
+  harness.responses.push({ code: 0, stdout: JSON.stringify({ models: [{ id: 'xai/grok-4.8', provider: 'xai' }], extra: 'x'.repeat(2 * 1024 * 1024) }) })
+  const oversized = await harness.service.refreshProviderCapabilities('xai')
+  assert.equal(oversized.ok, false)
+  assert.equal(oversized.reason, 'invalid_catalog_response')
+  assert.equal(oversized.snapshot?.models[0]?.id, 'xai/grok-4.7')
+})
+
 test('model probe requires a snapshotted configured model and uses strict request bounds', async () => {
   const harness = createHarness()
   harness.responses.push({
@@ -173,6 +186,77 @@ test('model probe declines missing auth and models without a persisted capabilit
   harness.providerConfigured = true
   assert.equal((await harness.service.probeModel('xai/unknown')).reason, 'model_not_snapshotted')
   assert.equal(harness.calls.length, 1)
+})
+
+test('provider onboarding reports auth, discovery, bounded opt-in contract, and advertised capabilities without probing', async () => {
+  const harness = createHarness()
+  harness.providerConfigured = false
+  const missingAuth = await harness.service.checkProviderOnboarding('xai')
+  assert.equal(missingAuth.status, 'authentication_required')
+  assert.equal(missingAuth.probeContract.available, false)
+  assert.equal(missingAuth.probeContract.executed, false)
+  assert.equal(harness.calls.length, 0)
+
+  harness.providerConfigured = true
+  harness.responses.push({
+    code: 0,
+    stdout: JSON.stringify({
+      providerOutcomes: [{ provider: 'xai', status: 'ready' }],
+      models: [{
+        id: 'xai/grok-4.7',
+        provider: 'xai',
+        contextWindow: 500_000,
+        input: ['text', 'image'],
+        output: ['text'],
+        reasoning: true,
+        supportsTools: true,
+      }],
+    }),
+  })
+  await harness.service.refreshProviderCapabilities('xai')
+  const onboarding = await harness.service.checkProviderOnboarding('xai')
+
+  assert.equal(onboarding.status, 'ready_for_opt_in_probe')
+  assert.equal(onboarding.authentication.configured, true)
+  assert.deepEqual(onboarding.catalog, {
+    discovered: true,
+    outcome: 'ready',
+    verifiedAt: '2026-11-17T12:00:00.000Z',
+    stale: false,
+    modelCount: 1,
+  })
+  assert.deepEqual(onboarding.probeContract, {
+    available: true,
+    executed: false,
+    requiresExplicitConfirmation: true,
+    mayBeBillable: true,
+    toolsDisabled: true,
+    timeoutMs: MODEL_PROBE_TIMEOUT_MS,
+    maxOutputTokens: MODEL_PROBE_MAX_OUTPUT_TOKENS,
+  })
+  assert.deepEqual(onboarding.advertisedCapabilities, {
+    inputModalities: ['image', 'text'],
+    outputModalities: ['text'],
+    reasoningModelCount: 1,
+    toolCapableModelCount: 1,
+    contextWindowModelCount: 1,
+  })
+  assert.equal(harness.calls.length, 1)
+  assert.equal(harness.calls.some((call) => call.args[0] === 'agent'), false)
+})
+
+test('model probe rejects oversized process output without persisting response content', async () => {
+  const harness = createHarness()
+  harness.responses.push({ code: 0, stdout: JSON.stringify({ models: [{ id: 'xai/grok-4.7', provider: 'xai' }] }) })
+  await harness.service.refreshProviderCapabilities('xai')
+  harness.responses.push({ code: 0, stdout: JSON.stringify({ ok: true, extra: 'x'.repeat(128 * 1024) }) })
+
+  const result = await harness.service.probeModel('xai/grok-4.7')
+
+  assert.equal(result.ok, false)
+  assert.equal(result.reason, 'invalid_probe_response')
+  assert.equal(result.result?.status, 'failed')
+  assert.equal(JSON.stringify(harness.state?.probes).includes('extra'), false)
 })
 
 test('provider permission failures are stored as a safe auth or entitlement outcome', async () => {

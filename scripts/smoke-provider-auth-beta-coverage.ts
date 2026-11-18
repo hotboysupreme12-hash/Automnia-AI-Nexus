@@ -14,6 +14,7 @@ const providerAuthService = read('server/services/providers/providerAuthService.
 const oauthCallbackService = read('server/services/providers/oauthCallbackService.ts')
 const providerModal = read('src/components/auth/ProviderAuthModal.tsx')
 const agentConsole = read('src/components/monitor/AgentResponseConsole.tsx')
+const failureRecovery = read('src/utils/failureRecovery.ts')
 const agentEditor = read('src/components/editor/AgentEditorModal.tsx')
 const modelSelector = read('src/components/party/ModelSelectorModal.tsx')
 const recruitModal = read('src/components/recruit/RecruitAgentModal.tsx')
@@ -104,9 +105,14 @@ assert.match(
 assert.doesNotMatch(providerModal, /\bfetch\s*\(/, 'provider auth modal must use the canonical API client')
 
 assert.match(
+  failureRecovery,
+  /auth_missing:\s*\{\s*label: 'Connect provider'[\s\S]*?auth_expired:\s*\{\s*label: 'Refresh provider access'/,
+  'shared failure recovery mapping must surface missing and expired provider auth guidance',
+)
+assert.match(
   agentConsole,
-  /case 'auth_missing':[^\n]*\n\s+case 'auth_expired':[\s\S]*label: 'Connect provider'/,
-  'Monitor command-console failures must show a Connect provider CTA for missing or expired auth',
+  /failureRecoveryForKind\(entry\.failureKind\)/,
+  'Monitor command-console failures must render the shared provider auth recovery mapping',
 )
 assert.match(
   agentEditor,

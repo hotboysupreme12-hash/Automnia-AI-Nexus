@@ -15,11 +15,11 @@ const distRoot = path.join(workspace, 'vendor', 'openclaw', 'dist')
 const rawBotMessageBundle = fs.readdirSync(distRoot)
   .filter((entry) => /^bot-message-[^.]+\.mjs$/.test(entry))
   .map((entry) => fs.readFileSync(path.join(distRoot, entry), 'utf8'))
-  .find((source) => source.includes('const buildTelegramMessageContext = async') && source.includes('function resolveTelegramInboundBody') && source.includes('const hasFinalResponse =')) || ''
+  .find((source) => source.includes('const buildTelegramMessageContext = async') && source.includes('function resolveTelegramInboundBody')) || ''
 const telegramCommandBundle = fs.readdirSync(distRoot)
   .filter((entry) => entry.endsWith('.mjs'))
   .map((entry) => fs.readFileSync(path.join(distRoot, entry), 'utf8'))
-  .find((source) => source.includes('const registerTelegramNativeCommands =') && source.includes('for (const pluginCommand of pluginCatalog.selectedCommands)')) || ''
+  .find((source) => source.includes('const registerTelegramNativeCommands =') && source.includes('buildPluginTelegramMenuCommands')) || ''
 const telegramTransformStart = controlPlane.indexOf('function patchedTelegramBotRuntimeSource(source: string) {')
 const telegramTransformEnd = controlPlane.indexOf('\nfunction openClawPackageRootCandidates()', telegramTransformStart)
 assert.ok(telegramTransformStart >= 0 && telegramTransformEnd > telegramTransformStart, 'Control Center should expose a bounded Telegram runtime patch transformer')
@@ -33,10 +33,23 @@ const patchTelegramBundle = new Function(
   'dedupeTelegramProgressHooks',
   `${telegramTransformSource}\nreturn patchedTelegramBotRuntimeSource;`,
 )(TELEGRAM_AGENT_ROUTING_HELPER, TELEGRAM_PROGRESS_STATUS_HELPER, dedupeTelegramProgressHooks) as (source: string) => string
-const botMessageBundle = patchTelegramBundle(rawBotMessageBundle.replace(
+function patchBundleWithWarnings(source: string) {
+  const warnings: string[] = []
+  const originalWarn = console.warn
+  console.warn = (...args: unknown[]) => warnings.push(args.map(String).join(' '))
+  try {
+    return { source: patchTelegramBundle(source), warnings }
+  } finally {
+    console.warn = originalWarn
+  }
+}
+const botMessagePatch = patchBundleWithWarnings(rawBotMessageBundle.replace(
   /\n\t\tconst telegramModelSelected = typeof onModelSelected === "function" \? \(\.\.\.args\) => \{[\s\S]*?\n\t\t\} : onModelSelected;/,
   '',
 ))
+const botMessageBundle = botMessagePatch.source
+const telegramCommandPatch = patchBundleWithWarnings(telegramCommandBundle)
+const patchedTelegramCommandBundle = telegramCommandPatch.source
 
 test('Telegram runtime repair targets OpenClaw split message and ingress bundles', () => {
   assert.match(controlPlane, /startsWith\('bot-message-'\)/)
@@ -44,6 +57,9 @@ test('Telegram runtime repair targets OpenClaw split message and ingress bundles
   assert.match(controlPlane, /hasNativeCommandShape/)
   assert.match(controlPlane, /TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 21/)
   assert.match(controlPlane, /TELEGRAM_PROGRESS_STATUS_HELPER/)
+  assert.match(controlPlane, /bot-message-dispatch-turn\.ts/)
+  assert.match(controlPlane, /resolveTelegramInboundBody/)
+  assert.match(controlPlane, /selectedPluginCommandLoopPattern/)
   assert.match(controlPlane, /turn\.dispatchAdmission = turnResult\.admission/)
   assert.match(controlPlane, /const duplicate = \/duplicate\|already\[-_ \]\?handled\/i/)
   assert.match(controlPlane, /if \(!next\.includes\('turn\.telegramProgressStatus\?\.toolStart\(toolName\);'\)\)/)
@@ -52,17 +68,34 @@ test('Telegram runtime repair targets OpenClaw split message and ingress bundles
 })
 
 test('the bundled OpenClaw shape exposes the routing and native-command insertion contracts', () => {
+  assert.ok(rawBotMessageBundle.length > 0, 'OpenClaw 2026.11.x should expose a Telegram message-context bundle')
+  assert.ok(telegramCommandBundle.length > 0, 'OpenClaw 2026.11.x should expose a Telegram native-command bundle')
   assert.match(botMessageBundle, /const buildTelegramMessageContext = async/)
   assert.match(botMessageBundle, /function resolveTelegramInboundBody/)
-  assert.match(botMessageBundle, /const hasFinalResponse = intentionalNoResponse \|\| turn\.previewLifecycle\.finalDelivered/)
+  assert.match(botMessageBundle, /previewLifecycle\.finalDelivered/)
   assert.doesNotMatch(botMessageBundle, /No response was generated for this Telegram message\./)
-  assert.match(botMessageBundle, /const telegramModelSelected = typeof onModelSelected === "function"/)
+  assert.match(botMessageBundle, /const telegramModelSelected = typeof [\w$]+ === "function"/)
   assert.ok(botMessageBundle.indexOf('const telegramModelSelected =') < botMessageBundle.indexOf('telegramModelSelected\n'))
   assert.match(botMessageBundle, /beforeDeliver: async \(payload, info\) => applyTelegramVerifiedIdentityDeliveryGuard/)
-  assert.match(botMessageBundle, /config: turn\.cfg,[\s\S]*?agentId: context\.route\.agentId,[\s\S]*?prompt: context\.ctxPayload\.RawBody/)
+  assert.match(botMessageBundle, /config: [\w$]+\.cfg,[\s\S]*?agentId: [\w$]+\.route\.agentId,[\s\S]*?prompt: [\w$]+\.ctxPayload\.RawBody/)
   assert.match(botMessageBundle, /createAutomniaTelegramProgressStatus/)
+  assert.match(botMessageBundle, /telegramProgressStatus\?\.start\(\)/)
+  assert.match(botMessageBundle, /telegramProgressStatus\?\.toolStart\(/)
+  assert.match(botMessageBundle, /telegramProgressStatus\?\.finalize\(telegramStatusOutcome/)
+  assert.match(botMessageBundle, /resolveTelegramAgentRouteForMessage\(\{/)
+  assert.match(botMessageBundle, /withTelegramAgentRouteContext\(\{/)
+  const earlyRouteIndex = botMessageBundle.indexOf('const automniaTelegramAgentRoute = resolveTelegramAgentRouteForMessage({')
+  const targetSessionIndex = botMessageBundle.indexOf('applyTelegramTargetSession({', earlyRouteIndex)
+  assert.ok(earlyRouteIndex >= 0 && targetSessionIndex > earlyRouteIndex, 'agent route selection should precede target session resolution')
+  assert.match(botMessageBundle, /\.rawBody = automniaTelegramAgentRoute\.rawBody/)
+  assert.match(botMessageBundle, /\.bodyText = withTelegramAgentRouteContext\(\{ config:/)
+  assert.match(patchedTelegramCommandBundle, /if \(n && ![\w$]+\.some\(\(command\) => normalizeTelegramCommandName\(command\.name\) === "agents"\)\) [\w$]+\.command\("agents", runAutomniaTelegramAgentsCommand\)/)
+  assert.doesNotMatch([...botMessagePatch.warnings, ...telegramCommandPatch.warnings].join('\n'), /\[plugins\/telegram\].*patch skipped/)
   assert.match(telegramCommandBundle, /const registerTelegramNativeCommands =/)
-  assert.match(telegramCommandBundle, /for \(const pluginCommand of pluginCatalog\.selectedCommands\)/)
+  assert.match(telegramCommandBundle, /buildPluginTelegramMenuCommands/)
+  assert.match(telegramCommandBundle, /for \(const \w+ of \w+\.selectedCommands\) \w+\.command\(/)
+  assert.match(patchedTelegramCommandBundle, /AUTOMNIA_TELEGRAM_AGENTS_COMMAND_PATCH/)
+  assert.match(patchedTelegramCommandBundle, /resolveTelegramAgentsCommandResponse\(\{/)
 })
 
 test('Telegram status helper serializes safe phase updates and leaves a final status message', async () => {

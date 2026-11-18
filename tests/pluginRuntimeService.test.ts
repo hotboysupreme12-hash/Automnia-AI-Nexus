@@ -153,6 +153,36 @@ test('plugin runtime service inspects runtime state, summarizes surfaces, and re
   assert.equal(harness.service.pluginRuntimeInspectReady(inspect), true)
 })
 
+test('plugin loader repair uses the documented plugin-targeted reload command', async () => {
+  const harness = createHarness([{ stdout: '{"pluginIds":["codex"]}', stderr: '', code: 0 }])
+  const result = await harness.service.repairPluginLoaderFailure('Codex')
+  assert.equal(result.code, 0)
+  assert.deepEqual(harness.runCalls[0], {
+    args: ['plugins', 'reload', 'codex', '--wait', '--json'],
+    timeoutMs: 120_000,
+  })
+})
+
+test('plugin loader repair preserves timeout metadata for fail-closed retry handling', async () => {
+  const harness = createHarness([{
+    code: 1,
+    stdout: '',
+    stderr: 'reload wait timed out',
+    timedOut: true,
+    failureKind: 'timeout',
+  }])
+
+  await assert.rejects(
+    () => harness.service.repairPluginLoaderFailure('codex'),
+    (error) => {
+      const commandError = error as Error & { timedOut?: boolean; failureKind?: string }
+      assert.equal(commandError.timedOut, true)
+      assert.equal(commandError.failureKind, 'timeout')
+      return true
+    },
+  )
+})
+
 test('plugin runtime service rejects invalid ids and redacts failed inspect output', async () => {
   const invalid = createHarness()
   await assert.rejects(

@@ -81,13 +81,6 @@ const EDITOR_AUTH_CACHE_MS = 15 * 1000
 const EDITOR_MODEL_FETCH_TIMEOUT_MS = 8000
 const EDITOR_PATCH_DEBOUNCE_MS = 500
 const IS_WINDOWS_CLIENT = typeof navigator !== 'undefined' && /Windows/i.test(navigator.userAgent)
-const CODEX_5_3_SPARK_MODEL_ID = 'openai/gpt-5.3-codex-spark'
-const CODEX_5_3_SPARK_MODEL: AvailableModel = {
-  id: CODEX_5_3_SPARK_MODEL_ID,
-  alias: 'gpt-5.3-codex-spark',
-  provider: 'openai',
-  name: 'Codex 5.3 Spark',
-}
 const AUTOMNIA_MODEL_OPTIONS: AvailableModel[] = AUTOMNIA_RELAY_MODEL_IDS.map((id) => ({
   id,
   alias: AUTOMNIA_RELAY_MODEL_LABELS[id],
@@ -139,11 +132,7 @@ const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: strin
         ...catalog.filter((model) => isAllowedAutomniaHostedModel(model.id, frontierAllowed)),
       ]
     : catalog.filter((model) => frontierAllowed || !isAutomniaPaidTierModel(model.id))
-  const seededCatalog = creditsOnly
-    ? allowedCatalog
-    : catalog.some((model) => model.id === CODEX_5_3_SPARK_MODEL_ID)
-      ? catalog
-      : [CODEX_5_3_SPARK_MODEL, ...catalog]
+  const seededCatalog = creditsOnly ? allowedCatalog : catalog
   for (const model of seededCatalog) {
     if (model.id.trim() && isSelectableModelId(model.id)) merged.set(model.id, model)
   }

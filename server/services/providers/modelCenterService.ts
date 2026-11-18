@@ -8,6 +8,8 @@ export const MODEL_CAPABILITY_SNAPSHOT_SCHEMA_VERSION = 1
 export const MODEL_PROBE_TIMEOUT_MS = 15_000
 export const MODEL_PROBE_MAX_OUTPUT_TOKENS = 8
 export const MODEL_PROBE_COOLDOWN_MS = 5 * 60 * 1000
+const MODEL_CATALOG_MAX_STDOUT_BYTES = 2 * 1024 * 1024
+const MODEL_PROBE_MAX_PROCESS_OUTPUT_BYTES = 128 * 1024
 
 const MAX_MODELS_PER_PROVIDER_SNAPSHOT = 500
 const MAX_PROVIDER_SNAPSHOTS = 100
@@ -78,6 +80,36 @@ export type ModelFallbackExplanation = {
   fallbackChain: string[]
   selectedFrom: 'requested' | 'agent-fallback' | 'configured-default' | 'system-default' | 'billing-policy'
   reason: 'requested-model-selected' | 'requested-model-unavailable' | 'configured-fallback-selected' | 'configured-default-selected' | 'system-default-selected' | 'billing-policy-override'
+}
+
+export type ProviderOnboardingCheck = {
+  provider: string
+  checkedAt: string
+  status: 'invalid_provider' | 'authentication_required' | 'catalog_discovery_required' | 'catalog_auth_rejected' | 'catalog_stale' | 'ready_for_opt_in_probe'
+  authentication: { configured: boolean }
+  catalog: {
+    discovered: boolean
+    outcome: ModelProviderCapabilitySnapshot['catalogOutcome'] | 'not_discovered'
+    verifiedAt: string | null
+    stale: boolean
+    modelCount: number
+  }
+  probeContract: {
+    available: boolean
+    executed: false
+    requiresExplicitConfirmation: true
+    mayBeBillable: true
+    toolsDisabled: true
+    timeoutMs: typeof MODEL_PROBE_TIMEOUT_MS
+    maxOutputTokens: typeof MODEL_PROBE_MAX_OUTPUT_TOKENS
+  }
+  advertisedCapabilities: {
+    inputModalities: string[]
+    outputModalities: string[]
+    reasoningModelCount: number
+    toolCapableModelCount: number
+    contextWindowModelCount: number
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -336,14 +368,91 @@ export function createModelCenterService(options: ModelCenterServiceOptions) {
     }))
   }
 
+  async function checkProviderOnboarding(providerInput: string): Promise<ProviderOnboardingCheck> {
+    const provider = providerInput.trim()
+    if (!PROVIDER_ID_PATTERN.test(provider)) {
+      return {
+        provider: provider.slice(0, 64),
+        checkedAt: new Date(nowMs()).toISOString(),
+        status: 'invalid_provider',
+        authentication: { configured: false },
+        catalog: { discovered: false, outcome: 'not_discovered', verifiedAt: null, stale: true, modelCount: 0 },
+        probeContract: {
+          available: false,
+          executed: false,
+          requiresExplicitConfirmation: true,
+          mayBeBillable: true,
+          toolsDisabled: true,
+          timeoutMs: MODEL_PROBE_TIMEOUT_MS,
+          maxOutputTokens: MODEL_PROBE_MAX_OUTPUT_TOKENS,
+        },
+        advertisedCapabilities: { inputModalities: [], outputModalities: [], reasoningModelCount: 0, toolCapableModelCount: 0, contextWindowModelCount: 0 },
+      }
+    }
+
+    const state = await readState()
+    const snapshot = state.providers[provider]
+    const models = snapshot?.models || []
+    const discovered = models.length > 0
+    const ageMs = snapshot ? nowMs() - Date.parse(snapshot.verifiedAt) : Number.POSITIVE_INFINITY
+    const stale = !Number.isFinite(ageMs) || ageMs < 0 || ageMs > 14 * 24 * 60 * 60 * 1000
+    const configured = options.isProviderConfigured(provider)
+    const inputModalities = [...new Set(models.flatMap((model) => model.input || []))].sort()
+    const outputModalities = [...new Set(models.flatMap((model) => model.output || []))].sort()
+    const status: ProviderOnboardingCheck['status'] = !configured
+      ? 'authentication_required'
+      : !discovered
+        ? 'catalog_discovery_required'
+        : snapshot?.catalogOutcome === 'auth-rejected'
+          ? 'catalog_auth_rejected'
+          : snapshot?.catalogOutcome === 'unavailable'
+            ? 'catalog_discovery_required'
+          : stale
+            ? 'catalog_stale'
+            : 'ready_for_opt_in_probe'
+
+    return {
+      provider,
+      checkedAt: new Date(nowMs()).toISOString(),
+      status,
+      authentication: { configured },
+      catalog: {
+        discovered,
+        outcome: snapshot?.catalogOutcome || 'not_discovered',
+        verifiedAt: snapshot?.verifiedAt || null,
+        stale,
+        modelCount: models.length,
+      },
+      probeContract: {
+        available: status === 'ready_for_opt_in_probe',
+        executed: false,
+        requiresExplicitConfirmation: true,
+        mayBeBillable: true,
+        toolsDisabled: true,
+        timeoutMs: MODEL_PROBE_TIMEOUT_MS,
+        maxOutputTokens: MODEL_PROBE_MAX_OUTPUT_TOKENS,
+      },
+      advertisedCapabilities: {
+        inputModalities,
+        outputModalities,
+        reasoningModelCount: models.filter((model) => model.reasoning === true).length,
+        toolCapableModelCount: models.filter((model) => model.supportsTools === true).length,
+        contextWindowModelCount: models.filter((model) => Boolean(model.contextWindow || model.contextTokens || model.contextWindows?.length)).length,
+      },
+    }
+  }
+
   async function refreshProviderCapabilities(provider: string) {
     if (!PROVIDER_ID_PATTERN.test(provider)) return { ok: false as const, reason: 'invalid_provider' as const, snapshot: null }
     const result = await options.runOpenClaw(['models', 'list', '--all', '--json', '--refresh', '--provider', provider], 30_000)
+    const stdout = result.stdout || ''
     let parsed: unknown
-    try {
-      parsed = result.stdout ? JSON.parse(result.stdout) : null
-    } catch {
-      parsed = null
+    if (Buffer.byteLength(stdout, 'utf8') <= MODEL_CATALOG_MAX_STDOUT_BYTES) {
+      try {
+        parsed = stdout ? JSON.parse(stdout) : null
+      } catch {
+        parsed = null
+      }
     }
     const verifiedAt = new Date(nowMs()).toISOString()
     const models = catalogRows(parsed)
@@ -429,16 +538,21 @@ export function createModelCenterService(options: ModelCenterServiceOptions) {
         '--json',
         '--config-override', override,
       ], MODEL_PROBE_TIMEOUT_MS)
+      const stdout = result.stdout || ''
+      const stderr = result.stderr || ''
+      const outputWithinLimit = Buffer.byteLength(stdout, 'utf8') + Buffer.byteLength(stderr, 'utf8') <= MODEL_PROBE_MAX_PROCESS_OUTPUT_BYTES
       let parsed: unknown
-      try {
-        parsed = result.stdout ? JSON.parse(result.stdout) : null
-      } catch {
-        parsed = null
+      if (outputWithinLimit) {
+        try {
+          parsed = stdout ? JSON.parse(stdout) : null
+        } catch {
+          parsed = null
+        }
       }
       if (result.code === 0 && isRecord(parsed) && parsed.ok === true) {
         status = 'passed'
         reason = 'ok'
-      } else if (isAuthOrEntitlementFailure(`${result.stderr || ''}\n${result.stdout || ''}`)) {
+      } else if (isAuthOrEntitlementFailure(`${stderr.slice(0, 4096)}\n${stdout.slice(0, 4096)}`)) {
         status = 'blocked'
         reason = 'provider_auth_or_entitlement_failed'
       } else if (result.code === 0) {
@@ -468,7 +582,7 @@ export function createModelCenterService(options: ModelCenterServiceOptions) {
     return { ok: status === 'passed', reason, result: probeResult }
   }
 
-  return { getCapabilitySnapshots, probeModel, refreshProviderCapabilities }
+  return { checkProviderOnboarding, getCapabilitySnapshots, probeModel, refreshProviderCapabilities }
 }
 
 export type ModelCenterService = ReturnType<typeof createModelCenterService>

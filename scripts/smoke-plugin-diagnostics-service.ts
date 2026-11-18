@@ -63,8 +63,8 @@ assert.match(
 )
 assert.match(
   pluginRoutes,
-  /const result = await options\.setupClawTalkPlugin\(parsed\.data\)/,
-  'plugin routes should delegate ClawTalk setup through route options',
+  /const result = parsed\.data\.install\s*\?\s*await runAuditedPluginAction\('install', options\.clawTalkPluginId, \(\) => options\.setupClawTalkPlugin\(parsed\.data\)\)\s*: await options\.setupClawTalkPlugin\(parsed\.data\)/,
+  'plugin routes should delegate ClawTalk setup and audit requested installs',
 )
 
 for (const coverage of [
