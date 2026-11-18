@@ -3905,7 +3905,7 @@ function isOpenClawNodeRuntimeUnavailableText(value: string) {
  * retired several older tuning knobs and renamed agents.list to entries;
  * persisting those knobs makes every later Gateway restart fail validation.
  */
-function projectConfigForOpenClaw2026_10_6(config: OpenClawConfigFile) {
+function projectConfigForOpenClaw2026_11_5(config: OpenClawConfigFile) {
   if (resolvedOpenClawRuntimeInfo().version !== RECOMMENDED_OPENCLAW_VERSION) return
   const gateway = config.gateway as Record<string, unknown> | undefined
   if (gateway) {
@@ -3965,9 +3965,85 @@ function projectConfigForOpenClaw2026_10_6(config: OpenClawConfigFile) {
     delete agents.list
   }
   if (isLooseRecord(agents?.entries)) {
-    for (const entry of Object.values(agents.entries)) {
+    const entries = agents.entries as Record<string, unknown>
+    const roster = Object.entries(entries).filter(([, entry]) => isLooseRecord(entry))
+    const defaults = isLooseRecord(agents.defaults) ? agents.defaults as Record<string, unknown> : {}
+    const systemAgent = isLooseRecord(defaults.systemAgent) ? defaults.systemAgent as Record<string, unknown> : {}
+    const configuredSystemAgentId = typeof systemAgent.agentId === 'string' ? systemAgent.agentId.trim() : ''
+    const markedDefaultId = roster.find(([, entry]) => isLooseRecord(entry) && entry.default === true)?.[0]
+    const ownerId = configuredSystemAgentId && entries[configuredSystemAgentId] !== undefined
+      ? configuredSystemAgentId
+      : markedDefaultId
+
+    // OpenClaw 2026.11 retired agents.entries.*.default. Automnia keeps this
+    // marker only in its in-memory editor model; project the chosen owner into
+    // the supported ownership fields before writing the runtime config.
+    if (ownerId) {
+      agents.defaults = defaults
+      if (!isLooseRecord(defaults.systemAgent)) {
+        defaults.systemAgent = { agentId: ownerId }
+      } else if (typeof systemAgent.agentId !== 'string' || !systemAgent.agentId.trim()) {
+        systemAgent.agentId = ownerId
+      }
+      if (!isLooseRecord(defaults.authInheritance)) {
+        const soleAgentId = roster.length === 1 ? roster[0][0] : 'main'
+        if (ownerId !== soleAgentId) defaults.authInheritance = { agentId: ownerId }
+      } else {
+        const authInheritance = defaults.authInheritance as Record<string, unknown>
+        if (typeof authInheritance.agentId !== 'string' || !authInheritance.agentId.trim()) {
+          const soleAgentId = roster.length === 1 ? roster[0][0] : 'main'
+          if (ownerId !== soleAgentId) authInheritance.agentId = ownerId
+        }
+      }
+      if (!isLooseRecord(defaults.sessionStore)) {
+        const sessionStorePath = typeof config.session?.store === 'string' ? config.session.store.trim() : ''
+        if (sessionStorePath && !sessionStorePath.includes('{agentId}')) defaults.sessionStore = { agentId: ownerId }
+      } else {
+        const sessionStore = defaults.sessionStore as Record<string, unknown>
+        const sessionStorePath = typeof config.session?.store === 'string' ? config.session.store.trim() : ''
+        if (sessionStorePath && !sessionStorePath.includes('{agentId}')
+          && (typeof sessionStore.agentId !== 'string' || !sessionStore.agentId.trim())) {
+          sessionStore.agentId = ownerId
+        }
+      }
+
+      const talk = isLooseRecord((config as Record<string, unknown>).talk)
+        ? (config as Record<string, unknown>).talk as Record<string, unknown>
+        : {}
+      if (typeof talk.agentId !== 'string' || !talk.agentId.trim()) {
+        talk.agentId = ownerId
+        ;(config as Record<string, unknown>).talk = talk
+      }
+
+      const channels = isLooseRecord(config.channels) ? config.channels as Record<string, unknown> : {}
+      const bindings = Array.isArray(config.bindings) ? config.bindings as OpenClawBinding[] : []
+      const hasChannelWideOwner = (channelId: string) => bindings.some((binding) => {
+        if (!isLooseRecord(binding) || binding.type === 'acp' || !isLooseRecord(binding.match)) return false
+        const match = binding.match as Record<string, unknown>
+        return typeof match.channel === 'string'
+          && match.channel.trim().toLowerCase() === channelId
+          && match.accountId === '*'
+          && match.peer === undefined
+          && match.guildId === undefined
+          && match.teamId === undefined
+          && (!Array.isArray(match.roles) || match.roles.length === 0)
+      })
+      const defaultChannelBindings = Object.entries(channels)
+        .filter(([channelId]) => !['defaults', 'modelByChannel'].includes(channelId.trim()))
+        .filter(([, value]) => {
+          if (isLooseRecord(value)) return value.enabled !== false && Object.keys(value).length > 0
+          return value !== undefined && value !== null && value !== false
+        })
+        .map(([channelId]) => channelId.trim().toLowerCase())
+        .filter((channelId) => channelId && !hasChannelWideOwner(channelId))
+        .map((channelId) => ({ agentId: ownerId, match: { channel: channelId, accountId: '*' } }))
+      if (defaultChannelBindings.length) config.bindings = [...bindings, ...defaultChannelBindings]
+    }
+
+    if (roster.length > 1) agents.ownership ??= 'explicit'
+    for (const [, entry] of roster) {
       if (!isLooseRecord(entry)) continue
-      if (agents.ownership === 'explicit') delete entry.default
+      delete entry.default
       if (!isLooseRecord(entry.contextLimits)) continue
       delete entry.contextLimits.memoryGetDefaultLines
       delete entry.contextLimits.toolResultMaxChars
@@ -8713,6 +8789,15 @@ function hydrateOpenClawAgentEntries(config: OpenClawConfigFile) {
     if (isLooseRecord(entry)) entries.set(id, { ...entry, id })
   }
   agents.list = Array.from(entries.values())
+  const defaults = isLooseRecord(agents.defaults) ? agents.defaults : null
+  const systemAgent = defaults && isLooseRecord(defaults.systemAgent) ? defaults.systemAgent : null
+  const systemAgentId = typeof systemAgent?.agentId === 'string' ? systemAgent.agentId.trim() : ''
+  if (systemAgentId && entries.has(systemAgentId)) {
+    for (const entry of agents.list as AgentConfigEntry[]) {
+      if (entry.id === systemAgentId) entry.default = true
+      else delete entry.default
+    }
+  }
   delete agents.entries
   return config
 }
@@ -9730,7 +9815,7 @@ async function writeOpenclawConfig(config: unknown, options: { allowDuringAgentT
             }
           : parsed.agents,
       }
-      projectConfigForOpenClaw2026_10_6(next as unknown as OpenClawConfigFile)
+      projectConfigForOpenClaw2026_11_5(next as unknown as OpenClawConfigFile)
       // Create a version of the config for comparison that excludes dynamic metadata fields
       // (like lastTouchedAt, lastTouchedVersion, updatedAt) using a true deep clone to prevent unnecessary restarts.
       const stripDynamicConfigFieldsForComparison = (cfg: unknown) => {
@@ -10313,16 +10398,6 @@ async function ensureGatewayStartupPluginDefaults(repairSummary: GatewayStartupP
     console.warn(`[runtime/codex-sidecar] ${warning}`)
     pushGatewayLog('lifecycle', warning, 'warning')
   }
-  const config = await readOpenclawConfig().catch(() => null)
-  if (!config) return
-  const before = JSON.stringify({ gateway: config.gateway || {}, plugins: config.plugins || {}, tools: config.tools || {} })
-  ensureGatewayConfigDefaults(config)
-  // Existing installs can reach gateway startup with a persisted config that
-  // predates the hosted-tool policy. Keep the Automnia cron tool available
-  // after an upgrade instead of making the agent fall back to host `crontab`.
-  applyAutomniaCreditsCompactToolPolicy(config)
-  ensureClawTalkBundledPluginDefaults(config)
-  await ensureClawTalkApiKeyMaterial(config)
   const [
     repairedClawTalkManifests,
     repairedTelegramRuntimes,
@@ -10334,12 +10409,39 @@ async function ensureGatewayStartupPluginDefaults(repairSummary: GatewayStartupP
       ? Promise.resolve(repairSummary.repairedTelegramRuntimes)
       : repairTelegramAgentRoutingRuntime(),
   ])
-  ensureBrowserRuntimeDefaults(config)
-  await ensureTrustedPluginAllowlistFromRuntimeState(config)
-  await ensureEnabledManagedPluginLoadPaths(config)
-  await ensureWebSearchProviderSelectionFromRuntimeState(config)
-  const after = JSON.stringify({ gateway: config.gateway || {}, plugins: config.plugins || {}, tools: config.tools || {} })
-  if (after !== before) await writeOpenclawConfig(config)
+
+  // A license or provider-route change can save OpenClaw config while Gateway
+  // startup is applying plugin defaults. Rebase this idempotent startup
+  // migration onto the latest disk config after a write conflict instead of
+  // making the Gateway restart loop repeat the same stale edit.
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const config = await readOpenclawConfig().catch(() => null)
+    if (!config) return
+    const before = JSON.stringify({ gateway: config.gateway || {}, plugins: config.plugins || {}, tools: config.tools || {} })
+    ensureGatewayConfigDefaults(config)
+    // Existing installs can reach gateway startup with a persisted config that
+    // predates the hosted-tool policy. Keep the Automnia cron tool available
+    // after an upgrade instead of making the agent fall back to host `crontab`.
+    applyAutomniaCreditsCompactToolPolicy(config)
+    ensureClawTalkBundledPluginDefaults(config)
+    await ensureClawTalkApiKeyMaterial(config)
+    ensureBrowserRuntimeDefaults(config)
+    await ensureTrustedPluginAllowlistFromRuntimeState(config)
+    await ensureEnabledManagedPluginLoadPaths(config)
+    await ensureWebSearchProviderSelectionFromRuntimeState(config)
+    const after = JSON.stringify({ gateway: config.gateway || {}, plugins: config.plugins || {}, tools: config.tools || {} })
+    if (after === before) break
+
+    try {
+      await writeOpenclawConfig(config)
+      break
+    } catch (error) {
+      if (!(error instanceof ConfigEditConflict) || attempt === 3) throw error
+      openclawConfigCache = null
+      console.warn(`[gateway-config] startup defaults raced with another config writer; rebasing (attempt ${attempt + 1}/3)`)
+      await delayMs(50 * (attempt + 1))
+    }
+  }
   if (repairedClawTalkManifests.length && !repairSummary.clawTalkRegistryRefreshed) {
     console.info(`[plugins/clawtalk] repaired manifest contracts in ${repairedClawTalkManifests.length} install(s)`)
     await refreshOpenClawPluginRegistry('clawtalk-manifest-repair').catch((error) => {

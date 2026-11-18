@@ -9,6 +9,8 @@ const root = process.cwd()
 const releaseRoot = path.join(root, 'release')
 const productName = 'Automnia AI Nexus'
 const packageJson = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'))
+const expectedOpenClawVersion = String(JSON.parse(readFileSync(path.join(root, 'vendor', 'openclaw', 'package.json'), 'utf8')).version || '').trim()
+assert.ok(expectedOpenClawVersion, 'release smoke must know the pinned OpenClaw version')
 const linuxExecutableName = String(packageJson.build?.linux?.executableName || packageJson.name || '').trim()
 const explicitLinuxAppImagePath = process.platform === 'linux'
   ? String(process.env.AUTOMNIA_PACKAGED_LINUX_APPIMAGE || '').trim()
@@ -151,6 +153,7 @@ async function waitForLogPatterns(
   patterns: RegExp[],
   timeoutMs = 60_000,
   hasLauncherFinished: () => boolean = () => false,
+  getLauncherOutput: () => string = () => '',
 ) {
   const found = new Set<number>()
   const start = Date.now()
@@ -164,7 +167,8 @@ async function waitForLogPatterns(
       if (found.size === patterns.length) return content
     }
     if (hasLauncherFinished()) {
-      throw new Error(`packaged launcher exited before its launch checks completed\n${content || '(no launch log was created)'}`)
+      const diagnostics = getLauncherOutput()
+      throw new Error(`packaged launcher exited before its launch checks completed\n${content || '(no launch log was created)'}${diagnostics ? `\n${diagnostics}` : ''}`)
     }
     await new Promise((resolve) => setTimeout(resolve, 250))
   }
@@ -185,6 +189,9 @@ const apiPort = await freePort()
 const frontendPort = await freePort()
 const gatewayPort = await freePort()
 const browserRelayPort = await freePort()
+let launcherStdout = ''
+let launcherStderr = ''
+const appendOutputTail = (current: string, chunk: Buffer | string) => `${current}${chunk.toString()}`.slice(-16_384)
 const env = {
   ...process.env,
   CONTROL_CENTER_PORT: String(apiPort),
@@ -196,6 +203,8 @@ const env = {
   CONTROL_CENTER_TOKEN: 'packaged-electron-e2e',
   AUTOMNIA_ELECTRON_E2E: '1',
   AUTOMNIA_ELECTRON_E2E_ALLOW_PARALLEL: '1',
+  AUTOMNIA_ELECTRON_E2E_ASSERT_PTY: '1',
+  AUTOMNIA_ELECTRON_E2E_KEEP_WINDOW_HIDDEN: '1',
   AUTOMNIA_ELECTRON_E2E_LOG_PATH: logPath,
   AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS: useLinuxAppImage ? '15000' : '1500',
   AUTOMNIA_ELECTRON_E2E_ASSERT_NAVIGATION: '1',
@@ -212,19 +221,36 @@ try {
     cwd: launcherCwd,
     env,
     windowsHide: true,
-    // Do not let descendant Electron processes inherit CI's stdout/stderr
-    // handles; on Windows that can keep the PowerShell pipeline open after
-    // the packaged launcher has completed its smoke-test work.
-    stdio: ['ignore', 'ignore', 'ignore'],
+    // Capture bounded output for early native launcher failures while draining
+    // both pipes so packaged descendants cannot keep the CI shell open.
+    stdio: ['ignore', 'pipe', 'pipe'],
   })
+  launcher.stdout?.on('data', (chunk) => { launcherStdout = appendOutputTail(launcherStdout, chunk) })
+  launcher.stderr?.on('data', (chunk) => { launcherStderr = appendOutputTail(launcherStderr, chunk) })
   let launcherError: Error | null = null
   launcher.once('error', (error) => { launcherError = error })
+
+  // The branded Windows executable is a small GUI launcher that starts the
+  // bundled electron.exe process and exits with code 0. Its exit alone does
+  // not mean the Automnia app exited; the packaged E2E markers prove startup.
+  const launcherFailedBeforeChecks = () => launcherError !== null ||
+    launcher.signalCode !== null ||
+    (launcher.exitCode !== null && !(process.platform === 'win32' && launcher.exitCode === 0))
 
   await waitForLogPatterns(logPath, [
     /\[automnia-e2e\] port-cleanup-skipped/,
     /\[automnia-e2e\] server-ready/,
     /\[automnia-e2e\] navigation-policy-ok/,
-  ], 60_000, () => launcherError !== null || launcher.exitCode !== null || launcher.signalCode !== null)
+    /\[automnia-e2e\] pty-native-ok/,
+  ], 60_000, launcherFailedBeforeChecks, () => {
+    const details = [
+      `launcher status: exit=${launcher.exitCode ?? 'unknown'}, signal=${launcher.signalCode ?? 'none'}`,
+      launcherError ? `spawn error: ${launcherError.message}` : '',
+      launcherStdout ? `launcher stdout:\n${launcherStdout}` : '',
+      launcherStderr ? `launcher stderr:\n${launcherStderr}` : '',
+    ].filter(Boolean)
+    return details.join('\n')
+  })
 
   assert.ok(existsSync(userDataDir), 'packaged startup must recreate a missing Automnia user-data directory')
   assert.ok(existsSync(openclawDir), 'packaged startup must recreate a missing OpenClaw state directory')
@@ -236,6 +262,9 @@ try {
   )
   assert.ok(writableRuntimeName, 'packaged startup must create a complete writable OpenClaw runtime while its packaged launch is running')
   const writableRuntimeRoot = path.join(writableRuntimeParent, writableRuntimeName)
+  const writableRuntimePackage = JSON.parse(readFileSync(path.join(writableRuntimeRoot, 'package.json'), 'utf8'))
+  assert.equal(writableRuntimePackage.version, expectedOpenClawVersion, 'installed app must stage the exact OpenClaw version packaged in this release')
+  assert.ok(existsSync(path.join(writableRuntimeRoot, 'openclaw.mjs')), 'staged OpenClaw runtime must include its executable entry point')
   const bundledRuntimeRoot = path.join(resourcesDir, 'openclaw')
   assert.notEqual(path.resolve(writableRuntimeRoot), path.resolve(bundledRuntimeRoot), 'mutable OpenClaw files must not point into the packaged resources directory')
 

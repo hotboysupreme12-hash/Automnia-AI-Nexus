@@ -13,7 +13,7 @@ function load(name, context = {}) {
   return vm.runInNewContext(ts.transpile(source.slice(start, end)) + `\n${name}`, context)
 }
 test('projection removes retired per-agent limits on repeated saves without losing supported limits', () => {
-  const project = load('projectConfigForOpenClaw2026_10_6', {
+  const project = load('projectConfigForOpenClaw2026_11_5', {
     RECOMMENDED_OPENCLAW_VERSION: '2026.11.5',
     resolvedOpenClawRuntimeInfo: () => ({ version: '2026.11.5' }),
     isLooseRecord: x => x !== null && typeof x === 'object' && !Array.isArray(x),
@@ -24,6 +24,7 @@ test('projection removes retired per-agent limits on repeated saves without losi
   config.agents.entries.new.default = true
   project(config)
   assert.equal(config.agents.entries.new.default, undefined)
+  assert.equal(config.agents.defaults.systemAgent.agentId, 'new')
   assert.equal(config.agents.entries.existing.contextLimits.memoryGetMaxChars, 500)
   assert.equal(config.agents.entries.new.contextLimits.postCompactionMaxChars, 800)
   assert.equal(config.agents.entries.existing.contextLimits.memoryGetDefaultLines, undefined)
@@ -36,7 +37,7 @@ test('canonical agents hydrate for billing sync and round-trip selected tiers an
     isLooseRecord: x => x !== null && typeof x === 'object' && !Array.isArray(x),
   }
   const hydrate = load('hydrateOpenClawAgentEntries', context)
-  const project = load('projectConfigForOpenClaw2026_10_6', context)
+  const project = load('projectConfigForOpenClaw2026_11_5', context)
   const config = { agents: { entries: { architect: { model: { primary: 'automnia-cloud/gemini-3.8-flash' } }, removed: {} } } }
   hydrate(config)
   assert.equal(config.agents.list[0].id, 'architect')
@@ -48,6 +49,53 @@ test('canonical agents hydrate for billing sync and round-trip selected tiers an
   hydrate(config)
   hydrate(config)
   assert.equal(config.agents.list.length, 1)
+})
+test('2026.11 ownership projection preserves the selected agent and materializes channel fallbacks without retired markers', () => {
+  const context = {
+    RECOMMENDED_OPENCLAW_VERSION: '2026.11.5',
+    resolvedOpenClawRuntimeInfo: () => ({ version: '2026.11.5' }),
+    isLooseRecord: x => x !== null && typeof x === 'object' && !Array.isArray(x),
+  }
+  const hydrate = load('hydrateOpenClawAgentEntries', context)
+  const project = load('projectConfigForOpenClaw2026_11_5', context)
+  const config = {
+    agents: {
+      defaults: {},
+      list: [
+        { id: 'architect', default: true, workspace: 'C:/workspace/architect' },
+        { id: 'coordinator', workspace: 'C:/workspace/coordinator' },
+      ],
+    },
+    session: { store: 'C:/state/sessions.json' },
+    channels: {
+      telegram: { enabled: true },
+      discord: { token: 'configured' },
+      whatsapp: { enabled: false },
+      defaults: { groupPolicy: 'allowlist' },
+    },
+    bindings: [
+      { agentId: 'coordinator', match: { channel: 'discord', accountId: 'team' } },
+    ],
+  }
+
+  project(config)
+  assert.equal(config.agents.ownership, 'explicit')
+  assert.equal(config.agents.defaults.systemAgent.agentId, 'architect')
+  assert.equal(config.agents.defaults.authInheritance.agentId, 'architect')
+  assert.equal(config.agents.defaults.sessionStore.agentId, 'architect')
+  assert.equal(config.talk.agentId, 'architect')
+  assert.equal(config.agents.entries.architect.default, undefined)
+  assert.equal(config.agents.entries.coordinator.default, undefined)
+  assert.equal(config.bindings[1].agentId, 'architect')
+  assert.equal(config.bindings[1].match.channel, 'telegram')
+  assert.equal(config.bindings[1].match.accountId, '*')
+  assert.equal(config.bindings[2].agentId, 'architect')
+  assert.equal(config.bindings[2].match.channel, 'discord')
+  assert.equal(config.bindings[2].match.accountId, '*')
+
+  hydrate(config)
+  assert.equal(config.agents.list.find(agent => agent.id === 'architect').default, true)
+  assert.equal(config.agents.list.find(agent => agent.id === 'coordinator').default, undefined)
 })
 test('Telegram 10.6 bundle patch handles authorized /agents and resilient delivery hook markers', () => {
   const warnings = []

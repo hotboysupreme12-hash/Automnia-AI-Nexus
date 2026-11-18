@@ -129,8 +129,59 @@ function Install-Automnia {
   return $AppExe
 }
 
+function Get-InstalledAutomniaProcesses {
+  $InstallPrefix = [IO.Path]::GetFullPath($InstallRoot).TrimEnd([char[]]@('\', '/')) + '\'
+  return @(Get-CimInstance -ClassName Win32_Process -ErrorAction Stop | Where-Object {
+    $ExecutablePath = [string]$_.ExecutablePath
+    $ExecutablePath -and $ExecutablePath.StartsWith($InstallPrefix, [StringComparison]::OrdinalIgnoreCase)
+  })
+}
+
+function Stop-InstalledAutomniaProcesses {
+  param([string]$Label)
+  foreach ($OwnedProcess in @(Get-InstalledAutomniaProcesses)) {
+    Stop-Process -Id ([int]$OwnedProcess.ProcessId) -Force -ErrorAction Stop
+  }
+  $StopDeadline = [DateTime]::UtcNow.AddSeconds(30)
+  do {
+    $RemainingProcesses = @(Get-InstalledAutomniaProcesses)
+    if (-not $RemainingProcesses) { return }
+    Start-Sleep -Milliseconds 250
+  } while ([DateTime]::UtcNow -lt $StopDeadline)
+  $RemainingNames = @($RemainingProcesses | ForEach-Object { "$($_.Name) (PID $($_.ProcessId))" }) -join ', '
+  throw "$Label could not stop installer-owned Automnia processes: $RemainingNames"
+}
+
+function Remove-DirectoryWithRetry {
+  param(
+    [string]$Path,
+    [string]$Label,
+    [int]$TimeoutSeconds = 30
+  )
+  $Target = [IO.Path]::GetFullPath($Path)
+  $Deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+  $LastError = $null
+  do {
+    if (-not (Test-Path -LiteralPath $Target)) { return }
+    try {
+      Remove-Item -LiteralPath $Target -Recurse -Force -ErrorAction Stop
+    } catch {
+      $LastError = $_.Exception.Message
+    }
+    if (-not (Test-Path -LiteralPath $Target)) { return }
+    Start-Sleep -Milliseconds 250
+  } while ([DateTime]::UtcNow -lt $Deadline)
+
+  if (Test-Path -LiteralPath $Target) {
+    $Remaining = @(Get-ChildItem -LiteralPath $Target -Force -ErrorAction SilentlyContinue | Select-Object -First 8 -ExpandProperty Name) -join ', '
+    $Detail = if ($LastError) { " Last error: $LastError" } else { '' }
+    throw "$Label could not remove its isolated directory: $Target. Remaining entries: $Remaining.$Detail"
+  }
+}
+
 function Uninstall-Automnia {
   param([string]$Label)
+  Stop-InstalledAutomniaProcesses -Label $Label
   $AppExe = Join-Path $InstallRoot $ExpectedAppExeName
   $Uninstaller = Get-ChildItem -LiteralPath $InstallRoot -Filter 'Uninstall*.exe' -File -Recurse |
     Select-Object -First 1 -ExpandProperty FullName
@@ -141,9 +192,7 @@ function Uninstall-Automnia {
     Start-Sleep -Milliseconds 250
   }
   if (Test-Path -LiteralPath $AppExe) { throw "$Label left $ExpectedAppExeName in place." }
-  if (Test-Path -LiteralPath $InstallRoot) {
-    Remove-Item -LiteralPath $InstallRoot -Recurse -Force
-  }
+  Remove-DirectoryWithRetry -Path $InstallRoot -Label $Label
   return $Uninstaller
 }
 
@@ -175,7 +224,7 @@ function Invoke-InstalledSmoke {
   $Old = @{}
   foreach ($Name in @(
     'CONTROL_CENTER_PORT', 'CONTROL_CENTER_FRONTEND_PORT', 'OPENCLAW_GATEWAY_PORT', 'OPENCLAW_BROWSER_RELAY_PORT',
-    'CONTROL_CENTER_AUTOSTART_GATEWAY', 'AUTOMNIA_ELECTRON_E2E', 'AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS',
+    'CONTROL_CENTER_AUTOSTART_GATEWAY', 'AUTOMNIA_ELECTRON_E2E', 'AUTOMNIA_ELECTRON_E2E_ASSERT_PTY', 'AUTOMNIA_ELECTRON_E2E_KEEP_WINDOW_HIDDEN', 'AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS',
     'AUTOMNIA_ELECTRON_E2E_ASSERT_NAVIGATION', 'AUTOMNIA_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL',
     'AUTOMNIA_ELECTRON_E2E_SKIP_PORT_CLEANUP', 'AUTOMNIA_ELECTRON_E2E_LOG_PATH', 'AUTOMNIA_USER_DATA_DIR',
     'OPENCLAW_STATE_DIR', 'OPENCLAW_HOME', 'CONTROL_CENTER_WORKSPACE_ROOT'
@@ -187,6 +236,8 @@ function Invoke-InstalledSmoke {
     $env:OPENCLAW_BROWSER_RELAY_PORT = [string](Get-FreePort)
     $env:CONTROL_CENTER_AUTOSTART_GATEWAY = '0'
     $env:AUTOMNIA_ELECTRON_E2E = '1'
+    $env:AUTOMNIA_ELECTRON_E2E_ASSERT_PTY = '1'
+    $env:AUTOMNIA_ELECTRON_E2E_KEEP_WINDOW_HIDDEN = '1'
     $env:AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS = '3500'
     $env:AUTOMNIA_ELECTRON_E2E_ASSERT_NAVIGATION = '1'
     $env:AUTOMNIA_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL = '1'
@@ -198,7 +249,7 @@ function Invoke-InstalledSmoke {
     $env:CONTROL_CENTER_WORKSPACE_ROOT = Join-Path $TempRoot ("workspace-$Label")
     Invoke-CheckedProcess -FilePath $AppExe -ArgumentList @() -Label "$Label packaged launch" -TimeoutSeconds 120 | Out-Null
     $Log = Wait-ForE2eLog -Path $LogPath -Label "$Label packaged launch" -TimeoutSeconds 120
-    foreach ($Marker in @('server-ready', 'navigation-policy-ok', 'quit-cleanup-complete')) {
+    foreach ($Marker in @('server-ready', 'navigation-policy-ok', 'pty-native-ok', 'quit-cleanup-complete')) {
       if ($Log -notmatch [Regex]::Escape($Marker)) { throw "$Label packaged launch did not record $Marker." }
     }
     return $LogPath
@@ -369,9 +420,12 @@ try {
   }
 } finally {
   try {
-    if (Test-Path -LiteralPath $TempRoot) {
-      Remove-Item -LiteralPath $TempRoot -Recurse -Force -ErrorAction Stop
-    }
+    Stop-InstalledAutomniaProcesses -Label 'final lifecycle cleanup'
+  } catch {
+    Write-Warning "[release-lifecycle] installer-owned process cleanup incomplete: $($_.Exception.Message)"
+  }
+  try {
+    Remove-DirectoryWithRetry -Path $TempRoot -Label 'final temporary cleanup'
   } catch {
     if (Test-Path -LiteralPath $TempRoot) {
       Write-Warning "[release-lifecycle] temporary cleanup incomplete: $($_.Exception.Message)"

@@ -109,7 +109,7 @@ const browserRelayPort = await freePort()
 const controlToken = 'packaged-openclaw-gateway-smoke-token'
 
 // Preserve a previous provider choice so the license route update changes the
-// live OpenClaw route while its first Gateway process is still starting.
+// live OpenClaw route after the packaged Gateway has completed first startup.
 mkdirSync(openclawDir, { recursive: true })
 writeFileSync(path.join(openclawDir, 'openclaw.json'), `${JSON.stringify({
   models: {
@@ -143,6 +143,7 @@ const env = {
   AUTOMNIA_USER_DATA_DIR: userDataDir,
   AUTOMNIA_ELECTRON_E2E: '1',
   AUTOMNIA_ELECTRON_E2E_ALLOW_PARALLEL: '1',
+  AUTOMNIA_ELECTRON_E2E_KEEP_WINDOW_HIDDEN: '1',
   AUTOMNIA_ELECTRON_E2E_LOG_PATH: desktopLogPath,
   AUTOMNIA_ELECTRON_E2E_SKIP_PORT_CLEANUP: '1',
   AUTOMNIA_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL: '1',
@@ -152,7 +153,6 @@ const env = {
   CONTROL_CENTER_INCLUDE_SHARED_OPENCLAW_TEMP_LOGS: '0',
   CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN: '1',
   CONTROL_CENTER_EXIT_ON_PORT_ERROR: '1',
-  CONTROL_CENTER_GATEWAY_STARTUP_HEALTH_CONFIRM_TIMEOUT_MS: '45000',
   HOME: tempRoot,
   USERPROFILE: tempRoot,
   OPENAI_API_KEY: '',
@@ -186,7 +186,10 @@ function electronMainPidFromDiagnostics() {
   for (const row of rows) {
     try {
       const event = JSON.parse(row) as { event?: string; pid?: number }
-      if (event.event === 'renderer-presented' && Number.isInteger(event.pid)) return Number(event.pid)
+      if (
+        ['process-start', 'renderer-presented', 'renderer-presentation-suppressed'].includes(String(event.event))
+        && Number.isInteger(event.pid)
+      ) return Number(event.pid)
     } catch {
       // Ignore partial diagnostic rows written during app shutdown.
     }
@@ -266,11 +269,16 @@ try {
   assert.ok(existsSync(userDataDir), 'packaged startup must create a missing Automnia user-data directory')
   assert.ok(existsSync(openclawDir), 'packaged startup must create a missing OpenClaw state directory')
 
+  const initialHealthPayload = await waitForGatewayHealth(120_000) as { ok?: boolean; status?: string }
+  assert.equal(initialHealthPayload?.ok, true, 'packaged Gateway must finish first startup before route-change validation')
+  refreshOutputFromDesktopLog()
+  assert.match(output, /\[automnia-e2e\] renderer-presentation-suppressed/, 'packaged Gateway smoke must keep its test window hidden on interactive desktops')
+
   const routeResponse = await fetch(`http://127.0.0.1:${apiPort}/api/license/usage-priority`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${controlToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ usagePriority: 'provider_first' }),
-    signal: AbortSignal.timeout(180_000),
+    signal: AbortSignal.timeout(120_000),
   })
   const routeBody = await routeResponse.json().catch(() => null) as { ok?: boolean; data?: { usagePriority?: string }; error?: string } | null
   assert.equal(routeResponse.status, 200, `packaged billing route update failed: ${JSON.stringify(routeBody)}`)
@@ -288,6 +296,9 @@ try {
   )
   assert.ok(runtimeName, 'packaged startup must stage a runnable OpenClaw runtime in user data')
   const writableRuntimeRoot = path.join(runtimeParent, runtimeName)
+  const expectedOpenClawVersion = String(JSON.parse(readFileSync(path.join(root, 'vendor', 'openclaw', 'package.json'), 'utf8')).version || '').trim()
+  const writableRuntimePackage = JSON.parse(readFileSync(path.join(writableRuntimeRoot, 'package.json'), 'utf8'))
+  assert.equal(writableRuntimePackage.version, expectedOpenClawVersion, 'packaged Gateway must run the OpenClaw version pinned by this release')
   const writableCodexCli = path.join(writableRuntimeRoot, codexCliRelative)
   assert.ok(existsSync(writableCodexCli), 'staged runtime must include the Codex plugin entry that failed with EPERM')
   const descriptor = openSync(writableCodexCli, 'r+')
