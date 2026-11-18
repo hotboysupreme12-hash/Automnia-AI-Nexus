@@ -148,6 +148,8 @@ assert.equal(packageJson.build?.linux?.executableName, packageJson.name, 'Linux 
 assert.ok(packagedElectronLaunchSmoke.includes('linuxExecutableName'), 'packaged Linux launch smoke must use the configured Linux executable name')
 assert.match(packagedElectronLaunchSmoke, /process.platform === 'darwin' || process.platform === 'linux' ? 60_000 : 10_000/, 'packaged macOS and Linux startup smoke must allow slow first-launch runtime staging')
 assert.match(packagedElectronLaunchSmoke, /useLinuxAppImage\s*\?\s*180_000/, 'AppImage extract-and-run smoke must allow time to unpack the bundled Linux application')
+assert.ok(packagedElectronLaunchSmoke.includes("AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS: useLinuxAppImage ? '15000' : '1500'"), 'AppImage smoke must keep its temporary extraction available while the runtime is verified')
+assert.ok(packagedElectronLaunchSmoke.indexOf('await waitForLogPatterns(logPath, [') < packagedElectronLaunchSmoke.indexOf('const launcherStatus = await new Promise'), 'packaged startup must verify the writable runtime before its launcher exits')
 const afterPack = read('scripts/after-pack.cjs')
 assert.match(afterPack, /const archiveMember = \(\.\.\.segments\) => path\.join\(\.\.\.segments\)/, 'packaged archive validation must use host-native member paths for Windows')
 assert.ok(!afterPack.includes("'electron/update-config.json'"), 'packaged archive validation must not hard-code POSIX member separators')

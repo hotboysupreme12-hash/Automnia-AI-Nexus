@@ -146,7 +146,12 @@ async function removeTempRootWithWindowsRetries(tempRootPath: string) {
   console.warn(lastError instanceof Error ? lastError.message : String(lastError))
 }
 
-async function waitForLogPatterns(logPath: string, patterns: RegExp[], timeoutMs = 60_000) {
+async function waitForLogPatterns(
+  logPath: string,
+  patterns: RegExp[],
+  timeoutMs = 60_000,
+  hasLauncherFinished: () => boolean = () => false,
+) {
   const found = new Set<number>()
   const start = Date.now()
   let content = ''
@@ -157,6 +162,9 @@ async function waitForLogPatterns(logPath: string, patterns: RegExp[], timeoutMs
         if (pattern.test(content)) found.add(index)
       })
       if (found.size === patterns.length) return content
+    }
+    if (hasLauncherFinished()) {
+      throw new Error(`packaged launcher exited before its launch checks completed\n${content || '(no launch log was created)'}`)
     }
     await new Promise((resolve) => setTimeout(resolve, 250))
   }
@@ -189,7 +197,7 @@ const env = {
   AUTOMNIA_ELECTRON_E2E: '1',
   AUTOMNIA_ELECTRON_E2E_ALLOW_PARALLEL: '1',
   AUTOMNIA_ELECTRON_E2E_LOG_PATH: logPath,
-  AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS: '1500',
+  AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS: useLinuxAppImage ? '15000' : '1500',
   AUTOMNIA_ELECTRON_E2E_ASSERT_NAVIGATION: '1',
   AUTOMNIA_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL: '1',
   AUTOMNIA_ELECTRON_E2E_SKIP_PORT_CLEANUP: '1',
@@ -209,28 +217,14 @@ try {
     // the packaged launcher has completed its smoke-test work.
     stdio: ['ignore', 'ignore', 'ignore'],
   })
-
-  const launcherStatus = await new Promise<number | null>((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      terminatePackagedLauncher(launcher)
-      const diagnostics = existsSync(logPath) ? readFileSync(logPath, 'utf8').trim() : '(no launch log was created)'
-      reject(new Error(`packaged launcher did not exit within ${launcherExitTimeoutMs / 1000}s\n${diagnostics}`))
-    }, launcherExitTimeoutMs)
-    launcher.once('error', reject)
-    launcher.once('exit', (code) => {
-      clearTimeout(timeout)
-      resolve(code)
-    })
-  })
-  assert.equal(launcherStatus, 0, `packaged launcher exited ${launcherStatus}`)
+  let launcherError: Error | null = null
+  launcher.once('error', (error) => { launcherError = error })
 
   await waitForLogPatterns(logPath, [
     /\[automnia-e2e\] port-cleanup-skipped/,
     /\[automnia-e2e\] server-ready/,
     /\[automnia-e2e\] navigation-policy-ok/,
-    /\[automnia-e2e\] auto-quit/,
-    /\[automnia-e2e\] quit-cleanup-complete/,
-  ])
+  ], 60_000, () => launcherError !== null || launcher.exitCode !== null || launcher.signalCode !== null)
 
   assert.ok(existsSync(userDataDir), 'packaged startup must recreate a missing Automnia user-data directory')
   assert.ok(existsSync(openclawDir), 'packaged startup must recreate a missing OpenClaw state directory')
@@ -240,7 +234,7 @@ try {
   const writableRuntimeName = readdirSync(writableRuntimeParent).find((entry) =>
     existsSync(path.join(writableRuntimeParent, entry, 'package.json')),
   )
-  assert.ok(writableRuntimeName, 'packaged startup must create a complete writable OpenClaw runtime')
+  assert.ok(writableRuntimeName, 'packaged startup must create a complete writable OpenClaw runtime while its packaged launch is running')
   const writableRuntimeRoot = path.join(writableRuntimeParent, writableRuntimeName)
   const bundledRuntimeRoot = path.join(resourcesDir, 'openclaw')
   assert.notEqual(path.resolve(writableRuntimeRoot), path.resolve(bundledRuntimeRoot), 'mutable OpenClaw files must not point into the packaged resources directory')
@@ -253,6 +247,41 @@ try {
     const descriptor = openSync(writableCodexCli, 'r+')
     closeSync(descriptor)
   }
+
+  if (launcherError) throw launcherError
+  const launcherStatus = await new Promise<number | null>((resolve, reject) => {
+    if (launcher.exitCode !== null) {
+      resolve(launcher.exitCode)
+      return
+    }
+    if (launcher.signalCode !== null) {
+      resolve(null)
+      return
+    }
+    const timeout = setTimeout(() => {
+      terminatePackagedLauncher(launcher)
+      const diagnostics = existsSync(logPath) ? readFileSync(logPath, 'utf8').trim() : '(no launch log was created)'
+      reject(new Error(`packaged launcher did not exit within ${launcherExitTimeoutMs / 1000}s\n${diagnostics}`))
+    }, launcherExitTimeoutMs)
+    launcher.once('exit', (code) => {
+      clearTimeout(timeout)
+      resolve(code)
+    })
+    launcher.once('error', (error) => {
+      clearTimeout(timeout)
+      reject(error)
+    })
+    if (launcherError) {
+      clearTimeout(timeout)
+      reject(launcherError)
+    }
+  })
+  assert.equal(launcherStatus, 0, `packaged launcher exited ${launcherStatus}`)
+
+  await waitForLogPatterns(logPath, [
+    /\[automnia-e2e\] auto-quit/,
+    /\[automnia-e2e\] quit-cleanup-complete/,
+  ])
 } finally {
   killPackagedElectronProcesses()
   await removeTempRootWithWindowsRetries(tempRoot)
