@@ -147,6 +147,7 @@ assert.ok(publicRelease.includes('readelf -h'), 'public release must verify the 
 assert.equal(packageJson.build?.linux?.executableName, packageJson.name, 'Linux executable name must match the installed Debian package executable')
 assert.ok(packagedElectronLaunchSmoke.includes('linuxExecutableName'), 'packaged Linux launch smoke must use the configured Linux executable name')
 assert.match(packagedElectronLaunchSmoke, /process.platform === 'darwin' || process.platform === 'linux' ? 60_000 : 10_000/, 'packaged macOS and Linux startup smoke must allow slow first-launch runtime staging')
+assert.match(packagedElectronLaunchSmoke, /useLinuxAppImage\s*\?\s*180_000/, 'AppImage extract-and-run smoke must allow time to unpack the bundled Linux application')
 const afterPack = read('scripts/after-pack.cjs')
 assert.match(afterPack, /const archiveMember = \(\.\.\.segments\) => path\.join\(\.\.\.segments\)/, 'packaged archive validation must use host-native member paths for Windows')
 assert.ok(!afterPack.includes("'electron/update-config.json'"), 'packaged archive validation must not hard-code POSIX member separators')

@@ -56,7 +56,11 @@ const resourcesDir = process.platform === 'darwin'
   ? path.join(macAppPath, 'Contents', 'Resources')
   : path.join(unpackedRoot, 'resources')
 const launcherCwd = process.platform === 'darwin' || useLinuxAppImage ? path.dirname(launcherPath) : unpackedRoot
-const launcherExitTimeoutMs = process.platform === 'darwin' || process.platform === 'linux' ? 60_000 : 10_000
+const launcherExitTimeoutMs = useLinuxAppImage
+  ? 180_000
+  : process.platform === 'darwin' || process.platform === 'linux'
+    ? 60_000
+    : 10_000
 const requiredPackagedFiles = [
   launcherPath,
   electronRuntimePath,
