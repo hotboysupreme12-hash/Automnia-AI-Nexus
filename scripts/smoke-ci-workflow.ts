@@ -33,6 +33,7 @@ const secretScanner = read('scripts/secret-scan.cjs')
 const packageDesktop = read('scripts/package-desktop.cjs')
 const packagedElectronLaunchSmoke = read('scripts/smoke-packaged-electron-launch.ts')
 const packagedOpenClawGatewaySmoke = read('scripts/smoke-packaged-openclaw-gateway.ts')
+const macOSReleaseBuild = read('scripts/build-macos-release.sh')
 const electronE2eSmoke = read('scripts/smoke-electron-e2e.ts')
 const controlPlaneSource = read('server/controlPlane.ts')
 
@@ -113,10 +114,14 @@ assert.match(publicRelease, /AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG:\s*'1'/, 'p
 assert.match(publicRelease, /AUTOMNIA_SKIP_PLATFORM_SIGNING:\s*'1'/, 'early public releases must explicitly select unsigned platform packaging')
 assert.ok(publicRelease.includes('AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM'), 'public release workflow must require the update signing secret')
 assert.match(publicRelease, /macos:\s*\n\s*name: Unsigned macOS DMG and ZIP\s*\n\s*runs-on: macos-15-intel/, 'Intel macOS release dependencies must be installed on a native Intel runner')
-assert.ok(publicRelease.includes('npm run dist:mac -- --x64'), 'public release must build an Intel macOS artifact')
-assert.ok(publicRelease.includes('npm run dist:mac -- --arm64'), 'public release must build an Apple silicon macOS artifact')
+assert.ok(publicRelease.includes('bash scripts/build-macos-release.sh x64'), 'public release must build an Intel macOS artifact')
+assert.ok(publicRelease.includes('bash scripts/build-macos-release.sh arm64'), 'public release must build an Apple silicon macOS artifact')
+assert.ok(macOSReleaseBuild.includes('npm run dist:mac -- "--$architecture"'), 'macOS release build must use electron-builder for the selected architecture')
+assert.ok(macOSReleaseBuild.includes("Unable to detach device cleanly: hdiutil: couldn't eject") && macOSReleaseBuild.includes('Resource busy'), 'DMG retry must be limited to the observed hdiutil resource-busy cleanup failure')
+assert.ok(macOSReleaseBuild.includes('["hdiutil", "info", "-plist"]') && macOSReleaseBuild.includes('os.path.commonpath([image_path, root]) == root'), 'DMG recovery must inspect and detach only temporary images from this runner')
+assert.ok(macOSReleaseBuild.includes('npm run dist:mac -- "--$architecture" dmg'), 'macOS release build must retry only the DMG target after transient eject contention')
 assert.match(publicRelease, /Build unsigned Intel Mac DMG and ZIP[\s\S]*?AUTOMNIA_TARGET_ARCH:\s*x64/, 'Intel macOS packaging must prepare an Intel Node runtime even on Apple silicon runners')
-assert.match(publicRelease, /macos-arm64:\s*\n\s*name: Unsigned Apple silicon macOS DMG and ZIP\s*\n\s*runs-on: macos-15[\s\S]*?npm run dist:mac -- --arm64/, 'Apple silicon packaging must run on the GitHub ARM macOS runner')
+assert.match(publicRelease, /macos-arm64:\s*\n\s*name: Unsigned Apple silicon macOS DMG and ZIP\s*\n\s*runs-on: macos-15[\s\S]*?bash scripts\/build-macos-release\.sh arm64/, 'Apple silicon packaging must run on the GitHub ARM macOS runner')
 assert.match(publicRelease, /AUTOMNIA_UPDATE_CHANNEL:\s*stable-x64/, 'x64 update artifacts must use the isolated signed update channel')
 assert.match(publicRelease, /node scripts\/publish-update-channel\.cjs release/, 'x64 releases must use the dual-bucket channel publisher')
 assert.match(publicRelease, /AUTOMNIA_LEGACY_UPDATE_BUCKET/, 'the release publisher must require the legacy bucket')
@@ -171,7 +176,6 @@ for (const command of [
   'npm run release:evidence',
   'npm run release:sign',
   'npm run release:validate',
-  'npm run dist:mac',
   'npm run dist:linux',
 ]) {
   assert.ok(publicRelease.includes(command), `public release workflow must run ${command}`)

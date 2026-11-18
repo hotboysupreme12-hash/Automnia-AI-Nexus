@@ -156,11 +156,12 @@ jobs:
         run: npm run verify:release-candidate
 
       - name: Build unsigned Intel Mac DMG and ZIP
+        shell: bash
         env:
           AUTOMNIA_SKIP_PLATFORM_SIGNING: '1'
           AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG: '1'
           AUTOMNIA_TARGET_ARCH: x64
-        run: npm run dist:mac -- --x64
+        run: bash scripts/build-macos-release.sh x64
 
       - name: Validate unsigned macOS package outputs
         shell: bash
@@ -228,10 +229,11 @@ jobs:
         run: npm run verify:release-candidate
 
       - name: Build unsigned Apple silicon Mac DMG and ZIP
+        shell: bash
         env:
           AUTOMNIA_SKIP_PLATFORM_SIGNING: '1'
           AUTOMNIA_TARGET_ARCH: arm64
-        run: npm run dist:mac -- --arm64
+        run: bash scripts/build-macos-release.sh arm64
 
       - name: Validate Apple silicon package outputs
         shell: bash
