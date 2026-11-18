@@ -26,7 +26,8 @@ foreach ($RegistryRoot in $MachineInstallRegistryRoots) {
   if (-not (Test-Path -LiteralPath $RegistryRoot)) { continue }
   foreach ($RegistryKey in Get-ChildItem -LiteralPath $RegistryRoot -ErrorAction SilentlyContinue) {
     $InstalledApplication = Get-ItemProperty -LiteralPath $RegistryKey.PSPath -ErrorAction SilentlyContinue
-    if ($InstalledApplication.DisplayName -like "$ProductName*") {
+    $DisplayNameProperty = $InstalledApplication.PSObject.Properties['DisplayName']
+    if ($DisplayNameProperty -and [string]$DisplayNameProperty.Value -like "$ProductName*") {
       $ExistingMachineInstall = $InstalledApplication
       break
     }

@@ -36,6 +36,7 @@ assert.match(lifecycle, /rollback-existing-version/, 'corrupted update rejection
 assert.match(lifecycle, /distribution-signing\.json/, 'Windows lifecycle validation must support release-consumable signing evidence when platform signing is enabled')
 assert.match(lifecycle, /ExpectedAppExeName/, 'Windows lifecycle validation must derive the installed executable name from package metadata')
 assert.match(lifecycle, /MachineInstallRegistryRoots/, 'Windows lifecycle validation must avoid triggering UAC against an existing machine-wide Automnia install')
+assert.match(lifecycle, /\$InstalledApplication\.PSObject\.Properties\['DisplayName'\]/, 'Windows lifecycle validation must tolerate uninstall registry entries without a DisplayName property under strict mode')
 assert.match(lifecycle, /a silent upgrade would invoke UAC/, 'Windows lifecycle validation must explain why a clean runner is required')
 assert.doesNotMatch(lifecycle, /Filter 'Automnia\\.exe'/, 'Windows lifecycle validation must not hardcode a stale executable name')
 assert.equal(packageJson.build?.nsis?.runAfterFinish, false, 'silent NSIS lifecycle installs must not launch the app before the test harness starts it')
