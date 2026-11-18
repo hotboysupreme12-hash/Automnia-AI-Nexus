@@ -32,6 +32,7 @@ for (const route of [
   "app.get('/api/skills/info/:skillName'",
   "app.get('/api/skills/library'",
   "app.get('/api/skills/library/:skillId'",
+  "app.get('/api/skills/library/:skillId/integrity'",
   "app.post('/api/skills/learn'",
   "app.get('/api/skills/clawhub/search'",
   "app.post('/api/skills/clawhub/install'",
@@ -41,6 +42,7 @@ for (const route of [
 }
 
 assert.match(skillRoutesModule, /'skill_command_failed'/, 'skills routes must include skill command failures')
+assert.match(skillRoutesModule, /'skill_integrity_limit'/, 'skills routes must return bounded-scan failures as a typed error')
 assert.match(skillRoutesModule, /'skill_operation_failed'/, 'skills routes must include skill operation failures')
 assert.match(skillRoutesModule, /'skill_not_found'/, 'skills routes must include missing skill failures')
 assert.match(skillRoutesModule, /apiSuccess\(res/, 'skills routes must use canonical success envelopes')
@@ -60,6 +62,17 @@ assert.match(server, /entries: \{\s*main: \{\s*workspace: OPENCLAW_STATE_ROOT/, 
 assert.match(skillRoutesModule, /normalizeClawHubSearchResult/, 'ClawHub search results must normalize registry statistics for the clients')
 assert.match(skillRoutesModule, /stats\?\.downloads/, 'ClawHub search must retain registry download counts')
 assert.match(skillRoutesModule, /stats\?\.stars/, 'ClawHub search must retain registry ratings')
+assert.match(skillRoutesModule, /SKILL_INTEGRITY_MAX_FILES = 400/, 'skill integrity scans must cap the number of support files')
+assert.match(skillRoutesModule, /SKILL_INTEGRITY_MAX_BYTES = 32 \* 1024 \* 1024/, 'skill integrity scans must cap total bytes')
+assert.match(skillRoutesModule, /SKILL_INTEGRITY_MAX_FILE_BYTES = 8 \* 1024 \* 1024/, 'skill integrity scans must cap each file before opening it')
+assert.match(skillRoutesModule, /SKILL_INTEGRITY_MAX_ENTRIES = 2_000/, 'skill integrity scans must cap all directory entries')
+assert.match(skillRoutesModule, /SKILL_INTEGRITY_MAX_DIRECTORIES = 256/, 'skill integrity scans must cap visited directories')
+assert.match(skillRoutesModule, /entry\.isSymbolicLink\(\)/, 'skill integrity scans must skip symbolic links')
+const skillIntegrityStart = skillRoutesModule.indexOf("app.get('/api/skills/library/:skillId/integrity'")
+const skillIntegrityEnd = skillRoutesModule.indexOf('\n  app.get(', skillIntegrityStart + 1)
+assert.notEqual(skillIntegrityStart, -1, 'skill integrity route must exist')
+assert.notEqual(skillIntegrityEnd, -1, 'skill integrity route must have a module boundary')
+assert.doesNotMatch(skillRoutesModule.slice(skillIntegrityStart, skillIntegrityEnd), /String\(error\)/, 'skill integrity scan failures must not expose raw filesystem errors')
 
 const avatarUploadStart = partyManagementRoutes.indexOf("app.post('/api/party/avatar-upload/:agentId'")
 const avatarUploadEnd = partyManagementRoutes.indexOf('\n}', avatarUploadStart)

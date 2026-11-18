@@ -82,11 +82,32 @@ test('capability refresh persists only bounded provider metadata with source and
     input: ['text', 'image'],
     output: ['text'],
     reasoning: true,
+    thinkingDefault: 'low',
     supportsTools: true,
     source: 'openclaw-model-catalog',
     verifiedAt: '2026-11-17T12:00:00.000Z',
   })
   assert.doesNotMatch(JSON.stringify(harness.state), /must-not-persist|private-profile-id/)
+})
+
+test('capability refresh resolves reasoning defaults and invalidates them when normalized metadata changes', async () => {
+  const harness = createHarness()
+  harness.responses.push({
+    code: 0,
+    stdout: JSON.stringify({ models: [{ id: 'google/gemini-4-hydrogen', provider: 'google', reasoning: true }] }),
+  })
+  const first = await harness.service.refreshProviderCapabilities('google')
+  assert.equal(first.ok, true)
+  assert.equal(first.snapshot?.models[0]?.thinkingDefault, 'low')
+
+  harness.responses.push({
+    code: 0,
+    stdout: JSON.stringify({ models: [{ id: 'google/gemini-4-hydrogen', provider: 'google', reasoning: false }] }),
+  })
+  const refreshed = await harness.service.refreshProviderCapabilities('google')
+  assert.equal(refreshed.ok, true)
+  assert.equal(refreshed.snapshot?.models[0]?.thinkingDefault, 'off')
+  assert.equal((await harness.service.getCapabilitySnapshots('google'))[0]?.models[0]?.thinkingDefault, 'off')
 })
 
 test('failed capability refresh keeps the last durable snapshot', async () => {

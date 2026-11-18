@@ -2,6 +2,7 @@ import { existsSync, readFileSync, promises as fs } from 'node:fs'
 import path from 'node:path'
 import {
   PLUGIN_ID_PATTERN,
+  missingRequiredPluginConfigFields,
   pluginIdFromPackageName,
   type PluginControlEntry,
   type PluginControlsPayload,
@@ -71,6 +72,11 @@ export type PluginInstallResult = {
     code: number
     stdout: string
     stderr: string
+  }
+  activationBlocked?: {
+    code: 'plugin_configuration_required'
+    message: string
+    fields: Array<{ key: string; label: string }>
   }
   repair?: PluginInstallRepairSummary
   postInstallRepair?: PluginPostInstallRepairSummary
@@ -620,7 +626,17 @@ export function createPluginInstallService(options: PluginInstallServiceOptions)
     let restart: PluginGatewayRestartRequest = skippedRestart()
     const activationId = installedPlugin?.id || (PLUGIN_ID_PATTERN.test(inferredId) ? inferredId : '')
     let activation: PluginOpenClawResult | null = null
-    if (params.enable && activationId) {
+    const missingRequiredFields = params.enable
+      ? missingRequiredPluginConfigFields(installedPlugin)
+      : []
+    const activationBlocked = missingRequiredFields.length
+      ? {
+          code: 'plugin_configuration_required' as const,
+          message: 'Plugin installed but left disabled because required configuration is missing.',
+          fields: missingRequiredFields,
+        }
+      : undefined
+    if (params.enable && activationId && !activationBlocked) {
       activation = await options.runOpenClaw(['plugins', 'enable', activationId], 120_000)
       if (activation.code !== 0) {
         const detail = options.redactSensitiveText(stripAnsi(`${activation.stdout}\n${activation.stderr}`).trim() || `openclaw plugins enable exited ${activation.code}`)
@@ -633,7 +649,7 @@ export function createPluginInstallService(options: PluginInstallServiceOptions)
       controls = await options.listPluginControls()
     }
     let postInstallRepair: PluginPostInstallRepairSummary | undefined
-    if (activationId === 'codex') {
+    if (activationId === 'codex' && !activationBlocked) {
       const config = await options.readOpenclawConfig()
       const routesNeedCodex = options.openClawConfigNeedsCodexPlugin(config)
       if (params.enable) {
@@ -654,7 +670,7 @@ export function createPluginInstallService(options: PluginInstallServiceOptions)
     }
     if (activationId) {
       const activatedPlugin = controls.plugins.find((plugin) => plugin.id === activationId) || installedPlugin
-      const enabledAfterInstall = params.enable ? true : activatedPlugin?.enabled === true
+      const enabledAfterInstall = params.enable && !activationBlocked ? true : activatedPlugin?.enabled === true
       await recordPluginInstallRuntimeState({
         pluginId: activationId,
         spec: bundledCodexSource ? requestedInput.spec : spec,
@@ -683,6 +699,7 @@ export function createPluginInstallService(options: PluginInstallServiceOptions)
           stderr: options.redactSensitiveText(activation.stderr).slice(0, 12_000),
         },
       } : {}),
+      ...(activationBlocked ? { activationBlocked } : {}),
       plugin: activationId
         ? controls.plugins.find((plugin) => plugin.id === activationId) || installedPlugin
         : installedPlugin,

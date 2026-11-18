@@ -2,6 +2,13 @@ export type AgentRuntimeFlagMode = 'default' | 'gateway' | 'local'
 export type AgentRuntimeThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 export type AgentRuntimeFastModePreference = 'auto' | 'on' | 'off'
 
+export type AgentRuntimeFallback = {
+  source: 'gateway-chat' | 'gateway'
+  destination: 'gateway' | 'local'
+  trigger: 'gateway-chat-client-failed' | 'gateway-run-failed' | 'gateway-unavailable' | 'gateway-readiness-failed'
+  detail: string
+}
+
 export type AgentRuntimeResult = {
   stdout: string
   stderr: string
@@ -12,6 +19,7 @@ export type AgentRuntimeResult = {
   timedOut?: boolean
   runtimeTransport?: 'gateway-chat' | 'gateway' | 'local'
   gatewayFallbackDetail?: string
+  runtimeFallback?: AgentRuntimeFallback
 }
 
 export type AgentRuntimeTurnParams = {
@@ -131,6 +139,18 @@ export function createAgentRuntimeService(options: AgentRuntimeServiceOptions) {
     }
 
     let gatewayFallbackDetail = ''
+    let runtimeFallback: AgentRuntimeFallback | undefined
+    const fallbackRecord = (
+      source: AgentRuntimeFallback['source'],
+      destination: AgentRuntimeFallback['destination'],
+      trigger: AgentRuntimeFallback['trigger'],
+      detail: string,
+    ): AgentRuntimeFallback => ({
+      source,
+      destination,
+      trigger,
+      detail: options.redactSensitiveText(detail).trim().slice(0, 800),
+    })
     try {
       await options.ensureGatewayRunning()
       options.startGatewayHealthMonitor()
@@ -154,6 +174,7 @@ export function createAgentRuntimeService(options: AgentRuntimeServiceOptions) {
           } catch (error) {
             if (params.signal?.aborted) throw error
             gatewayFallbackDetail = options.redactSensitiveText(String(error).trim() || 'gateway chat client failed')
+            runtimeFallback = fallbackRecord('gateway-chat', 'gateway', 'gateway-chat-client-failed', gatewayFallbackDetail)
             const dispatched = error as { gatewayDispatchState?: string; gatewayRunId?: string }
             if (dispatched?.gatewayDispatchState === 'uncertain' || dispatched?.gatewayDispatchState === 'accepted') {
               return {
@@ -173,6 +194,7 @@ export function createAgentRuntimeService(options: AgentRuntimeServiceOptions) {
           return {
             ...gateway,
             runtimeTransport: 'gateway',
+            ...(runtimeFallback ? { runtimeFallback } : {}),
             ...(gatewayFallbackDetail
               ? {
                   gatewayFallbackDetail,
@@ -187,12 +209,15 @@ export function createAgentRuntimeService(options: AgentRuntimeServiceOptions) {
             `${gateway.stderr || ''}\n${gateway.stdout || ''}`.trim() || 'gateway-backed agent run failed',
           ].filter(Boolean).join('\n'),
         )
+        runtimeFallback = fallbackRecord('gateway', 'local', 'gateway-run-failed', gatewayFallbackDetail)
       } else {
         gatewayFallbackDetail = `gateway not healthy on port ${options.gatewayHttpPort}`
+        runtimeFallback = fallbackRecord('gateway', 'local', 'gateway-unavailable', gatewayFallbackDetail)
       }
     } catch (error) {
       if (params.signal?.aborted) throw error
       gatewayFallbackDetail = options.redactSensitiveText(String(error))
+      runtimeFallback = fallbackRecord('gateway', 'local', 'gateway-readiness-failed', gatewayFallbackDetail)
     }
 
     if (params.signal?.aborted) {
@@ -220,6 +245,7 @@ export function createAgentRuntimeService(options: AgentRuntimeServiceOptions) {
       ...local,
       runtimeTransport: 'local',
       gatewayFallbackDetail,
+      ...(runtimeFallback ? { runtimeFallback } : {}),
       stderr: [local.stderr, gatewayFallbackDetail ? `Gateway session fallback: ${gatewayFallbackDetail}` : '']
         .filter(Boolean)
         .join('\n'),

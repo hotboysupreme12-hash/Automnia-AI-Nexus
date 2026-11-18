@@ -87,6 +87,18 @@ type NoticeTone = 'neutral' | 'success' | 'warning' | 'error'
 export type SettingsSectionId = 'account' | 'appearance' | 'workspace' | 'voice' | 'missions' | 'agents' | 'telegram' | 'updates' | 'logs' | 'data'
 type RuntimeTargetScope = 'party' | 'selection'
 type PendingConfirmation = 'reset-all' | 'reset-runtime' | 'clear-workspace' | null
+type ChannelDeliveryStatus = {
+  checkedAt: string
+  telegram: {
+    status: 'connected' | 'attention' | 'not-configured' | 'unknown'
+    configuredAccounts: number
+    connectedAccounts: number
+    pairing: { status: 'not-queried'; pendingCount: null }
+  }
+  clawTalk: { botConnected: 'pass' | 'warn' | 'fail' | 'unknown'; websocketServer: 'pass' | 'warn' | 'fail' | 'unknown' }
+  activity: { lastInboundObservedAt: string | null; lastOutboundObservedAt: string | null; lastObservedAt: string | null }
+  deliveryReceiptStatus: 'unavailable'
+}
 const SETTINGS_SECTIONS: Array<{
   id: SettingsSectionId
   label: string
@@ -303,6 +315,9 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   const [telegramSaving, setTelegramSaving] = useState(false)
   const [telegramLoaded, setTelegramLoaded] = useState(false)
   const [telegramLoadError, setTelegramLoadError] = useState('')
+  const [channelDeliveryStatus, setChannelDeliveryStatus] = useState<ChannelDeliveryStatus | null>(null)
+  const [channelDeliveryLoading, setChannelDeliveryLoading] = useState(false)
+  const [channelDeliveryError, setChannelDeliveryError] = useState('')
   const settingsRoot = useRef<HTMLElement>(null)
   const backupInputRef = useRef<HTMLInputElement>(null)
   const [backupPreview, setBackupPreview] = useState<PreferencesBackup | null>(null)
@@ -431,6 +446,21 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
       setTelegramLoading(false)
     }
   }, [telegramLoading])
+
+  const refreshChannelDeliveryStatus = useCallback(async () => {
+    if (channelDeliveryLoading) return
+    setChannelDeliveryLoading(true)
+    setChannelDeliveryError('')
+    try {
+      const result = await apiRequest<ChannelDeliveryStatus>('/api/openclaw/channel-delivery/status', { timeoutMs: 25_000 })
+      if (!result.ok) throw new Error(result.error.message || 'Channel status could not be checked.')
+      setChannelDeliveryStatus(result.data)
+    } catch {
+      setChannelDeliveryError('Channel status could not be checked. Try again in a moment.')
+    } finally {
+      setChannelDeliveryLoading(false)
+    }
+  }, [channelDeliveryLoading])
 
   const applyTelegramSettings = async (settings = telegramSettings) => {
     if (telegramSaving) return
@@ -843,6 +873,25 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   const renderTelegram = () => (
     <div className="dui-settings-section" id="settings-section-telegram">
       <SectionHeader section="telegram" eyebrow="Manage your Telegram experience" />
+      <SettingsCard title="Channel connection and activity" description="Check Telegram and ClawTalk health, plus the latest observed Telegram or ClawTalk traffic. Outbound activity does not confirm delivery.">
+        <div className="dui-settings-metrics">
+          <div><span>Telegram connection</span><strong>{channelDeliveryStatus?.telegram.status || 'Not checked'}</strong></div>
+          <div><span>Telegram accounts</span><strong>{channelDeliveryStatus ? `${channelDeliveryStatus.telegram.connectedAccounts}/${channelDeliveryStatus.telegram.configuredAccounts} connected` : 'Not checked'}</strong></div>
+          <div><span>Telegram pairing policy</span><strong>{{ pairing: 'Approve new users', allowlist: 'Approved users only', open: 'Anyone', disabled: 'Disabled' }[telegramSettings.dmPolicy]}</strong></div>
+          <div><span>Pending pairing requests</span><strong>{channelDeliveryStatus?.telegram.pairing.pendingCount ?? 'Not checked'}</strong></div>
+          <div><span>ClawTalk bot</span><strong>{channelDeliveryStatus?.clawTalk.botConnected || 'Not checked'}</strong></div>
+          <div><span>ClawTalk WebSocket</span><strong>{channelDeliveryStatus?.clawTalk.websocketServer || 'Not checked'}</strong></div>
+          <div><span>Last inbound observed</span><strong>{channelDeliveryStatus?.activity.lastInboundObservedAt ? new Date(channelDeliveryStatus.activity.lastInboundObservedAt).toLocaleString() : 'None observed'}</strong></div>
+          <div><span>Last outbound observed</span><strong>{channelDeliveryStatus?.activity.lastOutboundObservedAt ? new Date(channelDeliveryStatus.activity.lastOutboundObservedAt).toLocaleString() : 'None observed'}</strong></div>
+          <div><span>Delivery receipt</span><strong>{channelDeliveryStatus ? 'Unavailable from current adapter' : 'Not checked'}</strong></div>
+        </div>
+        <p className="text-sm text-slate-400">Pending pairing requests are not listed here because OpenClaw’s list command also prunes expired requests. Review them in OpenClaw’s channel access controls. Activity timestamps come from local logs and are not provider delivery receipts.</p>
+        <div className="dui-settings-actions">
+          <button type="button" className="is-primary" onClick={() => void refreshChannelDeliveryStatus()} disabled={channelDeliveryLoading}>{channelDeliveryLoading ? 'Checking channels…' : 'Check channel status'}</button>
+          {channelDeliveryStatus?.checkedAt && <span className="text-xs text-slate-400">Checked {new Date(channelDeliveryStatus.checkedAt).toLocaleString()}</span>}
+        </div>
+        {channelDeliveryError && <p role="alert" style={{ color: '#fbbf24', margin: '0.7rem 0 0', fontSize: '0.82rem' }}>{channelDeliveryError}</p>}
+      </SettingsCard>
       <SettingsCard title="Access and commands" description="Choose who can contact your bot and which commands are available.">
         <Field label="Command menu" hint="Show Automnia commands such as /agents in Telegram.">
           <select value={telegramSettings.nativeCommands} onChange={(event) => updateTelegramDraft('nativeCommands', event.target.value as TelegramSettings['nativeCommands'])}>

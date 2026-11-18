@@ -51,7 +51,7 @@ test(`gateway agent turn service preserves ${modelId} conversation until explici
     readAgentPrimaryModelIdSync: () => modelId,
     isGoogleGeminiModelId: (id) => id.includes('gemini'),
     thinkingForOpenClawRuntimeModel: (_modelId, thinking) => thinking,
-    resolveEffectiveAgentFastMode: async () => 'auto',
+    resolveEffectiveAgentFastMode: async (_agentId, requested) => requested === 'on' ? 'on' : 'auto',
     resolveEffectiveAgentWorkTimeoutSeconds: async () => 15,
     resolveAgentRunContext: async () => ({
       executionWorkspace: 'C:/workspace',
@@ -82,6 +82,7 @@ test(`gateway agent turn service preserves ${modelId} conversation until explici
     agent: 'agent-alpha',
     message: 'inspect logs',
     thinking: 'low',
+    fastMode: 'on',
     sessionKey: 'console',
     timeoutSeconds: 15,
     attachments: [{ id: 'upload-1' }],
@@ -104,7 +105,7 @@ test(`gateway agent turn service preserves ${modelId} conversation until explici
   assert.equal(capturedGatewayTurn?.requestedSessionKey, 'console')
   assert.equal(capturedGatewayTurn?.freshSession, true)
   assert.equal(capturedGatewayTurn?.thinking, 'low')
-  assert.equal(capturedGatewayTurn?.fastMode, 'auto')
+  assert.equal(capturedGatewayTurn?.fastMode, 'on')
   assert.equal(capturedGatewayTurn?.timeoutMs, 60_000)
   assert.deepEqual(capturedGatewayTurn?.attachments, [{ id: 'upload-1' }])
   assert.match(String(capturedGatewayTurn?.message), /You are Ada \(agent-alpha\)\./)
@@ -119,6 +120,7 @@ test(`gateway agent turn service preserves ${modelId} conversation until explici
   await runFollowup('go ahead')
   assert.equal(sessions.get('agent-alpha:console'), initialSessionId)
   assert.equal(capturedGatewayTurn?.freshSession, false)
+  assert.equal(capturedGatewayTurn?.fastMode, 'auto')
   assert.deepEqual(continuationFlags, [false, true])
   assert.deepEqual(deletedSessionIds, [])
 
@@ -504,6 +506,101 @@ test('agent runtime service uses the local runtime only when the fallback is exp
   assert.equal(result.runtimeTransport, 'local')
   assert.match(result.gatewayFallbackDetail || '', /\[redacted\]/)
   assert.doesNotMatch(result.stderr, /secret-123/)
+  assert.deepEqual(
+    { source: result.runtimeFallback?.source, destination: result.runtimeFallback?.destination, trigger: result.runtimeFallback?.trigger },
+    { source: 'gateway', destination: 'local', trigger: 'gateway-run-failed' },
+  )
+  assert.doesNotMatch(JSON.stringify(result.runtimeFallback), /secret-123/)
+})
+
+test('agent runtime service identifies a safe Gateway chat client to Gateway fallback', async () => {
+  let gatewayCliRuns = 0
+  const service = createAgentRuntimeService({
+    controlCenterGatewayAgentSessions: true,
+    forceLocalAgentRuntime: false,
+    allowLocalAgentRuntimeFallback: true,
+    controlCenterGatewayChatClient: true,
+    gatewayHttpPort: 18789,
+    runOpenClawWithGeminiToolWritePolicy: async () => {
+      gatewayCliRuns += 1
+      return { stdout: 'gateway agent reply', stderr: '', code: 0 }
+    },
+    withAgentRuntimeFlags: (args) => args,
+    ensureGatewayRunning: async () => undefined,
+    startGatewayHealthMonitor: () => undefined,
+    isGatewayHealthy: async () => true,
+    runControlCenterGatewayChatTurn: async () => {
+      throw new Error('chat client disconnected token=private-123')
+    },
+    classifyFailureKind: () => undefined,
+    redactSensitiveText: (value) => value.replace(/private-\d+/g, '[redacted]'),
+  })
+  const result = await service.runControlCenterAgentRuntimeTurn({
+    agentId: 'agent-alpha',
+    message: 'inspect workspace',
+    context: { executionWorkspace: 'C:/workspace', doctrineWorkspace: 'C:/workspace/.openclaw/agents/agent-alpha' },
+    args: ['agent', '--agent', 'agent-alpha'],
+    timeoutMs: 1000,
+    cwd: 'C:/workspace',
+    gatewayChat: { enabled: true, sessionId: 'session-1', thinking: 'low', message: 'inspect workspace' },
+  })
+
+  assert.equal(gatewayCliRuns, 1)
+  assert.equal(result.runtimeTransport, 'gateway')
+  assert.deepEqual(
+    { source: result.runtimeFallback?.source, destination: result.runtimeFallback?.destination, trigger: result.runtimeFallback?.trigger },
+    { source: 'gateway-chat', destination: 'gateway', trigger: 'gateway-chat-client-failed' },
+  )
+  assert.doesNotMatch(JSON.stringify(result.runtimeFallback), /private-123/)
+})
+
+test('agent runtime service keeps a console turn on a ready Gateway chat client', async () => {
+  let cliRuns = 0
+  let chatTurns = 0
+  let receivedFastMode: string | undefined
+  const service = createAgentRuntimeService({
+    controlCenterGatewayAgentSessions: true,
+    forceLocalAgentRuntime: false,
+    allowLocalAgentRuntimeFallback: true,
+    controlCenterGatewayChatClient: true,
+    gatewayHttpPort: 18789,
+    runOpenClawWithGeminiToolWritePolicy: async () => {
+      cliRuns += 1
+      return { stdout: 'unexpected CLI turn', stderr: '', code: 0 }
+    },
+    withAgentRuntimeFlags: (args) => args,
+    ensureGatewayRunning: async () => undefined,
+    startGatewayHealthMonitor: () => undefined,
+    isGatewayHealthy: async () => true,
+    runControlCenterGatewayChatTurn: async (params) => {
+      chatTurns += 1
+      receivedFastMode = params.fastMode
+      return { stdout: 'Gateway chat reply', stderr: '', code: 0, runtimeTransport: 'gateway-chat' }
+    },
+    classifyFailureKind: () => undefined,
+    redactSensitiveText: (value) => value,
+  })
+  const result = await service.runControlCenterAgentRuntimeTurn({
+    agentId: 'agent-alpha',
+    message: 'inspect workspace',
+    context: { executionWorkspace: 'C:/workspace', doctrineWorkspace: 'C:/workspace/.openclaw/agents/agent-alpha' },
+    args: ['agent', '--agent', 'agent-alpha'],
+    timeoutMs: 1000,
+    cwd: 'C:/workspace',
+    gatewayChat: {
+      enabled: true,
+      sessionId: 'session-1',
+      thinking: 'low',
+      fastMode: 'on',
+      message: 'inspect workspace',
+    },
+  })
+
+  assert.equal(chatTurns, 1)
+  assert.equal(cliRuns, 0)
+  assert.equal(receivedFastMode, 'on')
+  assert.equal(result.runtimeTransport, 'gateway-chat')
+  assert.equal(result.runtimeFallback, undefined)
 })
 
 test('agent runtime service returns a recoverable Gateway error instead of starting the embedded local agent by default', async () => {

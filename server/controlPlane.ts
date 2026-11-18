@@ -29,6 +29,7 @@ import { registerLicenseRoutes } from './routes/licenseRoutes'
 import { registerCommandConsoleFileRoutes } from './routes/commandConsoleFileRoutes'
 import { ConsoleRunSnapshots } from './services/agents/consoleRunSnapshots'
 import { registerClawTalkConsoleRoutes } from './routes/clawTalkConsoleRoutes'
+import { registerChannelDeliveryRoutes } from './routes/channelDeliveryRoutes'
 import { registerDiagnosticsRoutes } from './routes/diagnosticsRoutes'
 import { registerAgentTurnRoutes } from './routes/agentTurnRoutes'
 import { registerToolApprovalRoutes, ToolAccessPolicyConflictError, type ExecAccess } from './routes/toolApprovalRoutes'
@@ -37,6 +38,7 @@ import { removeGeneratedHostedToolAllowlist } from './services/agents/hostedTool
 import { registerAgentConfigRoutes } from './routes/agentConfigRoutes'
 import { registerFilesystemRoutes } from './routes/filesystemRoutes'
 import { registerMissionRoutes } from './routes/missionRoutes'
+import { registerWorkboardRoutes } from './routes/workboardRoutes'
 import { registerOpenClawCommandRoutes } from './routes/openclawCommandRoutes'
 import { registerPartyCoordinationRoutes } from './routes/partyCoordinationRoutes'
 import { registerPartyManagementRoutes } from './routes/partyManagementRoutes'
@@ -44,6 +46,7 @@ import { registerPluginRoutes } from './routes/pluginRoutes'
 import { registerProviderAuthRoutes } from './routes/providerAuthRoutes'
 import { registerRuntimeRoutes } from './routes/runtimeRoutes'
 import { createRuntimeStateBackupService } from './services/runtime/runtimeStateBackupService'
+import { createChannelDeliveryStatusService } from './services/channels/channelDeliveryStatusService'
 import { registerSkillRoutes } from './routes/skillRoutes'
 import { registerSpeechRoutes } from './routes/speechRoutes'
 import { createControlFilesService } from './services/controlFilesService'
@@ -76,6 +79,7 @@ import {
   type MissionCronReconciliationSnapshot,
 } from './services/missions/missionRecoveryService'
 import { createMissionTeamSyncService } from './services/missions/missionTeamSyncService'
+import { createWorkboardService } from './services/workboardService'
 import { createLoginAttemptLimiter } from './loginAttemptLimiter'
 import { createSessionTokenStore } from './sessionTokenStore'
 import { resolveAgencyAgentTemplateSourceRoot } from './services/recruit/agencyAgentTemplateService'
@@ -488,6 +492,10 @@ const commandConsoleUploadService = createCommandConsoleUploadService({
   uploadsDir: COMMAND_CONSOLE_UPLOADS_DIR,
   approvedRootDir: WORKSPACE_ROOT,
   isPathUnder,
+  ownerId: () => {
+    const account = accountAuthService.getStatus().account
+    return account?.accountId || account?.email || 'local-control-plane'
+  },
 })
 const pickerSessionService = createPickerSessionService({
   stateRoot: OPENCLAW_STATE_ROOT,
@@ -18344,6 +18352,7 @@ registerDiagnosticsRoutes(app, {
 registerCommandConsoleFileRoutes(app, {
   controlFiles: controlFilesService,
   persistCommandConsoleUpload,
+  cleanupExpiredUploads: () => commandConsoleUploadService.cleanupExpiredUploads(),
   uploadLimitBytes: COMMAND_CONSOLE_UPLOAD_LIMIT_BYTES,
 })
 
@@ -19114,6 +19123,16 @@ registerMissionRoutes(app, {
   readMissionEvents: (limit, options) => runtimeLedgerStore.readMissionEvents<MissionLifecycleEvent>(limit, options).catch(() => []),
 })
 
+const workboardService = createWorkboardService({
+  readState: () => readControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.workboard),
+  writeState: (state) => writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.workboard, state),
+})
+
+registerWorkboardRoutes(app, {
+  workboard: workboardService,
+  isMissionKnown: (missionId) => missions.has(missionId),
+})
+
 const gatewayAgentTurnService = createGatewayAgentTurnService({
   gatewayHttpPort: GATEWAY_HTTP_PORT,
   openClawAgentTurnTimeoutFloorSeconds: OPENCLAW_AGENT_TURN_TIMEOUT_FLOOR_SECONDS,
@@ -19545,6 +19564,7 @@ registerAgentTurnRoutes(app, {
   rememberClawTalkConsoleMirror,
   resolveAgentReference,
   resolveAgentRunContext,
+  resolveEffectiveAgentFastMode,
   resolveEffectiveAgentWorkTimeoutSeconds,
   resolveFilenameHintsForMessage,
   resolveGoogleGeminiArtifactTarget,
@@ -19591,6 +19611,13 @@ registerClawTalkConsoleRoutes(app, {
   writeSseEvent,
 })
 
+const channelDeliveryStatusService = createChannelDeliveryStatusService({
+  runOpenClaw,
+  readChannelActivity: readExternalChannelActivityEntries,
+})
+registerChannelDeliveryRoutes(app, {
+  getChannelDeliveryStatus: () => channelDeliveryStatusService.getStatus(),
+})
 
 registerBrowserRoutes(app, { checkBrowserPreflight })
 

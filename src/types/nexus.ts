@@ -452,6 +452,13 @@ export interface AgentResponse {
   usagePriority?: 'automnia_only' | 'provider_first' | 'automnia_first_with_provider_fallback' | 'automnia_first' | 'byok_only'
   billingRoute?: 'automnia-first' | 'provider-first' | 'provider-only' | string
   fallbackUsed?: boolean
+  runtimeFallback?: {
+    source: 'gateway-chat' | 'gateway'
+    destination: 'gateway' | 'local'
+    trigger: 'gateway-chat-client-failed' | 'gateway-run-failed' | 'gateway-unavailable' | 'gateway-readiness-failed'
+    detail: string
+    modelId?: string
+  }
   streaming?: boolean
   failureKind?: string
   transport?: string

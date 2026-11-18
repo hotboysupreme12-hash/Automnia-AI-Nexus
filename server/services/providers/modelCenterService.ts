@@ -1,3 +1,9 @@
+import { automniaThinkingDefaultForModel } from './automniaGeminiThinking'
+import {
+  createModelReasoningDefaultCache,
+  type ModelReasoningDefault,
+} from './modelReasoningDefaultCache'
+
 export const MODEL_CAPABILITY_SNAPSHOT_SCHEMA_VERSION = 1
 export const MODEL_PROBE_TIMEOUT_MS = 15_000
 export const MODEL_PROBE_MAX_OUTPUT_TOKENS = 8
@@ -20,6 +26,7 @@ export type ModelCapabilityRecord = {
   input?: string[]
   output?: string[]
   reasoning?: boolean
+  thinkingDefault?: ModelReasoningDefault
   supportsTools?: boolean
   source: 'openclaw-model-catalog'
   verifiedAt: string
@@ -285,6 +292,34 @@ export function explainModelFallback(input: {
 export function createModelCenterService(options: ModelCenterServiceOptions) {
   const nowMs = options.now ?? (() => Date.now())
   let probeInProgress = false
+  const reasoningDefaultCache = createModelReasoningDefaultCache()
+
+  function withReasoningDefaults(snapshot: ModelProviderCapabilitySnapshot): ModelProviderCapabilitySnapshot {
+    return {
+      ...snapshot,
+      models: snapshot.models.map((model) => {
+        const defaultThinking = reasoningDefaultCache.resolve(
+          model.provider,
+          model.id.slice(model.id.indexOf('/') + 1),
+          {
+            name: model.name,
+            contextWindow: model.contextWindow,
+            contextTokens: model.contextTokens,
+            contextWindows: model.contextWindows,
+            input: model.input,
+            output: model.output,
+            reasoning: model.reasoning,
+            supportsTools: model.supportsTools,
+          },
+          () => model.reasoning === false
+            ? 'off'
+            : (model.provider === 'automnia-cloud' ? automniaThinkingDefaultForModel(model.id) : undefined)
+              || (model.reasoning === true ? 'low' : undefined),
+        )
+        return defaultThinking ? { ...model, thinkingDefault: defaultThinking } : model
+      }),
+    }
+  }
 
   async function readState() {
     return normalizeStoreState(await options.readState())
@@ -296,7 +331,7 @@ export function createModelCenterService(options: ModelCenterServiceOptions) {
       ? [state.providers[provider]].filter((value): value is ModelProviderCapabilitySnapshot => Boolean(value))
       : Object.values(state.providers)
     return values.map((snapshot) => ({
-      ...snapshot,
+      ...withReasoningDefaults(snapshot),
       stale: nowMs() - Date.parse(snapshot.verifiedAt) > 14 * 24 * 60 * 60 * 1000,
     }))
   }
@@ -341,7 +376,7 @@ export function createModelCenterService(options: ModelCenterServiceOptions) {
     if (!await options.writeState({ ...next, providers: boundedProviders })) {
       return { ok: false as const, reason: 'persistence_failed' as const, snapshot: (await getCapabilitySnapshots(provider))[0] || null }
     }
-    return { ok: true as const, reason: 'refreshed' as const, snapshot: { ...snapshot, stale: false } }
+    return { ok: true as const, reason: 'refreshed' as const, snapshot: { ...withReasoningDefaults(snapshot), stale: false } }
   }
 
   async function persistProbeResult(result: ModelProbeResult) {

@@ -209,6 +209,45 @@ test('plugin install service installs, enables, refreshes controls, schedules re
   assert.equal(state.runtimeState.installs?.weather?.installedBy, 'control-center')
 })
 
+test('plugin install leaves a plugin disabled when required secret configuration is missing', async () => {
+  const missingConfigPlugin = {
+    ...pluginEntry('weather', false),
+    configFields: [{
+      key: 'apiKey',
+      label: 'Weather API key',
+      secret: true,
+      required: true,
+      present: false,
+      acceptsDirectSave: true,
+    }],
+  }
+  const { service, state } = createHarness({
+    controls: [
+      controlsPayload([]),
+      controlsPayload([missingConfigPlugin]),
+      controlsPayload([missingConfigPlugin]),
+    ],
+    runResults: [{ code: 0, stdout: 'installed weather', stderr: '' }],
+  })
+
+  const result = await service.installOpenClawPlugin({
+    spec: 'weather',
+    pluginId: 'weather',
+    pin: false,
+    enable: true,
+    force: false,
+    restart: true,
+  })
+
+  assert.deepEqual(state.runs.map((run) => run.args), [['plugins', 'install', 'weather']])
+  assert.equal(result.activation, undefined)
+  assert.equal(result.activationBlocked?.code, 'plugin_configuration_required')
+  assert.deepEqual(result.activationBlocked?.fields, [{ key: 'apiKey', label: 'Weather API key' }])
+  assert.equal(result.restart.scheduled, false)
+  assert.equal(state.runtimeState.managed?.weather?.enabled, false)
+  assert.deepEqual(state.persistedAllowlist, [])
+})
+
 test('plugin install service repairs Windows stage rename failure and retries with force', async () => {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'automnia-plugin-install-'))
   try {

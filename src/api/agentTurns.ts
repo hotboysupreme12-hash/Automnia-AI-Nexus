@@ -73,6 +73,13 @@ export type AgentTurnPayload = {
   fallbackUsed?: boolean
   runtimeTransport?: 'gateway-chat' | 'gateway' | 'local'
   gatewayFallbackDetail?: string
+  runtimeFallback?: {
+    source: 'gateway-chat' | 'gateway'
+    destination: 'gateway' | 'local'
+    trigger: 'gateway-chat-client-failed' | 'gateway-run-failed' | 'gateway-unavailable' | 'gateway-readiness-failed'
+    detail: string
+    modelId?: string
+  }
   streaming?: {
     model?: string
     modelId?: string

@@ -7,6 +7,7 @@ import { Badge, Button, StatusChip } from '../ui'
 import { MISSION_GLYPH_ASSETS, MISSION_PRESET_ASSETS, type MissionGlyph } from './missionIconAssets'
 import './MissionDeploymentPanel.css'
 import { MissionTemplates } from './MissionTemplates'
+import { WorkboardPanel } from './WorkboardPanel'
 
 type HeartbeatUnit = 'seconds' | 'minutes' | 'hours'
 type MissionAccent = 'code' | 'plan' | 'research' | 'command' | 'memory' | 'relay'
@@ -191,6 +192,11 @@ export function MissionDeploymentPanel() {
   const [heartbeatUnit, setHeartbeatUnit] = useState<HeartbeatUnit>('seconds')
   const [failedPortraitKeys, setFailedPortraitKeys] = useState<Set<string>>(() => new Set())
   const missionRunning = activeMission?.status === 'running'
+  const workboardMissions = useMemo(() => {
+    const rows = [...(activeMission ? [activeMission] : []), ...missionHistory]
+    const unique = new Map(rows.map((mission) => [mission.id, { id: mission.id, title: mission.title }]))
+    return Array.from(unique.values())
+  }, [activeMission, missionHistory])
   const selectedParty = confirmedPartyIds.length ? confirmedPartyIds : activePartyIds
   const agentById = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents])
   const busyAgentSet = useMemo(() => new Set(busyAgentIds), [busyAgentIds])
@@ -695,6 +701,8 @@ export function MissionDeploymentPanel() {
 
         </div>
       </section>
+
+      <WorkboardPanel missions={workboardMissions} />
 
       {showHistory && (
         <section id={`${fieldId}-history`} className="dui-mission-history" aria-label="Recent jobs">

@@ -1282,7 +1282,7 @@ export const useNexusStore = create<NexusState>()(
         ok: boolean,
         dur = 0,
         modelId = '',
-        meta: Partial<Pick<AgentResponse, 'failureKind' | 'transport' | 'buffered' | 'queuedAt' | 'startedAt' | 'firstTokenAt' | 'completedAt' | 'tokenCountEstimate' | 'remainingCredits' | 'usagePriority' | 'billingRoute' | 'fallbackUsed'>> = {},
+        meta: Partial<Pick<AgentResponse, 'failureKind' | 'transport' | 'buffered' | 'queuedAt' | 'startedAt' | 'firstTokenAt' | 'completedAt' | 'tokenCountEstimate' | 'remainingCredits' | 'usagePriority' | 'billingRoute' | 'fallbackUsed' | 'runtimeFallback'>> = {},
       ) => {
         const ts = new Date().toISOString()
         const seconds = Math.round(dur / 1000)
@@ -1316,6 +1316,7 @@ export const useNexusStore = create<NexusState>()(
               ...(meta.usagePriority ? { usagePriority: meta.usagePriority } : {}),
               ...(meta.billingRoute ? { billingRoute: meta.billingRoute } : {}),
               ...(meta.fallbackUsed !== undefined ? { fallbackUsed: meta.fallbackUsed } : {}),
+              ...(meta.runtimeFallback ? { runtimeFallback: meta.runtimeFallback } : {}),
               ...(failureKind ? { failureKind } : {}),
               ...(meta.transport ? { transport: meta.transport } : {}),
               ...(meta.buffered !== undefined ? { buffered: meta.buffered } : {}),
@@ -2414,6 +2415,7 @@ export const useNexusStore = create<NexusState>()(
               usagePriority: payload.usagePriority,
               billingRoute: payload.billingRoute,
               fallbackUsed: payload.fallbackUsed,
+              runtimeFallback: payload.runtimeFallback,
             })
           }
           if (ok && Array.isArray(payload.learnedSkills)) {

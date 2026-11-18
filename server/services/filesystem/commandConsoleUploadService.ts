@@ -19,6 +19,11 @@ async function readBounded(handle: FileHandle, limit: number) {
 export const COMMAND_CONSOLE_UPLOAD_LIMIT_BYTES = 25 * 1024 * 1024
 export const COMMAND_CONSOLE_GATEWAY_IMAGE_LIMIT_BYTES = 6 * 1024 * 1024
 export const COMMAND_CONSOLE_GATEWAY_ATTACHMENT_LIMIT_BYTES = 8 * 1024 * 1024
+export const COMMAND_CONSOLE_UPLOAD_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const COMMAND_CONSOLE_UPLOAD_MANIFEST_VERSION = 2
+const DEFAULT_COMMAND_CONSOLE_UPLOAD_CLEANUP_DELETE_LIMIT = 200
+const MAX_COMMAND_CONSOLE_UPLOAD_CLEANUP_SCAN_LIMIT = 10_000
+const MAX_COMMAND_CONSOLE_UPLOAD_CLEANUP_DELETE_LIMIT = 500
 
 const COMMAND_CONSOLE_UPLOAD_EXTENSIONS = new Set([
   '.png', '.jpg', '.jpeg', '.webp', '.gif',
@@ -110,6 +115,10 @@ export type CommandConsoleUploadServiceOptions = {
   uploadLimitBytes?: number
   imageInlineLimitBytes?: number
   fileInlineLimitBytes?: number
+  uploadTtlMs?: number
+  cleanupScanLimit?: number
+  cleanupDeleteLimit?: number
+  ownerId?: () => string
   isPathUnder?: (baseDir: string, targetPath: string) => boolean
   now?: () => number
   randomId?: () => string
@@ -269,9 +278,28 @@ export function createCommandConsoleUploadService(options: CommandConsoleUploadS
   const uploadLimitBytes = options.uploadLimitBytes ?? COMMAND_CONSOLE_UPLOAD_LIMIT_BYTES
   const imageInlineLimitBytes = options.imageInlineLimitBytes ?? COMMAND_CONSOLE_GATEWAY_IMAGE_LIMIT_BYTES
   const fileInlineLimitBytes = options.fileInlineLimitBytes ?? COMMAND_CONSOLE_GATEWAY_ATTACHMENT_LIMIT_BYTES
+  const configuredTtlMs = options.uploadTtlMs ?? COMMAND_CONSOLE_UPLOAD_TTL_MS
+  const uploadTtlMs = Number.isFinite(configuredTtlMs)
+    ? Math.min(30 * 24 * 60 * 60 * 1000, Math.max(60_000, Math.floor(configuredTtlMs)))
+    : COMMAND_CONSOLE_UPLOAD_TTL_MS
+  const configuredScanLimit = options.cleanupScanLimit ?? options.storageFileLimit ?? 2_000
+  const cleanupScanLimit = Number.isFinite(configuredScanLimit)
+    ? Math.min(MAX_COMMAND_CONSOLE_UPLOAD_CLEANUP_SCAN_LIMIT, Math.max(1, Math.floor(configuredScanLimit)))
+    : 2_000
+  const configuredDeleteLimit = options.cleanupDeleteLimit ?? DEFAULT_COMMAND_CONSOLE_UPLOAD_CLEANUP_DELETE_LIMIT
+  const cleanupDeleteLimit = Number.isFinite(configuredDeleteLimit)
+    ? Math.min(MAX_COMMAND_CONSOLE_UPLOAD_CLEANUP_DELETE_LIMIT, Math.max(1, Math.floor(configuredDeleteLimit)))
+    : DEFAULT_COMMAND_CONSOLE_UPLOAD_CLEANUP_DELETE_LIMIT
+  let cleanupScanCursor = 0
   const isPathUnder = options.isPathUnder ?? defaultIsPathUnder
   const now = options.now ?? Date.now
   const randomId = options.randomId ?? randomUUID
+
+  function currentOwnerKey() {
+    const ownerId = (options.ownerId?.() || 'local-control-plane').trim().slice(0, 512)
+    if (!ownerId) throw new Error('Could not resolve the upload owner.')
+    return createHash('sha256').update(ownerId).digest('hex')
+  }
 
   async function assertUploadWriteRoot(resolvedUploadDir: string) {
     const resolvedApprovedRoot = path.resolve(approvedRootDir)
@@ -317,12 +345,16 @@ export function createCommandConsoleUploadService(options: CommandConsoleUploadS
     const digest = createHash('sha256').update(bytes).digest('hex').slice(0, 16)
     const uploadId = randomId()
     if (!/^[a-zA-Z0-9_-]{1,100}$/.test(uploadId)) throw new Error('Could not allocate an upload identifier.')
-    const uploadPath = path.join(uploadsDir, `${now().toString(36)}-${digest}-${safeName}`)
+    const createdAt = now()
+    const expiresAt = createdAt + uploadTtlMs
+    const ownerId = currentOwnerKey()
+    const uploadPath = path.join(uploadsDir, `${createdAt.toString(36)}-${digest}-${safeName}`)
     const resolvedUploadDir = path.resolve(uploadsDir)
     const resolvedUploadPath = path.resolve(uploadPath)
     if (!isPathUnder(resolvedUploadDir, resolvedUploadPath)) throw new Error('Upload path resolved outside the upload directory.')
     await fs.mkdir(resolvedUploadDir, { recursive: true })
     await assertUploadWriteRoot(resolvedUploadDir)
+    await cleanupExpiredUploads()
     return withUploadCapacity(resolvedUploadDir, bytes.length, { bytes: options.storageLimitBytes ?? 2 * 1024 * 1024 * 1024, files: options.storageFileLimit ?? 2000 }, async () => {
     await assertUploadWriteRoot(resolvedUploadDir)
     await writeUploadFile(resolvedUploadPath, bytes)
@@ -336,7 +368,14 @@ export function createCommandConsoleUploadService(options: CommandConsoleUploadS
       delivery: bytes.length <= (kind === 'image' ? imageInlineLimitBytes : fileInlineLimitBytes) ? 'inline' : 'workspace',
     }
     try {
-      await writeUploadFile(path.join(path.resolve(uploadsDir), `${uploadId}.upload.json`), Buffer.from(JSON.stringify({ version: 1, attachment, createdAt: now(), sha256: createHash('sha256').update(bytes).digest('hex') })))
+      await writeUploadFile(path.join(path.resolve(uploadsDir), `${uploadId}.upload.json`), Buffer.from(JSON.stringify({
+        version: COMMAND_CONSOLE_UPLOAD_MANIFEST_VERSION,
+        attachment,
+        createdAt,
+        expiresAt,
+        ownerId,
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+      })))
     } catch (error) {
       await fs.unlink(resolvedUploadPath).catch(() => undefined)
       throw error
@@ -375,7 +414,91 @@ export function createCommandConsoleUploadService(options: CommandConsoleUploadS
     }
   }
 
+  async function cleanupExpiredUploads() {
+    const resolvedUploadDir = path.resolve(uploadsDir)
+    let entries: import('node:fs').Dirent[]
+    try {
+      await fs.mkdir(resolvedUploadDir, { recursive: true })
+      await assertUploadWriteRoot(resolvedUploadDir)
+      entries = await fs.readdir(resolvedUploadDir, { withFileTypes: true })
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return { scanned: 0, removed: 0, failed: 0, truncated: false }
+      }
+      throw error
+    }
+
+    const manifests = entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.upload.json'))
+      .sort((left, right) => left.name.localeCompare(right.name))
+    const truncated = manifests.length > cleanupScanLimit
+    const scanCount = Math.min(manifests.length, cleanupScanLimit)
+    const scanStart = manifests.length ? cleanupScanCursor % manifests.length : 0
+    const candidates = Array.from({ length: scanCount }, (_unused, index) => manifests[(scanStart + index) % manifests.length])
+    cleanupScanCursor = manifests.length ? (scanStart + scanCount) % manifests.length : 0
+    const expired: Array<{ id: string; attachment: CommandConsoleUploadAttachment; expiresAt: number }> = []
+    let failed = 0
+
+    for (const entry of candidates) {
+      const id = entry.name.slice(0, -'.upload.json'.length)
+      if (!/^[a-zA-Z0-9_-]{1,100}$/.test(id)) continue
+      try {
+        const manifestPath = path.join(resolvedUploadDir, entry.name)
+        const realManifest = await resolveAttachmentReadPath({ path: manifestPath } as CommandConsoleUploadAttachment)
+        if (!realManifest) continue
+        const handle = await fs.open(realManifest, constants.O_RDONLY | (constants.O_NOFOLLOW || 0))
+        let raw: unknown
+        try {
+          const stat = await handle.stat()
+          if (!stat.isFile() || stat.size > 16_384) continue
+          raw = JSON.parse((await readBounded(handle, 16_384)).toString('utf8'))
+        } finally { await handle.close() }
+        if (!isLooseRecord(raw) || raw.version !== COMMAND_CONSOLE_UPLOAD_MANIFEST_VERSION) continue
+        const attachment = normalizeAttachment(raw.attachment)
+        const createdAt = typeof raw.createdAt === 'number' && Number.isSafeInteger(raw.createdAt) ? raw.createdAt : 0
+        const expiresAt = typeof raw.expiresAt === 'number' && Number.isSafeInteger(raw.expiresAt) ? raw.expiresAt : 0
+        const sha256 = typeof raw.sha256 === 'string' ? raw.sha256 : ''
+        const expectedUploadName = `${createdAt.toString(36)}-${sha256.slice(0, 16)}-${attachment?.name || ''}`
+        if (
+          !attachment || attachment.id !== id || !createdAt || !expiresAt ||
+          path.basename(attachment.path) !== expectedUploadName ||
+          !/^[a-f0-9]{64}$/.test(sha256) ||
+          !/^[a-f0-9]{64}$/.test(String(raw.ownerId || ''))
+        ) continue
+        if (expiresAt <= now()) expired.push({ id, attachment, expiresAt })
+      } catch {
+        failed += 1
+      }
+    }
+
+    expired.sort((left, right) => left.expiresAt - right.expiresAt)
+    let removed = 0
+    for (const candidate of expired.slice(0, cleanupDeleteLimit)) {
+      try {
+        const attachmentPath = path.resolve(candidate.attachment.path)
+        if (path.dirname(attachmentPath) !== resolvedUploadDir) continue
+        const payloadStat = await fs.lstat(attachmentPath).catch((error: NodeJS.ErrnoException) => {
+          if (error.code === 'ENOENT') return null
+          throw error
+        })
+        // Unlinking a symlink removes only the link itself; it never follows the target.
+        if (payloadStat && (payloadStat.isFile() || payloadStat.isSymbolicLink())) await fs.unlink(attachmentPath)
+        const manifestPath = path.join(resolvedUploadDir, `${candidate.id}.upload.json`)
+        const manifestStat = await fs.lstat(manifestPath).catch((error: NodeJS.ErrnoException) => {
+          if (error.code === 'ENOENT') return null
+          throw error
+        })
+        if (manifestStat && (manifestStat.isFile() || manifestStat.isSymbolicLink())) await fs.unlink(manifestPath)
+        removed += 1
+      } catch {
+        failed += 1
+      }
+    }
+    return { scanned: candidates.length, removed, failed, truncated }
+  }
+
   async function gatewayAttachmentsFromTurnAttachments(attachments: unknown[] | undefined) {
+    await cleanupExpiredUploads()
     if ((attachments?.length || 0) > 8) throw new Error('Attach at most 8 files to one message.')
     const gatewayAttachments: Record<string, unknown>[] = []
     let inlineBytes = 0
@@ -396,8 +519,17 @@ export function createCommandConsoleUploadService(options: CommandConsoleUploadS
           if (!stat.isFile() || stat.size > 16_384) throw new Error('invalid')
           const raw = JSON.parse((await readBounded(handle, 16_384)).toString('utf8'))
           const attachment = normalizeAttachment(raw.attachment)
-          if (raw.version !== 1 || attachment?.id !== id || !/^[a-f0-9]{64}$/.test(raw.sha256 || '')) throw new Error('invalid')
-          record = { attachment, sha256: raw.sha256 }
+          if (
+            !isLooseRecord(raw) ||
+            raw.version !== COMMAND_CONSOLE_UPLOAD_MANIFEST_VERSION ||
+            attachment?.id !== id ||
+            raw.ownerId !== currentOwnerKey() ||
+            typeof raw.expiresAt !== 'number' ||
+            !Number.isSafeInteger(raw.expiresAt) ||
+            raw.expiresAt <= now() ||
+            !/^[a-f0-9]{64}$/.test(String(raw.sha256 || ''))
+          ) throw new Error('invalid')
+          record = { attachment, sha256: String(raw.sha256) }
         } finally { await handle.close() }
       } catch { throw new Error('An attachment record is unavailable. Remove it and upload the file again.') }
       const { attachment } = record
@@ -430,6 +562,7 @@ export function createCommandConsoleUploadService(options: CommandConsoleUploadS
 
   return {
     gatewayAttachmentsFromTurnAttachments,
+    cleanupExpiredUploads,
     normalizeAttachment,
     persistUpload,
     uploadFileName: commandConsoleUploadFileName,

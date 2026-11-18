@@ -837,6 +837,19 @@ const ResponseMessage = memo(function ResponseMessage({
           </div>
         )}
 
+        {entry.runtimeFallback && (
+          <div className="dy-command-message-meta-group dy-command-message-meta-group--auxiliary" aria-label="Runtime fallback">
+            <Badge
+              className="dy-command-message-chip is-warning"
+              title={`${entry.runtimeFallback.trigger.replace(/-/g, ' ')}: ${entry.runtimeFallback.detail}`}
+              tone="warning"
+              size="micro"
+            >
+              Fallback: {entry.runtimeFallback.source === 'gateway-chat' ? 'Gateway chat' : 'Gateway'} → {entry.runtimeFallback.destination === 'local' ? 'Local runtime' : 'Gateway'} · {entry.runtimeFallback.trigger.replace(/-/g, ' ')}
+            </Badge>
+          </div>
+        )}
+
         {(queuePositionLabel || (entry.failureKind && !entry.ok)) && (
           <div className="dy-command-message-meta-group dy-command-message-meta-group--auxiliary" aria-label="Additional response details">
             {queuePositionLabel && (

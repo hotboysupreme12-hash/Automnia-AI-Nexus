@@ -283,6 +283,69 @@ test('Gateway reads only server-owned upload metadata, including after restart',
   await assert.rejects(restarted.gatewayAttachmentsFromTurnAttachments([{ id: '../escape' }]), /invalid/)
 })
 
+test('upload ownership is durable across service restarts and prevents cross-account attachment use', async (t) => {
+  const uploadsDir = await createTempUploadsRoot(t)
+  let owner = 'account-one'
+  const options = {
+    uploadsDir,
+    ownerId: () => owner,
+    randomId: () => 'owned-upload',
+  }
+  const firstService = createCommandConsoleUploadService(options)
+  const attachment = await firstService.persistUpload(Buffer.from('private'), 'private.txt', 'text/plain')
+  const manifest = JSON.parse(await fs.readFile(path.join(uploadsDir, 'owned-upload.upload.json'), 'utf-8')) as Record<string, unknown>
+
+  assert.equal(manifest.version, 2)
+  assert.equal(manifest.ownerId, createHash('sha256').update('account-one').digest('hex'))
+  assert.equal(typeof manifest.createdAt, 'number')
+  assert.equal(typeof manifest.expiresAt, 'number')
+
+  owner = 'account-two'
+  const restarted = createCommandConsoleUploadService(options)
+  await assert.rejects(restarted.gatewayAttachmentsFromTurnAttachments([{ id: attachment.id }]), /record is unavailable/)
+  owner = 'account-one'
+  assert.deepEqual(await restarted.gatewayAttachmentsFromTurnAttachments([{ id: attachment.id }]), [
+    { type: 'file', mimeType: 'text/plain', fileName: 'private.txt', content: Buffer.from('private').toString('base64'), name: 'private.txt' },
+  ])
+})
+
+test('upload cleanup expires old files, retains fresh files, and respects its deletion bound', async (t) => {
+  const uploadsDir = await createTempUploadsRoot(t)
+  let now = 1_717_171_717_000
+  let uploadIndex = 0
+  const service = createCommandConsoleUploadService({
+    uploadsDir,
+    uploadTtlMs: 60_000,
+    cleanupScanLimit: 1,
+    cleanupDeleteLimit: 1,
+    now: () => now,
+    randomId: () => `expiry-upload-${++uploadIndex}`,
+  })
+  const expiredOne = await service.persistUpload(Buffer.from('expired one'), 'expired-one.txt', 'text/plain')
+  const expiredTwo = await service.persistUpload(Buffer.from('expired two'), 'expired-two.txt', 'text/plain')
+  now += 60_001
+
+  const firstCleanup = await service.cleanupExpiredUploads()
+  assert.equal(firstCleanup.removed, 1)
+  assert.equal(firstCleanup.scanned, 1)
+  assert.equal(firstCleanup.truncated, true)
+  assert.equal((await fs.readdir(uploadsDir)).length, 2)
+
+  const secondCleanup = await service.cleanupExpiredUploads()
+  assert.equal(secondCleanup.removed, 1)
+  assert.equal(secondCleanup.truncated, false)
+  assert.equal((await fs.readdir(uploadsDir)).length, 0)
+  await assert.rejects(service.gatewayAttachmentsFromTurnAttachments([{ id: expiredOne.id }]), /record is unavailable/)
+  await assert.rejects(service.gatewayAttachmentsFromTurnAttachments([{ id: expiredTwo.id }]), /record is unavailable/)
+
+  now += 1
+  const fresh = await service.persistUpload(Buffer.from('fresh'), 'fresh.txt', 'text/plain')
+  now += 30_000
+  const cleanupFresh = await service.cleanupExpiredUploads()
+  assert.equal(cleanupFresh.removed, 0)
+  assert.equal(await fs.readFile(fresh.path, 'utf-8'), 'fresh')
+})
+
 test('Gateway inline limits use actual server metadata and reject changed content', async (t) => {
   const uploadsDir = await createTempUploadsRoot(t)
   const service = createCommandConsoleUploadService({ uploadsDir, fileInlineLimitBytes: 4, imageInlineLimitBytes: 8 })

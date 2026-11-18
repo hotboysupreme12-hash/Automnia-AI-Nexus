@@ -5,6 +5,7 @@ import path from 'node:path'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
 import { buildContextOverflowContinuationPrompt, isContextOverflowResult } from '../services/agents/contextOverflowRecovery'
+import type { AgentRuntimeFallback } from '../services/agents/agentRuntimeService'
 
 type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 type StreamEmitter = (event: string, data: Record<string, unknown>) => void
@@ -45,6 +46,7 @@ type OpenClawResultLike = {
   failureKind?: string
   runtimeTransport?: 'gateway-chat' | 'gateway' | 'local' | string
   gatewayFallbackDetail?: unknown
+  runtimeFallback?: AgentRuntimeFallback
 }
 
 type FailureStatus = 'running' | 'completed' | 'failed' | 'timeout' | 'aborted' | 'interrupted'
@@ -88,6 +90,7 @@ type AgentRuntimeTurnParams = {
     requestedSessionKey?: string
     freshSession?: boolean
     thinking: ThinkingLevel
+    fastMode?: 'auto' | 'on' | 'off'
     message: string
     attachments?: unknown[]
     streamObserverId?: string
@@ -102,6 +105,7 @@ type AgentTurnStreamInput = {
   source?: 'clawtalk'
   sessionKey?: string
   thinking: ThinkingLevel
+  fastMode?: 'auto' | 'on' | 'off'
   timeoutSeconds?: number
   attachments?: unknown[]
   forceOpenClawRuntime?: boolean
@@ -230,6 +234,7 @@ type AgentTurnRoutesOptions = {
   rememberClawTalkConsoleMirror(context: ClawTalkConsoleMirrorContext): void
   resolveAgentReference(targetRef: string, party: PartyMember[], sourceAgentId?: string): PartyMember | null
   resolveAgentRunContext(agent: string): Promise<AgentRunContext>
+  resolveEffectiveAgentFastMode(agent: string, requested?: unknown): Promise<'auto' | 'on' | 'off'>
   resolveEffectiveAgentWorkTimeoutSeconds(agent: string, requested?: number): Promise<number>
   resolveFilenameHintsForMessage(message: string, workspace: string): Promise<FilenameResolution>
   resolveGoogleGeminiArtifactTarget(message: string, workspace: string): GoogleGeminiArtifactTarget | null
@@ -327,6 +332,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
     rememberClawTalkConsoleMirror,
     resolveAgentReference,
     resolveAgentRunContext,
+    resolveEffectiveAgentFastMode,
     resolveEffectiveAgentWorkTimeoutSeconds,
     resolveFilenameHintsForMessage,
     resolveGoogleGeminiArtifactTarget,
@@ -443,6 +449,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       source: z.enum(['clawtalk']).optional(),
       sessionKey: z.string().min(1).optional(),
       thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).default('low'),
+      fastMode: z.enum(['auto', 'on', 'off']).optional(),
       timeoutSeconds: z.number().int().min(30).max(7200).optional(),
       attachments: z.array(z.unknown()).optional(),
       forceOpenClawRuntime: z.boolean().optional().default(false),
@@ -798,6 +805,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       intentMessage: z.string().optional(),
       sessionKey: z.string().min(1).optional(),
       thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).default('low'),
+      fastMode: z.enum(['auto', 'on', 'off']).optional(),
       timeoutSeconds: z.number().int().min(30).max(7200).optional(),
       attachments: z.array(z.unknown()).optional(),
       forceOpenClawRuntime: z.boolean().optional().default(false),
@@ -817,6 +825,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       message: rawMessage,
       intentMessage: rawIntentMessage,
       thinking,
+      fastMode,
       timeoutSeconds,
       forceOpenClawRuntime: requestedForceOpenClawRuntime,
     } = parsed.data
@@ -895,6 +904,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       agentPrimaryModelId,
       browserIntent || clawTalkIntent ? 'off' : thinking,
     )
+    const effectiveFastMode = await resolveEffectiveAgentFastMode(agent, fastMode)
     const policyTimeoutSeconds = Math.max(
       await resolveEffectiveAgentWorkTimeoutSeconds(agent, timeoutSeconds),
       OPENCLAW_AGENT_TURN_TIMEOUT_FLOOR_SECONDS,
@@ -1076,6 +1086,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       agent,
       sessionId,
       thinking: effectiveThinking,
+      fastMode: effectiveFastMode,
       timeoutSeconds: effectiveTimeoutSeconds,
       cwd: runCwd,
       requestMessage: rawMessage,
@@ -1116,6 +1127,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         requestedSessionKey: parsed.data.sessionKey,
         freshSession: isFreshSession,
         thinking: effectiveThinking,
+        fastMode: effectiveFastMode,
         message: composedPrompt,
         attachments: parsed.data.attachments,
         streamObserverId: parsed.data.gatewayStreamObserverId,
@@ -1141,6 +1153,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         agent,
         sessionId,
         thinking: effectiveThinking,
+        fastMode: effectiveFastMode,
         timeoutSeconds: recoveryTimeoutSeconds,
         cwd: runCwd,
         requestMessage: rawMessage,
@@ -1177,6 +1190,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
           requestedSessionKey: parsed.data.sessionKey,
           freshSession: isFreshSession,
           thinking: effectiveThinking,
+          fastMode: effectiveFastMode,
           message: recoveryPrompt,
           attachments: parsed.data.attachments,
           streamObserverId: parsed.data.gatewayStreamObserverId,
@@ -1236,6 +1250,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
           requestedSessionKey: parsed.data.sessionKey,
           freshSession: true,
           thinking: effectiveThinking,
+          fastMode: effectiveFastMode,
           message: recoveryPrompt,
           attachments: parsed.data.attachments,
           streamObserverId: parsed.data.gatewayStreamObserverId,
@@ -1284,6 +1299,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
           requestedSessionKey: parsed.data.sessionKey,
           freshSession: true,
           thinking: effectiveThinking,
+          fastMode: effectiveFastMode,
           message: recoveryPrompt,
           attachments: parsed.data.attachments,
           streamObserverId: parsed.data.gatewayStreamObserverId,
@@ -1336,6 +1352,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
             requestedSessionKey: parsed.data.sessionKey,
             freshSession: true,
             thinking: effectiveThinking,
+            fastMode: effectiveFastMode,
             message: recoveryPrompt,
             attachments: parsed.data.attachments,
             streamObserverId: parsed.data.gatewayStreamObserverId,
@@ -1389,6 +1406,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
             requestedSessionKey: parsed.data.sessionKey,
             freshSession: true,
             thinking: effectiveThinking,
+            fastMode: effectiveFastMode,
             message: recoveryPrompt,
             attachments: parsed.data.attachments,
             streamObserverId: parsed.data.gatewayStreamObserverId,
@@ -1490,6 +1508,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       ...(failureKind ? { failureKind } : {}),
       ...(result.runtimeTransport ? { runtimeTransport: result.runtimeTransport } : {}),
       ...(result.gatewayFallbackDetail ? { gatewayFallbackDetail: result.gatewayFallbackDetail } : {}),
+      ...(result.runtimeFallback ? { runtimeFallback: { ...result.runtimeFallback, modelId: agentPrimaryModelId } } : {}),
       ...(runtimeRecovery ? { runtimeRecovery } : {}),
       modelId: agentPrimaryModelId,
       ...(forceOpenClawRuntime ? {

@@ -186,6 +186,18 @@ function isLooseRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
+/** Return only safe display metadata for required plugin fields that are not configured. */
+export function missingRequiredPluginConfigFields(plugin: unknown): Array<{ key: string; label: string }> {
+  if (!isLooseRecord(plugin) || !Array.isArray(plugin.configFields)) return []
+  return plugin.configFields
+    .filter((field): field is Record<string, unknown> => isLooseRecord(field) && field.required === true && field.present !== true)
+    .map((field) => {
+      const key = typeof field.key === 'string' ? field.key.trim().slice(0, 120) : ''
+      const label = typeof field.label === 'string' ? field.label.trim().slice(0, 120) : ''
+      return { key: key || 'required-config', label: label || key || 'Required configuration' }
+    })
+}
+
 function stripAnsi(text: string) {
   return text
     .replace(ANSI_CSI_PATTERN, '')

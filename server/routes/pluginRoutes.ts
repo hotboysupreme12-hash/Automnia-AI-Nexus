@@ -1,6 +1,7 @@
 import type { Express, Response } from 'express'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
+import { missingRequiredPluginConfigFields } from '../services/plugins/pluginInventoryService'
 import type { PluginRuntimeService, PluginSetupTerminalClient } from '../services/plugins/pluginRuntimeService'
 
 type PluginControlEntryLike = {
@@ -26,6 +27,7 @@ type GatewayRestartRequest = GatewayRestartResult & {
 type PluginInstallResult = {
   install: unknown
   activation?: unknown
+  activationBlocked?: unknown
   repair?: unknown
   postInstallRepair?: unknown
   plugin: unknown
@@ -158,6 +160,7 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
       return apiSuccess(res, {
         install: result.install,
         activation: result.activation,
+        activationBlocked: result.activationBlocked,
         repair: result.repair,
         postInstallRepair: result.postInstallRepair,
         plugin: result.plugin,
@@ -470,7 +473,21 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     try {
-      if (!await requirePluginControl(pluginId, res)) return
+      const controls = await requirePluginControl(pluginId, res)
+      if (!controls) return
+      if (parsed.data.enabled) {
+        const plugin = controls.plugins.find((entry) => entry.id === pluginId)
+        const missingFields = missingRequiredPluginConfigFields(plugin)
+        if (missingFields.length) {
+          return apiFailure(
+            res,
+            409,
+            'plugin_configuration_required',
+            'Configure the required plugin fields before enabling this plugin.',
+            { pluginId, fields: missingFields },
+          )
+        }
+      }
       const result = await options.setOpenClawPluginEnabledForControlCenter(pluginId, parsed.data.enabled, {
         restart: parsed.data.restart,
         immediateRestart: parsed.data.immediateRestart,

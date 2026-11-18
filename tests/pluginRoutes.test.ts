@@ -503,6 +503,33 @@ test('plugin routes preserve disabled plugin state and enable known disabled plu
   assert.ok(calls.list >= 2)
 })
 
+test('plugin routes block enabling plugins with missing required secret fields', async () => {
+  const { app, calls } = createPluginRoutesHarness([
+    pluginEntry('google', {
+      enabled: false,
+      configuredEnabled: false,
+      configFields: [{
+        key: 'apiKey',
+        label: 'Google API key',
+        secret: true,
+        required: true,
+        present: false,
+        acceptsDirectSave: true,
+      }],
+    }),
+  ])
+
+  await withRouteServer(app, async (baseUrl) => {
+    const result = await requestJson(baseUrl, 'POST', '/api/plugins/google', { enabled: true })
+    assert.equal(result.status, 409)
+    assert.match(result.text, /plugin_configuration_required/)
+    assert.match(result.text, /Google API key/)
+    assert.doesNotMatch(result.text, /secret-value|apiKey=/)
+  })
+
+  assert.equal(calls.toggle, 0)
+})
+
 test('plugin routes preserve unavailable channel plugin state', async () => {
   const { app, calls } = createPluginRoutesHarness([
     pluginEntry('channel-unavailable', {

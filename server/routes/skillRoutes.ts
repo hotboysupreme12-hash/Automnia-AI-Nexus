@@ -1,5 +1,8 @@
 import type { Express } from 'express'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
+import { createReadStream, type Dirent } from 'node:fs'
+import { lstat, opendir } from 'node:fs/promises'
+import path from 'node:path'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
 
@@ -74,6 +77,108 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function finiteNumber(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
+}
+
+const SKILL_INTEGRITY_MAX_FILES = 400
+const SKILL_INTEGRITY_MAX_BYTES = 32 * 1024 * 1024
+const SKILL_INTEGRITY_MAX_FILE_BYTES = 8 * 1024 * 1024
+const SKILL_INTEGRITY_MAX_DEPTH = 10
+const SKILL_INTEGRITY_MAX_ENTRIES = 2_000
+const SKILL_INTEGRITY_MAX_DIRECTORIES = 256
+const SKILL_INTEGRITY_READ_CHUNK_BYTES = 64 * 1024
+
+class SkillIntegrityLimitError extends Error {}
+
+async function collectSkillIntegrityFiles(skillDir: string) {
+  const files: Array<{ path: string; sizeBytes: number; sha256: string }> = []
+  let totalBytes = 0
+  let symlinksSkipped = 0
+  let entriesVisited = 0
+  let directoriesVisited = 0
+
+  async function visit(currentDir: string, relativeDir: string, depth: number): Promise<void> {
+    if (depth > SKILL_INTEGRITY_MAX_DEPTH) throw new SkillIntegrityLimitError('Skill support files exceed the maximum directory depth.')
+    directoriesVisited += 1
+    if (directoriesVisited > SKILL_INTEGRITY_MAX_DIRECTORIES) {
+      throw new SkillIntegrityLimitError(`Skill support files exceed the ${SKILL_INTEGRITY_MAX_DIRECTORIES}-directory scan limit.`)
+    }
+    const entries: Dirent[] = []
+    const directory = await opendir(currentDir)
+    for await (const entry of directory) {
+      entriesVisited += 1
+      if (entriesVisited > SKILL_INTEGRITY_MAX_ENTRIES) {
+        throw new SkillIntegrityLimitError(`Skill support files exceed the ${SKILL_INTEGRITY_MAX_ENTRIES}-entry scan limit.`)
+      }
+      entries.push(entry)
+    }
+    entries.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
+    for (const entry of entries) {
+      if (entry.isSymbolicLink()) {
+        symlinksSkipped += 1
+        continue
+      }
+      const absolutePath = path.join(currentDir, entry.name)
+      const relativePath = path.posix.join(relativeDir, entry.name)
+      if (entry.isDirectory()) {
+        await visit(absolutePath, relativePath, depth + 1)
+        continue
+      }
+      if (!entry.isFile()) continue
+      if (files.length >= SKILL_INTEGRITY_MAX_FILES) {
+        throw new SkillIntegrityLimitError(`Skill support files exceed the ${SKILL_INTEGRITY_MAX_FILES}-file scan limit.`)
+      }
+      const fileStat = await lstat(absolutePath)
+      if (fileStat.isSymbolicLink()) {
+        symlinksSkipped += 1
+        continue
+      }
+      if (!fileStat.isFile()) continue
+      if (fileStat.size > SKILL_INTEGRITY_MAX_FILE_BYTES) {
+        throw new SkillIntegrityLimitError(`A skill support file exceeds the ${SKILL_INTEGRITY_MAX_FILE_BYTES / (1024 * 1024)} MiB per-file scan limit.`)
+      }
+      if (totalBytes + fileStat.size > SKILL_INTEGRITY_MAX_BYTES) {
+        throw new SkillIntegrityLimitError('Skill support files exceed the 32 MiB scan limit.')
+      }
+      const hash = createHash('sha256')
+      let fileBytes = 0
+      const stream = createReadStream(absolutePath, { highWaterMark: SKILL_INTEGRITY_READ_CHUNK_BYTES })
+      try {
+        for await (const chunk of stream) {
+          fileBytes += chunk.byteLength
+          if (fileBytes > SKILL_INTEGRITY_MAX_FILE_BYTES || totalBytes + fileBytes > SKILL_INTEGRITY_MAX_BYTES) {
+            throw new SkillIntegrityLimitError('Skill support files exceeded a byte limit while being read.')
+          }
+          hash.update(chunk)
+        }
+      } catch (error) {
+        stream.destroy()
+        throw error
+      }
+      totalBytes += fileBytes
+      files.push({
+        path: relativePath,
+        sizeBytes: fileBytes,
+        sha256: hash.digest('hex'),
+      })
+    }
+  }
+
+  await visit(skillDir, '', 0)
+  return {
+    files,
+    totalBytes,
+    symlinksSkipped,
+    sha256: createHash('sha256').update(JSON.stringify(files)).digest('hex'),
+  }
+}
+
+function skillDirectoryForRoot(skillPath: unknown, root: unknown) {
+  if (typeof skillPath !== 'string' || typeof root !== 'string' || !skillPath.trim() || !root.trim()) return null
+  const directory = path.resolve(path.dirname(skillPath))
+  const resolvedRoot = path.resolve(root)
+  const relative = path.relative(resolvedRoot, directory)
+  if (!relative || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return null
+  return directory
 }
 
 /**
@@ -281,6 +386,44 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
       })
     } catch (error) {
       return apiFailure(res, 500, 'skill_operation_failed', 'Failed to load skill library', String(error))
+    }
+  })
+
+  app.get('/api/skills/library/:skillId/integrity', async (req, res) => {
+    try {
+      const skillId = options.slugifySkillId(req.params.skillId?.trim() || '')
+      if (!/^[a-z0-9][a-z0-9._-]{0,127}$/i.test(skillId)) {
+        return apiFailure(res, 400, 'invalid_payload', 'Skill id is invalid')
+      }
+      const agentId = queryAgentId(req.query.agentId)
+      const library = await options.readAgentSkillLibrary(agentId)
+      const findEntry = (entries: unknown[]) => entries.find((value) => {
+        const entry = asRecord(value)
+        return entry && typeof entry.id === 'string' && options.slugifySkillId(entry.id) === skillId
+      })
+      const agentEntry = findEntry(library.agent)
+      const sharedEntry = agentEntry ? undefined : findEntry(library.shared)
+      const entry = asRecord(agentEntry || sharedEntry)
+      if (!entry) return apiFailure(res, 404, 'skill_not_found', 'Skill not found')
+
+      const root = agentEntry ? library.agentSkillsRoot : options.sharedSkillsRoot
+      const skillDir = skillDirectoryForRoot(entry.path, root)
+      if (!skillDir) return apiFailure(res, 404, 'skill_not_found', 'Skill files are unavailable')
+      const stat = await lstat(skillDir)
+      if (!stat.isDirectory()) return apiFailure(res, 404, 'skill_not_found', 'Skill files are unavailable')
+
+      const integrity = await collectSkillIntegrityFiles(skillDir)
+      return apiSuccess(res, {
+        skill: { id: skillId, source: agentEntry ? 'agent' : 'library' },
+        algorithm: 'sha256',
+        complete: true,
+        ...integrity,
+      })
+    } catch (error) {
+      if (error instanceof SkillIntegrityLimitError) {
+        return apiFailure(res, 413, 'skill_integrity_limit', 'Skill integrity scan exceeded its safety limits.', error.message)
+      }
+      return apiFailure(res, 500, 'skill_operation_failed', 'Failed to inspect skill file integrity')
     }
   })
 

@@ -56,6 +56,7 @@ export const CONTROL_CENTER_STATE_KEYS = {
   partyProfiles: 'agents:party-profiles',
   pluginListCache: 'plugins:list-cache',
   pluginRuntimeState: 'plugins:runtime-state',
+  workboard: 'workboard:tasks',
   retiredAgentIds: 'agents:retired-ids',
   runtimeMonitorClear: 'runtime:monitor-clear',
 } as const

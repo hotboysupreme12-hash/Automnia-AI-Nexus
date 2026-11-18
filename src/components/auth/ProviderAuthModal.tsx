@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDialogFocus } from '../ui/Dialog'
 import { apiErrorMessage } from '../../api/client'
+import { providerOAuthExpiryGuidance } from '../../utils/providerOAuthExpiry'
 import {
   fetchProviderAuthStatuses,
   fetchProviderOAuthSession,
@@ -46,11 +47,8 @@ function formatOAuthExpiry(expiresAt?: number, refreshAvailable = false) {
 }
 
 function oauthHealth(expiresAt?: number, refreshAvailable = false) {
-  if (!expiresAt) return { label: refreshAvailable ? 'Refreshable' : 'Connected', tone: 'emerald' as const }
-  const deltaMs = expiresAt - Date.now()
-  if (deltaMs <= 0) return { label: 'Reconnect required', tone: 'rose' as const }
-  if (deltaMs < 15 * 60 * 1000) return { label: refreshAvailable ? 'Refresh Soon' : 'Expiring', tone: 'amber' as const }
-  return { label: 'Ready', tone: 'emerald' as const }
+  const guidance = providerOAuthExpiryGuidance(expiresAt, refreshAvailable)
+  return { label: guidance.label, tone: guidance.tone }
 }
 
 function BrandMark() {
@@ -430,6 +428,12 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
                         </div>
                       )}
                     </div>
+                  )}
+
+                  {oauth?.configured && oauthState.tone !== 'emerald' && (
+                    <p role="status" aria-live="polite" className={`mt-3 rounded-xl border px-3 py-2 text-xs leading-5 ${oauthState.tone === 'rose' ? 'border-rose-300/25 bg-rose-400/[0.08] text-rose-100' : 'border-amber-300/25 bg-amber-400/[0.08] text-amber-100'}`}>
+                      {providerOAuthExpiryGuidance(oauth.expiresAt, oauth.refreshAvailable).message}
+                    </p>
                   )}
 
                   {(provider === 'google' || provider === 'google-vertex') && (

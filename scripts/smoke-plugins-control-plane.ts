@@ -32,6 +32,8 @@ const pluginsPanel = readWorkspaceFile('src/components/plugins/PluginsPanel.tsx'
 const pluginsApi = readWorkspaceFile('src/api/plugins.ts')
 const pluginStateProjection = readWorkspaceFile('src/components/plugins/pluginStateProjection.ts')
 const pluginInventoryService = readWorkspaceFile('server/services/plugins/pluginInventoryService.ts')
+const pluginInstallService = readWorkspaceFile('server/services/plugins/pluginInstallService.ts')
+const pluginInstallTests = readWorkspaceFile('tests/pluginInstallService.test.ts')
 const phaseKPluginStatusSmoke = readWorkspaceFile('scripts/smoke-phase-k-plugin-status.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
@@ -53,7 +55,7 @@ const pluginRouteMarkers = [
   "app.post('/api/plugins/:pluginId'",
 ]
 
-for (const code of ['plugin_command_failed', 'plugin_not_found', 'plugin_operation_failed', 'plugin_terminal_failed']) {
+for (const code of ['plugin_command_failed', 'plugin_configuration_required', 'plugin_not_found', 'plugin_operation_failed', 'plugin_terminal_failed']) {
   assert(controlPlaneHttp.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
 }
 
@@ -160,6 +162,11 @@ assert(
   pluginRouteTests.includes('plugin routes preserve disabled plugin state and enable known disabled plugins'),
   'pluginRoutes.test.ts should cover disabled plugin state through the route boundary',
 )
+assert(pluginInventoryService.includes('export function missingRequiredPluginConfigFields'), 'plugin inventory must expose safe missing-required-field metadata')
+assert(pluginRoutes.includes('missingRequiredPluginConfigFields(plugin)'), 'plugin enable route must validate required configuration before activation')
+assert(pluginRouteTests.includes('plugin routes block enabling plugins with missing required secret fields'), 'pluginRoutes.test.ts must cover missing-secret activation blocking')
+assert(pluginInstallService.includes('activationBlocked'), 'plugin install response must report when activation was blocked by missing configuration')
+assert(pluginInstallTests.includes('plugin install leaves a plugin disabled when required secret configuration is missing'), 'pluginInstallService.test.ts must prove install-with-enable honors required configuration')
 for (const disabledStateFragment of [
   'disabled-one',
   "status: 'disabled'",

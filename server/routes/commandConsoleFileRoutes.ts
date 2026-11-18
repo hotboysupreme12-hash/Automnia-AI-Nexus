@@ -6,6 +6,7 @@ import type { ControlFilesService } from '../services/controlFilesService'
 type CommandConsoleFileRoutesOptions = {
   controlFiles: ControlFilesService
   persistCommandConsoleUpload: (bytes: Buffer, sourceName: string | undefined, rawMimeType: string | undefined) => Promise<unknown>
+  cleanupExpiredUploads?: () => Promise<unknown>
   uploadLimitBytes: number
 }
 
@@ -31,6 +32,9 @@ const COMMAND_CONSOLE_UPLOAD_CONTENT_TYPES = [
 
 export function registerCommandConsoleFileRoutes(app: Express, options: CommandConsoleFileRoutesOptions) {
   const { controlFiles } = options
+  if (options.cleanupExpiredUploads) {
+    void Promise.resolve(options.cleanupExpiredUploads()).catch(() => undefined)
+  }
 
   app.get('/api/files', (_req, res) => {
     return apiSuccess(res, { files: controlFiles.files })

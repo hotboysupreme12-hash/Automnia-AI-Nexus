@@ -75,6 +75,7 @@ export type ApiErrorCode =
   | 'party_operation_failed'
   | 'party_coordination_failed'
   | 'plugin_command_failed'
+  | 'plugin_configuration_required'
   | 'plugin_not_found'
   | 'plugin_operation_failed'
   | 'plugin_terminal_failed'
@@ -91,6 +92,7 @@ export type ApiErrorCode =
   | 'shift_command_failed'
   | 'shift_operation_failed'
   | 'skill_command_failed'
+  | 'skill_integrity_limit'
   | 'skill_install_confirmation_required'
   | 'skill_not_found'
   | 'skill_operation_failed'
@@ -98,6 +100,15 @@ export type ApiErrorCode =
   | 'team_sync_failed'
   | 'tool_access_update_failed'
   | 'workspace_unwritable'
+  | 'workboard_failed'
+  | 'workboard_persistence_failed'
+  | 'workboard_task_not_found'
+  | 'workboard_cycle'
+  | 'workboard_dependency_not_found'
+  | 'workboard_prerequisites_open'
+  | 'workboard_task_terminal'
+  | 'workboard_capacity'
+  | 'workboard_comment_capacity'
 
 type ControlPlaneHttpOptions = {
   authToken: string
