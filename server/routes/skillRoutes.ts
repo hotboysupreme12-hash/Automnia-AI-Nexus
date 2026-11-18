@@ -309,15 +309,22 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
     ? Math.min(options.skillPreviewTtlMs, MAX_SKILL_PREVIEW_TTL_MS)
     : MAX_SKILL_PREVIEW_TTL_MS
   const currentTime = options.now || Date.now
+  const previewCleanupTasks = new Map<string, Promise<void>>()
 
   const discardSkillPreview = async (previewId: string) => {
     const preview = pendingSkillPreviews.get(previewId)
-    if (!preview) return
+    if (!preview) {
+      await previewCleanupTasks.get(previewId)
+      return
+    }
     pendingSkillPreviews.delete(previewId)
     const timer = previewTimers.get(previewId)
     if (timer) clearTimeout(timer)
     previewTimers.delete(previewId)
-    await rm(preview.stagingRoot, { recursive: true, force: true }).catch(() => undefined)
+    const cleanupTask = rm(preview.stagingRoot, { recursive: true, force: true }).catch(() => undefined)
+    previewCleanupTasks.set(previewId, cleanupTask)
+    await cleanupTask
+    if (previewCleanupTasks.get(previewId) === cleanupTask) previewCleanupTasks.delete(previewId)
   }
 
   const pruneSkillPreviews = async () => {
@@ -860,7 +867,10 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
       return apiFailure(res, 400, 'invalid_payload', 'A skill preview must be explicitly confirmed before applying.')
     }
     const preview = parsed.data.previewId ? pendingSkillPreviews.get(parsed.data.previewId) : undefined
-    if (parsed.data.previewId && !preview) return apiFailure(res, 410, 'invalid_payload', 'This skill preview expired or was already used. Create a new preview.')
+    if (parsed.data.previewId && !preview) {
+      await discardSkillPreview(parsed.data.previewId)
+      return apiFailure(res, 410, 'invalid_payload', 'This skill preview expired or was already used. Create a new preview.')
+    }
     if (preview && preview.expiresAt <= currentTime()) {
       await discardSkillPreview(preview.previewId)
       return apiFailure(res, 410, 'invalid_payload', 'This skill preview expired. Create a new preview.')
@@ -973,7 +983,10 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
 
     const updateSkillRef = skillRef || '@all'
     const preview = parsed.data.previewId ? pendingSkillPreviews.get(parsed.data.previewId) : undefined
-    if (parsed.data.previewId && !preview) return apiFailure(res, 410, 'invalid_payload', 'This skill preview expired or was already used. Create a new preview.')
+    if (parsed.data.previewId && !preview) {
+      await discardSkillPreview(parsed.data.previewId)
+      return apiFailure(res, 410, 'invalid_payload', 'This skill preview expired or was already used. Create a new preview.')
+    }
     if (preview && preview.expiresAt <= currentTime()) {
       await discardSkillPreview(preview.previewId)
       return apiFailure(res, 410, 'invalid_payload', 'This skill preview expired. Create a new preview.')
