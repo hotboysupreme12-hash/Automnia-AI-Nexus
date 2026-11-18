@@ -26,7 +26,7 @@ import { buildLicenseEmailHtml } from './welcomeEmail.js';
 
 const app = express();
 const port = process.env.PORT || 8080;
-const serviceVersion = '2.10.3';
+const serviceVersion = '2.10.4';
 const schemaVersion = '2026-09-12.5';
 const secrets = (process.env.SHOPIFY_WEBHOOK_SECRETS || process.env.SHOPIFY_WEBHOOK_SECRET || '')
   .split(',')
@@ -2925,6 +2925,16 @@ function hasValidShopifySignature(rawBody, received) {
   });
 }
 
+function normalizedShopifyStoreDomain(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return '';
+  try {
+    return new URL(raw.includes('://') ? raw : `https://${raw}`).hostname.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
 function customerEmailFromShopify(payload) {
   return normalizeEmail(payload?.email || payload?.customer?.email || payload?.customer_email || payload?.customerEmail);
 }
@@ -3335,9 +3345,90 @@ async function setStarterContractRecurringPrice(contractId, tierConfig) {
   return { updatedLines: targetLines.length, price: targetPrice };
 }
 
-function orderPaymentConfirmed(order) {
+function shopifyMoneyCents(value) {
+  const amount = value && typeof value === 'object'
+    ? value.shop_money?.amount ?? value.presentment_money?.amount ?? value.amount
+    : value;
+  const parsed = Number(amount);
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) : null;
+}
+
+function shopifyOrderTotalCents(order) {
+  for (const amount of [
+    order?.current_total_price_set,
+    order?.total_price_set,
+    order?.current_total_price,
+    order?.total_price,
+    order?.currentTotalPrice,
+    order?.totalPrice,
+  ]) {
+    const cents = shopifyMoneyCents(amount);
+    if (cents !== null) return cents;
+  }
+  return null;
+}
+
+function matchingOrderLineItem(order, tierConfig) {
+  const lineItems = Array.isArray(order?.line_items) ? order.line_items : [];
+  return lineItems.find((lineItem) => {
+    const productId = normalizePlanId(lineItem?.product_id);
+    const variantId = normalizePlanId(lineItem?.variant_id);
+    const sellingPlanId = normalizePlanId(lineItem?.selling_plan_id || lineItem?.sellingPlanId);
+    const sku = String(lineItem?.sku || '').trim().toLowerCase();
+    return (productId && tierConfig.productIds?.includes(productId))
+      || (variantId && tierConfig.variantIds?.includes(variantId))
+      || (sellingPlanId && tierConfig.sellingPlanIds?.includes(sellingPlanId))
+      || (sku && tierConfig.skus?.includes(sku));
+  }) || null;
+}
+
+function orderPaymentConfirmed(order, tierConfig = null) {
   const financialStatus = String(order?.financial_status || order?.financialStatus || '').trim().toLowerCase();
-  return financialStatus === 'paid' || financialStatus === 'partially_paid';
+  if (financialStatus !== 'paid' && financialStatus !== 'partially_paid') return false;
+  const orderTotalCents = shopifyOrderTotalCents(order);
+  if (orderTotalCents === null || orderTotalCents <= 0) return false;
+  if (!tierConfig) return true;
+
+  const expectedUnitPriceCents = Number(tierConfig.planPriceCents);
+  if (!Number.isInteger(expectedUnitPriceCents) || expectedUnitPriceCents <= 0) return false;
+  const lineItem = matchingOrderLineItem(order, tierConfig);
+  if (!lineItem) return false;
+  const unitPriceCents = shopifyMoneyCents(lineItem.price_set || lineItem.priceSet || lineItem.price);
+  if (unitPriceCents === null || unitPriceCents < expectedUnitPriceCents) return false;
+  const quantityValue = Number(lineItem.quantity);
+  const quantity = Number.isSafeInteger(quantityValue) && quantityValue > 0 ? quantityValue : 1;
+  let discountCents = shopifyMoneyCents(lineItem.total_discount_set || lineItem.totalDiscountSet || lineItem.total_discount || lineItem.totalDiscount);
+  if (discountCents === null && Array.isArray(lineItem.discount_allocations)) {
+    discountCents = lineItem.discount_allocations.reduce((total, allocation) => {
+      return total + (shopifyMoneyCents(allocation?.amount_set || allocation?.amountSet || allocation?.amount) || 0);
+    }, 0);
+  }
+  if (discountCents === null) discountCents = 0;
+  const chargedLineCents = (unitPriceCents * quantity) - discountCents;
+  return Number.isSafeInteger(chargedLineCents) && chargedLineCents > 0;
+}
+
+async function recordRejectedShopifyOrder(order, deliveryId, tierConfig) {
+  const orderId = String(order?.id || 'unknown');
+  const eventId = webhookEventId('orders/paid', deliveryId, `order:${orderId}`);
+  const data = {
+    topic: 'orders/paid',
+    deliveryId: deliveryId || null,
+    orderId,
+    tier: tierConfig?.tier || null,
+    tokensGranted: 0,
+    creditsGranted: 0,
+    action: 'rejected',
+    reason: 'missing_paid_amount_or_mapped_line_charge',
+    createdAt: new Date().toISOString(),
+  };
+  if (useInMemoryStorage || !shopifyWebhookEvents) return;
+  try {
+    await shopifyWebhookEvents.doc(eventId).create(data);
+  } catch (error) {
+    if (error?.code === 6 || String(error?.code || '').toLowerCase() === 'already-exists') return;
+    throw error;
+  }
 }
 
 async function handlePaidOrder(order, deliveryId, trialWindow = null) {
@@ -3346,6 +3437,25 @@ async function handlePaidOrder(order, deliveryId, trialWindow = null) {
   const tierConfig = configuredTierForOrder(order);
   if (!orderId || !customerEmail) throw new Error('Paid Shopify order is missing an order ID or customer email.');
   if (!tierConfig) throw new Error('Paid Shopify order does not match an owner-configured plan mapping.');
+
+  // A subscription-contract webhook can explicitly authorize a configured
+  // trial. Every other entitlement must have a positive order total and a
+  // non-zero charge for its mapped line item. Shopify can mark a $0 order as
+  // "paid", which must not mint a full credit grant.
+  if (!trialWindow && !orderPaymentConfirmed(order, tierConfig)) {
+    await recordRejectedShopifyOrder(order, deliveryId, tierConfig);
+    console.warn(JSON.stringify({ event: 'shopify_zero_value_order_rejected', orderId, tier: tierConfig.tier }));
+    return { action: 'order_rejected_unpaid' };
+  }
+
+  const existing = await findLicenseByEmail(customerEmail);
+  if (existing && String(existing.lastShopifyOrderId || '') === orderId) {
+    const delivery = await deliverLicenseEmail(existing);
+    return {
+      action: delivery.action === 'email_sent' ? 'license_delivery_recovered' : 'duplicate_ignored',
+      license: delivery.record || existing,
+    };
+  }
 
   let processedOrder = order;
   if (tierConfig.kind === 'subscription') {
@@ -3363,15 +3473,7 @@ async function handlePaidOrder(order, deliveryId, trialWindow = null) {
   // An upgrade or top-up updates the existing entitlement and retains its
   // license key. A BYOK customer can therefore upgrade without reactivating
   // the desktop app or losing their connected provider configuration.
-  const existing = await findLicenseByEmail(customerEmail);
   if (existing) {
-    if (String(existing.lastShopifyOrderId || '') === orderId) {
-      const delivery = await deliverLicenseEmail(existing);
-      return {
-        action: delivery.action === 'email_sent' ? 'license_delivery_recovered' : 'duplicate_ignored',
-        license: delivery.record || existing,
-      };
-    }
     const updated = await updateHostedEntitlement({ record: existing, order: processedOrder, tierConfig, topic: 'orders/paid', deliveryId });
     if (!updated) throw new Error('The active license disappeared while applying the Shopify entitlement update.');
     const delivery = await deliverLicenseEmail(updated);
@@ -3471,7 +3573,7 @@ async function handleSubscriptionContractCreated(payload, deliveryId) {
   // A contract-create event can arrive before orders/paid. It is safe to use
   // as a fallback only when Shopify confirms payment; a non-trial unpaid
   // contract must remain locked until the payment webhook arrives.
-  if (orderPaymentConfirmed(order)) {
+  if (orderPaymentConfirmed(order, tierConfig)) {
     const nextBillingAt = shopifyDateFromPayload(payload, 'next_billing_date', 'nextBillingDate')
       || await fetchShopifyContractNextBillingDate(contractId);
     if (!nextBillingAt) throw new Error('Paid subscription contract is missing its next billing date.');
@@ -3540,6 +3642,11 @@ app.post('/shopify/webhooks/:webhookName', requireWritesEnabled, express.raw({ t
   if (!topic) return res.status(404).json({ error: 'Webhook endpoint not found.' });
   if (!secrets.length) return res.status(503).json({ error: 'Webhook verification is not configured.' });
   if (!hasValidShopifySignature(req.body, req.get('x-shopify-hmac-sha256') || '')) return res.status(401).json({ error: 'Invalid webhook signature.' });
+  const configuredShopDomain = normalizedShopifyStoreDomain(shopifyAdminStoreDomain);
+  const incomingShopDomain = normalizedShopifyStoreDomain(req.get('x-shopify-shop-domain') || '');
+  if (!configuredShopDomain || incomingShopDomain !== configuredShopDomain) {
+    return res.status(401).json({ error: 'Webhook store is not authorized.' });
+  }
 
   const deliveryId = String(req.get('x-shopify-webhook-id') || '').trim();
   if (!deliveryId) return res.status(400).json({ error: 'Missing Shopify webhook delivery ID.' });

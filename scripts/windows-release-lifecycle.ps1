@@ -129,6 +129,24 @@ function Install-Automnia {
   return $AppExe
 }
 
+function Uninstall-Automnia {
+  param([string]$Label)
+  $AppExe = Join-Path $InstallRoot $ExpectedAppExeName
+  $Uninstaller = Get-ChildItem -LiteralPath $InstallRoot -Filter 'Uninstall*.exe' -File -Recurse |
+    Select-Object -First 1 -ExpandProperty FullName
+  if (-not $Uninstaller) { throw "$Label could not find the NSIS uninstaller under $InstallRoot." }
+  Invoke-CheckedProcess -FilePath $Uninstaller -ArgumentList @('/S') -Label $Label -TimeoutSeconds 180 | Out-Null
+  $UninstallDeadline = [DateTime]::UtcNow.AddSeconds(30)
+  while ((Test-Path -LiteralPath $AppExe) -and [DateTime]::UtcNow -lt $UninstallDeadline) {
+    Start-Sleep -Milliseconds 250
+  }
+  if (Test-Path -LiteralPath $AppExe) { throw "$Label left $ExpectedAppExeName in place." }
+  if (Test-Path -LiteralPath $InstallRoot) {
+    Remove-Item -LiteralPath $InstallRoot -Recurse -Force
+  }
+  return $Uninstaller
+}
+
 function Wait-ForE2eLog {
   param(
     [string]$Path,
@@ -293,16 +311,11 @@ try {
   Write-LifecycleLog -Name 'fresh-install.log' -Lines @("Installer: $InstallerPath", "Install root: $InstallRoot", "Application: $FreshExe", "E2E log: $FreshLog", 'Status: passed') | Out-Null
 
   if ($PreviousInstallerPath -and (Test-Path -LiteralPath $PreviousInstallerPath -PathType Leaf)) {
-    if (Test-Path -LiteralPath $InstallRoot) { Remove-Item -LiteralPath $InstallRoot -Recurse -Force }
+    Uninstall-Automnia -Label 'fresh-version uninstall before previous-version install' | Out-Null
     Install-Automnia -Path (Resolve-Path -LiteralPath $PreviousInstallerPath).Path -Label 'previous-version install' | Out-Null
     $UpgradeMode = 'previous-version'
   } else {
-    $ExistingUninstaller = Get-ChildItem -LiteralPath $InstallRoot -Filter 'Uninstall*.exe' -File -Recurse | Select-Object -First 1 -ExpandProperty FullName
-    if (-not $ExistingUninstaller) { throw 'same-version reinstall could not find the existing NSIS uninstaller.' }
-    Invoke-CheckedProcess -FilePath $ExistingUninstaller -ArgumentList @('/S') -Label 'same-version uninstall before clean reinstall' -TimeoutSeconds 180 | Out-Null
-    $UninstallDeadline = [DateTime]::UtcNow.AddSeconds(30)
-    while ((Test-Path -LiteralPath $InstallRoot) -and [DateTime]::UtcNow -lt $UninstallDeadline) { Start-Sleep -Milliseconds 250 }
-    if (Test-Path -LiteralPath $InstallRoot) { Remove-Item -LiteralPath $InstallRoot -Recurse -Force }
+    Uninstall-Automnia -Label 'same-version uninstall before clean reinstall' | Out-Null
     $UpgradeMode = 'clean-reinstall'
   }
   $UpgradeExe = Install-Automnia -Path $InstallerPath -Label 'upgrade install'
@@ -313,12 +326,7 @@ try {
   $RollbackLog = Invoke-InstalledSmoke -AppExe $UpgradeExe -Label 'rollback-existing-version'
   Add-Content -LiteralPath (Join-Path $LifecycleDir 'corrupted-update.log') -Value "Existing installed version remained launchable: $RollbackLog"
 
-  $Uninstaller = Get-ChildItem -LiteralPath $InstallRoot -Filter 'Uninstall*.exe' -File -Recurse | Select-Object -First 1 -ExpandProperty FullName
-  if (-not $Uninstaller) { throw 'NSIS uninstaller was not found after installation.' }
-  Invoke-CheckedProcess -FilePath $Uninstaller -ArgumentList @('/S') -Label 'silent uninstall' -TimeoutSeconds 180 | Out-Null
-  $Deadline = [DateTime]::UtcNow.AddSeconds(30)
-  while ((Test-Path -LiteralPath $UpgradeExe) -and [DateTime]::UtcNow -lt $Deadline) { Start-Sleep -Milliseconds 250 }
-  if (Test-Path -LiteralPath $UpgradeExe) { throw "$ExpectedAppExeName remained after silent uninstall." }
+  $Uninstaller = Uninstall-Automnia -Label 'silent uninstall'
   Write-LifecycleLog -Name 'uninstall.log' -Lines @("Uninstaller: $Uninstaller", "$ExpectedAppExeName removed: true", 'Status: passed') | Out-Null
 
   if ($PlatformSigningRequired) {

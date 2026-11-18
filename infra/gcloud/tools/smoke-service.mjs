@@ -70,7 +70,7 @@ async function runMode(writeMode) {
       MIGRATION_WRITE_MODE: writeMode,
       SHOPIFY_PLAN_MAPPINGS: encodedMappings,
       SHOPIFY_CHECKOUT_URL: 'https://example.test/automnia-checkout',
-      SHOPIFY_STORE_DOMAIN: 'automnia.app',
+      SHOPIFY_STORE_DOMAIN: 'j12hqc-h2.myshopify.com',
       SHOPIFY_API_VERSION: '2026-07',
       SHOPIFY_ADMIN_API_TOKEN: 'local-smoke-shopify-admin-token',
       AUTOMNIA_TEST_EMAIL_DELIVERY: 'stub',
@@ -113,7 +113,7 @@ async function runMode(writeMode) {
     if (writeMode === 'read_only') {
       assert.equal((await activation.json()).retryable, true)
     } else {
-      const sendShopifyWebhook = async (webhookName, deliveryId, payload) => {
+      const sendShopifyWebhook = async (webhookName, deliveryId, payload, shopDomain = 'j12hqc-h2.myshopify.com') => {
         const body = JSON.stringify(payload)
         const signature = createHmac('sha256', 'local-smoke-webhook-value').update(body).digest('base64')
         return fetch(`${baseUrl}/shopify/webhooks/${webhookName}`, {
@@ -122,28 +122,58 @@ async function runMode(writeMode) {
             'Content-Type': 'application/json',
             'x-shopify-hmac-sha256': signature,
             'x-shopify-webhook-id': deliveryId,
+            'x-shopify-shop-domain': shopDomain,
           },
           body,
         })
       }
 
+      const smokeUnitPriceCents = {
+        'AUTO-REFILL-100K': 100,
+        'AUTO-REFILL-500K': 500,
+        'AUTO-REFILL-1M': 1_000,
+        'AUTO-REFILL-2500K': 2_500,
+        'AUTO-REFILL-5M': 5_000,
+        'AUTO-REFILL-10M': 10_000,
+        'AUTO-SUB-STARTER-MONTHLY': 1_999,
+        'AUTO-SUB-PRO-MONTHLY': 2_999,
+        'AUTO-BYOK-ONETIME': 2_999,
+      }
       const sendPaidOrder = async (id, sku, email = 'owner@example.test', quantity = 1, extra = {}) => {
+        const unitPriceCents = smokeUnitPriceCents[sku]
+        assert.ok(Number.isInteger(unitPriceCents), `smoke order requires a mapped price for ${sku}`)
+        const lineItem = { sku, quantity, price: (unitPriceCents / 100).toFixed(2), total_discount: '0.00' }
         const body = JSON.stringify({
           id,
           email,
           name: `#${id}`,
-          line_items: [{ sku, quantity }],
+          financial_status: 'paid',
+          total_price: ((unitPriceCents * quantity) / 100).toFixed(2),
+          line_items: [lineItem],
           ...extra,
         })
         return sendShopifyWebhook('orders-paid', `smoke-${id}`, JSON.parse(body))
       }
+
+      const crossStoreOrder = await sendShopifyWebhook('orders-paid', 'smoke-source-store-order', {
+        id: 'smoke-source-store-order',
+        email: 'foreign@example.test',
+        financial_status: 'paid',
+        total_price: '29.99',
+        subscription_contract_id: 'source-store-contract-smoke',
+        next_billing_date: '2099-01-01T12:00:00.000Z',
+        line_items: [{ sku: 'AUTO-SUB-PRO-MONTHLY', quantity: 1, price: '29.99', total_discount: '0.00' }],
+      }, 'unbkay-k3.myshopify.com')
+      assert.equal(crossStoreOrder.status, 401, 'A valid webhook signed for another Shopify store must be rejected')
+      let provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
+      assert.equal(provisioned.records.some((record) => record.email === 'foreign@example.test'), false, 'A source-store webhook must not create target-store access')
 
       const starterOrder = await sendPaidOrder('smoke-starter', 'AUTO-SUB-STARTER-MONTHLY', 'owner@example.test', 1, {
         subscription_contract_id: 'starter-contract-smoke',
         next_billing_date: '2099-01-01T12:00:00.000Z',
       })
       assert.equal(starterOrder.status, 200)
-      let provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
+      provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
       assert.equal(provisioned.count, 1)
       assert.equal(provisioned.records[0]?.tier, 'starter')
       assert.equal(provisioned.records[0]?.mode, 'hosted_credits')
@@ -224,6 +254,28 @@ async function runMode(writeMode) {
       assert.equal(provisioned.records[0]?.nextBillingAt, nextProBillingAt)
       assert.equal(provisioned.records[0]?.usagePriority, 'automnia_only')
       assert.equal(provisioned.records[0]?.creditBalance, 107_300, 'Pro must add 55,000 credits to the existing wallet')
+
+      const zeroValueProOrder = await sendPaidOrder('smoke-zero-value-pro', 'AUTO-SUB-PRO-MONTHLY', 'zero-value@example.test', 1, {
+        subscription_contract_id: 'zero-value-contract-smoke',
+        next_billing_date: '2099-02-01T12:00:00.000Z',
+        total_price: '0.00',
+        line_items: [{ sku: 'AUTO-SUB-PRO-MONTHLY', quantity: 1, price: '29.99', total_discount: '29.99' }],
+      })
+      assert.equal(zeroValueProOrder.status, 200)
+      assert.equal((await zeroValueProOrder.json()).action, 'order_rejected_unpaid', 'A $0 paid-status order must not grant a Pro balance')
+      provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
+      assert.equal(provisioned.records.some((record) => record.email === 'zero-value@example.test'), false, 'A zero-value order must not provision an entitlement')
+
+      const zeroValueDuplicateProOrder = await sendPaidOrder('smoke-pro', 'AUTO-SUB-PRO-MONTHLY', 'owner@example.test', 1, {
+        subscription_contract_id: '123456789',
+        next_billing_date: nextProBillingAt,
+        total_price: '0.00',
+        line_items: [{ sku: 'AUTO-SUB-PRO-MONTHLY', quantity: 1, price: '29.99', total_discount: '29.99' }],
+      })
+      assert.equal(zeroValueDuplicateProOrder.status, 200)
+      assert.equal((await zeroValueDuplicateProOrder.json()).action, 'order_rejected_unpaid', 'A zero-value replay must be rejected before duplicate delivery recovery')
+      provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
+      assert.equal(provisioned.records.find((record) => record.email === 'owner@example.test')?.creditBalance, 107_300, 'Rejecting a zero-value replay must not change an existing balance')
 
       const starterToProStarter = await sendPaidOrder('smoke-starter-to-pro-starter', 'AUTO-SUB-STARTER-MONTHLY', 'starter-to-pro@example.test', 1, {
         subscription_contract_id: 'starter-to-pro-starter-contract',
@@ -372,7 +424,7 @@ async function runUnconfiguredDeliveryCheck() {
       MIGRATION_WRITE_MODE: 'active',
       SHOPIFY_PLAN_MAPPINGS: encodedMappings,
       SHOPIFY_CHECKOUT_URL: 'https://example.test/automnia-checkout',
-      SHOPIFY_STORE_DOMAIN: 'automnia.app',
+      SHOPIFY_STORE_DOMAIN: 'j12hqc-h2.myshopify.com',
       SHOPIFY_WEBHOOK_SECRETS: 'local-smoke-webhook-value',
       ADMIN_API_TOKEN: 'local-smoke-admin-value',
     },
@@ -386,9 +438,11 @@ async function runUnconfiguredDeliveryCheck() {
     const body = JSON.stringify({
       id: 'smoke-unconfigured-email',
       email: 'owner@example.test',
+      financial_status: 'paid',
+      total_price: '19.99',
       subscription_contract_id: 'smoke-unconfigured-email-contract',
       next_billing_date: '2099-01-01T12:00:00.000Z',
-      line_items: [{ sku: 'AUTO-SUB-STARTER-MONTHLY', quantity: 1 }],
+      line_items: [{ sku: 'AUTO-SUB-STARTER-MONTHLY', quantity: 1, price: '19.99', total_discount: '0.00' }],
     })
     const signature = createHmac('sha256', 'local-smoke-webhook-value').update(body).digest('base64')
     const response = await fetch(`${baseUrl}/shopify/webhooks/orders-paid`, {
@@ -397,6 +451,7 @@ async function runUnconfiguredDeliveryCheck() {
         'Content-Type': 'application/json',
         'x-shopify-hmac-sha256': signature,
         'x-shopify-webhook-id': 'smoke-unconfigured-email',
+        'x-shopify-shop-domain': 'j12hqc-h2.myshopify.com',
       },
       body,
     })

@@ -238,6 +238,30 @@ if ($PSCmdlet.ShouldProcess("$ProjectId/$Region/$($config.BillingRetryJobName)",
     Invoke-Gcloud -Arguments @('scheduler', 'jobs', 'resume', $retryJobName, '--project', $ProjectId, '--location', $Region) | Out-Null
   }
 }
+if ($RouteImmediately) {
+  $routedRevision = [string]$health.Revision
+  if (-not $routedRevision) { throw 'Cannot route Cloud Run traffic because the validated candidate revision name is empty.' }
+  if ($PSCmdlet.ShouldProcess("$ProjectId/$Region/$($config.ServiceName)", "route 100% of Cloud Run traffic to $routedRevision")) {
+    Invoke-Gcloud -Arguments @(
+      'run', 'services', 'update-traffic', $config.ServiceName,
+      '--to-revisions', "$routedRevision=100",
+      '--project', $ProjectId,
+      '--region', $Region
+    ) | Out-Null
+  }
+  $service = Get-ServiceDescriptor -ProjectId $ProjectId -Region $Region -ServiceName $config.ServiceName
+  $routedTraffic = @($service.status.traffic | Where-Object {
+    $_ -and $_.PSObject.Properties['revisionName'] -and
+    [string]$_.revisionName -eq $routedRevision -and
+    $_.PSObject.Properties['percent'] -and [int]$_.percent -eq 100
+  })
+  if (-not $routedTraffic) { throw "Cloud Run did not confirm 100% traffic on $routedRevision." }
+  $permanentHealth = & (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $ProjectId -Region $Region -BaseUrl $config.PermanentBaseUrl -ExpectedWriteMode $migrationWriteMode -SkipGmail:$SkipGmail
+  if ([string]$permanentHealth.Revision -ne $routedRevision) {
+    throw "Permanent API URL served revision $($permanentHealth.Revision), expected $routedRevision after traffic routing."
+  }
+  $health = $permanentHealth
+}
 $timestamp = [DateTimeOffset]::UtcNow.ToString('yyyyMMddTHHmmssZ')
 $state = [ordered]@{
   kind = 'automnia-gcloud-deployment'

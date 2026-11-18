@@ -338,9 +338,150 @@ jobs:
           machine="$(readelf -h "$appimage_path" | awk -F: '/Machine:/ { gsub(/^[[:space:]]+/, "", $2); print $2 }')"
           test "$machine" = "Advanced Micro Devices X86-64"
           APPIMAGE_EXTRACT_AND_RUN=1 \
-            AUTOMNIA_PACKAGED_LINUX_APPIMAGE="$appimage_path" \
+            AUTOMNIA_PACKAGED_LINUX_APPIMAGE="$GITHUB_WORKSPACE/$appimage_path" \
             AUTOMNIA_ELECTRON_E2E_NO_SANDBOX=1 \
-            xvfb-run -a npm run smoke:packaged-electron-launch
+            timeout --signal=TERM --kill-after=10s 300s xvfb-run -a node --input-type=module <<'APPIMAGE_SMOKE'
+          import assert from 'node:assert/strict'
+          import { spawn } from 'node:child_process'
+          import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+          import net from 'node:net'
+          import os from 'node:os'
+          import path from 'node:path'
+
+          const appImagePath = path.resolve(process.env.AUTOMNIA_PACKAGED_LINUX_APPIMAGE || '')
+          assert.ok(existsSync(appImagePath), `AppImage not found: ${appImagePath}`)
+          const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'automnia-appimage-smoke-'))
+          const userDataDir = path.join(tempRoot, 'user-data')
+          const openclawDir = path.join(tempRoot, 'openclaw')
+          const workspaceRoot = path.join(tempRoot, 'workspace')
+          const logPath = path.join(tempRoot, 'electron-e2e.log')
+          const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+          async function freePort() {
+            return await new Promise((resolve, reject) => {
+              const server = net.createServer()
+              server.once('error', reject)
+              server.listen(0, '127.0.0.1', () => {
+                const address = server.address()
+                server.close((error) => {
+                  if (error) reject(error)
+                  else if (address && typeof address === 'object') resolve(address.port)
+                  else reject(new Error('Could not allocate an AppImage smoke port'))
+                })
+              })
+            })
+          }
+
+          function waitForExit(child, timeoutMs) {
+            if (child.exitCode !== null || child.signalCode !== null) {
+              return Promise.resolve({ code: child.exitCode, signal: child.signalCode })
+            }
+            return new Promise((resolve, reject) => {
+              const timer = setTimeout(() => reject(new Error(`AppImage launcher did not exit within ${timeoutMs}ms`)), timeoutMs)
+              child.once('exit', (code, signal) => {
+                clearTimeout(timer)
+                resolve({ code, signal })
+              })
+              child.once('error', (error) => {
+                clearTimeout(timer)
+                reject(error)
+              })
+            })
+          }
+
+          let child
+          let launcherOutput = ''
+          let spawnError
+          let passed = false
+          try {
+            const [apiPort, frontendPort, gatewayPort, browserRelayPort] = await Promise.all([
+              freePort(), freePort(), freePort(), freePort(),
+            ])
+            const env = {
+              ...process.env,
+              CONTROL_CENTER_PORT: String(apiPort),
+              CONTROL_CENTER_FRONTEND_PORT: String(frontendPort),
+              OPENCLAW_GATEWAY_PORT: String(gatewayPort),
+              OPENCLAW_BROWSER_RELAY_PORT: String(browserRelayPort),
+              CONTROL_CENTER_AUTOSTART_GATEWAY: '0',
+              CONTROL_CENTER_GATEWAY_CHAT_CLIENT: '0',
+              CONTROL_CENTER_TOKEN: 'appimage-release-e2e',
+              AUTOMNIA_ELECTRON_E2E: '1',
+              AUTOMNIA_ELECTRON_E2E_ALLOW_PARALLEL: '1',
+              AUTOMNIA_ELECTRON_E2E_LOG_PATH: logPath,
+              AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS: '15000',
+              AUTOMNIA_ELECTRON_E2E_ASSERT_NAVIGATION: '1',
+              AUTOMNIA_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL: '1',
+              AUTOMNIA_ELECTRON_E2E_SKIP_PORT_CLEANUP: '1',
+              AUTOMNIA_USER_DATA_DIR: userDataDir,
+              OPENCLAW_STATE_DIR: openclawDir,
+              OPENCLAW_HOME: openclawDir,
+              CONTROL_CENTER_WORKSPACE_ROOT: workspaceRoot,
+              APPIMAGE_EXTRACT_AND_RUN: '1',
+            }
+            child = spawn(appImagePath, ['--appimage-extract-and-run'], {
+              cwd: path.dirname(appImagePath),
+              env,
+              detached: true,
+              stdio: ['ignore', 'pipe', 'pipe'],
+            })
+            const appendOutput = (chunk) => {
+              launcherOutput = (launcherOutput + chunk.toString('utf8')).slice(-20000)
+            }
+            child.stdout.on('data', appendOutput)
+            child.stderr.on('data', appendOutput)
+            child.once('error', (error) => { spawnError = error })
+
+            const requiredMarkers = [
+              '[automnia-e2e] port-cleanup-skipped',
+              '[automnia-e2e] server-ready',
+              '[automnia-e2e] navigation-policy-ok',
+              '[automnia-e2e] auto-quit',
+              '[automnia-e2e] quit-cleanup-complete',
+            ]
+            const deadline = Date.now() + 240000
+            let content = ''
+            let runtimeVerified = false
+            while (Date.now() < deadline) {
+              if (existsSync(logPath)) content = readFileSync(logPath, 'utf8')
+              if (!runtimeVerified && content.includes('[automnia-e2e] server-ready')) {
+                assert.ok(existsSync(userDataDir), 'AppImage startup must create the isolated Automnia user-data directory')
+                assert.ok(existsSync(openclawDir), 'AppImage startup must create the isolated OpenClaw state directory')
+                const runtimeParent = path.join(userDataDir, 'runtimes', 'openclaw')
+                assert.ok(existsSync(runtimeParent), 'AppImage startup must stage OpenClaw under writable user data')
+                const runtime = readdirSync(runtimeParent).find((entry) =>
+                  existsSync(path.join(runtimeParent, entry, 'package.json')),
+                )
+                assert.ok(runtime, 'AppImage startup must stage a complete writable OpenClaw runtime')
+                runtimeVerified = true
+              }
+              if (requiredMarkers.every((marker) => content.includes(marker))) break
+              if (spawnError) throw spawnError
+              if (child.exitCode !== null || child.signalCode !== null) {
+                throw new Error(`AppImage exited before completing startup checks (code=${child.exitCode}, signal=${child.signalCode})`)
+              }
+              await wait(250)
+            }
+            if (!existsSync(logPath)) content = ''
+            else content = readFileSync(logPath, 'utf8')
+            const missing = requiredMarkers.filter((marker) => !content.includes(marker))
+            assert.deepEqual(missing, [], `AppImage launch did not record required startup markers: ${missing.join(', ')}\n${content}\n${launcherOutput}`)
+            assert.ok(runtimeVerified, 'AppImage writable runtime was not verified')
+            const exit = await waitForExit(child, 60000)
+            assert.equal(exit.code, 0, `AppImage launcher exited with code ${exit.code} and signal ${exit.signal}\n${content}\n${launcherOutput}`)
+            passed = true
+            console.log('AppImage no-FUSE launch smoke ok')
+          } finally {
+            if (child && !passed && child.exitCode === null && child.signalCode === null) {
+              try { process.kill(-child.pid, 'SIGTERM') } catch { child.kill('SIGTERM') }
+              await Promise.race([wait(5000), waitForExit(child, 5000).catch(() => {})])
+              if (child.exitCode === null && child.signalCode === null) {
+                try { process.kill(-child.pid, 'SIGKILL') } catch { child.kill('SIGKILL') }
+              }
+            }
+            rmSync(tempRoot, { recursive: true, force: true })
+          }
+          APPIMAGE_SMOKE
 
       - name: Upload Linux release candidates
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

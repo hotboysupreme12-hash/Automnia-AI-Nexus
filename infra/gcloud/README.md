@@ -162,7 +162,9 @@ new-target deployment creates a tagged candidate with no live traffic, sets
 `MIGRATION_WRITE_MODE=read_only`, and leaves its billing retry scheduler
 paused. Full Firestore refreshes keep the candidate read-only. Cutover creates
 and checks a separate active revision only after the source is frozen and final
-parity passes. `-RouteImmediately` opts out of staging and deploys active writes.
+parity passes. `-RouteImmediately` opts out of staging, deploys active writes,
+configures the billing retry scheduler, routes 100% of Cloud Run traffic to the
+validated revision, and verifies the permanent API URL serves that revision.
 Deployment requires usable Shopify Admin API and
 Microsoft Graph mail credentials; bootstrap placeholders are not accepted for
 either value. Use the new store's Shopify app credentials in the destination.
