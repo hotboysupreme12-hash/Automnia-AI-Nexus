@@ -42,6 +42,7 @@ const shopifyAdminStoreDomain = String(shopifyAdminCredential?.storeDomain || sh
 const shopifyApiVersion = String(process.env.SHOPIFY_API_VERSION || '2026-07').trim();
 let shopifyAccessTokenCache = null;
 const billingRetryAudience = String(process.env.AUTOMNIA_BILLING_RETRY_AUDIENCE || 'https://api.automnia.app').trim();
+const billingRetryServiceAccountEmail = String(process.env.AUTOMNIA_BILLING_RETRY_SERVICE_ACCOUNT_EMAIL || '').trim();
 const BILLING_RETRY_DELAY_MS = 24 * 60 * 60 * 1000;
 const BILLING_RETRY_MAX_ATTEMPTS = 3;
 const BILLING_ATTEMPT_CLAIM_TIMEOUT_MS = 30 * 60 * 1000;
@@ -1760,9 +1761,13 @@ function requireAdmin(req, res, next) {
 
 async function requireSchedulerIdentity(req, res, next) {
   const supplied = req.get('authorization')?.replace(/^Bearer\s+/i, '').trim() || '';
-  if (!supplied || !billingRetryAudience) return res.status(401).json({ ok: false, error: 'Unauthorized.' });
+  if (!supplied || !billingRetryAudience || !billingRetryServiceAccountEmail) return res.status(401).json({ ok: false, error: 'Unauthorized.' });
   try {
-    await new OAuth2Client().verifyIdToken({ idToken: supplied, audience: billingRetryAudience });
+    const ticket = await new OAuth2Client().verifyIdToken({ idToken: supplied, audience: billingRetryAudience });
+    const payload = ticket.getPayload();
+    if (payload?.aud !== billingRetryAudience || payload?.email_verified !== true || payload?.email !== billingRetryServiceAccountEmail) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized.' });
+    }
     return next();
   } catch {
     return res.status(401).json({ ok: false, error: 'Unauthorized.' });

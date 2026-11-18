@@ -226,6 +226,9 @@ jobs:
     env:
       AUTOMNIA_UPDATE_REQUIRE_SIGNING: '1'
       AUTOMNIA_UPDATE_CHANNEL: stable-x64
+      AUTOMNIA_UPDATE_BUCKET: ${{ vars.AUTOMNIA_UPDATE_BUCKET }}
+      AUTOMNIA_LEGACY_UPDATE_BUCKET: ${{ vars.AUTOMNIA_LEGACY_UPDATE_BUCKET }}
+      AUTOMNIA_UPDATE_TRUSTED_KEY_SHA256: ${{ vars.AUTOMNIA_UPDATE_TRUSTED_KEY_SHA256 }}
     steps:
       - name: Check out release source
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -283,6 +286,11 @@ jobs:
           AUTOMNIA_UPDATE_OUTPUT_DIR: release/update-channel
         run: npm run release:update-verify
 
+      - name: Verify installed-client trust and channel
+        env:
+          AUTOMNIA_RELEASE_VERSION: ${{ github.ref_name }}
+        run: node scripts/publish-update-channel.cjs verify
+
       - name: Authenticate to Google Cloud without a service-account key
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
         with:
@@ -291,6 +299,16 @@ jobs:
 
       - name: Install Google Cloud CLI
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+
+      - name: Preflight both update buckets
+        env:
+          AUTOMNIA_RELEASE_VERSION: ${{ github.ref_name }}
+        run: node scripts/publish-update-channel.cjs preflight
+
+      - name: Publish x64 update channel to both buckets
+        env:
+          AUTOMNIA_RELEASE_VERSION: ${{ github.ref_name }}
+        run: node scripts/publish-update-channel.cjs release
 
       - name: Publish customer installers to the private download bucket
         shell: bash
@@ -336,32 +354,3 @@ jobs:
           gcloud storage cp --cache-control="no-store,max-age=0" "$AUTOMNIA_WINDOWS_INSTALLER" "gs://$PUBLIC_DOWNLOAD_BUCKET/releases/current/Automnia-Setup-x64.exe"
           gcloud storage cp --cache-control="no-store,max-age=0" "$AUTOMNIA_MAC_X64" "gs://$PUBLIC_DOWNLOAD_BUCKET/releases/current/Automnia-AI-Nexus-x64.dmg"
           gcloud storage cp --cache-control="no-store,max-age=0" "$AUTOMNIA_LINUX_APPIMAGE" "gs://$PUBLIC_DOWNLOAD_BUCKET/releases/current/Automnia-AI-Nexus-x86_64.AppImage"
-
-      - name: Publish immutable payloads, then channel metadata
-        shell: bash
-        env:
-          UPDATE_BUCKET: ${{ vars.AUTOMNIA_UPDATE_BUCKET }}
-        run: |
-          set -euo pipefail
-          test -n "$UPDATE_BUCKET" || { echo "AUTOMNIA_UPDATE_BUCKET is required" >&2; exit 1; }
-          gcloud storage buckets describe "gs://$UPDATE_BUCKET" >/dev/null
-          # The WIF publisher is intentionally least-privilege and cannot delete
-          # temporary composite-upload parts. Upload each object directly instead.
-          gcloud config set storage/parallel_composite_upload_enabled False >/dev/null
-          version="${GITHUB_REF_NAME#v}"
-          version_destination="gs://$UPDATE_BUCKET/releases/$version"
-          channel_destination="gs://$UPDATE_BUCKET/stable-x64"
-          while IFS= read -r -d '' file; do
-            gcloud storage cp --if-generation-match=0 --cache-control="public,max-age=31536000,immutable" "$file" "$version_destination/"
-            gcloud storage cp --if-generation-match=0 --cache-control="public,max-age=31536000,immutable" "$file" "$channel_destination/"
-          done < <(find release/update-channel -maxdepth 1 -type f ! -name 'latest*.yml' ! -name 'update-manifest*' ! -name 'update-signing.json' -print0)
-          while IFS= read -r -d '' file; do
-            gcloud storage cp --if-generation-match=0 --cache-control="no-store,max-age=0" "$file" "$version_destination/"
-          done < <(find release/update-channel -maxdepth 1 -type f \( -name 'latest*.yml' -o -name 'update-manifest*' -o -name 'update-signing.json' \) -print0)
-          while IFS= read -r -d '' file; do
-            gcloud storage cp --cache-control="no-store,max-age=0" "$file" "$channel_destination/"
-          done < <(find release/update-channel -maxdepth 1 -type f -name 'latest*.yml' -print0)
-          for metadata in update-signing.json update-manifest-public-key.pem update-manifest.json.sig update-manifest.json; do
-            test -f "release/update-channel/$metadata" || { echo "Missing required metadata: $metadata" >&2; exit 1; }
-            gcloud storage cp --cache-control="no-store,max-age=0" "release/update-channel/$metadata" "$channel_destination/$metadata"
-          done

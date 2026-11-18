@@ -88,4 +88,17 @@ if (expectedVersion && metadataVersion !== expectedVersion) {
   throw new Error(`Updater metadata version ${metadataVersion} does not match requested release ${expectedVersion}`)
 }
 
+// Existing stable-x64 installations ask electron-updater for channel-specific
+// filenames, even though electron-builder emits latest*.yml. Keep both names.
+if (String(process.env.AUTOMNIA_UPDATE_CHANNEL || 'stable').trim() === 'stable-x64') {
+  for (const [source, alias] of [
+    ['latest.yml', 'stable-x64.yml'],
+    ['latest-mac.yml', 'stable-x64-mac.yml'],
+    ['latest-linux.yml', 'stable-x64-linux.yml'],
+  ]) {
+    const sourcePath = path.join(outputRoot, source)
+    if (fs.existsSync(sourcePath)) fs.copyFileSync(sourcePath, path.join(outputRoot, alias))
+  }
+}
+
 console.log(`[update-stage] staged ${fs.readdirSync(outputRoot).length} files for version ${metadataVersion} and a signed ${rolloutPercentage}% rollout policy`)

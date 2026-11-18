@@ -6,8 +6,8 @@ Automnia desktop updates are a cryptographically signed, cross-platform release 
 
 1. The public release workflow builds Windows NSIS, macOS DMG/ZIP, and Linux AppImage/DEB packages. It currently supports an early unsigned Windows/macOS mode and can be switched to platform signing later without changing the GCS update protocol.
 2. Every packaged app contains the Ed25519 public update key and its immutable update origin. The private key exists only as a protected GitHub Actions secret.
-3. A final release job downloads all three platform jobs, flattens one coherent channel, validates every `latest*.yml` reference, signs `update-manifest.json` with the staged-rollout policy, and verifies every artifact before publication.
-4. Payloads are uploaded first to both `releases/<version>/` and `stable/` with create-only generation preconditions. Mutable channel metadata is uploaded in dependency order with the signed manifest last and `Cache-Control: no-store`, so clients never accept metadata for a missing installer.
+3. A final release job downloads all three platform jobs, flattens one coherent `stable-x64` channel, validates every `latest*.yml` reference, creates the matching `stable-x64*.yml` provider names, signs `update-manifest.json` with the staged-rollout policy, and verifies every artifact before publication.
+4. Immutable payloads are made available in both the target and legacy update buckets under `releases/<version>/` and `stable-x64/` before channel metadata advances. The target pointer advances first, followed by the legacy pointer, with the manifest last and `Cache-Control: no-store`. Publication can be temporarily partial if a later write fails; investigate a failed run before retrying.
 5. The app verifies the signed JSON against its embedded key before allowing `electron-updater` to check or download. It then verifies the downloaded file's size and SHA-256 independently of electron-updater's SHA-512 and platform signature checks.
 
 The update bucket intentionally serves public, read-only release objects. Application access is still license-gated. Never embed a Google credential, service-account key, signing private key, or signed URL generator in the desktop app.
@@ -37,6 +37,23 @@ gcloud storage buckets add-iam-policy-binding "gs://$UPDATE_BUCKET" --member="se
 
 Use Google Workload Identity Federation for GitHub Actions rather than a long-lived service-account JSON key. Restrict the provider's attribute condition to the exact repository and, preferably, tag refs. Grant the resulting repository principal `roles/iam.workloadIdentityUser` on only the publisher service account.
 
+The promotion workflow is manually dispatched and normally runs on `refs/heads/main`, so a tag-only provider will reject it. Before authorizing promotion, protect the default branch and preserve the existing tag condition while adding only a branch exception for the promotion workflow, `workflow_dispatch`, and an approved workflow commit SHA. A policy shape to review is:
+
+```text
+assertion.repository == '<OWNER>/<REPO>' &&
+assertion.repository_id == '<REPOSITORY_ID>' &&
+assertion.repository_owner_id == '<OWNER_ID>' &&
+(
+  (assertion.ref_type == 'tag' && assertion.ref.startsWith('refs/tags/v')) ||
+  (assertion.ref_type == 'branch' && assertion.ref == 'refs/heads/main' &&
+   assertion.event_name == 'workflow_dispatch' &&
+   assertion.workflow_ref == '<OWNER>/<REPO>/.github/workflows/promote-desktop-update.yml@refs/heads/main' &&
+   assertion.workflow_sha == '<REVIEWED_MAIN_COMMIT_SHA>')
+)
+```
+
+Keep the existing subject, repository, ref, and ref-type mappings, and add mappings for every newly referenced claim when updating the provider; provider mapping updates replace the supplied mapping set. Confirm the publisher's `workloadIdentityUser` binding admits the same repository. Update the pinned SHA only after reviewing each new workflow revision. A branch/path exception without branch protection or a reviewed SHA would also trust unreviewed changes pushed to that branch. Test token exchange for an allowed release tag and an allowed promotion, and rejection for another workflow or branch, without logging tokens. The promotion workflow's `identity_check_only` input authenticates and describes both update buckets, then skips all publication steps; it does not prove write access.
+
 The direct production origin can be:
 
 ```text
@@ -63,8 +80,10 @@ Windows and Apple platform-signing secrets are optional in the early distributio
 
 Repository/environment variables:
 
-- `AUTOMNIA_UPDATE_BASE_URL`: the HTTPS `/stable` origin embedded in every build.
-- `AUTOMNIA_UPDATE_BUCKET`: bucket name without `gs://`.
+- `AUTOMNIA_UPDATE_BASE_URL`: the target HTTPS `/stable` base; the x64 workflow appends `-x64` before embedding it in builds.
+- `AUTOMNIA_UPDATE_BUCKET`: target update bucket name without `gs://`.
+- `AUTOMNIA_LEGACY_UPDATE_BUCKET`: the distinct old update bucket name without `gs://`; existing installations continue polling it. Both variables are required.
+- `AUTOMNIA_UPDATE_TRUSTED_KEY_SHA256`: the full lowercase SHA-256 fingerprint of the installed clients' Ed25519 public key in DER SubjectPublicKeyInfo form. The workflow rejects a different signing key before publication.
 - `AUTOMNIA_UPDATE_SIGNING_KEY_ID`: stable operational key label.
 - `AUTOMNIA_UPDATE_ROLLOUT_PERCENTAGE`: `5`, `25`, or `100`; defaults to `100`.
 - `AUTOMNIA_UPDATE_MINIMUM_VERSION`: oldest version allowed to defer the release. Leave blank for no minimum-version mandate.
@@ -79,14 +98,20 @@ openssl pkey -in automnia-update-private.pem -pubout -out automnia-update-public
 
 The workflow derives and embeds the public key. Keep the offline private-key backup encrypted. Key rotation requires a bridge release containing both old-authorized release metadata and the next public key; do not replace the key abruptly or installed clients will correctly reject every future update.
 
+The WIF publisher must be able to describe both buckets, read existing objects, create immutable objects, and replace channel metadata in both. The preflight checks bucket access, but does not prove all object write permissions. Keep both update buckets publicly readable. This dual publication covers updater objects; private installer and public website download aliases remain separately configured.
+
 ## Release procedure
 
 1. Bump `package.json` to a strictly higher semantic version and update `CHANGELOG.md`.
 2. Set rollout to `5` for the first production cohort.
 3. Push a protected `v<version>` tag. All platform jobs and lifecycle tests must pass before `publish-updates` can run.
 4. Verify the release URL, Windows/macOS signatures, update manifest signature, and one installed upgrade on each platform.
-5. Increase rollout to `25`, then `100`, with the protected **Promote Desktop Update Rollout** workflow after crash/startup health review. Promotion signs new policy metadata around the existing immutable installers; it never rebuilds them.
+5. Increase rollout to `25`, then `100`, with the protected **Promote Desktop Update Rollout** workflow after crash/startup health review. Select the original release's channel: the workflow verifies its original signature, key, version, and channel and checks the immutable payloads in both buckets before signing and publishing new policy metadata. It never rebuilds the installers.
 6. Never mutate an artifact filename already released. Publish a new higher patch version for a correction or rollback build.
+
+The x64 release workflow never replaces the shared `stable` channel, which can include Apple-silicon clients. Older clients on that channel need a separately compatible, signed bridge release before its legacy endpoint can be retired. A 5% rollout will not migrate every client. Preserve the old endpoints until adoption and rollback requirements are satisfied.
+
+If dual publication fails, do not overwrite a released object or blindly rebuild the same version. Inspect both buckets and preserve the original staged bytes. The publisher can resume when existing immutable objects match those bytes; a conflicting object or regenerated manifest causes a failure requiring operator reconciliation. Manifest and signature are separate objects, so readers may observe a temporary mismatch during publication and retry.
 
 ## Twenty-plus production failure cases handled
 

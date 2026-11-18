@@ -31,7 +31,7 @@ test('cross-platform update staging flattens coherent metadata and excludes evid
     }
     const result = spawnSync(process.execPath, ['scripts/stage-update-channel.cjs'], {
       cwd: process.cwd(),
-      env: { ...process.env, AUTOMNIA_UPDATE_STAGE_INPUT: input, AUTOMNIA_UPDATE_STAGE_OUTPUT: output, AUTOMNIA_UPDATE_ROLLOUT_PERCENTAGE: '5', AUTOMNIA_RELEASE_VERSION: '1.2.0' },
+      env: { ...process.env, AUTOMNIA_UPDATE_STAGE_INPUT: input, AUTOMNIA_UPDATE_STAGE_OUTPUT: output, AUTOMNIA_UPDATE_CHANNEL: 'stable', AUTOMNIA_UPDATE_ROLLOUT_PERCENTAGE: '5', AUTOMNIA_RELEASE_VERSION: '1.2.0' },
       encoding: 'utf8',
     })
     assert.equal(result.status, 0, result.stderr)
@@ -42,6 +42,22 @@ test('cross-platform update staging flattens coherent metadata and excludes evid
     const metadata = yaml.load(fs.readFileSync(path.join(output, 'latest.yml'), 'utf8'))
     assert.equal(metadata.version, '1.2.0')
     assert.equal(metadata.stagingPercentage, undefined, 'signed manifest owns rollout so updater cohorts cannot disagree')
+    assert.equal(fs.existsSync(path.join(output, 'stable-x64.yml')), false, 'shared stable must not gain x64 channel metadata')
+
+    const x64Output = path.join(temp, 'output-x64')
+    const x64 = spawnSync(process.execPath, ['scripts/stage-update-channel.cjs'], {
+      cwd: process.cwd(),
+      env: { ...process.env, AUTOMNIA_UPDATE_STAGE_INPUT: input, AUTOMNIA_UPDATE_STAGE_OUTPUT: x64Output, AUTOMNIA_UPDATE_CHANNEL: 'stable-x64', AUTOMNIA_RELEASE_VERSION: '1.2.0' },
+      encoding: 'utf8',
+    })
+    assert.equal(x64.status, 0, x64.stderr)
+    for (const [source, alias] of [
+      ['latest.yml', 'stable-x64.yml'],
+      ['latest-mac.yml', 'stable-x64-mac.yml'],
+      ['latest-linux.yml', 'stable-x64-linux.yml'],
+    ]) {
+      assert.deepEqual(fs.readFileSync(path.join(x64Output, alias)), fs.readFileSync(path.join(x64Output, source)))
+    }
   } finally {
     fs.rmSync(temp, { recursive: true, force: true })
   }
