@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
-import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { accessSync, closeSync, constants as fsConstants, existsSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import net from 'node:net'
@@ -8,6 +8,10 @@ import net from 'node:net'
 const root = process.cwd()
 const releaseRoot = path.join(root, 'release')
 const productName = 'Automnia AI Nexus'
+const explicitLinuxAppImagePath = process.platform === 'linux'
+  ? String(process.env.AUTOMNIA_PACKAGED_LINUX_APPIMAGE || '').trim()
+  : ''
+const useLinuxAppImage = Boolean(explicitLinuxAppImagePath)
 
 function resolveMacUnpackedRoot() {
   const explicitAppPath = String(process.env.AUTOMNIA_PACKAGED_MAC_APP_PATH || '').trim()
@@ -40,15 +44,17 @@ const launcherPath = process.platform === 'win32'
   ? path.join(unpackedRoot, 'Automnia AI Nexus.exe')
   : process.platform === 'darwin'
     ? path.join(macAppPath, 'Contents', 'MacOS', productName)
-  : path.join(unpackedRoot, 'automnia')
+  : useLinuxAppImage
+    ? path.resolve(explicitLinuxAppImagePath)
+    : path.join(unpackedRoot, 'automnia')
 const electronRuntimePath = process.platform === 'win32'
   ? path.join(unpackedRoot, 'electron.exe')
   : launcherPath
 const resourcesDir = process.platform === 'darwin'
   ? path.join(macAppPath, 'Contents', 'Resources')
   : path.join(unpackedRoot, 'resources')
-const launcherCwd = process.platform === 'darwin' ? path.dirname(launcherPath) : unpackedRoot
-const launcherExitTimeoutMs = process.platform === 'darwin' ? 30_000 : 10_000
+const launcherCwd = process.platform === 'darwin' || useLinuxAppImage ? path.dirname(launcherPath) : unpackedRoot
+const launcherExitTimeoutMs = process.platform === 'darwin' || useLinuxAppImage ? 60_000 : 10_000
 const requiredPackagedFiles = [
   launcherPath,
   electronRuntimePath,
@@ -59,11 +65,17 @@ const requiredPackagedFiles = [
   path.join(resourcesDir, 'openclaw'),
 ]
 
-for (const filePath of requiredPackagedFiles) {
-  assert.ok(existsSync(filePath), `packaged launch smoke requires ${filePath}; run node scripts/package-desktop.cjs --dir first`)
+if (useLinuxAppImage) {
+  assert.ok(existsSync(launcherPath), `packaged launch smoke requires AUTOMNIA_PACKAGED_LINUX_APPIMAGE=${launcherPath}`)
+  assert.ok(statSync(launcherPath).isFile(), 'packaged AppImage must be a file')
+  accessSync(launcherPath, fsConstants.X_OK)
+} else {
+  for (const filePath of requiredPackagedFiles) {
+    assert.ok(existsSync(filePath), `packaged launch smoke requires ${filePath}; run node scripts/package-desktop.cjs --dir first`)
+  }
+  assert.ok(statSync(launcherPath).isFile(), 'packaged launcher must be a file')
+  assert.ok(statSync(electronRuntimePath).isFile(), 'packaged Electron runtime must be a file')
 }
-assert.ok(statSync(launcherPath).isFile(), 'packaged launcher must be a file')
-assert.ok(statSync(electronRuntimePath).isFile(), 'packaged Electron runtime must be a file')
 
 async function freePort() {
   return await new Promise<number>((resolve, reject) => {
@@ -182,7 +194,7 @@ const env = {
 }
 
 try {
-  const launcher = spawn(launcherPath, [], {
+  const launcher = spawn(launcherPath, useLinuxAppImage ? ['--appimage-extract-and-run'] : [], {
     cwd: launcherCwd,
     env,
     windowsHide: true,

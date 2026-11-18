@@ -326,6 +326,20 @@ jobs:
           sudo apt-get remove -y "$package_name"
           trap - EXIT
 
+      - name: Verify and launch x86_64 AppImage under virtual display
+        shell: bash
+        run: |
+          set -euo pipefail
+          appimage_path="$(find release -maxdepth 1 -type f -name '*.AppImage' -print -quit)"
+          test -n "$appimage_path" && test -f "$appimage_path"
+          chmod +x "$appimage_path"
+          machine="$(readelf -h "$appimage_path" | awk -F: '/Machine:/ { gsub(/^[[:space:]]+/, "", $2); print $2 }')"
+          test "$machine" = "Advanced Micro Devices X86-64"
+          APPIMAGE_EXTRACT_AND_RUN=1 \
+            AUTOMNIA_PACKAGED_LINUX_APPIMAGE="$appimage_path" \
+            AUTOMNIA_ELECTRON_E2E_NO_SANDBOX=1 \
+            xvfb-run -a npm run smoke:packaged-electron-launch
+
       - name: Upload Linux release candidates
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
