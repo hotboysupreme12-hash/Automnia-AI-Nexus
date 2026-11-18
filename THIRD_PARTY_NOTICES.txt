@@ -1181,7 +1181,7 @@ node_modules/signal-exit@3.0.7
   License: ISC
 node_modules/simple-update-notifier@2.0.0
   License: MIT
-node_modules/source-map-js@1.2.2
+node_modules/source-map-js@1.2.3
   License: BSD-3-Clause
 node_modules/source-map-support@0.5.21
   License: MIT
@@ -1311,7 +1311,7 @@ node_modules/zustand@5.0.15
   License: MIT
 onnxruntime-common@1.31.0-dev.20260911-2a43ec07e
   License: MIT
-picomatch@4.0.7
+picomatch@4.0.4
   License: MIT
 semver@5.7.3
   License: ISC
