@@ -194,6 +194,7 @@ assert.match(testCiScript, /npm run smoke:packaged-beta-screenshots-contract/, '
 assert.match(testCiScript, /npm run smoke:ci-workflow/, 'test:ci must finish with CI workflow contract checks')
 
 assert.match(electronE2eSmoke, /renderer-journey/, 'Electron E2E must exercise rendered primary navigation')
+assert.match(electronE2eSmoke, /runChecked\('tar', \['-xf', zipPath, '-C', destination\], 'Electron extract'\)/, 'Windows Electron E2E must extract the verified binary with tar instead of PowerShell Archive module')
 assert.match(packageDesktop, /prepare-openclaw-vendor\.cjs/, 'desktop packaging must prepare vendored OpenClaw dependencies when invoked directly')
 assert.match(packageDesktop, /killGeneratedWindowsPackageProcesses/, 'Windows packaging must stop packaged child processes before replacing output')
 assert.match(packageDesktop, /StartsWith\(\$target/, 'Windows packaging cleanup must be scoped to the generated package directory')

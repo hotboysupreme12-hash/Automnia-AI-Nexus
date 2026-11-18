@@ -62,14 +62,7 @@ function downloadFile(url: string, destination: string) {
 
 function extractZip(zipPath: string, destination: string) {
   if (process.platform === 'win32') {
-    runChecked('powershell.exe', [
-      '-NoProfile',
-      '-NonInteractive',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-Command',
-      `Expand-Archive -LiteralPath ${psLiteral(zipPath)} -DestinationPath ${psLiteral(destination)} -Force`,
-    ], 'Electron extract')
+    runChecked('tar', ['-xf', zipPath, '-C', destination], 'Electron extract')
     return
   }
   runChecked('unzip', ['-q', zipPath, '-d', destination], 'Electron extract')
