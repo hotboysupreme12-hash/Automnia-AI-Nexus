@@ -154,6 +154,8 @@ assert.match(packagedElectronLaunchSmoke, /useLinuxAppImage\s*\?\s*180_000/, 'Ap
 assert.ok(packagedElectronLaunchSmoke.includes("AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS: useLinuxAppImage ? '15000' : '1500'"), 'AppImage smoke must keep its temporary extraction available while the runtime is verified')
 assert.ok(packagedElectronLaunchSmoke.includes("AUTOMNIA_ELECTRON_E2E_KEEP_WINDOW_HIDDEN: '1'"), 'packaged launch smoke must avoid showing a test window on an interactive desktop')
 assert.ok(packagedOpenClawGatewaySmoke.includes("AUTOMNIA_ELECTRON_E2E_KEEP_WINDOW_HIDDEN: '1'"), 'packaged Gateway smoke must avoid showing a test window on an interactive desktop')
+assert.ok(packagedOpenClawGatewaySmoke.includes('AUTOMNIA_PACKAGED_WINDOWS_ROOT'), 'packaged Gateway smoke must support the Windows release staging directory')
+assert.match(publicRelease, /AUTOMNIA_PACKAGED_WINDOWS_ROOT:\s*release\/win-installer\/win-unpacked/, 'Windows release smoke must launch the app from the installer build output')
 assert.match(read('electron/main.cjs'), /AUTOMNIA_ELECTRON_E2E_KEEP_WINDOW_HIDDEN === '1'/, 'Electron E2E must support hidden-window startup validation')
 assert.match(controlPlaneSource, /startup defaults raced with another config writer; rebasing/, 'Gateway plugin defaults must retry a config snapshot conflict during first startup')
 assert.ok(packagedElectronLaunchSmoke.indexOf('await waitForLogPatterns(logPath, [') < packagedElectronLaunchSmoke.indexOf('const launcherStatus = await new Promise'), 'packaged startup must verify the writable runtime before collecting launch completion evidence')

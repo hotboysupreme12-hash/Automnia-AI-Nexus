@@ -9,7 +9,10 @@ import net from 'node:net'
 const root = process.cwd()
 const require = createRequire(import.meta.url)
 const productName = 'Automnia AI Nexus'
-const unpackedRoot = path.join(root, 'release', process.platform === 'win32' ? 'win-unpacked' : 'unsupported')
+const configuredUnpackedRoot = String(process.env.AUTOMNIA_PACKAGED_WINDOWS_ROOT || '').trim()
+const unpackedRoot = configuredUnpackedRoot
+  ? path.resolve(root, configuredUnpackedRoot)
+  : path.join(root, 'release', process.platform === 'win32' ? 'win-unpacked' : 'unsupported')
 const launcherPath = path.join(unpackedRoot, `${productName}.exe`)
 const resourcesDir = path.join(unpackedRoot, 'resources')
 const codexCliRelative = path.join('dist', 'extensions', 'codex', 'node_modules', '@openai', 'codex', 'bin', 'codex.js')

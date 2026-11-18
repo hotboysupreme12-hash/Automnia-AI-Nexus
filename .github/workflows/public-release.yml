@@ -68,6 +68,8 @@ jobs:
         run: npm run dist:win
 
       - name: Launch packaged OpenClaw Gateway and verify the pinned runtime
+        env:
+          AUTOMNIA_PACKAGED_WINDOWS_ROOT: release/win-installer/win-unpacked
         run: npm run smoke:packaged-openclaw-gateway
 
       - name: Generate signed update manifest
