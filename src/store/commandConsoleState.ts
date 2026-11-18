@@ -4,6 +4,19 @@ import { forgetRememberedState } from '../hooks/useRememberedState'
 
 export const COMMAND_CONSOLE_DRAFT_PREFIX = 'automnia:command-draft:'
 export const MAX_COMMAND_CONSOLE_RESPONSES = 80
+export const COMMAND_CONSOLE_QUEUE_RECEIPTS_KEY = 'automnia:command-console-queue-receipts:v1'
+
+export type CommandConsoleQueueReceiptStatus = 'queued' | 'started' | 'cancelled' | 'interrupted' | 'expired' | 'failed'
+
+/** Safe receipt metadata only. Never add prompts, options, attachments, or executable work here. */
+export type CommandConsoleQueueReceipt = {
+  id: string
+  agentId: string
+  queuedAt: string
+  status: CommandConsoleQueueReceiptStatus
+  reason?: string
+  completedAt?: string
+}
 
 export type CommandConsoleDraft = {
   storageKey: string
@@ -17,6 +30,8 @@ export type CommandConsoleDraftStorage = {
   setItem(key: string, value: string): void
   removeItem(key: string): void
 }
+
+export type CommandConsoleQueueReceiptStorage = Pick<CommandConsoleDraftStorage, 'getItem' | 'setItem' | 'removeItem'>
 
 export interface NexusCommandConsoleResponseState {
   agentResponses: AgentResponse[]
@@ -104,6 +119,126 @@ function browserDraftStorage(): CommandConsoleDraftStorage | null {
   }
 }
 
+function normalizeCommandConsoleQueueReceipt(value: unknown): CommandConsoleQueueReceipt | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const candidate = value as Record<string, unknown>
+  const statuses: CommandConsoleQueueReceiptStatus[] = ['queued', 'started', 'cancelled', 'interrupted', 'expired', 'failed']
+  if (typeof candidate.id !== 'string' || !candidate.id.trim() || candidate.id.length > 256) return null
+  if (typeof candidate.agentId !== 'string' || !candidate.agentId.trim() || candidate.agentId.length > 256) return null
+  if (typeof candidate.queuedAt !== 'string' || candidate.queuedAt.length > 64 || !Number.isFinite(Date.parse(candidate.queuedAt))) return null
+  if (!statuses.includes(candidate.status as CommandConsoleQueueReceiptStatus)) return null
+  const reason = typeof candidate.reason === 'string' ? candidate.reason.slice(0, 500) : undefined
+  const completedAt = typeof candidate.completedAt === 'string'
+    && candidate.completedAt.length <= 64
+    && Number.isFinite(Date.parse(candidate.completedAt))
+    ? candidate.completedAt
+    : undefined
+  return {
+    id: candidate.id.trim(),
+    agentId: candidate.agentId.trim(),
+    queuedAt: candidate.queuedAt,
+    status: candidate.status as CommandConsoleQueueReceiptStatus,
+    ...(reason ? { reason } : {}),
+    ...(completedAt ? { completedAt } : {}),
+  }
+}
+
+export function readCommandConsoleQueueReceipts(
+  storage: CommandConsoleQueueReceiptStorage | null = browserDraftStorage(),
+): CommandConsoleQueueReceipt[] {
+  if (!storage) return []
+  try {
+    const raw = storage.getItem(COMMAND_CONSOLE_QUEUE_RECEIPTS_KEY)
+    if (!raw) return []
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.slice(-MAX_COMMAND_CONSOLE_RESPONSES)
+      .map(normalizeCommandConsoleQueueReceipt)
+      .filter((receipt): receipt is CommandConsoleQueueReceipt => receipt !== null)
+  } catch {
+    return []
+  }
+}
+
+export function writeCommandConsoleQueueReceipt(
+  receiptInput: CommandConsoleQueueReceipt,
+  storage: CommandConsoleQueueReceiptStorage | null = browserDraftStorage(),
+): void {
+  const receipt = normalizeCommandConsoleQueueReceipt(receiptInput)
+  if (!storage || !receipt) return
+  try {
+    const receipts = readCommandConsoleQueueReceipts(storage).filter((entry) => entry.id !== receipt.id)
+    receipts.push(receipt)
+    storage.setItem(COMMAND_CONSOLE_QUEUE_RECEIPTS_KEY, JSON.stringify(receipts.slice(-MAX_COMMAND_CONSOLE_RESPONSES)))
+  } catch {
+    // Receipt persistence is best-effort; a storage failure must not block a turn.
+  }
+}
+
+export function removeCommandConsoleQueueReceipt(
+  receiptId: string,
+  storage: CommandConsoleQueueReceiptStorage | null = browserDraftStorage(),
+): void {
+  if (!storage || !receiptId.trim()) return
+  try {
+    const receipts = readCommandConsoleQueueReceipts(storage).filter((entry) => entry.id !== receiptId)
+    if (receipts.length) storage.setItem(COMMAND_CONSOLE_QUEUE_RECEIPTS_KEY, JSON.stringify(receipts))
+    else storage.removeItem(COMMAND_CONSOLE_QUEUE_RECEIPTS_KEY)
+  } catch {
+    // Receipt cleanup is best-effort; runtime execution must not depend on browser storage.
+  }
+}
+
+export function expireCommandConsoleFollowup<TOptions>(
+  queued: Pick<CommandConsoleQueuedFollowup<TOptions>, 'id' | 'queuedAt'>,
+  agentId: string,
+  updateResponse: (id: string, patch: Partial<AgentResponse>) => void,
+  completedAt = new Date().toISOString(),
+  storage: CommandConsoleQueueReceiptStorage | null = browserDraftStorage(),
+): void {
+  const reason = 'Queued Command Console turn expired after waiting 6h for the lane to become free.'
+  writeCommandConsoleQueueReceipt({ id: queued.id, agentId, queuedAt: queued.queuedAt, status: 'expired', reason, completedAt }, storage)
+  updateResponse(queued.id, {
+    response: reason,
+    ok: false,
+    streaming: false,
+    failureKind: 'timeout',
+    completedAt,
+    queuePosition: undefined,
+    queueDepth: undefined,
+    progressLabel: 'Queue expired',
+    progressLines: ['Queued turn expired before it could start.'],
+    progressUpdatedAt: completedAt,
+  })
+}
+
+export function interruptQueuedCommandConsoleFollowups<TOptions>(
+  queues: Iterable<[string, CommandConsoleQueuedFollowup<TOptions>[]]>,
+  updateResponse: (id: string, patch: Partial<AgentResponse>) => void,
+  completedAt = new Date().toISOString(),
+  storage: CommandConsoleQueueReceiptStorage | null = browserDraftStorage(),
+): void {
+  const reason = 'Queued Command Console turn was interrupted when the session was reset. It was not replayed; resend it if needed.'
+  for (const [agentId, queue] of queues) {
+    for (const queued of queue) {
+      writeCommandConsoleQueueReceipt({ id: queued.id, agentId, queuedAt: queued.queuedAt, status: 'interrupted', reason, completedAt }, storage)
+      updateResponse(queued.id, {
+        response: reason,
+        ok: false,
+        streaming: false,
+        failureKind: 'interrupted',
+        completedAt,
+        queuePosition: undefined,
+        queueDepth: undefined,
+        progressLabel: 'Interrupted',
+        progressMode: 'block',
+        progressLines: [reason],
+        progressUpdatedAt: completedAt,
+      })
+    }
+  }
+}
+
 function estimateCommandConsoleTokenCount(text: string): number {
   return Math.max(1, Math.ceil((text || '').length / 4))
 }
@@ -181,9 +316,64 @@ export function removeCommandConsoleDraftsForAgent(agentId: string, storage: Com
   return removed
 }
 
-export function makeCommandConsoleResponseState(): NexusCommandConsoleResponseState {
+export function makeCommandConsoleResponseState(
+  storage: CommandConsoleQueueReceiptStorage | null = browserDraftStorage(),
+  nowMs = Date.now(),
+): NexusCommandConsoleResponseState {
+  const safeNowMs = Number.isFinite(nowMs) ? nowMs : Date.now()
+  const now = new Date(safeNowMs).toISOString()
+  const receipts = readCommandConsoleQueueReceipts(storage)
+  let updatedReceipts = false
+  const agentResponses: AgentResponse[] = []
+
+  for (const receipt of receipts) {
+    if (receipt.status === 'queued' || receipt.status === 'started') {
+      const wasStarted = receipt.status === 'started'
+      receipt.status = 'interrupted'
+      receipt.reason = wasStarted
+        ? 'This queued turn had started when the browser session ended. Its live response was not restored or replayed.'
+        : 'This queued turn was interrupted when the browser session ended. It was not replayed; resend it if needed.'
+      receipt.completedAt = now
+      updatedReceipts = true
+    }
+    const reason = receipt.reason || 'Queued turn ended before it could start.'
+    const failureKind = receipt.status === 'expired' ? 'timeout' : receipt.status === 'cancelled' ? 'aborted' : receipt.status === 'failed' ? 'failed' : 'interrupted'
+    const progressLabel = receipt.status === 'cancelled'
+      ? 'Cancelled'
+      : receipt.status === 'expired'
+        ? 'Queue expired'
+        : receipt.status === 'failed'
+          ? 'Queue stopped'
+          : 'Interrupted'
+    agentResponses.push({
+      id: receipt.id,
+      agentId: receipt.agentId,
+      prompt: 'Queued Command Console turn',
+      response: reason,
+      ok: false,
+      timestamp: receipt.queuedAt,
+      durationMs: Math.max(0, Date.parse(receipt.completedAt || now) - Date.parse(receipt.queuedAt)),
+      streaming: false,
+      failureKind,
+      transport: 'command-console-queue',
+      queuedAt: receipt.queuedAt,
+      completedAt: receipt.completedAt || now,
+      progressLabel,
+      progressMode: 'block',
+      progressLines: [reason],
+      progressUpdatedAt: receipt.completedAt || now,
+    })
+  }
+
+  if (updatedReceipts && storage) {
+    try {
+      storage.setItem(COMMAND_CONSOLE_QUEUE_RECEIPTS_KEY, JSON.stringify(receipts.slice(-MAX_COMMAND_CONSOLE_RESPONSES)))
+    } catch {
+      // The local projection still remains safe and non-runnable when storage is unavailable.
+    }
+  }
   return {
-    agentResponses: [],
+    agentResponses: agentResponses.slice(-MAX_COMMAND_CONSOLE_RESPONSES).reverse(),
     busyAgentIds: [],
   }
 }

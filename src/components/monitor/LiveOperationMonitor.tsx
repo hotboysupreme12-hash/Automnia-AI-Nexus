@@ -2,7 +2,7 @@ import { useRememberedState } from '../../hooks/useRememberedState'
 import { memo, useCallback, useId, useMemo, useState } from 'react'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AgentActivityEvent, AgentOperationState, AgentResponse, MissionEvent, OpenClawAgent } from '../../types/nexus'
-import { clearRuntimeMonitor, restartGatewayRuntime, runRuntimeDoctor, stopCronShift, updateCronShift } from '../../hooks/useRuntimeStatus'
+import { clearRuntimeMonitor, restartGatewayRuntime, runRuntimeDoctor, runRuntimeDoctorRepair, stopCronShift, updateCronShift } from '../../hooks/useRuntimeStatus'
 import type { DoctorFinding, DoctorRun, GatewayChannelActivity, GatewayLogEntry, RuntimeCronJob, RuntimeMonitorClearResult, RuntimeStatus } from '../../hooks/useRuntimeStatus'
 import { agentPortraitSrc } from '../../utils/portrait'
 import { useChannelActivitySettings } from '../settings/channelActivitySettings'
@@ -11,6 +11,7 @@ import { projectGatewayLogEntriesForSurface } from '../../utils/gatewayActivityP
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
 import { Badge, Button, IconButton, StatusChip } from '../ui'
 import type { BadgeTone } from '../ui'
+import { canCopyDoctorDiagnosticCommand, canRunGuidedDoctorRepair, doctorRecoveryTarget, doctorRepairResultMessage, type DoctorRecoveryTarget } from '../../utils/doctorRecoveryPlaybook'
 
 const AUTOMNIA_LOCKUP_SRC = '/brand/automnia-ai-nexus-logo-transparent-cropped.png'
 const DOCTOR_PANEL_DISMISSED_RUN_KEY = 'automnia-monitor-doctor-dismissed-run'
@@ -517,7 +518,60 @@ function doctorFindingAction(finding: DoctorFinding): string {
   ].filter(Boolean).join(' | ')
 }
 
-function DoctorPanel({ run, error, persisted = false, stale = false, onDismiss }: { run: DoctorRun | null; error: string; persisted?: boolean; stale?: boolean; onDismiss?: () => void }) {
+function DoctorPanel({
+  run,
+  error,
+  persisted = false,
+  stale = false,
+  onDismiss,
+  onOpenRecoveryTarget,
+  onRepairCompleted,
+}: {
+  run: DoctorRun | null
+  error: string
+  persisted?: boolean
+  stale?: boolean
+  onDismiss?: () => void
+  onOpenRecoveryTarget?: (target: DoctorRecoveryTarget) => void
+  onRepairCompleted?: (run: DoctorRun) => void
+}) {
+  const [repairConfirmationKey, setRepairConfirmationKey] = useState('')
+  const [repairBusyKey, setRepairBusyKey] = useState('')
+  const [repairFeedback, setRepairFeedback] = useState<{ message: string; tone: 'success' | 'error' } | null>(null)
+  const [copyFeedback, setCopyFeedback] = useState<{ key: string; message: string } | null>(null)
+  const [expandedFindingChecks, setExpandedFindingChecks] = useState<string[]>([])
+
+  const runGuidedRepair = async (finding: DoctorFinding, key: string) => {
+    if (!canRunGuidedDoctorRepair(finding) || repairBusyKey) return
+    setRepairBusyKey(key)
+    setRepairFeedback(null)
+    setRepairConfirmationKey('')
+    try {
+      const result = await runRuntimeDoctorRepair()
+      setRepairFeedback({ message: doctorRepairResultMessage(result), tone: result.ok ? 'success' : 'error' })
+      onRepairCompleted?.(result.doctor)
+    } catch (repairError) {
+      setRepairFeedback({
+        message: repairError instanceof Error ? repairError.message : String(repairError),
+        tone: 'error',
+      })
+    } finally {
+      setRepairBusyKey('')
+    }
+  }
+
+  const copyDiagnosticCommand = async (finding: DoctorFinding, key: string) => {
+    const command = finding.guidedAction?.command
+    if (!command?.length) return
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard access is unavailable in this window.')
+      await navigator.clipboard.writeText(command.join(' '))
+      setCopyFeedback({ key, message: 'Diagnostic command copied. Review it before running it in a terminal.' })
+    } catch (copyError) {
+      setCopyFeedback({ key, message: copyError instanceof Error ? copyError.message : 'Could not copy the diagnostic command.' })
+    }
+  }
+
   if (!run && !error) return null
   const checks = run?.checks || []
   const title = persisted && run?.endedAt
@@ -552,10 +606,17 @@ function DoctorPanel({ run, error, persisted = false, stale = false, onDismiss }
               <DoctorDismissButton onDismiss={onDismiss} />
             </div>
           </div>
+          {repairFeedback && (
+            <div className={`mb-2 rounded-lg border px-3 py-2 text-[12px] ${repairFeedback.tone === 'success' ? 'border-emerald-300/20 bg-emerald-300/[0.05] text-emerald-100' : repairFeedback.tone === 'error' ? 'border-rose-300/20 bg-rose-300/[0.05] text-rose-100' : 'border-white/10 bg-white/[0.03] text-slate-200'}`} role="status" aria-live="polite">
+              Guided repair result: {compactRuntimeText(repairFeedback.message, 360)}
+            </div>
+          )}
           <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
             {checks.map((check) => {
-              const findings = (check.findings || []).slice(0, 2)
-              const extraFindings = Math.max(0, (check.findings?.length || 0) - findings.length)
+              const allFindings = check.findings || []
+              const expanded = expandedFindingChecks.includes(check.id)
+              const findings = expanded ? allFindings : allFindings.slice(0, 2)
+              const extraFindings = Math.max(0, allFindings.length - findings.length)
               return (
                 <div key={check.id} className={`rounded-lg border px-2.5 py-2 text-[12px] ${check.severity === 'error' ? 'border-rose-400/18 bg-rose-400/[0.04]' : check.severity === 'warning' ? 'border-amber-400/18 bg-amber-400/[0.04]' : 'border-emerald-400/12 bg-emerald-400/[0.025]'}`}>
                   <div className="flex items-center justify-between gap-2">
@@ -575,6 +636,11 @@ function DoctorPanel({ run, error, persisted = false, stale = false, onDismiss }
                       {findings.map((finding) => {
                         const action = doctorFindingAction(finding)
                         const location = finding.ocPath || finding.path || ''
+                        const findingKey = `${check.id}:${finding.checkId}:${finding.path || finding.ocPath || finding.message}`
+                        const recoveryTarget = doctorRecoveryTarget(finding)
+                        const repairAllowed = canRunGuidedDoctorRepair(finding)
+                        const confirmingRepair = repairConfirmationKey === findingKey
+                        const repairing = repairBusyKey === findingKey
                         return (
                           <li key={`${finding.checkId}-${finding.path || finding.ocPath || finding.message}`} className={`dy-doctor-finding border-l-2 pl-2 text-[12px] leading-snug ${doctorFindingToneClass(finding)}`}>
                             <div className="flex min-w-0 items-center gap-1.5">
@@ -584,12 +650,66 @@ function DoctorPanel({ run, error, persisted = false, stale = false, onDismiss }
                             <p className="mt-0.5 line-clamp-2 text-slate-300" title={finding.message}>{finding.message}</p>
                             {location && <p className="mt-0.5 truncate text-slate-400" title={location}>{location}</p>}
                             {action && <p className="mt-0.5 line-clamp-2 text-cyan-100/85" title={action}>{compactRuntimeText(action, 260)}</p>}
+                            {(recoveryTarget || canCopyDoctorDiagnosticCommand(finding) || repairAllowed) && (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {recoveryTarget && onOpenRecoveryTarget && (
+                                  <Button size="compact" variant="secondary" onClick={() => onOpenRecoveryTarget(recoveryTarget)}>
+                                    {recoveryTarget.label}
+                                  </Button>
+                                )}
+                                {canCopyDoctorDiagnosticCommand(finding) ? (
+                                  <Button size="compact" variant="quiet" onClick={() => void copyDiagnosticCommand(finding, findingKey)}>
+                                    Copy diagnostic command
+                                  </Button>
+                                ) : null}
+                                {repairAllowed && !confirmingRepair && (
+                                  <Button size="compact" variant="secondary" disabled={Boolean(repairBusyKey)} onClick={() => { setRepairFeedback(null); setRepairConfirmationKey(findingKey) }}>
+                                    Review Doctor repair
+                                  </Button>
+                                )}
+                                {repairing && <span role="status" className="self-center text-amber-100">Doctor repair running…</span>}
+                              </div>
+                            )}
+                            {confirmingRepair && (
+                              <div className="mt-2 rounded-md border border-amber-300/20 bg-amber-300/[0.06] p-2" role="group" aria-label="Confirm Doctor repair">
+                                <p className="text-amber-100">This runs OpenClaw Doctor --fix across current runtime findings and may change OpenClaw configuration. Review the finding before continuing.</p>
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  <Button size="compact" variant="quiet" onClick={() => setRepairConfirmationKey('')}>Cancel</Button>
+                                  <Button size="compact" variant="secondary" disabled={Boolean(repairBusyKey)} onClick={() => void runGuidedRepair(finding, findingKey)}>
+                                    Confirm and run Doctor repair
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                            {copyFeedback?.key === findingKey && (
+                              <p className="mt-2 text-slate-300" role="status" aria-live="polite">{copyFeedback.message}</p>
+                            )}
                           </li>
                         )
                       })}
                       {extraFindings > 0 && (
-                        <li className="text-[11px] font-semibold uppercase tracking-[0.10em] text-slate-400">
-                          +{extraFindings} more finding{extraFindings === 1 ? '' : 's'}
+                        <li>
+                          <Button
+                            size="compact"
+                            variant="quiet"
+                            className="px-0 text-[11px] font-semibold uppercase tracking-[0.10em] text-slate-400"
+                            aria-expanded={expanded}
+                            onClick={() => setExpandedFindingChecks((current) => current.includes(check.id) ? current.filter((id) => id !== check.id) : [...current, check.id])}
+                          >
+                            +{extraFindings} more finding{extraFindings === 1 ? '' : 's'}
+                          </Button>
+                        </li>
+                      )}
+                      {expanded && allFindings.length > 2 && (
+                        <li>
+                          <Button
+                            size="compact"
+                            variant="quiet"
+                            className="px-0 text-[11px] font-semibold uppercase tracking-[0.10em] text-slate-400"
+                            onClick={() => setExpandedFindingChecks((current) => current.filter((id) => id !== check.id))}
+                          >
+                            Show fewer findings
+                          </Button>
                         </li>
                       )}
                     </ul>
@@ -1710,6 +1830,22 @@ export const LiveOperationMonitor = memo(function LiveOperationMonitor({
     }
   }
 
+  const openDoctorRecoveryTarget = (target: DoctorRecoveryTarget) => {
+    if (target.kind === 'monitor') {
+      setTab(target.target)
+      return
+    }
+    window.dispatchEvent(new CustomEvent('automnia:navigate', { detail: target.target }))
+  }
+
+  const acceptDoctorRepairResult = (result: DoctorRun) => {
+    setDoctorRun(result)
+    setDoctorError('')
+    setDismissedDoctorRunKey('')
+    rememberDismissedDoctorRunKey('')
+    refreshRuntimeStatus()
+  }
+
   const restartGateway = async () => {
     setGatewayRestartBusy(true)
     setGatewayRestartError('')
@@ -1755,7 +1891,15 @@ export const LiveOperationMonitor = memo(function LiveOperationMonitor({
 
   return (
     <section data-dui-panel="monitor" data-monitor-active-tab={tab} className="dy-monitor-shell overflow-hidden rounded-none border border-white/[0.06] bg-[linear-gradient(180deg,#101112,#080909)] shadow-2xl shadow-black/40">
-      <DoctorPanel run={displayedDoctorRun} error={doctorError} persisted={displayedDoctorRunPersisted} stale={displayedDoctorRunStale} onDismiss={dismissDoctorPanel} />
+      <DoctorPanel
+        run={displayedDoctorRun}
+        error={doctorError}
+        persisted={displayedDoctorRunPersisted}
+        stale={displayedDoctorRunStale}
+        onDismiss={dismissDoctorPanel}
+        onOpenRecoveryTarget={openDoctorRecoveryTarget}
+        onRepairCompleted={acceptDoctorRepairResult}
+      />
       {gatewayRestartError && (
         <div className="border-b border-white/[0.04] bg-black/20 px-5 py-3">
           <div

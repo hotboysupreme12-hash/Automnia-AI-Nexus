@@ -7,7 +7,7 @@ import path from 'node:path'
 import test from 'node:test'
 import express, { type Express } from 'express'
 import { registerPluginRoutes, type PluginRepairPolicy } from '../server/routes/pluginRoutes'
-import type { PluginRuntimeService } from '../server/services/plugins/pluginRuntimeService'
+import type { PluginRuntimeService, PluginSecretReferenceValidationResult } from '../server/services/plugins/pluginRuntimeService'
 
 function pluginEntry(id: string, overrides: Partial<PluginControlEntryLike> = {}): PluginControlEntryLike {
   const enabled = typeof overrides.enabled === 'boolean' ? overrides.enabled : true
@@ -63,6 +63,7 @@ function createRuntimeStub(
   errors: Partial<Record<PluginRouteErrorSurface, RouteError>> = {},
   repairFailures: RouteError[] = [],
   onRepairSuccess?: () => void,
+  secretRefValidation: PluginSecretReferenceValidationResult = { ok: true },
 ): PluginRuntimeService {
   const terminalSession = {
     id: 'setup-1',
@@ -95,6 +96,7 @@ function createRuntimeStub(
       onRepairSuccess?.()
       return { command: `openclaw plugins reload ${pluginId} --wait --json`, code: 0, stdout: '', stderr: '', output: 'reloaded' }
     },
+    validatePluginSecretReferences: async () => secretRefValidation,
     pluginRuntimeInspectReady: (inspect) => inspect.runtimeLoaded !== false,
     startPluginSetupTerminalSession: (params) => {
       calls.terminal += 1
@@ -126,6 +128,8 @@ type PluginRoutesHarnessOptions = {
   repairFailures?: RouteError[]
   pluginRepairPolicy?: Partial<PluginRepairPolicy>
   onRepairSuccess?: (setPluginEntries: (entries: PluginControlEntryLike[]) => void) => void
+  secretRefValidation?: PluginSecretReferenceValidationResult
+  pluginConfig?: unknown
 }
 
 function createPluginRoutesHarness(pluginEntries: Array<string | PluginControlEntryLike>, options: PluginRoutesHarnessOptions = {}) {
@@ -168,8 +172,15 @@ function createPluginRoutesHarness(pluginEntries: Array<string | PluginControlEn
     pluginErrorDetail: (error) => redactSensitiveText(error instanceof Error ? error.message : String(error)),
     pluginErrorStatus: (error) => typeof (error as Error & { code?: unknown }).code === 'number' ? 502 : 500,
     pluginIdPattern: /^[a-z0-9][a-z0-9._-]{0,79}$/,
-    pluginRuntime: createRuntimeStub(calls, errors, options.repairFailures, () => options.onRepairSuccess?.((entries) => { currentPluginEntries = entries })),
+    pluginRuntime: createRuntimeStub(
+      calls,
+      errors,
+      options.repairFailures,
+      () => options.onRepairSuccess?.((entries) => { currentPluginEntries = entries }),
+      options.secretRefValidation,
+    ),
     pluginRuntimeStatePath,
+    readPluginConfig: async () => options.pluginConfig ?? {},
     pluginRepairPolicy: options.pluginRepairPolicy,
     redactSensitiveText,
     savePluginDirectConfig: async () => {
@@ -555,6 +566,26 @@ test('plugin routes block enabling plugins with missing required secret fields',
     assert.match(result.text, /plugin_configuration_required/)
     assert.match(result.text, /Google API key/)
     assert.doesNotMatch(result.text, /secret-value|apiKey=/)
+  })
+
+  assert.equal(calls.toggle, 0)
+})
+
+test('plugin routes block enabling when SecretRef validation reports unresolved bindings', async () => {
+  const refId = 'MISSING_PLUGIN_TOKEN'
+  const { app, calls } = createPluginRoutesHarness(['codex'], {
+    pluginConfig: { appServer: { authToken: { source: 'env', provider: 'default', id: refId } } },
+    secretRefValidation: { ok: false, reason: 'unresolved_reference' },
+  })
+
+  await withRouteServer(app, async (baseUrl) => {
+    const result = await requestJson(baseUrl, 'POST', '/api/plugins/codex', { enabled: true })
+    assert.equal(result.status, 409)
+    assert.doesNotMatch(result.text, new RegExp(refId))
+    const payload = JSON.parse(result.text) as { ok: boolean; error: { code: string; detail?: { reason?: string } } }
+    assert.equal(payload.ok, false)
+    assert.equal(payload.error.code, 'plugin_configuration_required')
+    assert.equal(payload.error.detail?.reason, 'unresolved_reference')
   })
 
   assert.equal(calls.toggle, 0)

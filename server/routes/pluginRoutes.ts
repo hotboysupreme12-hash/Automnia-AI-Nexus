@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
 import { missingRequiredPluginConfigFields, pluginIdFromPackageName } from '../services/plugins/pluginInventoryService'
 import { createPluginActionLedgerService, type PluginActionKind, type PluginActionLedgerEntry } from '../services/plugins/pluginActionLedgerService'
-import type { PluginRuntimeService, PluginSetupTerminalClient } from '../services/plugins/pluginRuntimeService'
+import type { PluginRuntimeService, PluginSecretReferenceValidationResult, PluginSetupTerminalClient } from '../services/plugins/pluginRuntimeService'
 
 type PluginControlEntryLike = {
   id: string
@@ -93,6 +93,7 @@ type PluginRoutesOptions = {
   pluginIdPattern: RegExp
   pluginRuntime: PluginRuntimeService
   pluginRuntimeStatePath: string
+  readPluginConfig: (pluginId: string) => Promise<unknown>
   pluginRepairPolicy?: Partial<PluginRepairPolicy>
   redactSensitiveText: (value: string) => string
   savePluginDirectConfig: (pluginId: string, values: Record<string, string>, providerAuth: Record<string, string>) => Promise<void>
@@ -850,6 +851,19 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
             'plugin_configuration_required',
             'Configure the required plugin fields before enabling this plugin.',
             { pluginId, fields: missingFields },
+          )
+        }
+        const secretValidation: PluginSecretReferenceValidationResult = await options.pluginRuntime.validatePluginSecretReferences(
+          pluginId,
+          await options.readPluginConfig(pluginId),
+        )
+        if (!secretValidation.ok) {
+          return apiFailure(
+            res,
+            409,
+            'plugin_configuration_required',
+            'Resolve and validate this plugin’s SecretRef settings before enabling it.',
+            { reason: secretValidation.reason },
           )
         }
       }

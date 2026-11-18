@@ -10201,7 +10201,7 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
   for (const agent of config.agents.list || []) {
     // Agent-local settings are authoritative. The global agent entry is a
     // projection and may still contain the previous hosted tier (for example
-    // Balanced 3.7 after a user selected Prime 3.8).
+    // Balanced Hydrogen after a user selected Automnia Swift (3.8 Flash).
     agent.model = applyAutomniaBillingModelOrder(localModels.get(agent.id) || agent.model, priority, uniqueStrings(
       ...nonAutomniaOpenClawModels(localModels.get(agent.id)),
       ...allProviderModels,
@@ -18623,6 +18623,10 @@ registerPluginRoutes(app, {
   pluginIdPattern: PLUGIN_ID_PATTERN,
   pluginRuntime: activePluginRuntimeService(),
   pluginRuntimeStatePath: PLUGIN_RUNTIME_STATE_PATH,
+  readPluginConfig: async (pluginId) => {
+    const current = await readOpenclawConfig()
+    return current.plugins?.entries?.[pluginId]?.config ?? {}
+  },
   redactSensitiveText,
   savePluginDirectConfig,
   schedulePluginGatewayRestart,

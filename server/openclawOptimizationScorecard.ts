@@ -201,10 +201,10 @@ export const OPENCLAW_OPTIMIZATION_CATEGORIES: OpenClawOptimizationSourceCategor
       },
       {
         title: 'Publish a runtime recovery playbook',
-        status: 'partial',
+        status: 'implemented',
         priority: 'p2',
-        evidence: 'The app exposes recovery controls, but the operator flow is not yet a guided playbook.',
-        nextAction: 'Turn common Doctor findings into one-click guided recovery actions.',
+        evidence: 'Doctor findings map to allowlisted in-app destinations and copy-only diagnostics; server-authorized safe findings offer a separate review and explicit repair confirmation, with exit/result summaries.',
+        nextAction: 'Keep recovery destinations allowlisted and never execute diagnostic commands automatically.',
       },
     ],
   },
@@ -537,10 +537,10 @@ export const OPENCLAW_OPTIMIZATION_CATEGORIES: OpenClawOptimizationSourceCategor
       },
       {
         title: 'Validate SecretRef bindings',
-        status: 'partial',
+        status: 'implemented',
         priority: 'p0',
-        evidence: 'Plugin activation is blocked when required configuration fields are missing; the check does not resolve SecretRef bindings or validate their scopes.',
-        nextAction: 'Validate SecretRef bindings and scopes before enabling a plugin.',
+        evidence: 'SecretRef plugin activation runs read-only OpenClaw config validation and secrets audit, requires complete resolvability evidence, scopes unresolved findings to the selected plugin, and blocks exec-backed references without running configured commands.',
+        nextAction: 'Keep SecretRef checks fail-closed, read-only, scoped to the selected plugin, and covered by secret-free reason-code tests.',
       },
       {
         title: 'Expose plugin repair actions',

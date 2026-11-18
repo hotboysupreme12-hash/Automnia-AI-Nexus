@@ -26,6 +26,9 @@ export type PluginRuntimeInspectResult = {
 }
 
 export type PluginRepairFailureClass = 'loader_error'
+export type PluginSecretReferenceValidationResult =
+  | { ok: true }
+  | { ok: false; reason: 'invalid_binding' | 'unresolved_reference' | 'exec_requires_operator' | 'validation_unavailable' }
 
 export type PluginSetupTerminalCommand = 'plugins' | 'model' | 'full' | 'doctor' | 'registry'
 export type PluginSetupTerminalStatus = 'running' | 'completed' | 'failed' | 'stopped'
@@ -104,6 +107,7 @@ export type PluginRuntimeServiceOptions = {
 export type PluginRuntimeService = {
   inspectOpenClawPluginRuntime: (pluginId: string) => Promise<PluginRuntimeInspectResult>
   repairPluginLoaderFailure: (pluginId: string) => Promise<PluginCommandResult>
+  validatePluginSecretReferences: (pluginId: string, pluginConfig: unknown) => Promise<PluginSecretReferenceValidationResult>
   pluginRuntimeInspectReady: (inspect: PluginRuntimeInspectResult) => boolean
   startPluginSetupTerminalSession: (params: {
     command: PluginSetupTerminalCommand
@@ -218,6 +222,49 @@ function parseOpenClawJsonOutput(stdout: string): unknown {
     const slice = firstJsonSliceFromText(text)
     return slice ? JSON.parse(slice) as unknown : {}
   }
+}
+
+function scanPluginSecretReferenceInputs(value: unknown): { hasReferences: boolean; hasExecReference: boolean; complete: boolean } {
+  const pending: Array<{ value: unknown; depth: number }> = [{ value, depth: 0 }]
+  let visited = 0
+  let references = 0
+  let hasExecReference = false
+  while (pending.length) {
+    const current = pending.pop()
+    if (!current) continue
+    visited += 1
+    if (visited > 20_000 || current.depth > 32) return { hasReferences: true, hasExecReference, complete: false }
+    if (Array.isArray(current.value)) {
+      if (current.value.length > 512) return { hasReferences: true, hasExecReference, complete: false }
+      for (const child of current.value) pending.push({ value: child, depth: current.depth + 1 })
+      continue
+    }
+    const record = current.value
+    if (!isLooseRecord(record)) continue
+
+    const secretRefKeys = ['source', 'provider', 'id'].filter((key) => Object.hasOwn(record, key))
+    const hasSecretRefSource = typeof record.source === 'string' && ['env', 'file', 'exec', 'store'].includes(record.source)
+    if (secretRefKeys.length >= 2 || hasSecretRefSource) {
+      references += 1
+      if (references > 256) return { hasReferences: true, hasExecReference, complete: false }
+      if (record.source === 'exec') hasExecReference = true
+    }
+
+    const entries = Object.entries(record)
+    if (entries.length > 512) return { hasReferences: true, hasExecReference, complete: false }
+    for (const [, child] of entries) pending.push({ value: child, depth: current.depth + 1 })
+  }
+  return { hasReferences: references > 0, hasExecReference, complete: true }
+}
+
+function isPluginConfigSecretPath(pluginId: string, value: unknown) {
+  if (typeof value !== 'string') return false
+  const prefixes = [
+    `plugins.entries.${pluginId}.config`,
+    `plugins.entries["${pluginId}"].config`,
+    `plugins.entries['${pluginId}'].config`,
+  ]
+  return prefixes.some((prefix) => value === prefix || value.startsWith(`${prefix}.`) || value.startsWith(`${prefix}[`))
 }
 
 function pluginCommandString(args: string[]) {
@@ -422,6 +469,53 @@ export function createPluginRuntimeService(options: PluginRuntimeServiceOptions)
     }
   }
 
+  async function validatePluginSecretReferences(
+    pluginId: string,
+    pluginConfig: unknown,
+  ): Promise<PluginSecretReferenceValidationResult> {
+    const id = pluginId.trim().toLowerCase()
+    if (!PLUGIN_ID_PATTERN.test(id)) return { ok: false, reason: 'invalid_binding' }
+    const scan = scanPluginSecretReferenceInputs(pluginConfig)
+    if (!scan.complete) return { ok: false, reason: 'invalid_binding' }
+    if (!scan.hasReferences) return { ok: true }
+
+    try {
+      // This strict, read-only check validates the active schema and each
+      // registry-declared plugin SecretRef's provider/source binding, even
+      // while its plugin entry is disabled. It never resolves exec providers.
+      const configResult = await options.runOpenClaw(['config', 'validate', '--json'], 60_000)
+      const configValidation = parseOpenClawJsonOutput(configResult.stdout)
+      if (configResult.code !== 0 || !isLooseRecord(configValidation) || configValidation.valid !== true) {
+        return { ok: false, reason: configResult.failureKind === 'runtime_unavailable' ? 'validation_unavailable' : 'invalid_binding' }
+      }
+
+      // OpenClaw intentionally skips exec-backed resolution during audit unless
+      // --allow-exec is supplied. Never run an arbitrary configured provider as
+      // a side effect of enabling a plugin; require an operator to resolve it.
+      if (scan.hasExecReference) return { ok: false, reason: 'exec_requires_operator' }
+
+      // Audit is read-only and verifies env/file/store availability. Its exit
+      // code can reflect findings for unrelated owners, so scope the decision
+      // to this plugin's config paths and discard every diagnostic string.
+      const auditResult = await options.runOpenClaw(['secrets', 'audit', '--json'], 120_000)
+      const audit = parseOpenClawJsonOutput(auditResult.stdout)
+      if (!isLooseRecord(audit)
+        || !Array.isArray(audit.findings)
+        || !isLooseRecord(audit.resolution)
+        || audit.resolution.resolvabilityComplete !== true) {
+        return { ok: false, reason: 'validation_unavailable' }
+      }
+      const unresolved = audit.findings.some((finding) => isLooseRecord(finding)
+        && (finding.code === 'REF_UNRESOLVED' || finding.code === 'PLACEHOLDER_VALUE')
+        && isPluginConfigSecretPath(id, finding.jsonPath))
+      return unresolved
+        ? { ok: false, reason: 'unresolved_reference' }
+        : { ok: true }
+    } catch {
+      return { ok: false, reason: 'validation_unavailable' }
+    }
+  }
+
   async function repairPluginLoaderFailure(pluginId: string): Promise<PluginCommandResult> {
     const id = pluginId.trim().toLowerCase()
     if (!PLUGIN_ID_PATTERN.test(id)) throw new Error('Invalid plugin id.')
@@ -565,6 +659,7 @@ export function createPluginRuntimeService(options: PluginRuntimeServiceOptions)
   return {
     inspectOpenClawPluginRuntime,
     repairPluginLoaderFailure,
+    validatePluginSecretReferences,
     pluginRuntimeInspectReady,
     startPluginSetupTerminalSession,
     getPluginSetupTerminalSnapshot,

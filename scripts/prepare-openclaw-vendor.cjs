@@ -6,6 +6,12 @@ const { tmpdir } = require('node:os')
 const path = require('node:path')
 const { ensureRelayAiTransportCompatibility } = require('./lib/relay-thought-signature-patch.cjs')
 const { ensureRestartRecoveryClaimStartupRepair } = require('./lib/restart-recovery-stale-claim-patch.cjs')
+const { patchGoogleGeminiOnboardingDefault } = require('./lib/google-gemini-onboarding-default.cjs')
+const {
+  prepareGoogleGeminiDiscoverySource,
+  prepareGoogleGeminiDirectVideoBuilder,
+  prepareGoogleGeminiManifest,
+} = require('./lib/google-gemini-model-catalog.cjs')
 
 const root = path.resolve(__dirname, '..')
 const vendorRoot = path.resolve(process.env.AUTOMNIA_OPENCLAW_VENDOR_ROOT || path.join(root, 'vendor', 'openclaw'))
@@ -973,31 +979,6 @@ function writeMetadata(packageJson, shrinkwrapSha256, mode, packageArtifacts) {
   }, null, 2)}\n`)
 }
 
-const GOOGLE_GEMINI_4_MODELS = [
-  {
-    id: 'gemini-4-carbon',
-    name: 'Gemini 4 Carbon',
-    reasoning: true,
-    input: ['text', 'image', 'audio', 'video'],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 1048576,
-    maxTokens: 65536,
-    thinkingLevelMap: { minimal: null },
-    compat: { codeMode: 'preferred' },
-  },
-  {
-    id: 'gemini-4-hydrogen',
-    name: 'Gemini 4 Hydrogen',
-    reasoning: true,
-    input: ['text', 'image', 'audio', 'video'],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 1048576,
-    maxTokens: 65536,
-    thinkingLevelMap: { minimal: null },
-    compat: { codeMode: 'preferred' },
-  },
-]
-
 function findMatchingBracket(source, openIndex, openChar, closeChar) {
   let depth = 0
   let quote = ''
@@ -1018,75 +999,6 @@ function findMatchingBracket(source, openIndex, openChar, closeChar) {
     else if (char === closeChar && --depth === 0) return index
   }
   return -1
-}
-
-function validateGoogleGemini4Model(model, sourceLabel) {
-  const expected = GOOGLE_GEMINI_4_MODELS.find((entry) => entry.id === model?.id)
-  if (!expected) return
-  for (const key of ['name', 'reasoning', 'contextWindow', 'maxTokens']) {
-    if (model[key] !== expected[key]) {
-      throw new Error(`[openclaw-vendor] ${sourceLabel} ${expected.id} has unexpected ${key}: ${JSON.stringify(model[key])}`)
-    }
-  }
-  if (JSON.stringify(model.input) !== JSON.stringify(expected.input)) {
-    throw new Error(`[openclaw-vendor] ${sourceLabel} ${expected.id} input modalities changed unexpectedly`)
-  }
-  if (model.thinkingLevelMap?.minimal !== null || model.compat?.codeMode !== 'preferred') {
-    throw new Error(`[openclaw-vendor] ${sourceLabel} ${expected.id} reasoning/compat metadata changed unexpectedly`)
-  }
-}
-
-function insertGoogleGemini4ModelsInDiscovery(source) {
-  const modelCatalogStart = source.indexOf('var modelCatalog = {')
-  const googleProviderStart = source.indexOf('"providers": { "google": {', modelCatalogStart)
-  const modelsToken = source.indexOf('"models": [', googleProviderStart)
-  const modelsStart = source.indexOf('[', modelsToken)
-  if (modelCatalogStart < 0 || googleProviderStart < 0 || modelsToken < 0 || modelsStart < 0) {
-    throw new Error('[openclaw-vendor] Google provider discovery model catalog structure changed')
-  }
-  const modelsEnd = findMatchingBracket(source, modelsStart, '[', ']')
-  if (modelsEnd < 0) throw new Error('[openclaw-vendor] Could not parse Google provider discovery model list')
-  const modelArraySource = source.slice(modelsStart, modelsEnd + 1)
-
-  const missing = []
-  for (const expected of GOOGLE_GEMINI_4_MODELS) {
-    const idMarker = `"id": "${expected.id}"`
-    const firstIndex = modelArraySource.indexOf(idMarker)
-    if (firstIndex >= 0 && modelArraySource.indexOf(idMarker, firstIndex + idMarker.length) >= 0) {
-      throw new Error(`[openclaw-vendor] Duplicate ${expected.id} rows in Google provider discovery catalog`)
-    }
-    if (firstIndex < 0) {
-      missing.push(expected)
-      continue
-    }
-    const objectAnchor = `\n\t\t\t{\n\t\t\t\t"id": "${expected.id}"`
-    const objectStart = source.indexOf(objectAnchor, modelsStart)
-    const objectEndMarker = source.indexOf('\n\t\t\t},', objectStart)
-    if (objectStart < 0 || objectStart > modelsEnd || objectEndMarker < 0 || objectEndMarker > modelsEnd) {
-      throw new Error(`[openclaw-vendor] Could not safely validate existing ${expected.id} provider discovery row`)
-    }
-    const objectText = source.slice(objectStart + 1, objectEndMarker + 5)
-    let existing
-    try {
-      existing = JSON.parse(objectText)
-    } catch (error) {
-      throw new Error(`[openclaw-vendor] Existing ${expected.id} provider discovery row is not JSON-compatible: ${String(error)}`)
-    }
-    validateGoogleGemini4Model(existing, 'provider discovery')
-  }
-  if (!missing.length) return source
-
-  const anchor = '\n\t\t\t{\n\t\t\t\t"id": "gemini-2.5-pro"'
-  const anchorIndex = source.indexOf(anchor, modelsStart)
-  if (anchorIndex < 0 || anchorIndex > modelsEnd) {
-    throw new Error('[openclaw-vendor] Could not locate stable Google model catalog insertion anchor')
-  }
-  const formatted = missing.map((model) => JSON.stringify(model, null, '\t')
-    .split('\n')
-    .map((line) => `\t\t\t${line}`)
-    .join('\n'))
-    .join(',\n')
-  return source.slice(0, anchorIndex) + `\n${formatted},` + source.slice(anchorIndex)
 }
 
 function prepareGoogleGemini4AudioCatalogSupport(distRoot) {
@@ -1114,6 +1026,28 @@ function prepareGoogleGemini4AudioCatalogSupport(distRoot) {
   return { filePath, source: patched }
 }
 
+function ensureGoogleGeminiHydrogenOnboardingDefault(distRoot) {
+  const onboardingFiles = fs.readdirSync(distRoot)
+    .filter((name) => name.startsWith('onboard-') && name.endsWith('.mjs'))
+    .map((name) => path.join(distRoot, name))
+  const matches = onboardingFiles.filter((filePath) => {
+    const source = fs.readFileSync(filePath, 'utf8')
+    return source.includes('const GOOGLE_GEMINI_DEFAULT_MODEL = "google/gemini-4-argon";')
+      || source.includes('const GOOGLE_GEMINI_DEFAULT_MODEL = "google/gemini-4-hydrogen";')
+  })
+  if (matches.length !== 1) {
+    throw new Error(`[openclaw-vendor] Expected one Google onboarding default bundle, found ${matches.length}`)
+  }
+
+  const filePath = matches[0]
+  const source = fs.readFileSync(filePath, 'utf8')
+  try {
+    return { filePath, source: patchGoogleGeminiOnboardingDefault(source) }
+  } catch (error) {
+    throw new Error(`[openclaw-vendor] ${String(error)}`)
+  }
+}
+
 function ensureGoogleGemini4Models() {
   const googleDistRoot = path.join(vendorRoot, 'dist', 'extensions', 'google')
   const discoveryPath = path.join(googleDistRoot, 'provider-discovery.js')
@@ -1124,15 +1058,8 @@ function ensureGoogleGemini4Models() {
 
   let discovery = fs.readFileSync(discoveryPath, 'utf8')
   const previousDiscovery = discovery
-  discovery = insertGoogleGemini4ModelsInDiscovery(discovery)
-  const directBuilderPatch = 'input: e.input.includes("video") ? [...e.input] : [...e.input, "video"]'
-  if (!discovery.includes(directBuilderPatch)) {
-    const directBuilderPattern = /input: \[\.\.\.e\.input, "video"\]/
-    if (!directBuilderPattern.test(discovery)) {
-      throw new Error('[openclaw-vendor] Google direct catalog video modality builder changed; refusing broad patch')
-    }
-    discovery = discovery.replace(directBuilderPattern, directBuilderPatch)
-  }
+  discovery = prepareGoogleGeminiDiscoverySource(discovery)
+  discovery = prepareGoogleGeminiDirectVideoBuilder(discovery)
   const directEndpointMarker = '"baseUrl": "https://generativelanguage.googleapis.com/v1beta"'
   const vertexEndpointMarker = 'const GOOGLE_VERTEX_BASE_URL = "https://{location}-aiplatform.googleapis.com";'
   if (!discovery.includes(directEndpointMarker) || !discovery.includes(vertexEndpointMarker) || !discovery.includes('api: "google-vertex"')) {
@@ -1145,24 +1072,8 @@ function ensureGoogleGemini4Models() {
   } catch (error) {
     throw new Error(`[openclaw-vendor] Google plugin manifest is invalid JSON: ${String(error)}`)
   }
-  const directProvider = pluginManifest?.modelCatalog?.providers?.google
-  if (directProvider?.api !== 'google-generative-ai' || directProvider?.baseUrl !== 'https://generativelanguage.googleapis.com/v1beta') {
-    throw new Error('[openclaw-vendor] Google plugin manifest direct endpoint changed; refusing model-catalog patch')
-  }
-  const manifestModels = directProvider.models
-  if (!Array.isArray(manifestModels)) throw new Error('[openclaw-vendor] Google plugin manifest model list is missing')
-  const missingManifestModels = []
-  for (const expected of GOOGLE_GEMINI_4_MODELS) {
-    const matches = manifestModels.filter((model) => model.id === expected.id)
-    if (matches.length > 1) throw new Error(`[openclaw-vendor] Duplicate ${expected.id} rows in Google plugin manifest`)
-    if (matches.length === 1) validateGoogleGemini4Model(matches[0], 'plugin manifest')
-    else missingManifestModels.push(expected)
-  }
-  if (missingManifestModels.length) {
-    const anchorIndex = manifestModels.findIndex((model) => model.id === 'gemini-2.5-pro')
-    if (anchorIndex < 0) throw new Error('[openclaw-vendor] Could not locate stable Google plugin manifest insertion anchor')
-    manifestModels.splice(anchorIndex, 0, ...missingManifestModels)
-  }
+  const normalizedManifest = prepareGoogleGeminiManifest(pluginManifest)
+  pluginManifest = normalizedManifest.manifest
 
   const transportFile = fs.readdirSync(path.join(vendorRoot, 'dist'))
     .find((name) => name.startsWith('transport-stream-') && name.endsWith('.mjs'))
@@ -1174,11 +1085,15 @@ function ensureGoogleGemini4Models() {
     throw new Error('[openclaw-vendor] Google Generative Language / Vertex v1 request routes changed; refusing model-catalog patch')
   }
   const catalogTypePatch = prepareGoogleGemini4AudioCatalogSupport(path.join(vendorRoot, 'dist'))
+  const onboardingDefaultPatch = ensureGoogleGeminiHydrogenOnboardingDefault(path.join(vendorRoot, 'dist'))
 
   if (discovery !== previousDiscovery) fs.writeFileSync(discoveryPath, discovery)
-  if (missingManifestModels.length) fs.writeFileSync(manifestPath, `${JSON.stringify(pluginManifest, null, 2)}\n`)
+  if (normalizedManifest.changed) fs.writeFileSync(manifestPath, `${JSON.stringify(pluginManifest, null, 2)}\n`)
   if (catalogTypePatch.source !== fs.readFileSync(catalogTypePatch.filePath, 'utf8')) {
     fs.writeFileSync(catalogTypePatch.filePath, catalogTypePatch.source)
+  }
+  if (onboardingDefaultPatch.source !== fs.readFileSync(onboardingDefaultPatch.filePath, 'utf8')) {
+    fs.writeFileSync(onboardingDefaultPatch.filePath, onboardingDefaultPatch.source)
   }
 }
 

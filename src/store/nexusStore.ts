@@ -87,11 +87,15 @@ import {
   commandConsoleQueueCancellationForFollowup,
   commandConsoleSessionKey,
   createQueuedCommandConsoleResponse,
+  expireCommandConsoleFollowup,
+  interruptQueuedCommandConsoleFollowups,
   makeCommandConsoleResponseState,
   queueProgressLines,
+  removeCommandConsoleQueueReceipt,
   removeCommandConsoleDraftsForAgent,
   clearAllCommandConsoleDrafts,
   upsertCommandConsoleResponse,
+  writeCommandConsoleQueueReceipt,
   type CommandConsoleQueuedFollowup,
   type NexusCommandConsoleResponseState,
 } from './commandConsoleState'
@@ -2586,6 +2590,7 @@ export const useNexusStore = create<NexusState>()(
         clearQueuedCommandConsoleTimer(agentId)
         const completedAt = new Date().toISOString()
         for (const queued of queue) {
+          writeCommandConsoleQueueReceipt({ id: queued.id, agentId, queuedAt: queued.queuedAt, status: 'failed', reason: message, completedAt })
           updateQueuedCommandConsoleResponse(queued.id, {
             response: message,
             ok: false,
@@ -2618,20 +2623,7 @@ export const useNexusStore = create<NexusState>()(
           }
           if (Date.now() - queue[0].createdAt > 6 * 60 * 60 * 1000) {
             const queued = queue.shift()
-            if (queued) {
-              updateQueuedCommandConsoleResponse(queued.id, {
-                response: 'Queued Command Console turn expired after waiting 6h for the lane to become free.',
-                ok: false,
-                streaming: false,
-                failureKind: 'timeout',
-                completedAt: new Date().toISOString(),
-                queuePosition: undefined,
-                queueDepth: undefined,
-                progressLabel: 'Queue expired',
-                progressLines: ['Queued turn expired before it could start.'],
-                progressUpdatedAt: new Date().toISOString(),
-              })
-            }
+            if (queued) expireCommandConsoleFollowup(queued, agentId, updateQueuedCommandConsoleResponse)
             if (!queue.length) queuedCommandConsoleFollowups.delete(agentId)
             else refreshQueuedCommandConsolePositions(agentId)
             return
@@ -2647,6 +2639,7 @@ export const useNexusStore = create<NexusState>()(
           if (!queue.length) queuedCommandConsoleFollowups.delete(agentId)
           else refreshQueuedCommandConsolePositions(agentId)
           clearQueuedCommandConsoleTimer(agentId)
+          writeCommandConsoleQueueReceipt({ id: queued.id, agentId, queuedAt: queued.queuedAt, status: 'started' })
           const releasedAt = new Date().toISOString()
           updateQueuedCommandConsoleResponse(queued.id, {
             response: 'Queued turn released; live response started in this lane.',
@@ -2661,6 +2654,7 @@ export const useNexusStore = create<NexusState>()(
           })
           void runAgentPrompt(agentId, queued.prompt, queued.options)
             .finally(() => {
+              removeCommandConsoleQueueReceipt(queued.id)
               if ((queuedCommandConsoleFollowups.get(agentId)?.length || 0) > 0) {
                 drainQueuedCommandConsoleFollowups(agentId)
               }
@@ -2710,6 +2704,7 @@ export const useNexusStore = create<NexusState>()(
           })
           queue.push(queued)
           queuedCommandConsoleFollowups.set(agent.id, queue)
+          writeCommandConsoleQueueReceipt({ id: queued.id, agentId: agent.id, queuedAt, status: 'queued' })
           set((s) => ({ agentResponses: [entry, ...s.agentResponses].slice(0, MAX_COMMAND_CONSOLE_RESPONSES) }))
           refreshQueuedCommandConsolePositions(agent.id)
           drainQueuedCommandConsoleFollowups(agent.id)
@@ -2722,6 +2717,7 @@ export const useNexusStore = create<NexusState>()(
       }
 
       const clearQueuedCommandConsoleFollowups = () => {
+        interruptQueuedCommandConsoleFollowups(queuedCommandConsoleFollowups, updateQueuedCommandConsoleResponse)
         for (const agentId of queuedCommandConsoleTimers.keys()) clearQueuedCommandConsoleTimer(agentId)
         queuedCommandConsoleFollowups.clear()
       }
@@ -2742,6 +2738,7 @@ export const useNexusStore = create<NexusState>()(
 
           const completedAt = new Date().toISOString()
           const cancellation = commandConsoleQueueCancellationForFollowup(queued.queuedAt, queued.createdAt, agentId)
+          writeCommandConsoleQueueReceipt({ id: queued.id, agentId, queuedAt: queued.queuedAt, status: 'cancelled', reason: cancellation.message, completedAt })
           updateQueuedCommandConsoleResponse(normalized, commandConsoleQueueCancellationPatch(cancellation, completedAt))
           if (remaining.length) refreshQueuedCommandConsolePositions(agentId)
           addMissionFeedEvent(

@@ -183,6 +183,135 @@ test('plugin loader repair preserves timeout metadata for fail-closed retry hand
   )
 })
 
+test('plugin SecretRef validation checks bindings and scopes, then resolves only the selected plugin refs', async () => {
+  const harness = createHarness([
+    { code: 0, stdout: JSON.stringify({ valid: true, issues: [] }), stderr: '' },
+    {
+      code: 2,
+      stdout: JSON.stringify({
+        status: 'unresolved',
+        resolution: { refsChecked: 2, skippedExecRefs: 0, resolvabilityComplete: true },
+        findings: [
+          { code: 'REF_UNRESOLVED', jsonPath: 'plugins.entries.brave.config.webSearch.apiKey', message: 'unrelated missing ref' },
+          { code: 'REF_UNRESOLVED', jsonPath: 'plugins.entries.codex.config.appServer.authToken', message: 'secret value MUST_NOT_LEAK' },
+        ],
+      }),
+      stderr: '',
+    },
+  ])
+
+  const result = await harness.service.validatePluginSecretReferences('codex', {
+    appServer: { authToken: { source: 'env', provider: 'default', id: 'CODEX_APP_TOKEN' } },
+  })
+
+  assert.deepEqual(result, { ok: false, reason: 'unresolved_reference' })
+  assert.deepEqual(harness.runCalls.map(({ args }) => args), [
+    ['config', 'validate', '--json'],
+    ['secrets', 'audit', '--json'],
+  ])
+  assert.ok(harness.runCalls.every(({ args }) => !args.includes('--allow-exec')))
+  assert.doesNotMatch(JSON.stringify(result), /MUST_NOT_LEAK|CODEX_APP_TOKEN/)
+})
+
+test('plugin SecretRef validation fails closed when the audit cannot prove resolution completeness', async () => {
+  const harness = createHarness([
+    { code: 0, stdout: JSON.stringify({ valid: true, issues: [] }), stderr: '' },
+    {
+      code: 0,
+      stdout: JSON.stringify({
+        status: 'resolved',
+        resolution: { refsChecked: 1, skippedExecRefs: 0, resolvabilityComplete: false },
+        findings: [],
+      }),
+      stderr: '',
+    },
+  ])
+
+  const result = await harness.service.validatePluginSecretReferences('codex', {
+    appServer: { authToken: { source: 'env', provider: 'default', id: 'CODEX_APP_TOKEN' } },
+  })
+
+  assert.deepEqual(result, { ok: false, reason: 'validation_unavailable' })
+  assert.deepEqual(harness.runCalls.map(({ args }) => args), [
+    ['config', 'validate', '--json'],
+    ['secrets', 'audit', '--json'],
+  ])
+  assert.doesNotMatch(JSON.stringify(result), /CODEX_APP_TOKEN/)
+})
+
+test('plugin SecretRef validation rejects out-of-scope bindings without returning OpenClaw diagnostics', async () => {
+  const secretText = 'private-config-error-secret'
+  const harness = createHarness([{
+    code: 1,
+    stdout: JSON.stringify({
+      valid: false,
+      issues: [{ path: 'plugins.entries.codex.config.unregisteredCredential', message: secretText }],
+    }),
+    stderr: secretText,
+  }])
+
+  const result = await harness.service.validatePluginSecretReferences('codex', {
+    unregisteredCredential: { source: 'store', provider: 'default', id: 'PRIVATE_TOKEN' },
+  })
+
+  assert.deepEqual(result, { ok: false, reason: 'invalid_binding' })
+  assert.equal(harness.runCalls.length, 1)
+  assert.doesNotMatch(JSON.stringify(result), /private-config-error-secret|PRIVATE_TOKEN/)
+})
+
+test('plugin SecretRef validation rejects identity-scoped store refs because OpenClaw supports team scope only', async () => {
+  const harness = createHarness([{
+    code: 1,
+    stdout: JSON.stringify({
+      valid: false,
+      issues: [{ path: 'plugins.entries.codex.config.appServer.authToken', message: 'unsupported scope' }],
+    }),
+    stderr: '',
+  }])
+
+  const result = await harness.service.validatePluginSecretReferences('codex', {
+    appServer: { authToken: { source: 'store', provider: 'default', id: 'CODEX_APP_TOKEN', scope: 'identity' } },
+  })
+
+  assert.deepEqual(result, { ok: false, reason: 'invalid_binding' })
+  assert.equal(harness.runCalls.length, 1)
+  assert.deepEqual(harness.runCalls[0]?.args, ['config', 'validate', '--json'])
+})
+
+test('plugin SecretRef validation recognizes incomplete structured refs and rejects them', async () => {
+  const harness = createHarness([{
+    code: 1,
+    stdout: JSON.stringify({ valid: false, issues: [{ path: 'plugins.entries.codex.config.appServer.authToken', message: 'incomplete ref' }] }),
+    stderr: '',
+  }])
+
+  const result = await harness.service.validatePluginSecretReferences('codex', {
+    appServer: { authToken: { source: 'env' } },
+  })
+
+  assert.deepEqual(result, { ok: false, reason: 'invalid_binding' })
+  assert.deepEqual(harness.runCalls[0]?.args, ['config', 'validate', '--json'])
+})
+
+test('plugin SecretRef validation does not execute exec providers and keeps direct string config compatible', async () => {
+  const execHarness = createHarness([
+    { code: 0, stdout: JSON.stringify({ valid: true, issues: [] }), stderr: '' },
+  ])
+  const execResult = await execHarness.service.validatePluginSecretReferences('codex', {
+    appServer: { authToken: { source: 'exec', provider: 'vault', id: 'codex/token' } },
+  })
+  assert.deepEqual(execResult, { ok: false, reason: 'exec_requires_operator' })
+  assert.deepEqual(execHarness.runCalls.map(({ args }) => args), [['config', 'validate', '--json']])
+  assert.ok(execHarness.runCalls.every(({ args }) => !args.includes('--allow-exec')))
+
+  const directHarness = createHarness()
+  const directResult = await directHarness.service.validatePluginSecretReferences('codex', {
+    apiKey: 'existing-direct-config-value',
+  })
+  assert.deepEqual(directResult, { ok: true })
+  assert.deepEqual(directHarness.runCalls, [])
+})
+
 test('plugin runtime service rejects invalid ids and redacts failed inspect output', async () => {
   const invalid = createHarness()
   await assert.rejects(

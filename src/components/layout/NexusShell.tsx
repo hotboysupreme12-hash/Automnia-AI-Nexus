@@ -372,10 +372,14 @@ export function NexusShell() {
   }, [closeHelp, selectTab])
   useEffect(() => {
     const navigate = (event: Event) => {
-      if (!(event instanceof CustomEvent) || event.detail !== 'settings-account') return
-      useNexusStore.getState().closeEditor()
-      setRecruitOpen(false)
-      navigateFromHelp('settings-account')
+      if (!(event instanceof CustomEvent)) return
+      const target = event.detail
+      if (target !== 'settings-account' && target !== 'plugins' && target !== 'missions' && target !== 'monitor') return
+      if (target === 'settings-account') {
+        useNexusStore.getState().closeEditor()
+        setRecruitOpen(false)
+      }
+      navigateFromHelp(target as HelpNavigationTarget)
     }
     window.addEventListener('automnia:navigate', navigate)
     return () => window.removeEventListener('automnia:navigate', navigate)

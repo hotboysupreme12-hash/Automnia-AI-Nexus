@@ -13,12 +13,12 @@ await build({
     import { createRoot } from 'react-dom/client';
     import { AgentModelPicker } from './src/components/models/AgentModelPicker';
     const models = [
-      {id:'automnia-cloud/gemini-3.8-flash', name:'Automnia Prime', provider:'automnia-cloud'},
-      {id:'openai/gpt-5.4', name:'GPT-5.4', provider:'openai'},
+      {id:'automnia-cloud/gemini-3.8-flash', name:'Automnia Swift', provider:'automnia-cloud'},
+      {id:'openai/gpt-6.2-sol', name:'GPT-6.2 Sol', provider:'openai'},
       {id:'anthropic/claude-sonnet-4-6', name:'Claude Sonnet', provider:'anthropic'},
     ];
     function Fixture() {
-      const [primary, setPrimary] = useState('openai/gpt-5.4');
+      const [primary, setPrimary] = useState('openai/gpt-6.2-sol');
       const [fallbacks, setFallbacks] = useState(['anthropic/claude-sonnet-4-6']);
       const [connected, setConnected] = useState(false);
       return <div data-dui-modal="agent-editor" className="agent-settings-refresh" style={{padding:24, maxWidth:800, margin:'24px auto'}}>
@@ -89,9 +89,9 @@ async function run() {
     await search('openai')
     await js("document.querySelector('.amp-result').click()")
     await wait()
-    assert.deepEqual((await state()).fallbacks, ['openai/gpt-5.4'])
+    assert.deepEqual((await state()).fallbacks, ['openai/gpt-6.2-sol'])
     await click('Add backup model')
-    assert.equal(await js("Array.from(document.querySelectorAll('.amp-result')).some(b=>b.textContent.includes('GPT-5.4') || b.textContent.includes('Claude Sonnet'))"), false)
+    assert.equal(await js("Array.from(document.querySelectorAll('.amp-result')).some(b=>b.textContent.includes('GPT-6.2 Sol') || b.textContent.includes('Claude Sonnet'))"), false)
     await window.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' })
     await wait()
     assert.equal(await js("document.querySelector('.amp-chooser') === null"), true)
