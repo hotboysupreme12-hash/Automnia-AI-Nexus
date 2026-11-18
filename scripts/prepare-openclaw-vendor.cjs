@@ -221,35 +221,40 @@ function packageArtifactsMetadataPath() {
   return path.join(vendorRoot, 'dist', '.automnia-openclaw-package.json')
 }
 
-function packageArtifactsMatch(packageJson) {
+function packageArtifactsMatch(packageJson, expectedIntegrity) {
   try {
     const metadata = readJson(packageArtifactsMetadataPath())
     return metadata?.schema === 1 &&
       metadata?.package === packageJson.name &&
-      metadata?.version === packageJson.version
+      metadata?.version === packageJson.version &&
+      metadata?.integrity === expectedIntegrity
   } catch {
     return false
   }
 }
 
-function missingPackageArtifacts(packageJson) {
+function missingPackageArtifacts(packageJson, expectedIntegrity) {
   const missing = requiredPackageArtifacts.filter((artifact) => !fs.existsSync(path.join(vendorRoot, artifact)))
-  if (!packageArtifactsMatch(packageJson)) {
+  if (!packageArtifactsMatch(packageJson, expectedIntegrity)) {
     missing.push(path.join('dist', '.automnia-openclaw-package.json'))
   }
   return missing
 }
 
 async function hydratePublishedPackageArtifacts(packageJson) {
-  const missing = missingPackageArtifacts(packageJson)
+  const source = resolvePackageTarball(packageJson)
+  const missing = missingPackageArtifacts(packageJson, source.integrity)
   if (!refresh && missing.length === 0) {
-    return { mode: 'existing-package-artifacts' }
+    return {
+      mode: 'existing-package-artifacts',
+      tarball: source.tarball,
+      integrity: source.integrity,
+    }
   }
 
   if (missing.length) {
     console.log(`[openclaw-vendor] missing published package artifacts: ${missing.join(', ')}`)
   }
-  const source = resolvePackageTarball(packageJson)
   const tarballPath = path.join(cacheRoot, `openclaw-${packageJson.version}.tgz`)
   const extractRoot = fs.mkdtempSync(path.join(tmpdir(), 'automnia-openclaw-package-'))
 
@@ -287,7 +292,7 @@ async function hydratePublishedPackageArtifacts(packageJson) {
       tarball: source.tarball,
       integrity: source.integrity,
     }, null, 2)}\n`)
-    const stillMissing = missingPackageArtifacts(packageJson)
+    const stillMissing = missingPackageArtifacts(packageJson, source.integrity)
     if (stillMissing.length) {
       throw new Error(`[openclaw-vendor] OpenClaw package payload is missing required artifacts: ${stillMissing.join(', ')}`)
     }
@@ -944,11 +949,12 @@ function readMetadata() {
   }
 }
 
-function metadataMatches(metadata, packageJson, shrinkwrapSha256) {
+function metadataMatches(metadata, packageJson, shrinkwrapSha256, packageArtifacts) {
   return Boolean(
     metadata?.schema === 1 &&
     metadata.openclaw?.version === packageJson.version &&
     metadata.openclaw?.shrinkwrapSha256 === shrinkwrapSha256 &&
+    metadata.openclaw?.packageArtifacts?.integrity === packageArtifacts?.integrity &&
     Array.isArray(metadata.requiredRuntimePackages) &&
     requiredRuntimePackages.every((packageName) => metadata.requiredRuntimePackages.includes(packageName)),
   )
@@ -1124,7 +1130,7 @@ async function main() {
   if (!refresh && fs.existsSync(nodeModulesRoot)) {
     const missing = validateInstalledPackages(lock)
     const metadata = readMetadata()
-    if (missing.length === 0 && metadataMatches(metadata, packageJson, shrinkwrapSha256)) {
+    if (missing.length === 0 && metadataMatches(metadata, packageJson, shrinkwrapSha256, packageArtifacts)) {
       if (packageJson.dependencies?.['@openclaw/ai']) ensureRelayAiTransportCompatibility(vendorRoot)
       console.log(`[openclaw-vendor] OpenClaw ${packageJson.version} production dependencies already prepared`)
       return

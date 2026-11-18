@@ -31,7 +31,7 @@ Installer distribution is documented in
 The signed in-app desktop update channel, Google Cloud bucket setup, staged rollout,
 and rollback procedure are documented in
 [`../../docs/DESKTOP_AUTO_UPDATES.md`](../../docs/DESKTOP_AUTO_UPDATES.md).
-The three-day Starter selling-plan trial is documented in
+The destination monthly Starter and Pro selling-plan setup is documented in
 [`../../docs/SHOPIFY_TRIAL_SETUP.md`](../../docs/SHOPIFY_TRIAL_SETUP.md).
 
 ## Hosted-credit token efficiency
@@ -139,8 +139,8 @@ shopify app deploy
 ```
 
 The webhook is acknowledged only after the license email is confirmed. If
-Gmail or the Gmail OAuth credential is unavailable, the handler returns a
-retryable response and keeps the delivery state pending; use the authenticated
+Microsoft Graph mail delivery is unavailable, the handler returns a retryable
+response and keeps the delivery state pending; use the authenticated
 `/admin/email-delivery/retry` endpoint after the credential is repaired for an
 already-provisioned order.
 
@@ -157,14 +157,25 @@ Billing must already be enabled, or it can be linked explicitly:
 .\infra\gcloud\deploy.ps1 -ProjectId new-project-id -BillingAccountId 000000-000000-000000
 ```
 
-Without `-BillingAccountId`, deployment fails if billing is disabled. A new target receives cryptographically random bootstrap secret versions so Cloud Run can deploy before migration. The Shopify app secret is the exception: deployment refuses to create or accept a bootstrap placeholder for `SHOPIFY_ADMIN_API_TOKEN`, because a paid order must never be acknowledged without a usable customer-email credential. Other bootstrap values are not switch-eligible; migration replaces them with exact copies from the source and verification compares SHA-256 fingerprints.
+Without `-BillingAccountId`, deployment fails if billing is disabled. A normal
+new-target deployment creates a tagged candidate with no live traffic, sets
+`MIGRATION_WRITE_MODE=read_only`, and leaves its billing retry scheduler
+paused. Full Firestore refreshes keep the candidate read-only. Cutover creates
+and checks a separate active revision only after the source is frozen and final
+parity passes. `-RouteImmediately` opts out of staging and deploys active writes.
+Deployment requires usable Shopify Admin API and
+Microsoft Graph mail credentials; bootstrap placeholders are not accepted for
+either value. Use the new store's Shopify app credentials in the destination.
+Other bootstrap values are not switch-eligible; migration replaces them with
+exact copies from the source and verification compares SHA-256 fingerprints.
 
 To initialize the first project from explicit values, pass a local JSON file whose keys are secret resource names or environment names. The file is read locally, never printed, and should not be committed:
 
 ```json
 {
-  "automnia-shopify-webhook-secrets": "first-secret,rotated-secret",
-  "automnia-admin-api-token": "a-long-random-admin-token"
+  "automnia-shopify-webhook-secrets": "new-Shopify-app-webhook-secret",
+  "automnia-shopify-admin-api-token": "{\"client_id\":\"new-app-client-id\",\"client_secret\":\"new-app-client-secret\",\"store_domain\":\"new-store.myshopify.com\"}",
+  "automnia-microsoft-graph-mail-credentials": "{\"tenant_id\":\"...\",\"client_id\":\"...\",\"client_secret\":\"...\"}"
 }
 ```
 
@@ -174,11 +185,31 @@ To initialize the first project from explicit values, pass a local JSON file who
 
 ## Migrate data and secrets
 
-The normal command creates a uniformly-access-controlled migration bucket in the target project, temporarily grants both Firestore service agents access, performs a managed export/import of every collection and subcollection, copies the required latest secret versions, removes temporary bucket IAM, and compares the result:
+The normal command creates a uniformly-access-controlled migration bucket in
+the target project, temporarily grants both Firestore service agents access,
+performs a managed export/import of every collection and subcollection, copies
+the required latest secret versions, removes temporary bucket IAM, and
+compares the result. For a new Shopify app, preserve the destination's Shopify
+credentials while copying the other secrets:
 
 ```powershell
-.\infra\gcloud\migrate-firestore.ps1 -From old-project-id -To new-project-id
+ .\infra\gcloud\migrate-firestore.ps1 -From old-project-id -To new-project-id -UseTargetShopifySecrets
 ```
+
+Before using that switch, create enabled destination versions for
+`automnia-shopify-webhook-secrets` and `automnia-shopify-admin-api-token`. The
+old store's app credentials must never replace these target-specific values.
+
+A baseline Firestore copy can run before the target Cloud Run service is
+deployable:
+
+```powershell
+.\infra\gcloud\migrate-firestore.ps1 -From old-project-id -To new-project-id -DataOnly
+```
+
+This verifies the Firestore snapshot but does not copy secrets or make the
+migration switch-eligible. Run the full migration after deploying the target
+candidate.
 
 The target must be empty by default. `-AllowNonEmptyTarget` is reserved for the final cutover delta and rollback; exact post-import hashing still catches extra or stale documents.
 
@@ -218,8 +249,8 @@ Do not delete the old project or migration export until the rollback window clos
 ## Verify and cut over
 
 ```powershell
-.\infra\gcloud\verify.ps1 -ProjectId new-project-id
-.\infra\gcloud\switch-traffic.ps1 -ProjectId new-project-id
+ .\infra\gcloud\verify.ps1 -ProjectId new-project-id -AllowShopifyConfigMigration
+ .\infra\gcloud\switch-traffic.ps1 -ProjectId new-project-id -UseTargetShopifySecrets -AllowShopifyConfigMigration
 ```
 
 The migration state supplies the old project ID automatically. You can provide `-SourceProjectId` explicitly when state files are unavailable.
@@ -229,13 +260,20 @@ The verification gate refuses traffic when any of these do not match:
 1. Every Firestore document field, including license indexes, usage idempotency records, top-ups, and webhook delivery records.
 2. Customer counts, active-customer counts, credit-balance totals, top-up totals, and deducted-credit totals.
 3. Source, target, and declared composite indexes.
-4. Source, target, and declared Shopify plan mappings.
-5. Required secret values by one-way fingerprint and their Cloud Run bindings.
+ 4. The local Shopify mapping matches the source or destination mapping; source
+    and destination plan maps may intentionally differ when a new store is used.
+ 5. Non-Shopify secret values match by one-way fingerprint. Shopify app secrets
+    are destination-specific and must have enabled versions and Cloud Run bindings.
 6. Required APIs, runtime identity, and IAM roles.
 7. Cloud Run health, revision schema, Firestore readiness, and permanent-host contract.
 8. A non-mutating verification against a real non-revoked license (or the rejection path for an empty ledger) and reachability of the configured live Shopify checkout.
 
-`switch-traffic.ps1` repeats verification after a protected final delta; an old report is never enough to switch.
+`switch-traffic.ps1` pauses both billing retry schedulers, freezes source
+writes, repeats read-only verification after a protected final delta, then
+creates and checks a tagged active revision before routing. It restores the
+source route and scheduler on failure and enables the destination scheduler
+only after the permanent HTTPS health check succeeds. An old report is never
+enough to switch.
 
 ## Roll back safely
 
@@ -251,7 +289,12 @@ Or identify the active and prior projects explicitly:
 .\infra\gcloud\rollback.ps1 -FromProjectId new-project-id -ToProjectId old-project-id
 ```
 
-Rollback freezes writes on the active service, copies post-cutover Firestore and secret changes back, verifies the reverse migration, activates the prior candidate revision, and only then restores the permanent domain. If reverse verification fails, the permanent domain stays on the current project.
+Rollback pauses the active billing scheduler, freezes writes, copies
+post-cutover Firestore and non-Shopify secret changes back, preserves the
+rollback destination's Shopify credentials, verifies the reverse migration,
+creates and checks a tagged active revision, and only then restores the
+permanent domain and its scheduler. If reverse verification fails, the
+permanent domain stays on the current project.
 
 ## Operational safeguards
 

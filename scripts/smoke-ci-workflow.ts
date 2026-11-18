@@ -75,6 +75,7 @@ assert.match(workflow, /name:\s*automnia-release-evidence[\s\S]*path:\s*release\
 const order = [
   'npm ci',
   'npm run prepare:openclaw-vendor',
+  'npm run prepare:runtime-bundles',
   'npm run audit:dependencies',
   'npm run secret:scan',
   'npm run lint',
@@ -84,7 +85,6 @@ const order = [
   'npm run build:server',
   'npm run build:client',
   'npm run smoke:electron-e2e',
-  'npm run prepare:runtime-bundles',
   'node scripts/package-desktop.cjs --dir',
   'npm run smoke:packaged-electron-launch',
   'npm run release:evidence',
@@ -98,6 +98,8 @@ for (const command of order) {
 }
 
 assert.match(publicRelease, /tags:\s*\n\s*- 'v\*'/, 'version tags must trigger the dedicated public release workflow')
+assert.match(publicRelease, /workflow_dispatch:/, 'public release workflow must support a build-only manual verification run')
+assert.match(publicRelease, /publish-updates:[\s\S]*?if:\s*\$\{\{\s*github\.event_name\s*==\s*'push'\s*\}\}/, 'manual installer verification must never publish production aliases')
 assert.match(publicRelease, /AUTOMNIA_RELEASE_REQUIRE_SIGNING:\s*'0'/, 'early public releases must allow unsigned platform artifacts')
 assert.match(publicRelease, /AUTOMNIA_UPDATE_REQUIRE_SIGNING:\s*'1'/, 'public releases must fail closed without update signing')
 assert.match(publicRelease, /AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG:\s*'1'/, 'public release builds must verify the embedded updater trust configuration')
@@ -105,9 +107,10 @@ assert.match(publicRelease, /AUTOMNIA_SKIP_PLATFORM_SIGNING:\s*'1'/, 'early publ
 assert.ok(publicRelease.includes('AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM'), 'public release workflow must require the update signing secret')
 assert.match(publicRelease, /macos:\s*\n\s*name: Unsigned macOS DMG and ZIP\s*\n\s*runs-on: macos-15-intel/, 'Intel macOS release dependencies must be installed on a native Intel runner')
 assert.ok(publicRelease.includes('npm run dist:mac -- --x64'), 'public release must build an Intel macOS artifact')
+assert.ok(publicRelease.includes('npm run dist:mac -- --arm64'), 'public release must build an Apple silicon macOS artifact')
 assert.match(publicRelease, /Build unsigned Intel Mac DMG and ZIP[\s\S]*?AUTOMNIA_TARGET_ARCH:\s*x64/, 'Intel macOS packaging must prepare an Intel Node runtime even on Apple silicon runners')
-assert.doesNotMatch(publicRelease, /--arm64|aarch64|Automnia-AI-Nexus-arm64\.dmg/i, 'x64-only release must not build or publish an ARM64 installer')
-assert.match(publicRelease, /AUTOMNIA_UPDATE_CHANNEL:\s*stable-x64/, 'x64-only installers must use an isolated signed update channel')
+assert.match(publicRelease, /macos-arm64:\s*\n\s*name: Unsigned Apple silicon macOS DMG and ZIP\s*\n\s*runs-on: macos-15[\s\S]*?npm run dist:mac -- --arm64/, 'Apple silicon packaging must run on the GitHub ARM macOS runner')
+assert.match(publicRelease, /AUTOMNIA_UPDATE_CHANNEL:\s*stable-x64/, 'x64 update artifacts must use the isolated signed update channel')
 assert.match(publicRelease, /node scripts\/publish-update-channel\.cjs release/, 'x64 releases must use the dual-bucket channel publisher')
 assert.match(publicRelease, /AUTOMNIA_LEGACY_UPDATE_BUCKET/, 'the release publisher must require the legacy bucket')
 assert.match(publicRelease, /AUTOMNIA_UPDATE_TRUSTED_KEY_SHA256/, 'the release publisher must pin the installed update key')
@@ -117,12 +120,20 @@ assert.match(updatePromotion, /AUTOMNIA_UPDATE_CHANNEL:\s*\$\{\{\s*inputs\.chann
 assert.match(updatePromotion, /node scripts\/publish-update-channel\.cjs verify/, 'rollout promotion must verify the original signed release')
 assert.match(updatePromotion, /node scripts\/publish-update-channel\.cjs promote/, 'rollout promotion must update both buckets')
 assert.match(publicRelease, /AUTOMNIA_INSTALLER_BUCKET/, 'public release must publish customer installers to the configured private bucket')
-assert.match(publicRelease, /AUTOMNIA_WINDOWS_INSTALLER=%s\\nAUTOMNIA_MAC_X64=%s\\nAUTOMNIA_LINUX_APPIMAGE=%s\\nAUTOMNIA_LINUX_DEB=%s\\n[\s\S]*>> "\$GITHUB_ENV"/, 'installer paths must persist between the private and public publication steps')
+assert.match(publicRelease, /AUTOMNIA_WINDOWS_INSTALLER=%s\\nAUTOMNIA_MAC_X64=%s\\nAUTOMNIA_MAC_ARM64=%s\\nAUTOMNIA_LINUX_APPIMAGE=%s\\nAUTOMNIA_LINUX_DEB=%s\\n[\s\S]*>> "\$GITHUB_ENV"/, 'all installer paths must persist between the private and public publication steps')
 assert.match(publicRelease, /"\$AUTOMNIA_WINDOWS_INSTALLER" "gs:\/\/\$PUBLIC_DOWNLOAD_BUCKET\/releases\/current\/Automnia-Setup-x64\.exe"/, 'public download aliases must use the persisted Windows installer path')
 assert.match(publicRelease, /"\$AUTOMNIA_MAC_X64" "gs:\/\/\$PUBLIC_DOWNLOAD_BUCKET\/releases\/current\/Automnia-AI-Nexus-x64\.dmg"/, 'public download aliases must use the persisted Intel macOS installer path')
+assert.match(publicRelease, /"\$AUTOMNIA_MAC_ARM64" "gs:\/\/\$PUBLIC_DOWNLOAD_BUCKET\/releases\/current\/Automnia-AI-Nexus-arm64\.dmg"/, 'public download aliases must use the persisted Apple silicon installer path')
 assert.match(publicRelease, /"\$AUTOMNIA_LINUX_APPIMAGE" "gs:\/\/\$PUBLIC_DOWNLOAD_BUCKET\/releases\/current\/Automnia-AI-Nexus-x86_64\.AppImage"/, 'public download aliases must use the persisted Linux installer path')
+assert.match(publicRelease, /"\$AUTOMNIA_LINUX_DEB" "gs:\/\/\$PUBLIC_DOWNLOAD_BUCKET\/releases\/current\/Automnia-AI-Nexus-x86_64\.deb"/, 'public download aliases must use the persisted Debian package path')
 assert.match(publicRelease, /Automnia-AI-Nexus-x64\.dmg/, 'public release must publish the Intel DMG under the portal object name')
+assert.match(publicRelease, /Automnia-AI-Nexus-arm64\.dmg/, 'public release must publish the Apple silicon DMG under the portal object name')
 assert.match(publicRelease, /Automnia-Setup-x64\.exe/, 'public release must publish the Windows installer under the portal object name')
+assert.match(publicRelease, /Automnia-AI-Nexus-x86_64\.deb/, 'public release must publish the current Debian package under the portal object name')
+assert.ok(publicRelease.includes('AUTOMNIA_PACKAGED_MAC_APP_PATH'), 'public release must launch the app copied from each mounted Mac DMG')
+assert.ok(publicRelease.includes('lipo -archs'), 'public release must verify the native architecture inside both Mac DMGs')
+assert.ok(publicRelease.includes('dpkg-deb -f'), 'public release must inspect Debian package metadata')
+assert.ok(publicRelease.includes('AUTOMNIA_PACKAGED_LINUX_ROOT'), 'public release must launch the installed Debian package')
 const afterPack = read('scripts/after-pack.cjs')
 assert.match(afterPack, /const archiveMember = \(\.\.\.segments\) => path\.join\(\.\.\.segments\)/, 'packaged archive validation must use host-native member paths for Windows')
 assert.ok(!afterPack.includes("'electron/update-config.json'"), 'packaged archive validation must not hard-code POSIX member separators')
@@ -140,6 +151,7 @@ for (const command of [
   assert.ok(publicRelease.includes(command), `public release workflow must run ${command}`)
 }
 assert.match(publicRelease, /fresh|lifecycle/i, 'public release workflow must retain installer lifecycle evidence')
+assert.match(publicRelease, /Download the currently published installer for a real upgrade check[\s\S]*?AUTOMNIA_PREVIOUS_WINDOWS_INSTALLER_PATH/, 'public release must test an upgrade from the installer customers currently use')
 assert.match(publicRelease, /retention-days:\s*90/, 'public release evidence must be retained for review')
 
 assert.match(quality, /ubuntu-latest/, 'cross-platform quality must cover Linux')

@@ -4,6 +4,7 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { execFile, spawnSync } from 'node:child_process'
 import type { LocalOAuthCredential } from './providerAuthService'
+import { boundedHttpRequest, type BoundedHttpFetch } from '../http/boundedHttpRequest'
 
 export const GOOGLE_VERTEX_PROJECT_ID_KEYS = ['GOOGLE_VERTEX_PROJECT_ID', 'GOOGLE_CLOUD_PROJECT', 'GOOGLE_PROJECT_ID', 'GCP_PROJECT', 'GCLOUD_PROJECT']
 export const GOOGLE_VERTEX_LOCATION_KEYS = [
@@ -20,6 +21,7 @@ export const GOOGLE_ADC_SETUP_POWERSHELL_URL = 'https://storage.googleapis.com/c
 export const GOOGLE_VERTEX_GLOBAL_LOCATION = 'global'
 export const GOOGLE_VERTEX_DEFAULT_LOCATION = GOOGLE_VERTEX_GLOBAL_LOCATION
 export const GOOGLE_VERTEX_ACCESS_TOKEN_CACHE_MS = 45 * 60 * 1000
+const GOOGLE_VERTEX_TOKEN_RESPONSE_MAX_BYTES = 32 * 1024
 
 export type GoogleVertexGcloudStatus = {
   supported: true
@@ -647,9 +649,8 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     if (!signal && adcRequests.has(key)) return adcRequests.get(key)!
     const pending = (async () => {
       try {
-        const response = await fetch('https://oauth2.googleapis.com/token', {
+        const { response, text } = await boundedHttpRequest('https://oauth2.googleapis.com/token', {
           method: 'POST',
-          signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10000)]) : AbortSignal.timeout(10000),
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams({
             client_id: credential.clientId,
@@ -657,9 +658,14 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
             refresh_token: credential.refreshToken,
             grant_type: 'refresh_token',
           }).toString(),
+          signal,
+        }, {
+          timeoutMs: 10_000,
+          maxResponseBytes: GOOGLE_VERTEX_TOKEN_RESPONSE_MAX_BYTES,
+          fetch: fetch as unknown as BoundedHttpFetch,
         })
         if (!response.ok) return null
-        const payload = await response.json() as { access_token?: unknown; expires_in?: unknown }
+        const payload = JSON.parse(text) as { access_token?: unknown; expires_in?: unknown }
         const accessToken = typeof payload.access_token === 'string' ? payload.access_token.trim() : ''
         if (!accessToken) return null
         const lifetime = typeof payload.expires_in === 'number' && Number.isFinite(payload.expires_in) ? Math.max(0, payload.expires_in * 1000 - 60000) : GOOGLE_VERTEX_ACCESS_TOKEN_CACHE_MS

@@ -7,16 +7,17 @@ read_when:
 
 # Troubleshooting
 
-## `clawhub login` opens a browser but never completes
+## `clawhub login` waits for authorization
 
-The CLI starts a short-lived local callback server during browser login.
+Open the verification URL printed by the CLI, sign in with GitHub if needed,
+and select **Authorize** for the displayed code. You can use a browser on
+another device; no localhost callback is required.
 
-- Make sure your browser can reach `http://127.0.0.1:<port>/callback`.
-- Check local firewall, VPN, and proxy rules if the callback never arrives.
-- In headless environments, create an API token in the ClawHub web UI and run:
+If the code expires, run `clawhub login` again. For unattended login, create an
+API token in ClawHub Settings → API tokens and run:
 
 ```bash
-clawhub login --token clh_...
+clawhub login --token <token>
 ```
 
 ## `whoami` or `publish` returns `Unauthorized` (401)
@@ -38,6 +39,21 @@ Read the retry information in the response:
 If many users share one egress IP, anonymous IP limits can be hit even when each
 person only sends a few requests. Sign in where possible and retry after the
 reported delay.
+
+Only a real `429` carries these headers, and the CLI shows a reset hint only for
+a `429`. Other failures are not rate limiting.
+
+## Publish returns `ClawHub backend is temporarily unavailable` (503)
+
+The registry hit a temporary backend failure, such as overload or write
+contention. The request was not rejected for validation. The CLI already retried
+it with backoff, honoring the server's `Retry-After`. Run the command again
+shortly. If a retry reports that the version already exists, an earlier attempt
+completed; check the published version before bumping it.
+
+If the same failure arrives as `409` saying the request cannot be retried, it
+happened after the publish saved its uploaded files. Check whether the version
+was published; if not, run `clawhub publish` again to upload the files again.
 
 ## Search or install fails behind a proxy
 
@@ -134,12 +150,17 @@ clawhub update @openclaw/demo --force
 
 ## A plugin install fails in OpenClaw
 
-- Use an explicit ClawHub source:
+- Use the explicit ClawHub source on released OpenClaw versions through
+  `2026.10.4`. This form also works on updated builds:
 
 ```bash
 openclaw plugins install clawhub:<package>
 ```
 
+- Prefix-free commands require an updated main/dev build with ClawHub-default
+  support. On older versions, a bare package name can select npm instead.
+- If the plugin is only available on npm, use
+  `openclaw plugins install npm:<package>`.
 - Check the package detail page for scan status and compatibility metadata.
 - Confirm your OpenClaw version satisfies the package's advertised
   compatibility range.

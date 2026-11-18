@@ -639,7 +639,7 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
     return startGoogleOAuthSessionWithScopes(
       undefined,
       'account',
-      options.googleAccountOAuthScopes?.length ? options.googleAccountOAuthScopes : ['openid', 'email', 'profile'],
+      options.googleAccountOAuthScopes?.length ? options.googleAccountOAuthScopes : ['openid', 'email'],
     )
   }
 

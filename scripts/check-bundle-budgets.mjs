@@ -59,10 +59,12 @@ const budgets = {
   // leaving a small amount of room for normal asset-hash and dependency drift.
   entryCssBytes: numberEnv('AUTOMNIA_BUDGET_ENTRY_CSS_BYTES', 1_850_000),
   entryCssGzipBytes: numberEnv('AUTOMNIA_BUDGET_ENTRY_CSS_GZIP_BYTES', 225_000),
-  totalJsBytes: numberEnv('AUTOMNIA_BUDGET_TOTAL_JS_BYTES', 1_100_000),
-  totalJsGzipBytes: numberEnv('AUTOMNIA_BUDGET_TOTAL_JS_GZIP_BYTES', 325_000),
-  deferredSpeechJsBytes: numberEnv('AUTOMNIA_BUDGET_DEFERRED_SPEECH_JS_BYTES', 550_000),
-  deferredSpeechJsGzipBytes: numberEnv('AUTOMNIA_BUDGET_DEFERRED_SPEECH_JS_GZIP_BYTES', 160_000),
+  // The security refresh updated transitive ONNX/runtime chunks; keep these ceilings
+  // just above the new measured production output, with limited drift headroom.
+  totalJsBytes: numberEnv('AUTOMNIA_BUDGET_TOTAL_JS_BYTES', 1_140_000),
+  totalJsGzipBytes: numberEnv('AUTOMNIA_BUDGET_TOTAL_JS_GZIP_BYTES', 345_000),
+  deferredSpeechJsBytes: numberEnv('AUTOMNIA_BUDGET_DEFERRED_SPEECH_JS_BYTES', 565_000),
+  deferredSpeechJsGzipBytes: numberEnv('AUTOMNIA_BUDGET_DEFERRED_SPEECH_JS_GZIP_BYTES', 166_000),
 }
 
 const format = (bytes) => `${(bytes / 1024).toFixed(1)} KiB`

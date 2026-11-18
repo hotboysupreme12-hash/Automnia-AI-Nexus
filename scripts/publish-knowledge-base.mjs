@@ -14,16 +14,21 @@ import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 
-const repositoryRoot = path.resolve(new URL('.', import.meta.url).pathname, '..')
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 // Keep the default aligned with the project used by infra/gcloud/config.psd1.
 // A publish pointed at an old/unavailable project leaves the live corpus
 // pending even when Cloud Run itself is healthy.
-const projectId = process.env.AUTOMNIA_KNOWLEDGE_PROJECT || 'project-60131eab-441a-4cc5-a71'
+const projectId = process.env.AUTOMNIA_KNOWLEDGE_PROJECT || 'project-1799c8b6-3a92-4bbb-85c'
 const location = process.env.AUTOMNIA_KNOWLEDGE_LOCATION || 'global'
 const collection = 'default_collection'
 const dataStoreId = process.env.AUTOMNIA_KNOWLEDGE_DATA_STORE || 'automnia-knowledge'
 const branch = '0'
+
+if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(projectId)) {
+  throw new Error('AUTOMNIA_KNOWLEDGE_PROJECT must be a valid Google Cloud project ID.')
+}
 
 function source(relativePath) {
   return path.join(repositoryRoot, relativePath)
@@ -187,7 +192,19 @@ function buildDocument(group) {
 }
 
 function gcloud(args) {
-  return execFileSync('gcloud', args, { encoding: 'utf8' }).trim()
+  if (process.platform === 'win32') {
+    // Cloud SDK is a .cmd entry point on Windows. Permit only simple tokens
+    // before passing them through cmd.exe; the only variable argument is the
+    // validated project ID above.
+    if (!args.every((argument) => /^[A-Za-z0-9_.:=/-]+$/.test(String(argument)))) {
+      throw new Error('Unsupported character in gcloud argument.')
+    }
+    const command = ['gcloud.cmd', ...args].join(' ')
+    return execFileSync(command, { encoding: 'utf8', shell: true }).trim()
+  }
+  return execFileSync('gcloud', args, {
+    encoding: 'utf8',
+  }).trim()
 }
 
 async function publish(document, token, projectNumber) {
@@ -195,7 +212,11 @@ async function publish(document, token, projectNumber) {
   const url = `https://discoveryengine.googleapis.com/v1/${resource}?allowMissing=true`
   const response = await fetch(url, {
     method: 'PATCH',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'x-goog-user-project': projectId,
+    },
     body: JSON.stringify(document),
   })
   const body = await response.text()
@@ -210,7 +231,7 @@ console.log(JSON.stringify({ event: 'knowledge_corpus_prepared', documentCount: 
 if (process.argv.includes('--dry-run')) process.exit(0)
 
 const token = gcloud(['auth', 'print-access-token'])
-const projectNumber = gcloud(['projects', 'describe', projectId, '--format=value(projectNumber)'])
+const projectNumber = JSON.parse(gcloud(['projects', 'describe', projectId, '--format=json'])).projectNumber
 for (const document of documents) {
   const result = await publish(document, token, projectNumber)
   console.log(JSON.stringify({ event: 'knowledge_document_published', id: document.id, name: result.name || null }))

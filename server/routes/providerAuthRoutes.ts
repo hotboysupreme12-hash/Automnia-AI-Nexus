@@ -50,7 +50,7 @@ type ProviderAuthRoutesOptions = {
   isCreditsOnlyEntitlement?: () => boolean
   providerAccessAllowed?: () => boolean
   creditsOnlyAvailableModels?: () => unknown
-  modelCenter?: Pick<ModelCenterService, 'getCapabilitySnapshots' | 'probeModel' | 'refreshProviderCapabilities'>
+  modelCenter?: Pick<ModelCenterService, 'checkProviderOnboarding' | 'getCapabilitySnapshots' | 'probeModel' | 'refreshProviderCapabilities'>
 }
 
 async function ensureProviderAuthReady(options: ProviderAuthRoutesOptions) {
@@ -339,6 +339,36 @@ export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRo
       return apiSuccess(res, { snapshots: await options.modelCenter.getCapabilitySnapshots(provider || undefined) })
     } catch (error) {
       return apiFailure(res, 500, 'model_catalog_failed', 'Failed to read model capability snapshots', String(error))
+    }
+  })
+
+  app.get('/api/models/onboarding', async (req, res) => {
+    if (!options.modelCenter) return apiFailure(res, 503, 'model_catalog_failed', 'Provider onboarding checks are unavailable')
+    try {
+      await ensureProviderAuthReady(options)
+      if (providerAccessBlocked()) return rejectCreditsOnlyProviderAccess(res)
+      const queryProvider = req.query.provider
+      if (Array.isArray(queryProvider) || typeof queryProvider !== 'string') {
+        return apiFailure(res, 400, 'invalid_payload', 'Specify one provider ID')
+      }
+      const provider = queryProvider.trim()
+      if (!/^[a-z0-9][a-z0-9-]{0,63}$/i.test(provider)) {
+        return apiFailure(res, 400, 'invalid_payload', 'Invalid provider ID')
+      }
+      const queryRefresh = req.query.refresh
+      if (Array.isArray(queryRefresh) || (queryRefresh !== undefined && queryRefresh !== '0' && queryRefresh !== '1')) {
+        return apiFailure(res, 400, 'invalid_payload', 'Use refresh=1 to discover the provider catalog')
+      }
+      const discovery = queryRefresh === '1'
+        ? await options.modelCenter.refreshProviderCapabilities(provider)
+        : null
+      const onboarding = await options.modelCenter.checkProviderOnboarding(provider)
+      return apiSuccess(res, {
+        onboarding,
+        ...(discovery ? { discovery: { refreshed: discovery.ok, reason: discovery.ok ? null : discovery.reason } } : {}),
+      })
+    } catch (error) {
+      return apiFailure(res, 500, 'model_catalog_failed', 'Failed to check provider onboarding', String(error))
     }
   })
 

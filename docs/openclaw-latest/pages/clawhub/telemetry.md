@@ -14,8 +14,11 @@ ClawHub uses minimal CLI telemetry to compute aggregate skill and plugin install
 Telemetry is only sent when:
 
 - You are logged in in the CLI.
-- You run `clawhub install <slug>`, or complete an authenticated
-  `openclaw plugins install clawhub:<package>` install.
+- You complete `clawhub install <skill>`, an update that replaces a skills.sh
+  catalog skill through `clawhub update`, or an authenticated
+  `openclaw plugins install clawhub:<package>` install. Updated main/dev builds
+  with ClawHub-default support can omit the prefix and still report the ClawHub
+  install.
 - Telemetry is **not disabled** (see “How to disable” below).
 
 If you are not logged in, nothing is reported.
@@ -29,10 +32,14 @@ The event includes:
 
 - The installed skill slug or canonical plugin package name.
 - `version`: the installed version, when known.
+- Skill events may also include the publisher handle, source reference and kind,
+  repository, repository-relative source path, source URL, canonical reference,
+  scan status, and trust label, when available.
 
 ### What we do _not_ collect
 
-- No folder paths or folder-derived identifiers.
+- No local filesystem paths or identifiers derived from local folder paths.
+  A repository-relative source path identifies the skill within its source repository.
 - No file contents.
 - No per-run logs, prompts, or other CLI output.
 
@@ -43,6 +50,14 @@ For skills, ClawHub maintains:
 - `installsAllTime`: unique users who have reported at least one CLI install for the skill.
 - `installsCurrent`: unique users who have reported an install and have not deleted their
   telemetry.
+
+Install events record presence, not a snapshot of your installed skills.
+Uninstalling does not send telemetry or decrement counts, and `clawhub sync`
+does not reconcile removals. Legacy snapshot reports also only add reported
+installs; omitted skills are not removed from the counts.
+
+The server discards skills.sh install events; they do not increment native
+ClawHub skill counters.
 
 For plugins, ClawHub counts the first successful install reported by each user and package.
 Repeated installs and updates refresh the recorded version without increasing the aggregate

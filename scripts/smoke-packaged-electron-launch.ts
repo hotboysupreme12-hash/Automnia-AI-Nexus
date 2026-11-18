@@ -10,6 +10,16 @@ const releaseRoot = path.join(root, 'release')
 const productName = 'Automnia AI Nexus'
 
 function resolveMacUnpackedRoot() {
+  const explicitAppPath = String(process.env.AUTOMNIA_PACKAGED_MAC_APP_PATH || '').trim()
+  if (explicitAppPath) {
+    const resolvedAppPath = path.resolve(explicitAppPath)
+    assert.ok(
+      existsSync(path.join(resolvedAppPath, 'Contents', 'MacOS', productName)),
+      `packaged launch smoke expected ${productName}.app at AUTOMNIA_PACKAGED_MAC_APP_PATH=${resolvedAppPath}`,
+    )
+    return path.dirname(resolvedAppPath)
+  }
+
   const candidates = [
     path.join(releaseRoot, process.arch === 'arm64' ? 'mac-arm64' : 'mac'),
     path.join(releaseRoot, 'mac-arm64'),
@@ -22,7 +32,9 @@ function resolveMacUnpackedRoot() {
 
 const unpackedRoot = process.platform === 'darwin'
   ? resolveMacUnpackedRoot()
-  : path.join(releaseRoot, process.platform === 'win32' ? 'win-unpacked' : 'linux-unpacked')
+  : process.platform === 'linux' && String(process.env.AUTOMNIA_PACKAGED_LINUX_ROOT || '').trim()
+    ? path.resolve(String(process.env.AUTOMNIA_PACKAGED_LINUX_ROOT).trim())
+    : path.join(releaseRoot, process.platform === 'win32' ? 'win-unpacked' : 'linux-unpacked')
 const macAppPath = path.join(unpackedRoot, `${productName}.app`)
 const launcherPath = process.platform === 'win32'
   ? path.join(unpackedRoot, 'Automnia AI Nexus.exe')

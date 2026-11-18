@@ -6,6 +6,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { AVATAR_IMAGE_TYPE_ERROR, isSupportedAvatarImagePath } from './avatarFileService'
 import { isPathUnder } from './safePathService'
+import { appendBoundedProcessOutput } from '../process/boundedProcessService'
 
 export type PickerSessionStatus = 'pending' | 'selected' | 'cancelled' | 'error'
 
@@ -54,6 +55,7 @@ export type PickerSessionServiceOptions = {
   now?: () => number
   randomId?: () => string
   spawnProcess?: SpawnProcess
+  terminateProcessTree?: (pid: number | undefined, reason?: string, force?: boolean) => Promise<{ ok: boolean }> | { ok: boolean }
   optionalRequire?: (id: string) => unknown
   persistAgentAvatarFromPath?: (agentId: string, sourcePath: string) => Promise<PersistedAgentAvatar>
   pickFolderWithOsDialog?: (startPath?: string, abortSignal?: AbortSignal) => Promise<PickerDialogResult>
@@ -77,6 +79,7 @@ const defaultOptionalRequire = createRequire(import.meta.url)
 
 export const DEFAULT_PICKER_TIMEOUT_MS = 60_000
 export const DEFAULT_PICKER_SESSION_TTL_MS = 5 * 60 * 1000
+export const MAX_PICKER_COMMAND_OUTPUT_CHARS = 64 * 1024
 const WINDOWS_PICKER_POLL_INTERVAL_MS = 100
 
 export function quoteWindowsBatchArg(value: string) {
@@ -265,15 +268,35 @@ export function createPickerSessionService(options: PickerSessionServiceOptions)
         commandOptions.abortSignal?.removeEventListener('abort', onAbort)
         resolve(result)
       }
-      const child = spawnProcess(command, args, { shell: false, windowsHide: commandOptions.windowsHide ?? true })
+      const child = spawnProcess(command, args, {
+        shell: false,
+        detached: platform !== 'win32',
+        ...(platform === 'win32' ? { windowsHide: commandOptions.windowsHide ?? true } : {}),
+      })
       let stdout = ''
       let stderr = ''
-      const onAbort = () => {
-        try {
-          child.kill()
-        } catch {
-          // The process may already have exited.
+      const terminateChildTree = (reason: string) => {
+        const killChild = () => {
+          try {
+            child.kill()
+          } catch {
+            // The process may already have exited.
+          }
         }
+        if (!options.terminateProcessTree) {
+          killChild()
+          return
+        }
+        try {
+          void Promise.resolve(options.terminateProcessTree(child.pid, `${label} ${reason}`, true))
+            .then((result) => { if (!result.ok) killChild() })
+            .catch(killChild)
+        } catch {
+          killChild()
+        }
+      }
+      const onAbort = () => {
+        terminateChildTree('cancelled')
         finish({ ok: false, detail: `${label} request was cancelled before it completed.` })
       }
       if (commandOptions.abortSignal?.aborted) {
@@ -282,10 +305,10 @@ export function createPickerSessionService(options: PickerSessionServiceOptions)
       }
       commandOptions.abortSignal?.addEventListener('abort', onAbort, { once: true })
       child.stdout?.on('data', (chunk) => {
-        stdout += chunk.toString()
+        stdout = appendBoundedProcessOutput(stdout, chunk, MAX_PICKER_COMMAND_OUTPUT_CHARS)
       })
       child.stderr?.on('data', (chunk) => {
-        stderr += chunk.toString()
+        stderr = appendBoundedProcessOutput(stderr, chunk, MAX_PICKER_COMMAND_OUTPUT_CHARS)
       })
       child.once('error', (error) => {
         finish({ ok: false, detail: String(error) })
@@ -297,11 +320,7 @@ export function createPickerSessionService(options: PickerSessionServiceOptions)
       })
       if (commandTimeoutMs > 0) {
         timeout = setServiceTimeout(() => {
-          try {
-            child.kill()
-          } catch {
-            // The process may already have exited.
-          }
+          terminateChildTree('timeout')
           finish({
             ok: false,
             detail: `${label} timed out after ${Math.round(commandTimeoutMs / 1000)} seconds. Try Browse again.`,

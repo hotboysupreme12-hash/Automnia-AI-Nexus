@@ -11,9 +11,12 @@ import { isUploadResponse } from '../../api/responseValidation'
 import { abortRuntimeRun, restartGatewayRuntime, useRuntimeSummaryStatus } from '../../hooks/useRuntimeStatus'
 import type { GatewayStabilityStatus, RuntimeRun, RuntimeStatus } from '../../hooks/useRuntimeStatus'
 import {
+  commandConsoleQueueAgeMs,
   commandConsoleSessionKey,
+  isCommandConsoleQueueStale,
   makeCommandConsoleDraftStorageKey,
   readCommandConsoleDraft,
+  STALE_COMMAND_CONSOLE_QUEUE_AGE_MS,
   writeCommandConsoleDraft,
   type CommandConsoleDraft,
 } from '../../store/commandConsoleState'
@@ -555,14 +558,17 @@ function backgroundTaskResponse(task: AgentBackgroundTask, fallbackAgentId: stri
 
 type ResponseCta = Omit<FailureRecovery, 'action'> & { action?: FailureRecoveryAction | 'cancel-queued' }
 
-function responseCta(entry: AgentResponse): ResponseCta | null {
+function responseCta(entry: AgentResponse, staleQueueAgeMs: number | null = null): ResponseCta | null {
   if (entry.streaming && entry.transport === 'command-console-queue') {
+    const stale = staleQueueAgeMs !== null && staleQueueAgeMs >= STALE_COMMAND_CONSOLE_QUEUE_AGE_MS
     const queueDetail = entry.queuePosition && entry.queueDepth
       ? `Position ${entry.queuePosition} of ${entry.queueDepth}.`
       : 'Waiting for the active lane to finish.'
     return {
-      label: 'Queued',
-      detail: `${queueDetail} Starts automatically when the lane is free.`,
+      label: stale ? 'Stale queued turn' : 'Queued',
+      detail: stale
+        ? `Waiting ${formatShortElapsed(staleQueueAgeMs)}. This turn has not started; cancel it if it is no longer needed.`
+        : `${queueDetail} Starts automatically when the lane is free.`,
       action: 'cancel-queued',
     }
   }
@@ -620,6 +626,22 @@ const ResponseMessage = memo(function ResponseMessage({
   const runtimeNoticeActive = Boolean(entry.streaming && (entry.runtimeNoticeActive || isRuntimeNoticeTransport(entry.transport)))
   const avatar = meta?.portrait || ''
   const name = meta?.name || entry.agentId
+  const [queueClockMs, setQueueClockMs] = useState(() => Date.now())
+  useEffect(() => {
+    if (!entry.streaming || entry.transport !== 'command-console-queue') return
+    const initialTick = window.setTimeout(() => setQueueClockMs(Date.now()), 0)
+    const interval = window.setInterval(() => setQueueClockMs(Date.now()), 30_000)
+    return () => {
+      window.clearTimeout(initialTick)
+      window.clearInterval(interval)
+    }
+  }, [entry.id, entry.streaming, entry.transport])
+  const queueAgeMs = entry.transport === 'command-console-queue'
+    ? commandConsoleQueueAgeMs(entry.queuedAt || entry.timestamp, queueClockMs)
+    : null
+  const staleQueued = entry.streaming
+    && entry.transport === 'command-console-queue'
+    && isCommandConsoleQueueStale(entry.queuedAt || entry.timestamp, queueClockMs)
   const role = meta?.role || ''
   // Runtime transport describes how the agent is executing; it does not make
   // the response a standalone Automnia message. Keep the real agent identity
@@ -646,7 +668,7 @@ const ResponseMessage = memo(function ResponseMessage({
   const status = entry.streaming ? 'streaming' : entry.ok ? 'complete' : 'blocked'
   const statusText = runOutcomeLabel(entry)
   const durationLabel = entry.durationMs > 0 ? `${(entry.durationMs / 1000).toFixed(1)}s` : ''
-  const cta = responseCta(entry)
+  const cta = responseCta(entry, staleQueued ? queueAgeMs : null)
   const activityItems = responseActivityItems(entry)
   const showLiveActivity = entry.streaming && activityItems.length > 0
   const hasActivity = (entry.activity || []).some((event) => event.type !== 'message.partial' && event.type !== 'message.final')
@@ -669,6 +691,7 @@ const ResponseMessage = memo(function ResponseMessage({
       data-agent-rarity={rarity}
       data-message-state={status}
       data-message-transport={entry.transport || ''}
+      data-queue-stale={staleQueued ? 'true' : 'false'}
       data-runtime-notice={runtimeNoticeActive ? 'true' : 'false'}
       className="dy-command-message group/message relative overflow-hidden border border-white/[0.055] bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.018))] p-4 transition-all duration-200 hover:bg-white/[0.045] hover:border-white/[0.09] border-l-[3px]"
     >
@@ -850,8 +873,19 @@ const ResponseMessage = memo(function ResponseMessage({
           </div>
         )}
 
-        {(queuePositionLabel || (entry.failureKind && !entry.ok)) && (
+        {(queuePositionLabel || staleQueued || (entry.failureKind && !entry.ok)) && (
           <div className="dy-command-message-meta-group dy-command-message-meta-group--auxiliary" aria-label="Additional response details">
+            {staleQueued && (
+              <Badge
+                className="dy-command-message-chip is-warning"
+                aria-label={`Stale queued turn after ${formatShortElapsed(queueAgeMs || 0)}. Cancel it if it is no longer needed.`}
+                title={`This queued turn has not started after ${formatShortElapsed(queueAgeMs || 0)}.`}
+                tone="warning"
+                size="micro"
+              >
+                Stale queue · {formatShortElapsed(queueAgeMs || 0)}
+              </Badge>
+            )}
             {queuePositionLabel && (
               <Badge
                 className="dy-command-message-chip is-queue"
@@ -895,12 +929,12 @@ const ResponseMessage = memo(function ResponseMessage({
             <Button
               disabled={actionBusy}
               onClick={() => onCancelQueuedTurn(entry.id)}
-              title="Cancel this queued Command Console turn"
+              title={staleQueued ? 'Cancel this stale queued Command Console turn' : 'Cancel this queued Command Console turn'}
               size="compact"
               variant="danger"
               loading={actionBusy}
             >
-              {actionBusy ? 'Canceling' : 'Cancel'}
+              {actionBusy ? 'Canceling' : staleQueued ? 'Cancel stale turn' : 'Cancel'}
             </Button>
           )}
           {cta.action === 'open-settings' && (

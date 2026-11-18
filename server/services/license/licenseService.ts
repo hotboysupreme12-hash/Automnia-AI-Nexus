@@ -136,19 +136,32 @@ function tierAllowsByok(tier: string | null | undefined) {
   return true
 }
 
-function tierRank(tier: string | null | undefined) {
-  const normalized = String(tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
-  if (isAutomniaFrontierTier(normalized)) return 4
-  // Enterprise is retained here solely so existing customers keep equivalent
-  // access below the dedicated Automnia Frontier tier.
-  if (normalized.includes('enterprise') || normalized.includes('pro')) return 3
-  if (normalized === 'starter' || normalized.includes('starter') || normalized === 'byok' || normalized.includes('byok')) return 1
-  if (normalized.includes('credit') || normalized.includes('refill') || normalized.includes('topup')) return 0
-  return normalized ? 1 : 0
+function hasProSubscriptionTerms(record: {
+  mode?: 'hosted_credits' | 'byok' | null
+  tier?: string | null
+  planPriceCents?: number | null
+}) {
+  const normalizedTier = String(record.tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
+  return (record.mode || 'hosted_credits') === 'hosted_credits'
+    && normalizedTier.includes('pro')
+    && Number.isSafeInteger(Number(record.planPriceCents))
+    && Number(record.planPriceCents) > 0
 }
 
-function permanentAccessFor(record: { permanentAccess?: boolean; mode?: 'hosted_credits' | 'byok' | null; tier?: string | null }) {
-  return !creditsOnlyEntitlement(record) && (record.permanentAccess === true || record.mode === 'byok' || tierRank(record.tier) >= 2)
+function hasPermanentTierAccess(tier: string | null | undefined) {
+  const normalized = String(tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
+  return normalized.includes('enterprise') || isAutomniaFrontierTier(normalized)
+}
+
+function permanentAccessFor(record: {
+  permanentAccess?: boolean
+  mode?: 'hosted_credits' | 'byok' | null
+  tier?: string | null
+  planPriceCents?: number | null
+}) {
+  return !creditsOnlyEntitlement(record)
+    && (record.permanentAccess === true
+      || (!hasProSubscriptionTerms(record) && (record.mode === 'byok' || hasPermanentTierAccess(record.tier))))
 }
 
 function effectiveMode(record: Pick<StoredLicense, 'mode' | 'tier'>): 'hosted_credits' | 'byok' {
@@ -221,8 +234,12 @@ function publicStatus(record: StoredLicense | null): LicenseStatus {
     mode,
     planPriceCents: validPlanPriceCents(record.planPriceCents) ? record.planPriceCents : null,
     byokAllowed: !creditsOnlyEntitlement(record) && (record.byokAllowed === true || tierAllowsByok(record.tier)),
-    permanentAccess: permanentAccessFor(record),
-    subscriptionStatus: record.subscriptionStatus || null,
+    permanentAccess: permanentAccessFor({ ...record, mode }),
+    subscriptionStatus: record.permanentAccess !== true
+      && hasProSubscriptionTerms({ mode, tier: record.tier, planPriceCents: record.planPriceCents })
+      && record.subscriptionStatus === 'permanent'
+      ? 'active'
+      : record.subscriptionStatus || null,
     usagePriority: effectiveUsagePriority(record, mode),
     preferredProviderModel: preferredProviderModel(record.preferredProviderModel),
     creditBalance: validCreditBalance(record.creditBalance) ? record.creditBalance : null,
@@ -320,8 +337,12 @@ function storedLicense(value: unknown): StoredLicense | null {
     mode,
     planPriceCents,
     byokAllowed: !creditsOnly && (record.byokAllowed === true || mode === 'byok' || tierAllowsByok(tier)),
-    permanentAccess: !creditsOnly && (record.permanentAccess === true || mode === 'byok' || tierRank(tier) >= 2),
-    subscriptionStatus: typeof record.subscriptionStatus === 'string' ? record.subscriptionStatus : null,
+    permanentAccess: permanentAccessFor({ ...record, mode, tier, planPriceCents }),
+    subscriptionStatus: typeof record.subscriptionStatus === 'string'
+      ? record.permanentAccess !== true
+        && hasProSubscriptionTerms({ mode, tier, planPriceCents })
+        && record.subscriptionStatus === 'permanent' ? 'active' : record.subscriptionStatus
+      : null,
     usagePriority: validUsagePriority(record.usagePriority) ? record.usagePriority : null,
     preferredProviderModel: preferredProviderModel(record.preferredProviderModel),
     creditBalance: validCreditBalance(record.creditBalance) ? record.creditBalance : null,
@@ -381,8 +402,18 @@ export function createLicenseService(options: LicenseServiceOptions) {
       mode,
       planPriceCents,
       byokAllowed: !creditsOnly && (payload.byokAllowed === true || fallback.byokAllowed === true || mode === 'byok' || tierAllowsByok(tier)),
-      permanentAccess: !creditsOnly && (payload.permanentAccess === true || fallback.permanentAccess === true || mode === 'byok' || tierRank(tier) >= 2),
-      subscriptionStatus: typeof payload.subscriptionStatus === 'string' ? payload.subscriptionStatus : fallback.subscriptionStatus,
+      permanentAccess: permanentAccessFor({
+        permanentAccess: payload.permanentAccess === true || fallback.permanentAccess === true,
+        mode,
+        tier,
+        planPriceCents,
+      }),
+      subscriptionStatus: typeof payload.subscriptionStatus === 'string'
+        ? payload.permanentAccess !== true
+          && fallback.permanentAccess !== true
+          && hasProSubscriptionTerms({ mode, tier, planPriceCents })
+          && payload.subscriptionStatus === 'permanent' ? 'active' : payload.subscriptionStatus
+        : fallback.subscriptionStatus,
       // The desktop preference is durable local state. Provisioner/account
       // payloads currently omit the user's selected route or may contain the
       // historical Automnia-first default, so never replace an explicit local

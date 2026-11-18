@@ -7,11 +7,15 @@ import {
   createProviderAuthService,
   type ProviderAuthOpenClawConfig,
 } from '../server/services/providers/providerAuthService'
-import { AUTH_ENV_MAP, AUTH_PROVIDER_CATALOG } from '../server/catalogs/providerCatalog'
+import { AUTH_ENV_MAP, AUTH_PROVIDER_CATALOG, GOOGLE_ACCOUNT_OAUTH_SCOPES } from '../server/catalogs/providerCatalog'
 import {
   canonicalAgentModelId,
   isOpenAiCodexSubscriptionModel,
 } from '../server/services/providers/modelCatalogService'
+
+test('Google account sign-in requests only email identity scopes', () => {
+  assert.deepEqual(GOOGLE_ACCOUNT_OAUTH_SCOPES, ['openid', 'email'])
+})
 
 type HarnessOptions = {
   authEnvMap?: Record<string, string[]>

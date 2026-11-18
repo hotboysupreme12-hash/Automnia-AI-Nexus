@@ -1,59 +1,87 @@
-# Three-day Shopify trial
+# Shopify monthly subscription setup
 
-Automnia's trial is a storefront subscription trial for Starter only, backed by
-Shopify selling plans and enforced by the Cloud Run provisioner. Pro and
-Enterprise remain unchanged. It is not Shopify App Billing's trial for
-installing an app in a merchant admin.
+This runbook describes the destination Shopify storefront. It has two paid
+monthly subscriptions and no free trial:
 
-## Shopify setup
+| Plan | Monthly price | SKU | Initial hosted tokens |
+| --- | ---: | --- | ---: |
+| Starter | $19.99 | `AUTO-SUB-STARTER-MONTHLY` | 22,000,000 |
+| Pro | $29.99 | `AUTO-SUB-PRO-MONTHLY` | 55,000,000 |
 
-1. Create or update the Starter subscription product in Shopify.
-2. Attach a subscription selling plan to the Starter variant with a three-day
-   free trial and a recurring monthly price of $19.99.
-3. Keep the selling plan on the same product/variant that is listed in
-   `infra/gcloud/shopify-plan-mappings.json`. If the plan uses a separate
-   variant or selling-plan ID, add that ID to `sellingPlanIds` in the mapping.
-4. Make sure the selling plan collects a payment method at checkout and that
-   the first billing date is three days after the contract is created.
-5. Deploy the Shopify app configuration so the contract-create, billing-success,
-   billing-failure, challenged, cancel, pause, fail, and expire webhooks point
-   to `https://api.automnia.app/shopify/webhooks/...`.
+Pro is a recurring subscription. It does not grant permanent access. Cancelling
+or otherwise ending the Shopify subscription must end the hosted entitlement.
+The Admin API client credentials and webhook signing secret must belong to the
+new Shopify app and destination store.
 
-The Cloud Run service needs the Shopify Admin API token in the
-`SHOPIFY_ADMIN_API_TOKEN` secret. It uses that token to resolve the origin order
-when Shopify sends `subscription_contracts/create`; the contract webhook does
-not contain the product line needed to select the Automnia plan. The app needs
-`read_orders` and `read_own_subscription_contracts` in addition to the webhook
-configuration already present in `infra/gcloud/shopify.app.toml.template`.
+## Configure the destination products
 
-## Runtime behavior
+1. Create a Starter product and a Pro product in the destination Shopify store.
+   Use the SKUs above and set the monthly recurring prices shown in the table.
+2. Create a monthly subscription selling plan for each product. Do not add a
+   free trial. Make sure each selling plan is attached to its product variant
+   and collects the recurring payment through Shopify checkout.
+3. Create or select the `automnia-plans-and-refills` collection and include
+   both subscription products.
+4. Record each product ID, variant ID, and selling plan ID in
+   `infra/gcloud/shopify-plan-mappings.json`. The webhook resolver uses these
+   IDs and the SKUs to identify the purchased entitlement.
+5. Verify the collection checkout URL in `infra/gcloud/config.psd1` opens the
+   destination store and exposes the two subscription products.
 
-- A verified contract-create webhook resolves the origin order and checks the
-  selling plan against the owner-controlled mapping.
-- A first-time customer receives a Firestore entitlement in `trialing` state,
-  with `trialStartedAt`, `trialEndsAt`, and `nextBillingAt` recorded.
-- Every API request and installer download checks the server-side trial window.
-- A successful first billing attempt changes the entitlement to `active`.
-- A failed, challenged, cancelled, paused, failed, or expired contract cannot
-  use the hosted relay or download installers.
-- Shopify webhook delivery IDs are idempotent, so retries do not grant credits
-  or send duplicate license emails.
-- A checkout email that has already used a trial is not granted a second trial.
-  A later paid order can still activate a valid subscription for that customer.
+Selling plans created through Shopify's Admin API are app-owned. Create them
+with the new Automnia app so that the same app can read and maintain the plan
+group. The new app installation must have the required product, purchase
+option, order, and subscription-contract scopes granted before provisioning.
 
-## Verification checklist
+## Configure webhook and Admin API credentials
 
-Use a new Shopify test customer and verify all of the following:
+The Cloud Run service reads two destination-specific secrets:
 
-1. The zero-dollar trial order creates a `trialing` Firestore record and sends
-   the license email.
-2. The desktop can activate and use hosted credits during the three-day window.
-3. The same webhook resent with the same delivery ID does not add credits.
-4. The subscription billing success webhook changes the record to `active`.
-5. A billing failure or contract cancellation prevents relay requests and
-   installer downloads.
-6. A second trial checkout using the same email does not receive access.
+- `automnia-shopify-webhook-secrets`: the new app's webhook signing secret.
+- `automnia-shopify-admin-api-token`: JSON containing `client_id`,
+  `client_secret`, and `store_domain` for the new app and destination store.
 
-Shopify documents that subscription contracts are created from selling-plan
-purchases and recommends using contract webhooks for notification:
-[Shopify subscription contracts](https://shopify.dev/docs/apps/build/purchase-options/subscriptions/contracts).
+The Admin API credential is used for the Shopify client-credentials token
+exchange and to resolve subscription contract details. Never copy the old
+store's Admin API credential into the destination project.
+
+The app must subscribe to the order, subscription-contract, subscription
+billing, cancellation, pause, failure, and expiration webhook topics configured
+in `infra/gcloud/shopify-app-new/automnia-ai-nexus/shopify.app.toml`. Shopify
+webhook deliveries are idempotent; duplicate delivery IDs must not grant tokens
+or send duplicate account emails.
+
+## Existing subscribers
+
+Shopify subscription contracts and saved payment methods are not moved by the
+Firestore migration. Keep the old store and app available while customers
+reauthorize on the destination or an approved Shopify payment-method migration
+is completed. Recreate each destination contract through the new selling plan,
+then verify that its origin order and product mapping produce the correct
+entitlement. Do not disable the old billing flow or route `api.automnia.app` to
+the destination until existing subscribers have a documented transition path.
+
+See [Shopify subscription contracts](https://shopify.dev/docs/apps/build/purchase-options/subscriptions/contracts),
+[migrating subscription contracts](https://shopify.dev/docs/apps/build/purchase-options/subscriptions/migrate-to-subscriptions-api/migrate-subscription-contracts),
+and [migrating payment methods](https://help.shopify.com/en/manual/products/purchase-options/subscriptions/migrating-payment-methods).
+
+## Verify the purchase lifecycle
+
+Use a Shopify test customer and verify each plan separately:
+
+1. Complete checkout for the monthly plan and confirm the correct order SKU,
+   variant, and selling plan are present.
+2. Confirm the contract-created and paid-order webhook deliveries resolve to
+   the intended plan and grant the initial token balance once.
+3. Confirm the stored entitlement includes the contract ID, active subscription
+   status, and next billing date, with `permanentAccess` false for Pro.
+4. Replay a webhook delivery with the same delivery ID and confirm it does not
+   grant tokens or send another welcome email.
+5. Cancel the contract and confirm the hosted entitlement and installer access
+   are disabled; test pause, billing failure, and expiration paths as well.
+6. Confirm the next recurring billing attempt is made by the destination
+   scheduler only after the new project is activated.
+
+The local service smoke check covers request handling and idempotency. It does
+not replace checkout, webhook-delivery, or recurring-billing verification in
+the destination Shopify store.

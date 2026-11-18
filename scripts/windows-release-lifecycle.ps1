@@ -17,6 +17,27 @@ $ProductName = [string]$PackageMetadata.build.productName
 if (-not $ProductName) { $ProductName = [string]$PackageMetadata.productName }
 if (-not $ProductName) { $ProductName = [string]$PackageMetadata.name }
 $ExpectedAppExeName = "$ProductName.exe"
+$MachineInstallRegistryRoots = @(
+  'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
+  'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+)
+$ExistingMachineInstall = $null
+foreach ($RegistryRoot in $MachineInstallRegistryRoots) {
+  if (-not (Test-Path -LiteralPath $RegistryRoot)) { continue }
+  foreach ($RegistryKey in Get-ChildItem -LiteralPath $RegistryRoot -ErrorAction SilentlyContinue) {
+    $InstalledApplication = Get-ItemProperty -LiteralPath $RegistryKey.PSPath -ErrorAction SilentlyContinue
+    if ($InstalledApplication.DisplayName -like "$ProductName*") {
+      $ExistingMachineInstall = $InstalledApplication
+      break
+    }
+  }
+  if ($ExistingMachineInstall) { break }
+}
+if ($ExistingMachineInstall) {
+  $ExistingLocation = [string]$ExistingMachineInstall.InstallLocation
+  if (-not $ExistingLocation) { $ExistingLocation = 'the registered machine install path' }
+  throw "$ProductName is already installed machine-wide at $ExistingLocation. This lifecycle requires a clean Windows runner because a silent upgrade would invoke UAC and could change the existing app."
+}
 if (-not $EvidenceDir) { $EvidenceDir = Join-Path $Root 'release\evidence' }
 if (-not $UpdateManifestPath) { $UpdateManifestPath = Join-Path $Root 'release\updates\update-manifest.json' }
 if (-not $UpdateSignaturePath) { $UpdateSignaturePath = Join-Path $Root 'release\updates\update-manifest.json.sig' }

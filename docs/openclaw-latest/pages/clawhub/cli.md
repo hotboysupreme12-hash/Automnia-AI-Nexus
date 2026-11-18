@@ -29,7 +29,7 @@ clawhub whoami
 
 - `--workdir <dir>`: working directory (default: cwd; falls back to Clawdbot workspace if configured)
 - `--dir <dir>`: install dir under workdir (default: `skills`)
-- `--site <url>`: base URL for browser login (default: `https://clawhub.ai`)
+- `--site <url>`: site base URL for registry discovery and device verification (default: `https://clawhub.ai`). A saved token is sent only to the registry origin stored with it. Discovery of another origin leaves that login in place, including a legacy `auth.clawhub.ai` registry. Discovered registry URLs must be `http` or `https` and must not contain userinfo.
 - `--registry <url>`: API base URL (default: discovered, else `https://clawhub.ai`)
 - `--no-input`: disable prompts
 
@@ -81,9 +81,20 @@ Stores your API token + cached registry URL.
 
 ### `login` / `auth login`
 
-- Default: opens browser to `<site>/cli/auth` and completes via loopback callback.
-- Headless: `clawhub login --token clh_...`
-- Remote/headless interactive: `clawhub login --device` prints a code and waits while you authorize it at `<site>/cli/device`.
+- Default: prints a one-time code and verification URL. Open the printed URL
+  on this or another device, sign in with GitHub if needed, type the code from
+  the terminal, and select **Authorize**. The page does not fill the code in
+  from the link.
+  The CLI polls for approval, verifies the API token via `whoami`, and saves it
+  in your config. It does not open a browser or start a local callback server.
+- `--device`: explicitly selects the default device flow.
+- `--no-browser`: accepted without `--token`; device login already prints the URL.
+- `--label <label>`: labels the token created by device login (default:
+  `CLI device login`). Does not rename a token supplied with `--token`.
+- Unattended/CI: `clawhub login --token <token>` verifies and stores an existing
+  API token. `--no-input` alone still waits for device approval.
+
+See [CLI login](/clawhub/auth#cli-login) for the approval steps and expiry guidance.
 
 ### `whoami`
 
@@ -120,7 +131,8 @@ Stores your API token + cached registry URL.
   - `--limit <n>` (1-200, default: 25)
   - `--sort newest|updated|rating|downloads|trending` (default: newest). Legacy install sort aliases still work for compatibility.
   - `--json` (machine-readable output)
-- Output: `<slug>  v<version>  <age>  <summary>` (summary truncated to 50 chars).
+- Output: `<ownerHandle>/<slug>  v<version>  <age>  <summary>` (summary truncated to 50 chars).
+- Older custom registries selected with `--registry` may omit owner or latest-version fields. The CLI preserves their slug-only output and displays `v?` for an omitted version; explicit `latestVersion: null` is also accepted.
 
 ### `inspect @owner/slug`
 
@@ -133,6 +145,14 @@ Stores your API token + cached registry URL.
 - `--file <path>`: fetch raw file bytes (10MB limit).
 - `--json`: machine-readable output; `--file` includes exact bytes as base64 and UTF-8 text when available.
 
+While logged in as the owner, `clawhub inspect @owner/slug --version 2.0.0`
+also reports a retained version's publication status when the public version is
+unavailable. It distinguishes failed checks from missing evidence and identifies
+an older public release separately. Output includes stored-report and support
+guidance; it does not retry checks or release the upload. JSON places the status
+in `publication` and recovery guidance in `nextSteps`. Held content is not returned
+by `--file` or `--files`; these requests exit unsuccessfully after showing status.
+
 ### `install @owner/slug`
 
 - Resolves latest version for the named owner and skill.
@@ -143,11 +163,13 @@ Stores your API token + cached registry URL.
   - `<workdir>/.clawhub/lock.json` (legacy `.clawdhub`)
   - `<skill>/.clawhub/origin.json` (legacy `.clawdhub`)
 
+A completed replacement stays installed if deleting its old backup fails. The leftover `.backup-` directory can be removed once the file lock is released. Failures before the replacement completes still restore the previous install.
+
 ### `uninstall <skill>`
 
 - Removes `<workdir>/<dir>/<slug>` and deletes the lockfile entry.
-- Sends best-effort telemetry while logged in so current install counts can be
-  deactivated.
+- Does not send uninstall telemetry or decrement ClawHub install counts.
+  Running `clawhub sync` does not reconcile removals.
 - Interactive: asks for confirmation.
 - Non-interactive (`--no-input`): requires `--yes`.
 
@@ -192,6 +214,12 @@ Stores your API token + cached registry URL.
   actor has publisher access.
 - `--migrate-owner` moves an existing skill to `--owner` while publishing a new
   version. Requires admin/owner access on both publishers.
+- `--categories <slugs>` and `--topics <topics>` take comma-separated values and
+  set where the skill appears in browse filters. A skill first published without
+  `--categories` is stored as `other`; a later publish that omits the flag keeps
+  whatever is already stored. Valid category slugs, the limits, and the reserved
+  topic names are listed in
+  [Skill catalog metadata](/clawhub/publishing#skill-catalog-metadata).
 - Owner and review behavior is explained in `docs/publishing.md`.
 - Publishing a skill means it is released under `MIT-0` on ClawHub.
 - Published skills are free to use, modify, and redistribute without attribution.
@@ -215,6 +243,13 @@ same automatic patch-version behavior.
 Set `dry_run: true` to preview without a token. Real publishes require the
 `clawhub_token` secret.
 
+Optional `changelog`, `categories`, and `topics` inputs map to the matching
+`skill publish` flags, and `clear_categories` / `clear_topics` remove metadata a
+skill already carries. A skill first published without `categories` is stored as
+`other`, the same as `sync`. Because catalog metadata applies to every skill the
+run publishes and suspends the unchanged-skill skip described above, see the
+notes under [GitHub Actions](#github-actions-1) before setting it catalog-wide.
+
 ### `sync`
 
 - Scans the current workdir, the configured skills directory, and any
@@ -233,6 +268,9 @@ Set `dry_run: true` to preview without a token. Real publishes require the
   actor has publisher access.
 - `sync` is one-way publish only. It does not install, update, download, or
   report install/download telemetry.
+- `sync` has no `--categories` or `--topics`. Skills first published through
+  `sync` are stored as `other` until someone sets
+  [skill catalog metadata](/clawhub/publishing#skill-catalog-metadata) on them.
 
 ```bash
 clawhub sync --all --dry-run
@@ -247,7 +285,7 @@ clawhub sync --root ./skills --owner openclaw --bump minor
 - Scans are asynchronous and may take time to complete. While queued, the terminal spinner shows the current prioritized scan position and how many scans are ahead.
 - Published scans require ownership or publisher management access. Moderators/admins can use the same backend through `clawhub-admin`.
 - `--update` is valid only with `--slug`; it writes successful published scan results back to the selected version.
-- `--output <file.zip>` downloads the full report archive with `manifest.json`, `clawscan.json`, `skillspector.json`, `static-analysis.json`, `virustotal.json`, and `README.md`.
+- `--output <file.zip>` downloads the full report archive with `manifest.json`, `clawscan.json`, `endor.json`, `skillspector.json`, and `README.md`.
 - `--json` prints the full poll response for automation.
 - Local path scans are no longer supported. Upload a new version, then use `scan download` to retrieve the stored scan results for that submitted version.
 
@@ -274,7 +312,7 @@ clawhub scan download @scope/demo --version 2.0.0 --kind plugin --output report.
 #### GitHub Actions
 
 ClawHub ships an official reusable workflow at
-[`/.github/workflows/skill-publish.yml`](https://github.com/openclaw/clawhub/blob/3d3ac2942e4037e937f6b1e315109f84a5b6c8ef/.github/workflows/skill-publish.yml)
+[`/.github/workflows/skill-publish.yml`](https://github.com/openclaw/clawhub/blob/bf198e629636788e8487fdeb2552edad7374f66e/.github/workflows/skill-publish.yml)
 for skill repos and catalog repos.
 
 Typical catalog setup:
@@ -300,6 +338,9 @@ jobs:
     with:
       owner: nvidia
       dry_run: false
+      changelog: "Describe the changes in this release."
+      categories: "automation"
+      topics: "code-review,linting"
     secrets:
       clawhub_token: ${{ secrets.CLAWHUB_TOKEN }}
 ```
@@ -309,6 +350,34 @@ Notes:
 - `root` defaults to `skills` for catalog repos.
 - Pass `skill_path: skills/review-helper` to process one skill folder.
 - `owner` maps to the CLI `--owner` flag; omit it to publish as the authenticated user.
+- `changelog`, `categories`, and `topics` map to the matching `skill publish`
+  flags and are optional. Omitting them leaves the published metadata untouched.
+- Like `tags`, these three apply to **every** skill the run publishes. Pass
+  `skill_path` when the values describe one skill rather than the whole catalog.
+- **`categories` and `topics` suspend the "skips unchanged skills" behavior
+  described above.** The CLI treats supplied catalog metadata as authoritative
+  and bypasses its already-published short-circuit, so a catalog-wide run
+  publishes a **new patch version of every selected skill**, including skills
+  whose files did not change. The `clear_categories` and `clear_topics` flags
+  count as supplied metadata and do the same. `changelog` does not: a run that
+  passes only `changelog` still reports unchanged skills as `alreadySynced`.
+  Use `skill_path` to keep a metadata edit from releasing a whole catalog.
+- `changelog` reaches the CLI verbatim, the way `skill publish --changelog`
+  stores it, so Markdown indentation and trailing hard-break spaces survive the
+  workflow; a value that is only whitespace counts as omitted. `categories` and
+  `topics` are trimmed instead, being slug lists.
+- Categories and topics are comma-separated and validated server-side, so an
+  unknown category slug or a topic over the per-skill limit fails the publish
+  after the run has already built and validated the skill.
+- To remove categories or topics already on a skill, set `clear_categories: true`
+  or `clear_topics: true`. A workflow input cannot distinguish `categories: ""`
+  from an omitted `categories`, so the empty string keeps meaning "leave them
+  alone" and the boolean is what sends the CLI's `--categories ""`. Setting a
+  non-empty value and its `clear_` flag together fails the run rather than
+  picking one silently. `changelog` has no such flag: the CLI already reads an
+  omitted `--changelog` as empty.
+- The run logs echo the resolved `skill publish` command for each target, so a
+  forwarded flag is visible in CI output. Keep the values non-sensitive.
 - V1 skill publishing uses `clawhub_token`; GitHub OIDC trusted publishing is package-only for now.
 
 ### `delete <skill>`
@@ -323,6 +392,8 @@ Notes:
 - `--reason <text>` records a moderation note on a whole-skill soft-delete and audit log.
 - `--note <text>` is an alias for `--reason`.
 - `--yes` skips confirmation.
+- The legacy `POST /api/cli/skill/delete` endpoint rejects a supplied `version` instead of
+  interpreting it as a whole-skill delete.
 
 ### `undelete <skill>`
 
@@ -334,6 +405,22 @@ Notes:
 - `--reason <text>` records a moderation note on the skill and audit log.
 - `--note <text>` is an alias for `--reason`.
 - `--yes` skips confirmation.
+
+### `skill tag <skill> <version>`
+
+- Moves an owned skill tag to an existing public version; `latest` is the default.
+- Calls `POST /api/v1/skills/{slug}/tags/{tag}`.
+- Org publishers require owner or admin membership, matching version withdrawal.
+- Use this to roll `latest` back after an accidental higher-version publish; publishing a lower
+  version alone intentionally does not replace the highest-semver latest version.
+- `--tag <tag>` selects another tag.
+- `--yes` skips confirmation.
+
+Example:
+
+```bash
+clawhub skill tag @owner/example 1.2.3 --yes
+```
 
 ### `hide <skill>`
 
@@ -361,9 +448,12 @@ Notes:
 ### `transfer`
 
 - Ownership transfer workflow.
-- Transfers to user handles create a pending request that the recipient accepts.
-- Transfers to org/publisher handles apply immediately only when the actor has
-  admin access to both the current owner and destination publisher.
+- Requests to another user normally create a pending request that the recipient accepts.
+- Requests to an org or your own personal publisher use a direct publisher move.
+  API callers can also select this path explicitly with `toOwner` or `toPublisherHandle`.
+- Direct publisher moves apply immediately and require admin access to both the
+  current owner and destination publisher, unless performed by a platform admin.
+  The destination must be active; moderation restrictions still apply.
 - Subcommands:
   - `transfer request <skill> <handle> [--message "..."] [--yes]`
   - `transfer list [--outgoing]`
@@ -383,7 +473,7 @@ Notes:
 - Browses or searches the unified package catalog via `GET /api/v1/packages` and `GET /api/v1/packages/search`.
 - Use this for plugins and other package-family entries; top-level `search` remains the skill search surface.
 - Flags:
-  - `--family skill|code-plugin|bundle-plugin`
+  - `--family skill|code-plugin|bundle-plugin|template`
   - `--official`
   - `--executes-code`
   - `--target <target>`, `--os <os>`, `--arch <arch>`, `--libc <libc>`
@@ -464,6 +554,8 @@ clawhub package verify ./example-plugin-1.2.3.tgz --sha256 <hex>
 
 ### `package validate <source>`
 
+- Requires Node.js 22.13+ on the 22.x line or Node.js 24+; run the installed CLI
+  under Node.js rather than the Bun shortcut for this command.
 - Runs the ClawHub CLI's bundled Plugin Inspector against a local plugin package
   folder.
 - Defaults to offline/static validation, without locating or importing a local
@@ -580,9 +672,40 @@ Example:
 clawhub package moderation-status @openclaw/example-plugin
 ```
 
+### `package publication <name>`
+
+- Shows the publication state of one exact package version.
+- Calls `GET /api/v1/packages/{name}/versions/{version}/publication`.
+- `--version` is required. The public latest version is a different question:
+  a pending release is omitted from the public version list.
+- Prints `published`, `absent`, `pending` (`staging`, `checks`, or
+  `finalization`), or `failed`. The text does not include scan findings,
+  report bodies, or digests.
+- A registry that predates this route can answer `404`, or `200` with the
+  version document and no `state`. The command then reads
+  `GET /api/v1/packages/{name}/versions/{version}`. A public version is
+  reported as published. A response that already has `state` but does not
+  match the publication contract still fails.
+- `recoverable: true` means an authorized publisher may recover the attempt.
+  It does not mean the current login can. The text shows
+  `clawhub package recover <attempt-id> --manual-override-reason "<reason>"`.
+- This does not say whether the package is an official migration candidate.
+  Use `package readiness` for that check.
+- Flags:
+  - `--version <version>`: exact version.
+  - `--json`: machine-readable output, the response object unchanged.
+
+Example:
+
+```bash
+clawhub package publication @openclaw/example-plugin --version 1.2.3
+```
+
 ### `package readiness <name>`
 
 - Checks whether a package is ready for future OpenClaw consumption.
+- A community package fails the `official` check here even when its latest
+  version is public. Use `package publication` for an exact version.
 - Calls `GET /api/v1/packages/{name}/readiness`.
 - Reports blockers for official status, ClawPack availability, artifact digest,
   source provenance, OpenClaw compatibility, host targets, environment metadata,
@@ -625,21 +748,34 @@ clawhub publisher create opik --display-name "Opik"
 
 ### `package publish <source>`
 
-- Publishes a code plugin or bundle plugin via `POST /api/v1/packages`.
+- Publishes a code plugin, bundle plugin, or built Template artifact via `POST /api/v1/packages`.
 - `<source>` accepts:
   - Local folder path: `./my-plugin`
   - Local ClawPack npm-pack tarball: `./my-plugin-1.2.3.tgz`
   - GitHub repo: `owner/repo` or `owner/repo@ref`
   - GitHub URL: `https://github.com/owner/repo`
-- Metadata is auto-detected from `package.json`, `openclaw.plugin.json`, and
+- Template family detection uses `package.json.openclaw.template`; use
+  `--family template` to select it explicitly. The retired family name is not an alias.
+- Plugin metadata is auto-detected from `package.json`, `openclaw.plugin.json`, and
   real OpenClaw bundle markers such as `.codex-plugin/plugin.json`,
   `.claude-plugin/plugin.json`, and `.cursor-plugin/plugin.json`.
 - `.tgz` sources are treated as ClawPack. The CLI uploads the exact npm-pack
   bytes and uses the extracted `package/` contents only for validation and
   metadata prefill.
+- Experimental Templates must be published from an already-built `.tgz`. Template
+  source folders and GitHub sources are rejected; use `openclaw templates build`
+  first. The publish request binds the local SHA-256, and ClawHub returns that
+  digest after accepting the exact bytes.
 - Code-plugin folders are packed into a ClawPack npm tarball before upload so
   OpenClaw installs can verify the exact artifact. Bundle-plugin folders still
   use the extracted-file publish path.
+- Bundles need exactly one supported bundle marker with a non-empty `name`, not
+  an added `openclaw.plugin.json` envelope. The name determines the canonical
+  bundle runtime identity. `--bundle-format` must match the marker's `codex`,
+  `claude`, or `cursor` format. Multiple bundle markers are rejected. Explicit
+  native entrypoints take precedence during family detection; use the matching
+  family rather than rewriting a manifest. All original files remain uploaded
+  and inspected, including companion skill and native manifests.
 - For GitHub sources, source attribution is auto-populated from the repo, resolved commit, ref, and subpath.
 - For local folders, source attribution is auto-detected from local git when the origin remote points at GitHub.
 - External code plugins must declare `openclaw.compat.pluginApi` and
@@ -651,6 +787,23 @@ clawhub publisher create opik --display-name "Opik"
   release is published or reaches a terminal failure state.
 - `--wait-timeout <seconds>` sets the `--wait` deadline (default: 1800).
 - `--owner <handle>` publishes under a user or org publisher handle when the actor has publisher access.
+- Code-plugin and bundle-plugin categories come from `openclaw.plugin.json`.
+  Declare exactly one category, for example `"categories": ["agent-runtimes"]`.
+  An explicit manifest declaration takes priority. If the field is omitted,
+  ClawHub generates one category from bounded package metadata and documentation
+  using its configured model (default: GPT-5.6 Luna), with `other` as the fallback
+  when classification is unavailable. Omission does not preserve a category
+  supplied on an earlier publish. See [Plugin catalog metadata](/clawhub/publishing#plugin-catalog-metadata).
+- `--categories <slugs>` remains accepted for compatibility, but is ignored for
+  plugin publishes, including `--categories ""`. The CLI prints a deprecation
+  warning to stderr, including with `--json` and `--dry-run`. Move declarations
+  into the manifest; remove the field to request automatic classification.
+  Experimental [`--family template`](/clawhub/templates) publishes still store categories
+  passed through this flag as-is.
+- `--topics <topics>` is separate from categories and still accepts comma-separated
+  values. Omit it to preserve existing topics; pass `--topics ""` to clear them.
+  The [topic rules](/clawhub/publishing#skill-catalog-metadata) apply to every family,
+  including `template`.
 - Scoped package names must match the selected owner. See `docs/publishing.md`.
 - Existing flags (`--family`, `--name`, `--version`, `--source-repo`, `--source-commit`, `--source-ref`, `--source-path`) still work as overrides.
 - Private GitHub repos require `GITHUB_TOKEN`.
@@ -673,7 +826,7 @@ clawhub package publish ./my-plugin-1.2.3.tgz --family code-plugin --wait
 #### Local folder flow
 
 For code plugins, folder publish builds and uploads a ClawPack artifact from
-the package folder:
+the package folder. This convenience does not apply to Templates:
 
 ```bash
 clawhub package publish ./my-plugin --family code-plugin --dry-run
@@ -724,7 +877,7 @@ Notes:
 #### GitHub Actions
 
 ClawHub also ships an official reusable workflow at
-[`/.github/workflows/package-publish.yml`](https://github.com/openclaw/clawhub/blob/3d3ac2942e4037e937f6b1e315109f84a5b6c8ef/.github/workflows/package-publish.yml)
+[`/.github/workflows/package-publish.yml`](https://github.com/openclaw/clawhub/blob/bf198e629636788e8487fdeb2552edad7374f66e/.github/workflows/package-publish.yml)
 for plugin repos.
 
 Typical caller setup:
@@ -758,11 +911,34 @@ jobs:
       clawhub_token: ${{ secrets.CLAWHUB_TOKEN }}
 ```
 
+To attach release and catalog metadata, add the matching CLI values to the
+job's existing `with` block. Keep `dry_run: true` on pull-request jobs; use
+`dry_run: false` only on the trusted publish job shown above.
+
+```yaml
+with:
+  changelog: "Describe the changes in this release."
+  topics: "automation,productivity"
+```
+
 Notes:
 
 - The reusable workflow defaults `source` to the caller repo.
 - For monorepos, pass `source_path` so the workflow publishes the plugin
   package folder, for example `source_path: extensions/codex`.
+- `changelog` and `topics` are optional and map to the matching CLI flags.
+  Topics use comma-separated values. Omit `topics` to preserve existing topics,
+  or set `clear_topics: true` to remove them. Do not combine `topics` with
+  `clear_topics: true`.
+- For plugins, declare exactly one category in `openclaw.plugin.json` as described
+  in [Plugin catalog metadata](/clawhub/publishing#plugin-catalog-metadata). Omit that
+  field to let ClawHub classify the release automatically using its configured
+  model (default: GPT-5.6 Luna).
+- The legacy `categories` and `clear_categories` inputs still forward
+  `--categories` for compatibility. Plugin publishes ignore both and print a
+  deprecation warning; they cannot set, preserve, or clear a plugin's category.
+  Remove these workflow inputs when migrating the declaration into the manifest.
+  Experimental Template publishes retain their existing category behavior.
 - Pin the reusable workflow to a stable tag or full commit SHA. Do not run release publishing from `@main`.
 - `pull_request` should use `dry_run: true` so CI stays non-polluting.
 - Real publishes should be limited to trusted events such as `workflow_dispatch` or tag pushes.

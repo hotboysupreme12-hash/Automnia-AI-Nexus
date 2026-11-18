@@ -54,7 +54,7 @@ export const GOOGLE_OAUTH_SCOPES = [
 
 // Account sign-in only needs the verified Google identity. Keep it separate
 // from the broader provider scopes used when connecting Google AI/Vertex.
-export const GOOGLE_ACCOUNT_OAUTH_SCOPES = ['openid', 'email', 'profile']
+export const GOOGLE_ACCOUNT_OAUTH_SCOPES = ['openid', 'email']
 
 export const OPENAI_CODEX_OAUTH_REDIRECT_URI = 'http://localhost:1455/auth/callback'
 

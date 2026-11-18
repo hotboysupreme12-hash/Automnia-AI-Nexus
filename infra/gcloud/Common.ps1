@@ -40,13 +40,41 @@ function Invoke-Gcloud {
   } else {
     'gcloud'
   }
+  $effectiveArguments = @($Arguments)
+  $projectId = $null
+  for ($argumentIndex = 0; $argumentIndex -lt $Arguments.Count; $argumentIndex++) {
+    if ($Arguments[$argumentIndex] -eq '--project' -and $argumentIndex + 1 -lt $Arguments.Count) {
+      $projectId = [string]$Arguments[$argumentIndex + 1]
+      break
+    }
+    if ([string]$Arguments[$argumentIndex] -match '^--project=(.+)$') {
+      $projectId = $Matches[1]
+      break
+    }
+  }
+  if (-not $projectId -and $Arguments.Count -ge 3 -and $Arguments[0] -eq 'projects' -and $Arguments[1] -eq 'describe') {
+    $projectId = [string]$Arguments[2]
+  }
+  if ($projectId -and $env:AUTOMNIA_GCLOUD_PROJECT_ACCOUNT_OVERRIDES) {
+    try {
+      $accountOverrides = ConvertFrom-Json -InputObject $env:AUTOMNIA_GCLOUD_PROJECT_ACCOUNT_OVERRIDES
+    } catch {
+      throw 'AUTOMNIA_GCLOUD_PROJECT_ACCOUNT_OVERRIDES must contain a JSON object keyed by project ID.'
+    }
+    $accountProperty = $accountOverrides.PSObject.Properties[$projectId]
+    $account = if ($accountProperty) { [string]$accountProperty.Value } else { '' }
+    $hasExplicitAccount = @($Arguments | Where-Object { $_ -eq '--account' -or [string]$_ -like '--account=*' }).Count -gt 0
+    if ($account -and -not $hasExplicitAccount) {
+      $effectiveArguments = @("--account=$account") + $effectiveArguments
+    }
+  }
   # Let the native launcher write informational progress to stderr without
   # allowing PowerShell to throw before `$LASTEXITCODE` can be inspected.
   # The Cloud SDK's process exit code remains the authoritative result.
   $previousErrorActionPreference = $ErrorActionPreference
   try {
     $ErrorActionPreference = 'Continue'
-    $output = & $gcloudExecutable @Arguments 2>&1
+    $output = & $gcloudExecutable @effectiveArguments 2>&1
     $exitCode = $LASTEXITCODE
   } finally {
     $ErrorActionPreference = $previousErrorActionPreference
@@ -103,6 +131,31 @@ function Get-ServiceUrl {
   )
   $service = Get-ServiceDescriptor -ProjectId $ProjectId -Region $Region -ServiceName $ServiceName
   [string]$service.status.url
+}
+
+function Get-SchedulerJobDescriptor {
+  param(
+    [Parameter(Mandatory)][string]$ProjectId,
+    [Parameter(Mandatory)][string]$Region,
+    [Parameter(Mandatory)][string]$JobName,
+    [switch]$AllowMissing
+  )
+  $result = Invoke-Gcloud -Arguments @('scheduler', 'jobs', 'describe', $JobName, '--project', $ProjectId, '--location', $Region, '--format=json') -AllowFailure
+  if ($result.ExitCode -ne 0) {
+    if ($AllowMissing) { return $null }
+    throw "Cloud Scheduler job '$JobName' was not found in $ProjectId/$Region.`n$($result.Output)"
+  }
+  $result.Output | ConvertFrom-Json
+}
+
+function Set-SchedulerJobState {
+  param(
+    [Parameter(Mandatory)][string]$ProjectId,
+    [Parameter(Mandatory)][string]$Region,
+    [Parameter(Mandatory)][string]$JobName,
+    [Parameter(Mandatory)][ValidateSet('pause', 'resume')][string]$Action
+  )
+  Invoke-Gcloud -Arguments @('scheduler', 'jobs', $Action, $JobName, '--project', $ProjectId, '--location', $Region) | Out-Null
 }
 
 function Wait-HttpJson {
@@ -174,7 +227,7 @@ function Get-FirestoreSnapshot {
   $tool = Join-Path $script:InfraRoot 'tools\firestore-snapshot.mjs'
   $previousToken = $env:AUTOMNIA_GCLOUD_ACCESS_TOKEN
   try {
-    $env:AUTOMNIA_GCLOUD_ACCESS_TOKEN = Get-GoogleAccessToken
+    $env:AUTOMNIA_GCLOUD_ACCESS_TOKEN = Get-GoogleAccessToken -ProjectId $ProjectId
     $json = & node $tool $ProjectId
     if ($LASTEXITCODE -ne 0 -or -not $json) { throw "Unable to snapshot Firestore project '$ProjectId'." }
     ([string]$json) | ConvertFrom-Json
@@ -287,8 +340,12 @@ function Test-SecretVersion {
     [Parameter(Mandatory)][string]$ProjectId,
     [Parameter(Mandatory)][string]$SecretName
   )
-  $result = Invoke-Gcloud -Arguments @('secrets', 'versions', 'list', $SecretName, '--project', $ProjectId, '--filter=state:ENABLED', '--limit=1', '--format=value(name)') -AllowFailure
-  $result.ExitCode -eq 0 -and [bool]$result.Output
+  $result = Invoke-Gcloud -Arguments @('secrets', 'versions', 'list', $SecretName, '--project', $ProjectId, '--format=value(name,state)') -AllowFailure
+  if ($result.ExitCode -ne 0) { return $false }
+  foreach ($line in ($result.Output -split "`r?`n")) {
+    if ($line.Trim() -match '^\d+\s+enabled$') { return $true }
+  }
+  $false
 }
 
 function Ensure-SecretResource {
@@ -347,7 +404,9 @@ function Copy-SecretLatestVersion {
   try {
     Invoke-Gcloud -Arguments @('secrets', 'versions', 'access', 'latest', '--secret', $SecretName, '--project', $FromProjectId, '--out-file', $secretFile) | Out-Null
     $sourceHash = (Get-FileHash -LiteralPath $secretFile -Algorithm SHA256).Hash.ToLowerInvariant()
-    $targetHash = Get-SecretFingerprint -ProjectId $ToProjectId -SecretName $SecretName
+    $targetHash = if (Test-SecretVersion -ProjectId $ToProjectId -SecretName $SecretName) {
+      Get-SecretFingerprint -ProjectId $ToProjectId -SecretName $SecretName
+    } else { $null }
     if ($targetHash -ne $sourceHash) {
       Invoke-Gcloud -Arguments @('secrets', 'versions', 'add', $SecretName, '--project', $ToProjectId, '--data-file', $secretFile) | Out-Null
       $targetHash = Get-SecretFingerprint -ProjectId $ToProjectId -SecretName $SecretName
@@ -360,15 +419,27 @@ function Copy-SecretLatestVersion {
 }
 
 function Get-GoogleAccessToken {
-  (Invoke-Gcloud -Arguments @('auth', 'print-access-token')).Trim()
+  param([string]$Account, [string]$ProjectId)
+  if (-not $Account -and $ProjectId -and $env:AUTOMNIA_GCLOUD_PROJECT_ACCOUNT_OVERRIDES) {
+    try {
+      $accountOverrides = ConvertFrom-Json -InputObject $env:AUTOMNIA_GCLOUD_PROJECT_ACCOUNT_OVERRIDES
+    } catch {
+      throw 'AUTOMNIA_GCLOUD_PROJECT_ACCOUNT_OVERRIDES must contain a JSON object keyed by project ID.'
+    }
+    $accountProperty = $accountOverrides.PSObject.Properties[$ProjectId]
+    if ($accountProperty) { $Account = [string]$accountProperty.Value }
+  }
+  $arguments = if ($Account) { @("--account=$Account", 'auth', 'print-access-token') } else { @('auth', 'print-access-token') }
+  (Invoke-Gcloud -Arguments $arguments).Trim()
 }
 
 function Get-DomainMapping {
   param(
     [Parameter(Mandatory)][string]$ProjectId,
-    [Parameter(Mandatory)][string]$Domain
+    [Parameter(Mandatory)][string]$Domain,
+    [string]$Account
   )
-  $token = Get-GoogleAccessToken
+  $token = Get-GoogleAccessToken -Account $Account -ProjectId $ProjectId
   $region = (Get-AutomniaConfig).Region
   $encodedDomain = [Uri]::EscapeDataString($Domain)
   $uri = "https://$region-run.googleapis.com/apis/domains.cloudrun.com/v1/namespaces/$ProjectId/domainmappings/$encodedDomain"
@@ -383,10 +454,11 @@ function Get-DomainMapping {
 function Remove-DomainMapping {
   param(
     [Parameter(Mandatory)][string]$ProjectId,
-    [Parameter(Mandatory)][string]$Domain
+    [Parameter(Mandatory)][string]$Domain,
+    [string]$Account
   )
-  if (-not (Get-DomainMapping -ProjectId $ProjectId -Domain $Domain)) { return }
-  $token = Get-GoogleAccessToken
+  if (-not (Get-DomainMapping -ProjectId $ProjectId -Domain $Domain -Account $Account)) { return }
+  $token = Get-GoogleAccessToken -Account $Account
   $region = (Get-AutomniaConfig).Region
   $encodedDomain = [Uri]::EscapeDataString($Domain)
   $uri = "https://$region-run.googleapis.com/apis/domains.cloudrun.com/v1/namespaces/$ProjectId/domainmappings/$encodedDomain"
@@ -397,9 +469,10 @@ function New-DomainMapping {
   param(
     [Parameter(Mandatory)][string]$ProjectId,
     [Parameter(Mandatory)][string]$Domain,
-    [Parameter(Mandatory)][string]$ServiceName
+    [Parameter(Mandatory)][string]$ServiceName,
+    [string]$Account
   )
-  $token = Get-GoogleAccessToken
+  $token = Get-GoogleAccessToken -Account $Account
   $region = (Get-AutomniaConfig).Region
   $uri = "https://$region-run.googleapis.com/apis/domains.cloudrun.com/v1/namespaces/$ProjectId/domainmappings"
   $body = @{

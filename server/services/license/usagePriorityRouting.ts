@@ -63,7 +63,7 @@ function automniaHostedFallbacks(automniaModelId: string, selectedPrimary?: stri
   // Keep the fallback chain inside the Automnia-hosted boundary. Never infer
   // fallback IDs from a user/provider selection: that could widen a
   // credits-only route into a direct-provider request.
-  if (!isAutomniaModel(automniaModelId, 'automnia-cloud/gemini-3.7-flash')) return []
+  if (!isAutomniaRelayModelId(automniaModelId) && !isAutomniaCreditsModelId(automniaModelId)) return []
   return [...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS].filter((modelId) => modelId !== selectedPrimary)
 }
 

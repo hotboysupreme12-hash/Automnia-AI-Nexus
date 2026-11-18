@@ -151,12 +151,12 @@ test('opens a minimal Google account OAuth flow and verifies the subscriber befo
         },
       }
     },
-    googleAccountOAuthScopes: ['openid', 'email', 'profile'],
+    googleAccountOAuthScopes: ['openid', 'email'],
   })
   try {
     const { session, launched } = await service.startGoogleAccountOAuthSession()
     assert.equal(launched.ok, true)
-    assert.deepEqual(new URL(state.openUrls[0]).searchParams.get('scope')?.split(' '), ['openid', 'email', 'profile'])
+    assert.deepEqual(new URL(state.openUrls[0]).searchParams.get('scope')?.split(' '), ['openid', 'email'])
 
     const snapshot = service.callbackServerSnapshot()
     const response = await getCallback(

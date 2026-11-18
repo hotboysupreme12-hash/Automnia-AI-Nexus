@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 concurrency:
   group: public-release-${{ github.ref }}
@@ -15,7 +16,7 @@ permissions:
 jobs:
   windows:
     name: Unsigned Windows installer and lifecycle evidence
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 90
     env:
       AUTOMNIA_RELEASE_REQUIRE_SIGNING: '0'
@@ -46,6 +47,9 @@ jobs:
       - name: Prepare vendored OpenClaw dependencies
         run: npm run prepare:openclaw-vendor
 
+      - name: Prepare runtime bundles for readiness checks
+        run: npm run prepare:runtime-bundles
+
       - name: Embed update verification configuration
         env:
           AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM: ${{ secrets.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM }}
@@ -73,9 +77,17 @@ jobs:
       - name: Verify update manifest
         run: npm run release:update-verify
 
+      - name: Download the currently published installer for a real upgrade check
+        shell: pwsh
+        run: |
+          $previousInstaller = Join-Path $env:RUNNER_TEMP 'automnia-previous-setup.exe'
+          $previousUrl = 'https://storage.googleapis.com/automnia-public-downloads-98780848640/releases/current/Automnia-Setup-x64.exe'
+          curl.exe --fail --location --retry 3 --output $previousInstaller $previousUrl
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $previousInstaller -PathType Leaf)) { throw 'Could not download the currently published Windows installer for the upgrade test.' }
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "AUTOMNIA_PREVIOUS_WINDOWS_INSTALLER_PATH=$previousInstaller"
+
       - name: Run install, upgrade, rollback, and uninstall lifecycle
         env:
-          AUTOMNIA_PREVIOUS_WINDOWS_INSTALLER_PATH: ${{ vars.AUTOMNIA_PREVIOUS_WINDOWS_INSTALLER_PATH }}
           AUTOMNIA_PLATFORM_SIGNING_REQUIRED: '0'
           AUTOMNIA_WINDOWS_INSTALLER_TIMEOUT_SECONDS: '900'
         run: npm run release:lifecycle:windows
@@ -124,6 +136,9 @@ jobs:
       - name: Prepare vendored OpenClaw dependencies
         run: npm run prepare:openclaw-vendor
 
+      - name: Prepare runtime bundles for readiness checks
+        run: npm run prepare:runtime-bundles
+
       - name: Embed update verification configuration
         env:
           AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM: ${{ secrets.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM }}
@@ -150,6 +165,25 @@ jobs:
           test -n "$(find release -type f -name '*-x64.dmg' -print -quit)"
           test -z "$(find release -type f -iname '*-arm64.*' -print -quit)"
 
+      - name: Mount, architecture-check, install, and launch Intel DMG
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg_path="$(find release -type f -name '*-x64.dmg' -print -quit)"
+          test -n "$dmg_path" && test -f "$dmg_path"
+          mount_dir="$RUNNER_TEMP/automnia-dmg-x64"
+          installed_app="$RUNNER_TEMP/Automnia AI Nexus.app"
+          mkdir -p "$mount_dir"
+          hdiutil attach "$dmg_path" -mountpoint "$mount_dir" -nobrowse -readonly -quiet
+          trap 'hdiutil detach "$mount_dir" -quiet >/dev/null 2>&1 || true' EXIT
+          source_app="$mount_dir/Automnia AI Nexus.app"
+          test -d "$source_app"
+          archs="$(lipo -archs "$source_app/Contents/MacOS/Automnia AI Nexus")"
+          test "$archs" = "x86_64"
+          ditto "$source_app" "$installed_app"
+          hdiutil detach "$mount_dir" -quiet
+          AUTOMNIA_PACKAGED_MAC_APP_PATH="$installed_app" npm run smoke:packaged-electron-launch
+
       - name: Upload unsigned macOS release candidate
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -162,9 +196,78 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+  macos-arm64:
+    name: Unsigned Apple silicon macOS DMG and ZIP
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Prepare vendored OpenClaw dependencies
+        run: npm run prepare:openclaw-vendor
+
+      - name: Prepare runtime bundles for readiness checks
+        run: npm run prepare:runtime-bundles
+
+      - name: Verify release candidate source
+        run: npm run verify:release-candidate
+
+      - name: Build unsigned Apple silicon Mac DMG and ZIP
+        env:
+          AUTOMNIA_SKIP_PLATFORM_SIGNING: '1'
+          AUTOMNIA_TARGET_ARCH: arm64
+        run: npm run dist:mac -- --arm64
+
+      - name: Validate Apple silicon package outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$(find release -type f -name '*-arm64.dmg' -print -quit)"
+          test -n "$(find release -type f -name '*-arm64.zip' -print -quit)"
+          test -z "$(find release -type f -iname '*-x64.dmg' -print -quit)"
+
+      - name: Mount, architecture-check, install, and launch Apple silicon DMG
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg_path="$(find release -type f -name '*-arm64.dmg' -print -quit)"
+          test -n "$dmg_path" && test -f "$dmg_path"
+          mount_dir="$RUNNER_TEMP/automnia-dmg-arm64"
+          installed_app="$RUNNER_TEMP/Automnia AI Nexus.app"
+          mkdir -p "$mount_dir"
+          hdiutil attach "$dmg_path" -mountpoint "$mount_dir" -nobrowse -readonly -quiet
+          trap 'hdiutil detach "$mount_dir" -quiet >/dev/null 2>&1 || true' EXIT
+          source_app="$mount_dir/Automnia AI Nexus.app"
+          test -d "$source_app"
+          archs="$(lipo -archs "$source_app/Contents/MacOS/Automnia AI Nexus")"
+          test "$archs" = "arm64"
+          ditto "$source_app" "$installed_app"
+          hdiutil detach "$mount_dir" -quiet
+          AUTOMNIA_PACKAGED_MAC_APP_PATH="$installed_app" npm run smoke:packaged-electron-launch
+
+      - name: Upload unsigned Apple silicon release candidate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: automnia-macos-arm64-public-release
+          path: |
+            release/**/*-arm64.dmg
+            release/**/*-arm64.zip
+          if-no-files-found: error
+          retention-days: 90
+
   linux:
     name: Linux AppImage and Debian package
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 60
     steps:
       - name: Check out release source
@@ -181,6 +284,9 @@ jobs:
 
       - name: Prepare vendored OpenClaw dependencies
         run: npm run prepare:openclaw-vendor
+
+      - name: Prepare runtime bundles for readiness checks
+        run: npm run prepare:runtime-bundles
 
       - name: Embed update verification configuration
         env:
@@ -200,6 +306,26 @@ jobs:
           AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG: '1'
         run: npm run dist:linux
 
+      - name: Install, launch, and remove x86_64 Debian package
+        shell: bash
+        run: |
+          set -euo pipefail
+          deb_path="$(find release -maxdepth 1 -type f -name '*.deb' -print -quit)"
+          test -n "$deb_path" && test -f "$deb_path"
+          deb_arch="$(dpkg-deb -f "$deb_path" Architecture)"
+          test "$deb_arch" = "amd64"
+          package_name="$(dpkg-deb -f "$deb_path" Package)"
+          sudo apt-get update
+          sudo apt-get install -y "$deb_path"
+          trap 'sudo apt-get remove -y "$package_name" >/dev/null 2>&1 || true' EXIT
+          app_asar="$(dpkg-query --listfiles "$package_name" | grep -E '/resources/app\.asar$' | head -n 1)"
+          test -n "$app_asar" && test -f "$app_asar"
+          app_root="${app_asar%/resources/app.asar}"
+          test -x "$app_root/automnia"
+          AUTOMNIA_PACKAGED_LINUX_ROOT="$app_root" AUTOMNIA_ELECTRON_E2E_NO_SANDBOX=1 xvfb-run -a npm run smoke:packaged-electron-launch
+          sudo apt-get remove -y "$package_name"
+          trap - EXIT
+
       - name: Upload Linux release candidates
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -214,7 +340,8 @@ jobs:
 
   publish-updates:
     name: Publish verified desktop update channel to Google Cloud
-    needs: [windows, macos, linux]
+    if: ${{ github.event_name == 'push' }}
+    needs: [windows, macos, macos-arm64, linux]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     concurrency:
@@ -253,6 +380,12 @@ jobs:
         with:
           name: automnia-macos-public-release
           path: release-downloads/macos
+
+      - name: Download Apple silicon macOS release
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: automnia-macos-arm64-public-release
+          path: release-downloads/macos-arm64
 
       - name: Download Linux release
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -322,17 +455,19 @@ jobs:
           }
           windows_installer="$(find_one '*Setup*.exe')"
           mac_x64="$(find_one '*-x64.dmg')"
+          mac_arm64="$(find release-downloads/macos-arm64 -type f -iname '*-arm64.dmg' -print -quit)"
           linux_appimage="$(find_one '*.AppImage')"
           linux_deb="$(find_one '*.deb')"
-          for required in "$windows_installer" "$mac_x64" "$linux_appimage" "$linux_deb"; do
+          for required in "$windows_installer" "$mac_x64" "$mac_arm64" "$linux_appimage" "$linux_deb"; do
             test -n "$required" && test -f "$required" || { echo "Missing installer artifact: $required" >&2; exit 1; }
           done
-          printf 'AUTOMNIA_WINDOWS_INSTALLER=%s\nAUTOMNIA_MAC_X64=%s\nAUTOMNIA_LINUX_APPIMAGE=%s\nAUTOMNIA_LINUX_DEB=%s\n' \
-            "$windows_installer" "$mac_x64" "$linux_appimage" "$linux_deb" >> "$GITHUB_ENV"
+          printf 'AUTOMNIA_WINDOWS_INSTALLER=%s\nAUTOMNIA_MAC_X64=%s\nAUTOMNIA_MAC_ARM64=%s\nAUTOMNIA_LINUX_APPIMAGE=%s\nAUTOMNIA_LINUX_DEB=%s\n' \
+            "$windows_installer" "$mac_x64" "$mac_arm64" "$linux_appimage" "$linux_deb" >> "$GITHUB_ENV"
           gcloud storage buckets describe "gs://$INSTALLER_BUCKET" >/dev/null
           gcloud config set storage/parallel_composite_upload_enabled False >/dev/null
           gcloud storage cp --cache-control="no-store,max-age=0" "$windows_installer" "gs://$INSTALLER_BUCKET/releases/current/windows/Automnia-Setup-x64.exe"
           gcloud storage cp --cache-control="no-store,max-age=0" "$mac_x64" "gs://$INSTALLER_BUCKET/releases/current/macos/Automnia-AI-Nexus-x64.dmg"
+          gcloud storage cp --cache-control="no-store,max-age=0" "$mac_arm64" "gs://$INSTALLER_BUCKET/releases/current/macos/Automnia-AI-Nexus-arm64.dmg"
           gcloud storage cp --cache-control="no-store,max-age=0" "$linux_appimage" "gs://$INSTALLER_BUCKET/releases/current/linux/Automnia-AI-Nexus-x86_64.AppImage"
           gcloud storage cp --cache-control="no-store,max-age=0" "$linux_deb" "gs://$INSTALLER_BUCKET/releases/current/linux/Automnia-AI-Nexus-x86_64.deb"
 
@@ -343,14 +478,15 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$PUBLIC_DOWNLOAD_BUCKET" || { echo "AUTOMNIA_PUBLIC_DOWNLOAD_BUCKET is required" >&2; exit 1; }
-          for required in "$AUTOMNIA_WINDOWS_INSTALLER" "$AUTOMNIA_MAC_X64" "$AUTOMNIA_LINUX_APPIMAGE"; do
+          for required in "$AUTOMNIA_WINDOWS_INSTALLER" "$AUTOMNIA_MAC_X64" "$AUTOMNIA_MAC_ARM64" "$AUTOMNIA_LINUX_APPIMAGE" "$AUTOMNIA_LINUX_DEB"; do
             test -n "$required" && test -f "$required" || { echo "Missing installer artifact: $required" >&2; exit 1; }
           done
           gcloud storage buckets describe "gs://$PUBLIC_DOWNLOAD_BUCKET" >/dev/null
           # These stable aliases are the URLs rendered by the Shopify download
           # page. Keep them non-cacheable so a browser never retains a prior
-          # release after the next tagged publish. Apple-silicon macOS and the
-          # Debian package are intentionally not overwritten by this flow.
+          # release after the next tagged publish.
           gcloud storage cp --cache-control="no-store,max-age=0" "$AUTOMNIA_WINDOWS_INSTALLER" "gs://$PUBLIC_DOWNLOAD_BUCKET/releases/current/Automnia-Setup-x64.exe"
           gcloud storage cp --cache-control="no-store,max-age=0" "$AUTOMNIA_MAC_X64" "gs://$PUBLIC_DOWNLOAD_BUCKET/releases/current/Automnia-AI-Nexus-x64.dmg"
+          gcloud storage cp --cache-control="no-store,max-age=0" "$AUTOMNIA_MAC_ARM64" "gs://$PUBLIC_DOWNLOAD_BUCKET/releases/current/Automnia-AI-Nexus-arm64.dmg"
           gcloud storage cp --cache-control="no-store,max-age=0" "$AUTOMNIA_LINUX_APPIMAGE" "gs://$PUBLIC_DOWNLOAD_BUCKET/releases/current/Automnia-AI-Nexus-x86_64.AppImage"
+          gcloud storage cp --cache-control="no-store,max-age=0" "$AUTOMNIA_LINUX_DEB" "gs://$PUBLIC_DOWNLOAD_BUCKET/releases/current/Automnia-AI-Nexus-x86_64.deb"
