@@ -167,6 +167,7 @@ const WSLG_RUNTIME = process.platform === 'linux' && (
 )
 const TRAY_ENABLED = process.env.AUTOMNIA_DISABLE_TRAY !== '1' &&
   (!WSLG_RUNTIME || process.env.AUTOMNIA_ENABLE_WSLG_TRAY === '1')
+const START_HIDDEN = process.env.AUTOMNIA_START_HIDDEN === '1' || process.argv.includes('--background')
 process.env.OPENCLAW_SUPPRESS_EXTENSION_API_WARNING = process.env.OPENCLAW_SUPPRESS_EXTENSION_API_WARNING || '1'
 if (WINDOWS_DISABLE_GPU) {
   app.disableHardwareAcceleration()
@@ -2463,6 +2464,13 @@ function createMainWindow() {
     if (ELECTRON_E2E && process.env.AUTOMNIA_ELECTRON_E2E_KEEP_WINDOW_HIDDEN === '1') {
       appendDesktopDiagnostic('renderer-presentation-suppressed', { reason })
       logE2e('renderer-presentation-suppressed')
+      return
+    }
+    if (START_HIDDEN && TRAY_ENABLED) {
+      win.hide()
+      win.setSkipTaskbar(true)
+      appendDesktopDiagnostic('renderer-kept-hidden', { reason })
+      updateTrayMenu()
       return
     }
     if (!win.isVisible()) {
