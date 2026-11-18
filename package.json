@@ -241,6 +241,7 @@
         "AppImage",
         "deb"
       ],
+      "executableName": "automnia-ai-nexus",
       "category": "Development",
       "maintainer": "Automnia AI",
       "artifactName": "${productName}-${version}-${arch}.${ext}"

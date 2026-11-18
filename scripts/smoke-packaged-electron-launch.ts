@@ -8,6 +8,8 @@ import net from 'node:net'
 const root = process.cwd()
 const releaseRoot = path.join(root, 'release')
 const productName = 'Automnia AI Nexus'
+const packageJson = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'))
+const linuxExecutableName = String(packageJson.build?.linux?.executableName || packageJson.name || '').trim()
 const explicitLinuxAppImagePath = process.platform === 'linux'
   ? String(process.env.AUTOMNIA_PACKAGED_LINUX_APPIMAGE || '').trim()
   : ''
@@ -46,7 +48,7 @@ const launcherPath = process.platform === 'win32'
     ? path.join(macAppPath, 'Contents', 'MacOS', productName)
   : useLinuxAppImage
     ? path.resolve(explicitLinuxAppImagePath)
-    : path.join(unpackedRoot, 'automnia')
+    : path.join(unpackedRoot, linuxExecutableName)
 const electronRuntimePath = process.platform === 'win32'
   ? path.join(unpackedRoot, 'electron.exe')
   : launcherPath

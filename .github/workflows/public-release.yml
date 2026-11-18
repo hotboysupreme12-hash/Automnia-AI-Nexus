@@ -316,13 +316,14 @@ jobs:
           deb_arch="$(dpkg-deb -f "$deb_path" Architecture)"
           test "$deb_arch" = "amd64"
           package_name="$(dpkg-deb -f "$deb_path" Package)"
+          linux_executable_name="$(node -p 'require("./package.json").build.linux.executableName')"
           sudo apt-get update
           sudo apt-get install -y "$deb_path"
           trap 'sudo apt-get remove -y "$package_name" >/dev/null 2>&1 || true' EXIT
           app_asar="$(dpkg-query --listfiles "$package_name" | grep -E '/resources/app\.asar$' | head -n 1)"
           test -n "$app_asar" && test -f "$app_asar"
           app_root="${app_asar%/resources/app.asar}"
-          test -x "$app_root/automnia"
+          test -x "$app_root/$linux_executable_name"
           AUTOMNIA_PACKAGED_LINUX_ROOT="$app_root" AUTOMNIA_ELECTRON_E2E_NO_SANDBOX=1 xvfb-run -a npm run smoke:packaged-electron-launch
           sudo apt-get remove -y "$package_name"
           trap - EXIT

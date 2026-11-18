@@ -8,7 +8,11 @@ const workflowPath = path.join(root, '.github', 'workflows', 'control-plane-ci.y
 const publicReleasePath = path.join(root, '.github', 'workflows', 'public-release.yml')
 const qualityPath = path.join(root, '.github', 'workflows', 'quality-matrix.yml')
 const auditPath = path.join(root, '.github', 'workflows', 'dependency-audit.yml')
-const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
+const packageJson = JSON.parse(read('package.json')) as {
+  name?: string
+  scripts?: Record<string, string>
+  build?: { linux?: { executableName?: string } }
+}
 const scripts = packageJson.scripts || {}
 const testCiScript = scripts['test:ci'] || ''
 
@@ -27,6 +31,7 @@ const dependencyAudit = read('.github/workflows/dependency-audit.yml')
 const releaseGovernance = read('docs/RELEASE_GOVERNANCE.md')
 const secretScanner = read('scripts/secret-scan.cjs')
 const packageDesktop = read('scripts/package-desktop.cjs')
+const packagedElectronLaunchSmoke = read('scripts/smoke-packaged-electron-launch.ts')
 const electronE2eSmoke = read('scripts/smoke-electron-e2e.ts')
 
 const assertPinnedActions = (source: string, label: string) => {
@@ -134,10 +139,13 @@ assert.ok(publicRelease.includes('AUTOMNIA_PACKAGED_MAC_APP_PATH'), 'public rele
 assert.ok(publicRelease.includes('lipo -archs'), 'public release must verify the native architecture inside both Mac DMGs')
 assert.ok(publicRelease.includes('dpkg-deb -f'), 'public release must inspect Debian package metadata')
 assert.ok(publicRelease.includes('deb_path="$(realpath "$deb_path")"'), 'public release must pass apt-get an absolute local Debian package path')
+assert.ok(publicRelease.includes('test -x "$app_root/$linux_executable_name"'), 'public release must validate the Debian package executable name from package metadata')
 assert.ok(publicRelease.includes('AUTOMNIA_PACKAGED_LINUX_ROOT'), 'public release must launch the installed Debian package')
 assert.ok(publicRelease.includes('AUTOMNIA_PACKAGED_LINUX_APPIMAGE'), 'public release must launch the built AppImage')
 assert.ok(publicRelease.includes('APPIMAGE_EXTRACT_AND_RUN=1'), 'public release must smoke-test AppImage without requiring FUSE on the runner')
 assert.ok(publicRelease.includes('readelf -h'), 'public release must verify the AppImage ELF architecture')
+assert.equal(packageJson.build?.linux?.executableName, packageJson.name, 'Linux executable name must match the installed Debian package executable')
+assert.ok(packagedElectronLaunchSmoke.includes('linuxExecutableName'), 'packaged Linux launch smoke must use the configured Linux executable name')
 const afterPack = read('scripts/after-pack.cjs')
 assert.match(afterPack, /const archiveMember = \(\.\.\.segments\) => path\.join\(\.\.\.segments\)/, 'packaged archive validation must use host-native member paths for Windows')
 assert.ok(!afterPack.includes("'electron/update-config.json'"), 'packaged archive validation must not hard-code POSIX member separators')
