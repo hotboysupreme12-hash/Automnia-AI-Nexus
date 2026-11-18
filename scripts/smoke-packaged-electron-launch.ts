@@ -63,6 +63,7 @@ const launcherExitTimeoutMs = useLinuxAppImage
   : process.platform === 'darwin' || process.platform === 'linux'
     ? 60_000
     : 10_000
+const startupLogTimeoutMs = process.platform === 'darwin' || useLinuxAppImage ? 180_000 : 60_000
 const requiredPackagedFiles = [
   launcherPath,
   electronRuntimePath,
@@ -176,7 +177,8 @@ async function waitForLogPatterns(
     .map((pattern, index) => (found.has(index) ? null : String(pattern)))
     .filter(Boolean)
     .join(', ')
-  throw new Error(`packaged Electron launch log did not contain ${missing}\n${content}`)
+  const diagnostics = getLauncherOutput()
+  throw new Error(`packaged Electron launch log did not contain ${missing}\n${content || '(no startup log was created)'}${diagnostics ? `\n${diagnostics}` : ''}`)
 }
 
 const tempRoot = mkdtempSync(path.join(tmpdir(), 'automnia-packaged-launch-'))
@@ -191,6 +193,7 @@ const gatewayPort = await freePort()
 const browserRelayPort = await freePort()
 let launcherStdout = ''
 let launcherStderr = ''
+let launcherProcess: ReturnType<typeof spawn> | null = null
 const appendOutputTail = (current: string, chunk: Buffer | string) => `${current}${chunk.toString()}`.slice(-16_384)
 const env = {
   ...process.env,
@@ -225,6 +228,7 @@ try {
     // both pipes so packaged descendants cannot keep the CI shell open.
     stdio: ['ignore', 'pipe', 'pipe'],
   })
+  launcherProcess = launcher
   launcher.stdout?.on('data', (chunk) => { launcherStdout = appendOutputTail(launcherStdout, chunk) })
   launcher.stderr?.on('data', (chunk) => { launcherStderr = appendOutputTail(launcherStderr, chunk) })
   let launcherError: Error | null = null
@@ -238,11 +242,16 @@ try {
     (launcher.exitCode !== null && !(process.platform === 'win32' && launcher.exitCode === 0))
 
   await waitForLogPatterns(logPath, [
+    /\[automnia-e2e\] main-process-loaded/,
+    /\[automnia-e2e\] app-ready/,
+    /\[automnia-e2e\] openclaw-runtime-resolution-start/,
+    /\[automnia-e2e\] openclaw-runtime-resolution-complete/,
+    /\[automnia-e2e\] npm-toolchain-check-complete/,
     /\[automnia-e2e\] port-cleanup-skipped/,
     /\[automnia-e2e\] server-ready/,
     /\[automnia-e2e\] navigation-policy-ok/,
     /\[automnia-e2e\] pty-native-ok/,
-  ], 60_000, launcherFailedBeforeChecks, () => {
+  ], startupLogTimeoutMs, launcherFailedBeforeChecks, () => {
     const details = [
       `launcher status: exit=${launcher.exitCode ?? 'unknown'}, signal=${launcher.signalCode ?? 'none'}`,
       launcherError ? `spawn error: ${launcherError.message}` : '',
@@ -312,6 +321,9 @@ try {
     /\[automnia-e2e\] quit-cleanup-complete/,
   ])
 } finally {
+  if (launcherProcess && launcherProcess.exitCode === null && launcherProcess.signalCode === null) {
+    terminatePackagedLauncher(launcherProcess)
+  }
   killPackagedElectronProcesses()
   await removeTempRootWithWindowsRetries(tempRoot)
 }
