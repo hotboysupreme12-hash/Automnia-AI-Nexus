@@ -120,6 +120,25 @@ function killPackagedElectronProcesses() {
   })
 }
 
+async function waitForProcessGroupExit(processGroupId: number, timeoutMs: number) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      process.kill(-processGroupId, 0)
+    } catch {
+      return true
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+
+  try {
+    process.kill(-processGroupId, 0)
+    return false
+  } catch {
+    return true
+  }
+}
+
 async function terminatePackagedLauncher(launcher: ReturnType<typeof spawn>) {
   if (process.platform === 'win32') {
     killPackagedElectronProcesses()
@@ -140,20 +159,16 @@ async function terminatePackagedLauncher(launcher: ReturnType<typeof spawn>) {
     return
   }
 
-  const deadline = Date.now() + 2_000
-  while (Date.now() < deadline) {
-    try {
-      process.kill(-processGroupId, 0)
-    } catch {
-      return
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100))
-  }
+  if (await waitForProcessGroupExit(processGroupId, 2_000)) return
 
   try {
     process.kill(-processGroupId, 'SIGKILL')
   } catch {
     // The process group can exit between the final liveness probe and SIGKILL.
+  }
+
+  if (!await waitForProcessGroupExit(processGroupId, 2_000)) {
+    throw new Error(`packaged app process group ${processGroupId} remained after SIGKILL`)
   }
 }
 
