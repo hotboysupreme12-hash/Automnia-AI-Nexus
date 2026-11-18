@@ -133,6 +133,7 @@ assert.match(publicRelease, /Automnia-AI-Nexus-x86_64\.deb/, 'public release mus
 assert.ok(publicRelease.includes('AUTOMNIA_PACKAGED_MAC_APP_PATH'), 'public release must launch the app copied from each mounted Mac DMG')
 assert.ok(publicRelease.includes('lipo -archs'), 'public release must verify the native architecture inside both Mac DMGs')
 assert.ok(publicRelease.includes('dpkg-deb -f'), 'public release must inspect Debian package metadata')
+assert.ok(publicRelease.includes('deb_path="$(realpath "$deb_path")"'), 'public release must pass apt-get an absolute local Debian package path')
 assert.ok(publicRelease.includes('AUTOMNIA_PACKAGED_LINUX_ROOT'), 'public release must launch the installed Debian package')
 assert.ok(publicRelease.includes('AUTOMNIA_PACKAGED_LINUX_APPIMAGE'), 'public release must launch the built AppImage')
 assert.ok(publicRelease.includes('APPIMAGE_EXTRACT_AND_RUN=1'), 'public release must smoke-test AppImage without requiring FUSE on the runner')
