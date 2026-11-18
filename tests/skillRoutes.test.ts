@@ -324,6 +324,7 @@ test('ClawHub preview stages and diffs in isolated state, then applies only afte
       const stateRoot = commandOptions?.envOverrides?.OPENCLAW_STATE_DIR || ''
       stagedRoots.push(path.dirname(stateRoot))
       assert.ok(stateRoot)
+      if (process.platform === 'darwin') assert.equal(await realpath(path.dirname(stateRoot)), path.dirname(stateRoot))
       assert.notEqual(path.resolve(stateRoot), path.resolve(sharedRoot))
       assert.ok(commandOptions?.cwd && path.resolve(commandOptions.cwd).startsWith(path.resolve(path.dirname(stateRoot))))
       assert.equal(path.resolve(commandOptions?.envOverrides?.OPENCLAW_CONFIG_PATH || ''), path.join(path.resolve(stateRoot), 'openclaw.json'))
@@ -411,6 +412,7 @@ test('failed and expired ClawHub previews cannot be applied and are cleaned up',
     runOpenClaw: async (args, _timeoutMs, commandOptions) => {
       const stateRoot = commandOptions?.envOverrides?.OPENCLAW_STATE_DIR || ''
       stagedRoots.push(path.dirname(stateRoot))
+      if (process.platform === 'darwin') assert.equal(await realpath(path.dirname(stateRoot)), path.dirname(stateRoot))
       if (args[1] === 'search') return { stdout: JSON.stringify({ results: [{ ownerHandle: 'example', slug: 'demo', version: '2.0.0' }] }), stderr: '', code: 0 }
       stageCount += 1
       if (stageCount === 1) return { stdout: '', stderr: 'download failed', code: 1 }

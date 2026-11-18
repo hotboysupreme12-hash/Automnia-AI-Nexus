@@ -1,6 +1,6 @@
 import type { Express } from 'express'
 import { randomUUID } from 'node:crypto'
-import { lstat, mkdtemp, mkdir, opendir, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdtemp, mkdir, opendir, realpath, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { z } from 'zod'
@@ -359,7 +359,10 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
     if (pendingSkillPreviews.size >= MAX_SKILL_PREVIEW_COUNT) throw new SkillPreviewError('Too many skill previews are waiting for confirmation. Apply or cancel one before starting another.')
     const skillId = options.slugifySkillId(clawHubSkillSlug(skillRef))
     if (!SKILL_ID_PATTERN.test(skillId)) throw new SkillPreviewError('The ClawHub skill id is invalid.')
-    const stagingRoot = await mkdtemp(path.join(os.tmpdir(), 'automnia-clawhub-preview-'))
+    // macOS may expose the temporary directory through a symlink (for example,
+    // /var -> /private/var). Keep staged skills on the physical path because
+    // the preview integrity checks reject symlinked ancestors.
+    const stagingRoot = await mkdtemp(path.join(await realpath(os.tmpdir()), 'automnia-clawhub-preview-'))
     if (pathsOverlap(stagingRoot, options.sharedSkillsRoot)) {
       await rm(stagingRoot, { recursive: true, force: true }).catch(() => undefined)
       throw new SkillPreviewError('The temporary preview location overlaps the shared skills directory.')
