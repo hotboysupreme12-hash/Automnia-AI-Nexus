@@ -1,24 +1,31 @@
-const DEFAULT_AUTOMNIA_RELAY_MODEL = 'gemini-3.7-flash';
-const DEFAULT_AUTOMNIA_RELAY_FALLBACK_MODELS = ['gemini-3.6-flash', 'gemini-2.5-flash'];
-const DEFAULT_AUTOMNIA_RELAY_SELECTABLE_MODELS = ['gemini-4-argon', 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash'];
+const DEFAULT_AUTOMNIA_RELAY_MODEL = 'gemini-4-hydrogen';
+const DEFAULT_AUTOMNIA_RELAY_FALLBACK_MODELS = ['gemini-3.8-flash'];
+const DEFAULT_AUTOMNIA_RELAY_SELECTABLE_MODELS = ['gemini-4-carbon', 'gemini-4-argon', 'gemini-4-hydrogen', 'gemini-3.8-flash'];
+const LEGACY_AUTOMNIA_RELAY_MODELS = new Set(['gemini-2.5-flash', 'gemini-3.6-flash', 'gemini-3.7-flash']);
 
 function normalizeRelayModel(value) {
   return String(value || '').trim().toLowerCase().replace(/^automnia-cloud\//, '');
 }
 
 function configuredRelayModels(primary, fallbackValue) {
-  const normalizedPrimary = normalizeRelayModel(primary) || DEFAULT_AUTOMNIA_RELAY_MODEL;
+  const requestedPrimary = normalizeRelayModel(primary);
+  const normalizedPrimary = !requestedPrimary || LEGACY_AUTOMNIA_RELAY_MODELS.has(requestedPrimary)
+    ? DEFAULT_AUTOMNIA_RELAY_MODEL
+    : requestedPrimary;
   const rawFallbacks = String(fallbackValue || '').trim();
   const fallbacks = (rawFallbacks ? rawFallbacks.split(',') : DEFAULT_AUTOMNIA_RELAY_FALLBACK_MODELS)
     .map(normalizeRelayModel)
     .filter(Boolean)
+    .filter((model) => !LEGACY_AUTOMNIA_RELAY_MODELS.has(model))
     .filter((model) => model !== normalizedPrimary);
   return [normalizedPrimary, ...new Set(fallbacks)];
 }
 
 function configuredRelaySelectableModels(selectableValue, operationalModels) {
   const configured = String(selectableValue || '').trim();
-  const requested = configured ? configured.split(',').map(normalizeRelayModel).filter(Boolean) : [];
+  const requested = configured
+    ? configured.split(',').map(normalizeRelayModel).filter(Boolean).filter((model) => !LEGACY_AUTOMNIA_RELAY_MODELS.has(model))
+    : [];
   return [...new Set([
     ...requested,
     ...DEFAULT_AUTOMNIA_RELAY_SELECTABLE_MODELS,
