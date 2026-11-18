@@ -211,6 +211,7 @@ let e2eExternalAssertionsComplete = false
 let e2eRendererCrashRequested = false
 let e2eTrayAssertionsStarted = false
 let e2eRendererJourneyComplete = false
+let e2eRendererJourneyAuthReloadRequested = false
 let e2eScreenshotCaptureStarted = false
 let e2eDesktopBootstrapStarted = false
 let e2eAppRehydrationStarted = false
@@ -2596,7 +2597,11 @@ function createMainWindow() {
       !e2eRendererJourneyComplete
     ) {
       setTimeout(() => {
-        void runElectronE2eRendererJourney(win).then(() => {
+        void runElectronE2eRendererJourney(win).then((completed) => {
+          if (!completed) {
+            logE2e('renderer-journey-auth-reload')
+            return
+          }
           e2eRendererJourneyComplete = true
           logE2e('renderer-journey-ok')
           if (process.env.AUTOMNIA_ELECTRON_E2E_QUIT_AFTER_RENDERER_JOURNEY === '1') app.quit()
@@ -3181,6 +3186,23 @@ function runElectronE2ePolicySelfTest() {
 async function runElectronE2eRendererJourney(win) {
   if (!ELECTRON_E2E || process.env.AUTOMNIA_ELECTRON_E2E_ASSERT_RENDERER_JOURNEY !== '1') return
   const e2eAuthToken = JSON.stringify(String(process.env.CONTROL_CENTER_TOKEN || ''))
+  const hasPrimaryNavigation = await win.webContents.executeJavaScript(
+    'Boolean(document.querySelector(\'nav[aria-label="Primary navigation"]\'))',
+    true,
+  )
+  if (!hasPrimaryNavigation && !e2eRendererJourneyAuthReloadRequested) {
+    if (!process.env.CONTROL_CENTER_TOKEN) throw new Error('E2E control-center token is missing')
+    await win.webContents.executeJavaScript(`
+      localStorage.setItem('control-center-token', ${e2eAuthToken});
+      sessionStorage.removeItem('control-center-token');
+      sessionStorage.removeItem('control-center-signed-out');
+      localStorage.removeItem('control-center-signed-out');
+      true;
+    `, true)
+    e2eRendererJourneyAuthReloadRequested = true
+    win.webContents.reload()
+    return false
+  }
   const result = await win.webContents.executeJavaScript(`
     (async () => {
       const waitFor = async (predicate, label, timeoutMs = 15000) => {
@@ -3192,15 +3214,6 @@ async function runElectronE2eRendererJourney(win) {
         }
         throw new Error('Timed out waiting for ' + label);
       };
-      if (!document.querySelector('nav[aria-label="Primary navigation"]')) {
-        const token = ${e2eAuthToken};
-        if (!token) throw new Error('E2E control-center token is missing');
-        localStorage.setItem('control-center-token', token);
-        sessionStorage.removeItem('control-center-token');
-        sessionStorage.removeItem('control-center-signed-out');
-        localStorage.removeItem('control-center-signed-out');
-        location.reload();
-      }
       const nav = await waitFor(
         () => document.querySelector('nav[aria-label="Primary navigation"]'),
         'primary navigation',
@@ -3235,6 +3248,7 @@ async function runElectronE2eRendererJourney(win) {
   `, true)
   assertElectronE2e(Boolean(result?.ok), 'renderer journey must finish successfully')
   assertElectronE2e(Array.isArray(result?.visited) && result.visited.join(',') === 'Missions,Monitor,Plugins,Agents', 'renderer journey must visit every primary workspace')
+  return true
 }
 
 async function runElectronE2eDesktopSessionBootstrap(win) {
