@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDialogFocus } from '../ui/Dialog'
+import { ProviderModelReadinessPanel } from './ProviderModelReadinessPanel'
 import { apiErrorMessage } from '../../api/client'
 import { providerOAuthExpiryGuidance } from '../../utils/providerOAuthExpiry'
 import {
@@ -122,6 +123,7 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
     : provider === 'google'
       ? 'Gemini'
       : activeProviderStatus?.label || providerLabels[provider] || provider
+  const readinessProvider = provider === 'openai-codex' || provider === 'codex' ? 'openai' : provider
 
   const refreshProviderStatus = useCallback(async (announceReady = false) => {
     setGcloudRefreshing(true)
@@ -847,6 +849,14 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
               </div>
             </section>
           )}
+
+          <ProviderModelReadinessPanel
+            key={`${readinessProvider}:${activeProviderStatus?.configured === true ? 'configured' : 'unconfigured'}`}
+            open={isOpen}
+            provider={readinessProvider}
+            providerLabel={label}
+            authenticationConfigured={activeProviderStatus?.configured}
+          />
 
           {status && (
             <div className={`mb-4 flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-xs leading-5 ${statusTone === 'error' ? 'border-rose-300/20 bg-rose-400/[0.06] text-rose-100' : statusTone === 'success' ? 'border-emerald-300/20 bg-emerald-400/[0.06] text-emerald-100' : 'border-cyan-300/20 bg-cyan-300/[0.05] text-cyan-100'}`} role="status" aria-live="polite">

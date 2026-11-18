@@ -64,6 +64,17 @@ function createRuntimeStub(
   repairFailures: RouteError[] = [],
   onRepairSuccess?: () => void,
 ): PluginRuntimeService {
+  const terminalSession = {
+    id: 'setup-1',
+    command: 'plugins' as const,
+    commandLine: 'openclaw configure --section plugins',
+    title: 'Plugin fields: codex',
+    pluginId: 'codex',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    status: 'running' as const,
+    pid: 1234,
+  }
   return {
     inspectOpenClawPluginRuntime: async (pluginId) => {
       calls.inspect += 1
@@ -100,11 +111,11 @@ function createRuntimeStub(
         pid: 1234,
       }
     },
-    getPluginSetupTerminalSnapshot: () => null,
+    getPluginSetupTerminalSnapshot: () => terminalSession,
     attachPluginSetupTerminalClient: () => null,
-    writePluginSetupTerminalInput: () => ({ ok: false, reason: 'not_found', message: 'Setup terminal session not found.' }),
+    writePluginSetupTerminalInput: () => ({ ok: true, session: terminalSession }),
     resizePluginSetupTerminalSession: () => ({ ok: false, reason: 'not_found', message: 'Setup terminal session not found.' }),
-    stopPluginSetupTerminalSession: () => ({ ok: false, reason: 'not_found', message: 'Setup terminal session not found.' }),
+    stopPluginSetupTerminalSession: () => ({ ok: true, session: { ...terminalSession, status: 'stopped' } }),
     stopAllPluginSetupTerminalSessions: () => 0,
   }
 }
@@ -622,6 +633,103 @@ test('plugin routes still run known plugin mutations after the not-found guard',
 
   assert.equal(calls.update, 1)
   assert.ok(calls.list >= 1)
+})
+
+test('plugin mutation routes append safe action records for enable, disable, config, and restart', async () => {
+  const { app } = createPluginRoutesHarness(['codex'])
+  const configValue = 'must-not-appear-config-value'
+  const authValue = 'must-not-appear-provider-auth'
+  const fieldName = 'must-not-appear-secret-field-name'
+
+  await withRouteServer(app, async (baseUrl) => {
+    const disabled = await requestJson(baseUrl, 'POST', '/api/plugins/codex', { enabled: false })
+    assert.equal(disabled.status, 200)
+    const enabled = await requestJson(baseUrl, 'POST', '/api/plugins/codex', { enabled: true })
+    assert.equal(enabled.status, 200)
+
+    const configured = await requestJson(baseUrl, 'POST', '/api/plugins/codex/config', {
+      values: { [fieldName]: configValue },
+      providerAuth: { bearerToken: authValue },
+      restart: true,
+    })
+    assert.equal(configured.status, 200)
+
+    const restarted = await requestJson(baseUrl, 'POST', '/api/plugins/gateway/restart')
+    assert.equal(restarted.status, 200)
+
+    const listing = await requestJson(baseUrl, 'GET', '/api/plugins')
+    const ledger = JSON.parse(listing.text) as {
+      data: { actionLedger: Array<{ action: string; outcome: string; pluginId: string; summary?: string }> }
+    }
+    assert.deepEqual(ledger.data.actionLedger.map(({ action, outcome, pluginId }) => ({ action, outcome, pluginId })), [
+      { action: 'disable', outcome: 'started', pluginId: 'codex' },
+      { action: 'disable', outcome: 'succeeded', pluginId: 'codex' },
+      { action: 'enable', outcome: 'started', pluginId: 'codex' },
+      { action: 'enable', outcome: 'succeeded', pluginId: 'codex' },
+      { action: 'configure', outcome: 'started', pluginId: 'codex' },
+      { action: 'configure', outcome: 'succeeded', pluginId: 'codex' },
+      { action: 'gateway-restart', outcome: 'started', pluginId: '*' },
+      { action: 'gateway-restart', outcome: 'succeeded', pluginId: '*' },
+      { action: 'gateway-restart', outcome: 'started', pluginId: '*' },
+      { action: 'gateway-restart', outcome: 'succeeded', pluginId: '*' },
+    ])
+    assert.doesNotMatch(listing.text, new RegExp(configValue))
+    assert.doesNotMatch(listing.text, new RegExp(authValue))
+    assert.doesNotMatch(listing.text, new RegExp(fieldName))
+    assert.ok(ledger.data.actionLedger.every(({ summary }) => !summary?.includes(configValue) && !summary?.includes(authValue)))
+  })
+})
+
+test('ClawTalk setup without installation is audited without storing supplied credentials or failures', async () => {
+  const setupKey = 'clawtalk-api-key-must-not-be-persisted'
+  const { app } = createPluginRoutesHarness(['clawtalk'], {
+    errors: { clawTalkSetup: routeError('clawTalkSetup') },
+  })
+
+  await withRouteServer(app, async (baseUrl) => {
+    const setup = await requestJson(baseUrl, 'POST', '/api/plugins/clawtalk/setup', {
+      apiKey: setupKey,
+      install: false,
+    })
+    assert.equal(setup.status, 500)
+    const listing = await requestJson(baseUrl, 'GET', '/api/plugins')
+    const payload = JSON.parse(listing.text) as {
+      data: { actionLedger: Array<{ action: string; outcome: string; pluginId: string; summary?: string }> }
+    }
+    assert.deepEqual(payload.data.actionLedger.map(({ action, outcome, pluginId }) => ({ action, outcome, pluginId })), [
+      { action: 'configure', outcome: 'started', pluginId: 'clawtalk' },
+      { action: 'configure', outcome: 'failed', pluginId: 'clawtalk' },
+    ])
+    assert.doesNotMatch(listing.text, /clawtalk-api-key-must-not-be-persisted|route-secret-token|route-redaction-secret/)
+  })
+})
+
+test('plugin setup terminal start, input, and stop are audited without storing terminal input', async () => {
+  const terminalInput = 'apiKey=terminal-input-secret token=terminal-token-secret'
+  const { app } = createPluginRoutesHarness(['codex'])
+
+  await withRouteServer(app, async (baseUrl) => {
+    const started = await requestJson(baseUrl, 'POST', '/api/plugins/setup-terminal', { command: 'plugins', pluginId: 'codex' })
+    assert.equal(started.status, 200)
+    const input = await requestJson(baseUrl, 'POST', '/api/plugins/setup-terminal/setup-1/input', { data: terminalInput })
+    assert.equal(input.status, 200)
+    const stopped = await requestJson(baseUrl, 'DELETE', '/api/plugins/setup-terminal/setup-1')
+    assert.equal(stopped.status, 200)
+
+    const listing = await requestJson(baseUrl, 'GET', '/api/plugins')
+    const payload = JSON.parse(listing.text) as {
+      data: { actionLedger: Array<{ action: string; outcome: string; pluginId: string; summary?: string }> }
+    }
+    assert.deepEqual(payload.data.actionLedger.map(({ action, outcome, pluginId }) => ({ action, outcome, pluginId })), [
+      { action: 'setup-terminal', outcome: 'started', pluginId: 'codex' },
+      { action: 'setup-terminal', outcome: 'succeeded', pluginId: 'codex' },
+      { action: 'setup-terminal', outcome: 'started', pluginId: 'codex' },
+      { action: 'setup-terminal', outcome: 'succeeded', pluginId: 'codex' },
+      { action: 'setup-terminal', outcome: 'started', pluginId: 'codex' },
+      { action: 'setup-terminal', outcome: 'succeeded', pluginId: 'codex' },
+    ])
+    assert.doesNotMatch(listing.text, /apiKey=terminal-input-secret|terminal-token-secret|setup-1/)
+  })
 })
 
 test('plugin loader repair is idempotent by plugin and failure class and records append-only evidence', async () => {

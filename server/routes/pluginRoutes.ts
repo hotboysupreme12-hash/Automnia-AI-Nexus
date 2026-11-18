@@ -187,7 +187,12 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
   )
   const repairInFlight = new Map<string, Promise<PluginRepairAttemptResult>>()
 
-  async function runAuditedPluginAction<T>(action: PluginActionKind, pluginId: string, run: () => Promise<T>) {
+  async function runAuditedPluginAction<T>(
+    action: PluginActionKind,
+    pluginId: string,
+    run: () => Promise<T>,
+    isSuccessful: (result: T) => boolean = () => true,
+  ) {
     const actionId = randomUUID()
     await actionLedger.append({ actionId, action, pluginId, outcome: 'started', summary: `${action} request accepted.` })
     let result: T
@@ -197,7 +202,14 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
       await actionLedger.append({ actionId, action, pluginId, outcome: 'failed', summary: `${action} failed.` }).catch(() => undefined)
       throw error
     }
-    await actionLedger.append({ actionId, action, pluginId, outcome: 'succeeded', summary: `${action} completed.` })
+    const succeeded = isSuccessful(result)
+    await actionLedger.append({
+      actionId,
+      action,
+      pluginId,
+      outcome: succeeded ? 'succeeded' : 'failed',
+      summary: succeeded ? `${action} completed.` : `${action} did not complete.`,
+    })
     return result
   }
 
@@ -296,10 +308,10 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
 
   app.post('/api/plugins/gateway/restart', async (_req, res) => {
     try {
-      const restart = {
+      const restart = await runAuditedPluginAction('gateway-restart', '*', async () => ({
         ...(await options.tryRestartGatewayService({ force: true, reason: 'plugin workspace requested gateway restart' })),
         scheduled: false,
-      }
+      }))
       options.invalidateRuntimeStatusCache()
       const controls = await options.listPluginControls()
       return apiSuccess(res, {
@@ -322,9 +334,8 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     try {
-      const result = parsed.data.install
-        ? await runAuditedPluginAction('install', options.clawTalkPluginId, () => options.setupClawTalkPlugin(parsed.data))
-        : await options.setupClawTalkPlugin(parsed.data)
+      const action = parsed.data.install ? 'install' : 'configure'
+      const result = await runAuditedPluginAction(action, options.clawTalkPluginId, () => options.setupClawTalkPlugin(parsed.data))
       options.invalidateRuntimeStatusCache()
       return apiSuccess(res, {
         install: result.installResult?.install,
@@ -684,9 +695,14 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
 
     try {
       if (!await requirePluginControl(pluginId, res)) return
-      await options.savePluginDirectConfig(pluginId, parsed.data.values, parsed.data.providerAuth)
+      await runAuditedPluginAction('configure', pluginId, async () => {
+        await options.savePluginDirectConfig(pluginId, parsed.data.values, parsed.data.providerAuth)
+        return true
+      })
       options.invalidateRuntimeStatusCache()
-      const restart = parsed.data.restart ? options.schedulePluginGatewayRestart() : { restarted: false, scheduled: false, detail: 'gateway restart skipped' }
+      const restart = parsed.data.restart
+        ? await runAuditedPluginAction('gateway-restart', '*', async () => options.schedulePluginGatewayRestart())
+        : { restarted: false, scheduled: false, detail: 'gateway restart skipped' }
       const controls = await options.listPluginControls()
       return apiSuccess(res, {
         plugin: controls.plugins.find((entry) => entry.id === pluginId) || null,
@@ -713,7 +729,9 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
 
     try {
       if (parsed.data.pluginId && !await requirePluginControl(parsed.data.pluginId, res)) return
-      const session = options.pluginRuntime.startPluginSetupTerminalSession(parsed.data)
+      const session = await runAuditedPluginAction('setup-terminal', parsed.data.pluginId || '*', async () =>
+        options.pluginRuntime.startPluginSetupTerminalSession(parsed.data),
+      )
       return apiSuccess(res, { session })
     } catch (error) {
       return apiFailure(res, 500, 'plugin_terminal_failed', 'Failed to start setup terminal', options.pluginErrorDetail(error))
@@ -745,7 +763,7 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     })
   })
 
-  app.post('/api/plugins/setup-terminal/:sessionId/input', (req, res) => {
+  app.post('/api/plugins/setup-terminal/:sessionId/input', async (req, res) => {
     const session = options.pluginRuntime.getPluginSetupTerminalSnapshot(req.params.sessionId)
     if (!session) return apiFailure(res, 404, 'plugin_not_found', 'Setup terminal session not found.')
     if (session.status !== 'running') return apiFailure(res, 409, 'plugin_terminal_failed', 'Setup terminal is not running.')
@@ -755,7 +773,12 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     try {
-      const result = options.pluginRuntime.writePluginSetupTerminalInput(req.params.sessionId, parsed.data.data)
+      const result = await runAuditedPluginAction(
+        'setup-terminal',
+        session.pluginId || '*',
+        async () => options.pluginRuntime.writePluginSetupTerminalInput(req.params.sessionId, parsed.data.data),
+        (operation) => operation.ok,
+      )
       if (!result.ok) {
         return apiFailure(res, result.reason === 'not_found' ? 404 : 409, result.reason === 'not_found' ? 'plugin_not_found' : 'plugin_terminal_failed', result.message)
       }
@@ -787,8 +810,15 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     }
   })
 
-  app.delete('/api/plugins/setup-terminal/:sessionId', (req, res) => {
-    const result = options.pluginRuntime.stopPluginSetupTerminalSession(req.params.sessionId)
+  app.delete('/api/plugins/setup-terminal/:sessionId', async (req, res) => {
+    const session = options.pluginRuntime.getPluginSetupTerminalSnapshot(req.params.sessionId)
+    if (!session) return apiFailure(res, 404, 'plugin_not_found', 'Setup terminal session not found.')
+    const result = await runAuditedPluginAction(
+      'setup-terminal',
+      session.pluginId || '*',
+      async () => options.pluginRuntime.stopPluginSetupTerminalSession(req.params.sessionId),
+      (operation) => operation.ok,
+    )
     if (!result.ok) return apiFailure(res, 404, 'plugin_not_found', result.message)
     return apiSuccess(res, { session: result.session })
   })
@@ -823,10 +853,11 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
           )
         }
       }
-      const result = await options.setOpenClawPluginEnabledForControlCenter(pluginId, parsed.data.enabled, {
+      const action = parsed.data.enabled ? 'enable' : 'disable'
+      const result = await runAuditedPluginAction(action, pluginId, () => options.setOpenClawPluginEnabledForControlCenter(pluginId, parsed.data.enabled, {
         restart: parsed.data.restart,
         immediateRestart: parsed.data.immediateRestart,
-      })
+      }))
       options.invalidateRuntimeStatusCache()
       return apiSuccess(res, {
         command: result.command,

@@ -242,6 +242,7 @@ import {
   type PluginInventoryService,
   type PluginRuntimeState,
 } from './services/plugins/pluginInventoryService'
+import { pluginLoaderDoctorProjection, projectPluginLoaderFailures } from './services/plugins/pluginLoaderHealth'
 import {
   createPluginInstallService,
   type PluginInstallService,
@@ -18321,18 +18322,32 @@ async function runDoctorChecks(): Promise<{ id: string; startedAt: string; ended
   })
 
   const pluginCheck = await boundedOperation('Plugin controls', 12_000, async () => listPluginControls())
-  const brokenPlugins = pluginCheck.value?.plugins.filter((plugin) => plugin.missingDependencies.length || /broken|error|failed/i.test(plugin.status)) || []
+  const pluginLoaderFailures = projectPluginLoaderFailures(pluginCheck.value?.plugins || [])
+  const pluginLoaderHealth = pluginLoaderDoctorProjection(pluginLoaderFailures)
+  const pluginFindings: DoctorFinding[] = pluginLoaderFailures.map((failure) => {
+    const finding: Omit<DoctorFinding, 'guidedAction'> = {
+      checkId: 'plugin-loader',
+      category: 'plugin',
+      severity: 'warning',
+      message: failure.summary,
+      fixHint: failure.recoveryHint,
+      repairAction: failure.recoveryHint,
+    }
+    const guidedAction = doctorGuidedActionForFinding(finding)
+    return { ...finding, ...(guidedAction ? { guidedAction } : {}) }
+  })
   checks.push({
     id: 'plugins',
     label: 'Plugin loader health',
-    ok: pluginCheck.ok && !brokenPlugins.length,
-    severity: brokenPlugins.length ? 'warning' : pluginCheck.ok ? 'info' : 'error',
-    failureKind: brokenPlugins.length || !pluginCheck.ok ? 'plugin_loader_error' : undefined,
+    ok: pluginCheck.ok && pluginLoaderHealth.ok,
+    severity: pluginLoaderFailures.length ? 'warning' : pluginCheck.ok ? 'info' : 'error',
+    failureKind: pluginLoaderFailures.length || !pluginCheck.ok ? 'plugin_loader_error' : undefined,
     evidence: pluginCheck.ok
-      ? `${pluginCheck.value?.plugins.length || 0} plugins indexed${brokenPlugins.length ? `; ${brokenPlugins.length} need repair.` : '.'}`
+      ? `${pluginCheck.value?.plugins.length || 0} plugins indexed. ${pluginLoaderHealth.evidence}`
       : pluginCheck.error || 'Plugin scan failed.',
     elapsedMs: pluginCheck.elapsedMs,
-    repairAction: brokenPlugins.length ? 'Open Plugins and inspect loader errors/missing dependencies.' : undefined,
+    repairAction: pluginLoaderHealth.repairAction || (pluginCheck.ok ? undefined : 'Refresh Plugin controls in Automnia, then rerun Doctor.'),
+    ...(pluginFindings.length ? { findings: pluginFindings } : {}),
   })
 
   checks.push(authDoctorCheck())

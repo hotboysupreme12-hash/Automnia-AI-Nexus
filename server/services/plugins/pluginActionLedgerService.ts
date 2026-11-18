@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 
-export type PluginActionKind = 'install' | 'update' | 'update-all' | 'uninstall' | 'repair'
+export type PluginActionKind = 'install' | 'update' | 'update-all' | 'uninstall' | 'repair' | 'enable' | 'disable' | 'configure' | 'gateway-restart' | 'setup-terminal'
 export type PluginActionOutcome = 'started' | 'succeeded' | 'failed' | 'uncertain'
 
 export type PluginActionLedgerEntry = {
@@ -40,7 +40,7 @@ function normalizeEntry(value: unknown): PluginActionLedgerEntry | null {
   if (typeof value.timestamp !== 'string' || !Number.isFinite(Date.parse(value.timestamp))) return null
   if (typeof value.pluginId !== 'string' || (!/^[a-z0-9][a-z0-9._-]{0,79}$/u.test(value.pluginId) && value.pluginId !== '*')) return null
   if (typeof value.action !== 'string' || typeof value.outcome !== 'string') return null
-  if (!['install', 'update', 'update-all', 'uninstall', 'repair'].includes(value.action)) return null
+  if (!['install', 'update', 'update-all', 'uninstall', 'repair', 'enable', 'disable', 'configure', 'gateway-restart', 'setup-terminal'].includes(value.action)) return null
   if (!['started', 'succeeded', 'failed', 'uncertain'].includes(value.outcome)) return null
   if (value.attempt !== undefined && (!Number.isSafeInteger(value.attempt) || Number(value.attempt) < 1 || Number(value.attempt) > 3)) return null
   if (value.retryable !== undefined && typeof value.retryable !== 'boolean') return null

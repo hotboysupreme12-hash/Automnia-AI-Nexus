@@ -1,6 +1,7 @@
 import type { GatewayHealthPayload, GatewayReadinessSummary, GatewayStabilityStatus } from '../gateway/gatewayDiagnosticsService'
 import type { GatewayActivitySummary, GatewayLogEntry } from '../gateway/gatewayLogService'
 import type { GatewayRestartLifecycleSnapshot } from '../gateway/gatewayLifecycleService'
+import { projectPluginLoaderFailures } from '../plugins/pluginLoaderHealth'
 
 type RuntimeStatusGatewaySnapshot = Record<string, unknown> & {
   logs?: GatewayLogEntry[]
@@ -36,6 +37,8 @@ type RuntimeStatusPluginControlEntry = {
   providers: string[]
   channels: string[]
   missingDependencies: string[]
+  loaderErrorSummary?: string
+  recoveryHint?: string
   restartRequired: boolean
 }
 
@@ -331,6 +334,8 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
       plugins: {
         enabledCount: typeof plugins.enabledCount === 'number' ? plugins.enabledCount : 0,
         totalCount: typeof plugins.totalCount === 'number' ? plugins.totalCount : 0,
+        loaderFailureCount: typeof plugins.loaderFailureCount === 'number' ? plugins.loaderFailureCount : 0,
+        loaderFailures: Array.isArray(plugins.loaderFailures) ? plugins.loaderFailures.slice(0, 12) : [],
         enabled: [],
         communication: communicationPlugins,
         ...(plugins.cache ? { cache: plugins.cache } : {}),
@@ -535,6 +540,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
       return runtimeLoadedPluginIds.has(plugin.id) || plugin.runtimeLoaded || status === 'loaded'
     }
     const pluginSummaries = pluginControls.plugins.map((plugin) => pluginSummary(plugin, Boolean(isPluginRuntimeLoaded(plugin))))
+    const pluginLoaderFailures = projectPluginLoaderFailures(pluginControls.plugins)
     const enabledPluginSummaries = pluginSummaries.filter((plugin) => plugin.enabled)
     const communicationPluginSummaries = enabledPluginSummaries.filter((plugin) => plugin.category === 'communications' || plugin.channels.length)
     const activeMissions = options.listMissions().filter((mission) => mission.status === 'active')
@@ -584,6 +590,8 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
       plugins: {
         enabledCount: enabledPluginSummaries.length,
         totalCount: pluginSummaries.length,
+        loaderFailureCount: pluginLoaderFailures.length,
+        loaderFailures: pluginLoaderFailures,
         all: pluginSummaries,
         enabled: enabledPluginSummaries.slice(0, 24),
         communication: communicationPluginSummaries.slice(0, 12),
@@ -685,6 +693,8 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
       plugins: {
         enabledCount: pluginEnabledCount,
         totalCount: pluginTotalCount,
+        loaderFailureCount: typeof cachedPlugins?.loaderFailureCount === 'number' ? cachedPlugins.loaderFailureCount : 0,
+        loaderFailures: Array.isArray(cachedPlugins?.loaderFailures) ? cachedPlugins.loaderFailures.slice(0, 12) : [],
         enabled: [],
         communication: pluginCommunication,
         ...(cachedPlugins?.cache ? { cache: cachedPlugins.cache } : {}),

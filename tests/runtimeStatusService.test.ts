@@ -28,6 +28,7 @@ type MutableRuntimeStatusState = {
   externalChannelLogs: RuntimeStatusServiceOptions['readExternalChannelActivityEntries'] extends (limit?: number) => Promise<infer Logs>
     ? Logs
     : never
+  pluginControls: Awaited<ReturnType<RuntimeStatusServiceOptions['listPluginControls']>>['plugins']
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -95,6 +96,23 @@ function createService(overrides: Partial<MutableRuntimeStatusState> = {}) {
     externalGatewayLogs: [],
     externalGatewayReads: 0,
     externalChannelLogs: [],
+    pluginControls: [{
+      id: 'clawtalk',
+      name: 'ClawTalk',
+      description: 'Communication bridge',
+      origin: 'bundled',
+      status: 'installed',
+      enabled: false,
+      configuredEnabled: true,
+      runtimeLoaded: false,
+      managed: true,
+      category: 'communications',
+      commands: ['send'],
+      providers: [],
+      channels: ['telegram'],
+      missingDependencies: [],
+      restartRequired: false,
+    }],
     ...overrides,
   }
   const requestedLedgerLimits: number[] = []
@@ -134,25 +152,7 @@ function createService(overrides: Partial<MutableRuntimeStatusState> = {}) {
     },
     readExternalChannelActivityEntries: async (limit = 80) => state.externalChannelLogs.slice(0, limit),
     listPluginControls: async () => ({
-      plugins: [
-        {
-          id: 'clawtalk',
-          name: 'ClawTalk',
-          description: 'Communication bridge',
-          origin: 'bundled',
-          status: 'installed',
-          enabled: false,
-          configuredEnabled: true,
-          runtimeLoaded: false,
-          managed: true,
-          category: 'communications',
-          commands: ['send'],
-          providers: [],
-          channels: ['telegram'],
-          missingDependencies: [],
-          restartRequired: false,
-        },
-      ],
+      plugins: state.pluginControls,
       cache: { source: 'test-cache', refreshedAt: state.now, refreshing: false },
     }),
     readOpenclawConfig: async () => ({ session: { dmScope: 'peer' } }),
@@ -475,6 +475,45 @@ test('forced runtime status refresh updates the summary cache without keeping th
   assert.equal(monitor.forceRefresh, false)
   assert.equal(plugins.enabledCount, 1)
   assert.equal(plugins.totalCount, 1)
+})
+
+test('runtime health projects plugin loader failure summaries without exposing raw loader text', async () => {
+  const { service } = createService({
+    pluginControls: [{
+      id: 'codex',
+      name: 'Codex',
+      description: 'Provider plugin',
+      origin: 'bundled',
+      status: 'failed',
+      enabled: true,
+      configuredEnabled: true,
+      runtimeLoaded: false,
+      managed: true,
+      category: 'providers',
+      commands: [],
+      providers: ['openai'],
+      channels: [],
+      missingDependencies: ['private-package-path'],
+      loaderErrorSummary: 'Authentication token=top-secret',
+      recoveryHint: 'Raw plugin recovery text includes api_key=hidden-value',
+      restartRequired: false,
+    }],
+  })
+
+  const status = await service.getRuntimeStatusPayload(false)
+  const plugins = record(status.plugins)
+  const failures = array(plugins.loaderFailures)
+  const failure = record(failures[0])
+  assert.equal(plugins.loaderFailureCount, 1)
+  assert.equal(failure.pluginId, 'codex')
+  assert.equal(failure.failureClass, 'loader_error')
+  assert.match(String(failure.summary), /1 declared dependency is unavailable/)
+  assert.match(String(failure.recoveryHint), /verified source/)
+  assert.doesNotMatch(JSON.stringify(failures), /top-secret|hidden-value|private-package-path/)
+
+  const summary = await service.getRuntimeSummaryPayload(false)
+  assert.equal(record(summary.plugins).loaderFailureCount, 1)
+  assert.equal(array(record(summary.plugins).loaderFailures).length, 1)
 })
 
 test('forced runtime summary refresh updates the normalized summary cache', async () => {
