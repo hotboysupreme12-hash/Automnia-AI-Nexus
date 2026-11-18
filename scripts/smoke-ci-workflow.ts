@@ -159,6 +159,8 @@ assert.match(packagedElectronLaunchSmoke, /useLinuxAppImage\s*\?\s*180_000/, 'Ap
 assert.ok(packagedElectronLaunchSmoke.includes('main-process-loaded'), 'packaged startup smoke must capture the Electron main-process startup phase')
 assert.ok(packagedElectronLaunchSmoke.includes('openclaw-runtime-resolution-complete'), 'packaged startup smoke must prove OpenClaw runtime staging finished')
 assert.ok(packagedElectronLaunchSmoke.includes('launcherProcess && launcherProcess.exitCode === null'), 'packaged startup smoke must terminate an app that remains alive after a failed launch check')
+assert.match(packagedElectronLaunchSmoke, /detached: process\.platform !== 'win32'/, 'macOS and Linux packaged app smokes must isolate their process trees for complete cleanup')
+assert.ok(packagedElectronLaunchSmoke.includes("process.kill(-processGroupId, 'SIGTERM')"), 'macOS and Linux packaged app smokes must terminate orphaned app helpers on failure')
 assert.ok(packagedElectronLaunchSmoke.includes("AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS: useLinuxAppImage ? '15000' : '1500'"), 'AppImage smoke must keep its temporary extraction available while the runtime is verified')
 assert.ok(packagedElectronLaunchSmoke.includes("AUTOMNIA_ELECTRON_E2E_KEEP_WINDOW_HIDDEN: '1'"), 'packaged launch smoke must avoid showing a test window on an interactive desktop')
 assert.ok(packagedOpenClawGatewaySmoke.includes("AUTOMNIA_ELECTRON_E2E_KEEP_WINDOW_HIDDEN: '1'"), 'packaged Gateway smoke must avoid showing a test window on an interactive desktop')

@@ -120,11 +120,39 @@ function killPackagedElectronProcesses() {
   })
 }
 
-function terminatePackagedLauncher(launcher: ReturnType<typeof spawn>) {
+async function terminatePackagedLauncher(launcher: ReturnType<typeof spawn>) {
   if (process.platform === 'win32') {
     killPackagedElectronProcesses()
+    launcher.kill()
+    return
   }
-  launcher.kill()
+
+  const processGroupId = launcher.pid
+  if (!processGroupId) {
+    launcher.kill()
+    return
+  }
+
+  try {
+    process.kill(-processGroupId, 'SIGTERM')
+  } catch {
+    launcher.kill()
+    return
+  }
+
+  const deadline = Date.now() + 2_000
+  while (Date.now() < deadline) {
+    try {
+      process.kill(-processGroupId, 0)
+    } catch {
+      return
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+
+  try {
+    process.kill(-processGroupId, 'SIGKILL')
+  } catch {}
 }
 
 async function removeTempRootWithWindowsRetries(tempRootPath: string) {
@@ -223,6 +251,7 @@ try {
   const launcher = spawn(launcherPath, useLinuxAppImage ? ['--appimage-extract-and-run'] : [], {
     cwd: launcherCwd,
     env,
+    detached: process.platform !== 'win32',
     windowsHide: true,
     // Capture bounded output for early native launcher failures while draining
     // both pipes so packaged descendants cannot keep the CI shell open.
@@ -297,7 +326,6 @@ try {
       return
     }
     const timeout = setTimeout(() => {
-      terminatePackagedLauncher(launcher)
       const diagnostics = existsSync(logPath) ? readFileSync(logPath, 'utf8').trim() : '(no launch log was created)'
       reject(new Error(`packaged launcher did not exit within ${launcherExitTimeoutMs / 1000}s\n${diagnostics}`))
     }, launcherExitTimeoutMs)
@@ -321,9 +349,7 @@ try {
     /\[automnia-e2e\] quit-cleanup-complete/,
   ])
 } finally {
-  if (launcherProcess && launcherProcess.exitCode === null && launcherProcess.signalCode === null) {
-    terminatePackagedLauncher(launcherProcess)
-  }
+  if (launcherProcess) await terminatePackagedLauncher(launcherProcess)
   killPackagedElectronProcesses()
   await removeTempRootWithWindowsRetries(tempRoot)
 }
