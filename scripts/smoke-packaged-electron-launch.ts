@@ -152,7 +152,9 @@ async function terminatePackagedLauncher(launcher: ReturnType<typeof spawn>) {
 
   try {
     process.kill(-processGroupId, 'SIGKILL')
-  } catch {}
+  } catch {
+    // The process group can exit between the final liveness probe and SIGKILL.
+  }
 }
 
 async function removeTempRootWithWindowsRetries(tempRootPath: string) {
