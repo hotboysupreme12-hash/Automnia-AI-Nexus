@@ -310,6 +310,8 @@ function logE2e(message) {
   }
 }
 
+logE2e('main-process-loaded')
+
 function showBlockingError(title, message) {
   if (ELECTRON_E2E) {
     logE2e(`${title}: ${message}`)
@@ -3594,16 +3596,20 @@ async function runElectronE2eTraySelfTest(win) {
 }
 
 app.whenReady().then(async () => {
+  logE2e('app-ready')
   if (!hasSingleInstanceLock) return
   if (startingUp || startupFailed || isQuitting) return
   startingUp = true
+  logE2e('startup-begin')
 
   try {
     // Set env vars before launching the server child process.
     const staticDir = resolveStaticDir()
     const openclawStateDir = resolveOpenClawHomeDir()
     const workspaceRoot = process.env.CONTROL_CENTER_WORKSPACE_ROOT || path.join(openclawStateDir, 'workspace')
+    logE2e('openclaw-runtime-resolution-start')
     const openclawRuntime = await resolveOpenClawRuntime()
+    logE2e('openclaw-runtime-resolution-complete')
 
     fs.mkdirSync(openclawStateDir, { recursive: true })
     fs.mkdirSync(workspaceRoot, { recursive: true })
@@ -3625,7 +3631,9 @@ app.whenReady().then(async () => {
     if (app.isPackaged && process.platform === 'darwin' && !bundledNode) {
       throw new Error('The packaged Automnia app is missing an executable bundled Node.js runtime. Reinstall a complete macOS build; do not install Node globally as a workaround.')
     }
+    logE2e('npm-toolchain-check-start')
     await ensureNpmToolchainAvailable()
+    logE2e('npm-toolchain-check-complete')
     if (process.env.AUTOMNIA_ELECTRON_E2E_SKIP_PORT_CLEANUP === '1') {
       logE2e('port-cleanup-skipped')
     } else {
