@@ -85,29 +85,62 @@ function sriSha512File(filePath) {
   return `sha512-${hash.digest('base64')}`
 }
 
-function downloadFile(url, targetPath) {
+const MAX_PACKAGE_DOWNLOAD_ATTEMPTS = 3
+const TRANSIENT_DOWNLOAD_CODES = new Set([
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'EPIPE',
+  'ETIMEDOUT',
+  'EAI_AGAIN',
+])
+
+function isTransientDownloadError(error) {
+  if (Array.isArray(error?.errors) && error.errors.some(isTransientDownloadError)) return true
+  if (TRANSIENT_DOWNLOAD_CODES.has(error?.code)) return true
+  if (error?.statusCode === 429 || error?.statusCode >= 500) return true
+  return /timed?\s*out|timeout|temporar|socket hang up/i.test(String(error?.message || error))
+}
+
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds))
+}
+
+async function downloadFile(url, targetPath, attempt = 1) {
   fs.mkdirSync(path.dirname(targetPath), { recursive: true })
-  return new Promise((resolve, reject) => {
-    const request = https.get(url, { timeout: 180_000 }, (response) => {
-      const status = response.statusCode || 0
-      if (status >= 300 && status < 400 && response.headers.location) {
-        response.resume()
-        downloadFile(new URL(response.headers.location, url).toString(), targetPath).then(resolve, reject)
-        return
-      }
-      if (status < 200 || status >= 300) {
-        response.resume()
-        reject(new Error(`[openclaw-vendor] HTTP ${status} while downloading ${url}`))
-        return
-      }
-      const file = fs.createWriteStream(targetPath)
-      file.on('error', reject)
-      file.on('finish', () => file.close(resolve))
-      response.pipe(file)
+  try {
+    await new Promise((resolve, reject) => {
+      const request = https.get(url, { timeout: 180_000 }, (response) => {
+        const status = response.statusCode || 0
+        if (status >= 300 && status < 400 && response.headers.location) {
+          response.resume()
+          downloadFile(new URL(response.headers.location, url).toString(), targetPath).then(resolve, reject)
+          return
+        }
+        if (status < 200 || status >= 300) {
+          response.resume()
+          const error = new Error(`[openclaw-vendor] HTTP ${status} while downloading ${url}`)
+          error.statusCode = status
+          reject(error)
+          return
+        }
+        const file = fs.createWriteStream(targetPath)
+        file.on('error', reject)
+        file.on('finish', () => file.close(resolve))
+        response.pipe(file)
+      })
+      request.on('timeout', () => request.destroy(new Error(`[openclaw-vendor] Download timed out: ${url}`)))
+      request.on('error', reject)
     })
-    request.on('timeout', () => request.destroy(new Error(`[openclaw-vendor] Download timed out: ${url}`)))
-    request.on('error', reject)
-  })
+  } catch (error) {
+    fs.rmSync(targetPath, { force: true })
+    if (attempt >= MAX_PACKAGE_DOWNLOAD_ATTEMPTS || !isTransientDownloadError(error)) throw error
+    const delayMs = 1000 * attempt
+    console.warn(`[openclaw-vendor] download attempt ${attempt}/${MAX_PACKAGE_DOWNLOAD_ATTEMPTS} failed; retrying in ${delayMs}ms: ${error.message}`)
+    await wait(delayMs)
+    return downloadFile(url, targetPath, attempt + 1)
+  }
 }
 
 function run(command, args, options = {}) {
