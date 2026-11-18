@@ -56,8 +56,8 @@ headless wall-clock deadline. A checkpoint does not reset that wall deadline.
 When the shell `exec` tool is available, use it for heavier computation
 and keep guest JavaScript focused on coordinating tools and processing results.
 
-If code mode is enabled but the selected executor cannot load, OpenClaw fails closed
-for that run; it does not silently expose normal tools as a fallback. This
+If code mode is enabled but the selected executor cannot load, OpenClaw stops
+that run; it does not silently expose normal tools as a fallback. This
 holds for `true` and for `"auto"` runs where the model resolves as preferred:
 an engaged run never silently falls back to another executor or broad direct
 tool exposure.
@@ -124,7 +124,7 @@ Every catalog row for a shared model therefore states its tier explicitly once
 any sibling row states one. Rows are matched on the vendor's own name for the
 weights, so a catalog that republishes a model under a namespaced id or
 different casing is matched automatically: `novita/moonshotai/kimi-k3`,
-`nvidia/z-ai/glm-5.2`, and `together/deepseek-ai/DeepSeek-V4-Pro` all group with
+`deepinfra/zai-org/GLM-5.2`, and `together/zai-org/GLM-5.2` all group with
 the first-party rows without anyone declaring anything. Only genuinely different
 names need the manifest's `upstreamModel` marker, as the `kimi` catalog uses for
 `moonshot/kimi-k3`.

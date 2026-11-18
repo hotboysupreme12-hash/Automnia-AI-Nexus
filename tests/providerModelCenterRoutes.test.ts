@@ -139,10 +139,39 @@ test('provider probe reports permission failure with a sanitized reason code', a
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ modelId: 'xai/grok-4.7', confirm: true }),
     })
-    const body = await response.text()
+    const body = await response.json() as {
+      ok: boolean
+      data: {
+        passed: boolean
+        reason: string
+        probe: {
+          modelId: string
+          provider: string
+          status: string
+          reason: string
+          checkedAt: string
+          durationMs: number
+          timeoutMs: number
+          maxOutputTokens: number
+        }
+      }
+    }
     assert.equal(response.status, 200)
-    assert.match(body, /provider_auth_or_entitlement_failed/)
-    assert.doesNotMatch(body, /private-project|private-token|PERMISSION_DENIED|403/)
+    assert.equal(body.ok, true)
+    assert.equal(body.data.passed, false)
+    assert.equal(body.data.reason, 'provider_auth_or_entitlement_failed')
+    assert.equal(body.data.probe.status, 'blocked')
+    assert.equal(body.data.probe.reason, 'provider_auth_or_entitlement_failed')
+    assert.deepEqual(Object.keys(body.data.probe).sort(), [
+      'checkedAt', 'durationMs', 'maxOutputTokens', 'modelId', 'provider', 'reason', 'status', 'timeoutMs',
+    ])
+    assert.doesNotMatch(JSON.stringify({
+      reason: body.data.reason,
+      modelId: body.data.probe.modelId,
+      provider: body.data.probe.provider,
+      status: body.data.probe.status,
+      probeReason: body.data.probe.reason,
+    }), /private-project|private-token|PERMISSION_DENIED|403/)
     assert.equal(calls.length, 2)
   }, true)
 })

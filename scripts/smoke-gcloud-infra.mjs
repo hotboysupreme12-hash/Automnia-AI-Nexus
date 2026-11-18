@@ -40,7 +40,7 @@ for (const relative of requiredFiles) assert.equal(existsSync(path.join(infra, r
 const mappings = JSON.parse(readFileSync(path.join(infra, 'shopify-plan-mappings.json'), 'utf8'))
 const config = readFileSync(path.join(infra, 'config.psd1'), 'utf8')
 assert.match(config, /TokensPerCredit\s*=\s*1000/, 'gcloud config must keep the 1,000-token credit ratio explicit')
-assert.equal(mappings.length, 12, 'the production catalog contains credit refills plus the two sellable plans')
+assert.equal(mappings.length, 9, 'the production catalog contains six paid refills, two subscriptions, and one BYOK license')
 assert.equal(mappings.every((entry) => Number.isSafeInteger(entry.initialTokens) && entry.initialTokens >= 0), true, 'Shopify grants must be declared in raw tokens')
 assert.deepEqual(
   Object.fromEntries(mappings.filter((entry) => entry.kind === 'subscription' && entry.tier === 'starter').map((entry) => [entry.tier, entry.initialTokens])),
@@ -50,11 +50,21 @@ assert.deepEqual(
   Object.fromEntries(mappings.filter((entry) => entry.tier === 'pro').map((entry) => [entry.tier, entry.initialTokens])),
   { pro: 55000000 },
 )
-assert.deepEqual([...new Set(mappings.filter((entry) => entry.kind !== 'topup').map((entry) => entry.tier))].sort(), ['pro', 'starter'], 'Starter and Pro are the only sellable plans')
+assert.deepEqual(
+  Object.fromEntries(mappings.filter((entry) => entry.kind === 'subscription').map((entry) => [entry.tier, entry.planPriceCents])),
+  { starter: 1999, pro: 2999 },
+  'Starter and Pro must use their approved monthly subscription prices',
+)
+assert.deepEqual(
+  mappings.filter((entry) => entry.mode === 'byok').map((entry) => ({ kind: entry.kind, planPriceCents: entry.planPriceCents, permanentAccess: entry.permanentAccess })),
+  [{ kind: 'license', planPriceCents: 2999, permanentAccess: true }],
+  'BYOK must remain a one-time permanent-access product',
+)
+assert.equal(mappings.some((entry) => entry.skus.some((sku) => /qa|free|test/i.test(sku))), false, 'free QA and test products must not be part of the production catalog')
 const configuredVariantIds = mappings.flatMap((entry) => entry.variantIds).filter(Boolean)
 assert.equal(new Set(configuredVariantIds).size, configuredVariantIds.length, 'configured variant IDs must be unique')
-assert.equal(new Set(mappings.flatMap((entry) => entry.skus)).size, 12, 'SKUs must be unique')
-assert.equal(mappings.filter((entry) => entry.kind === 'topup').length, 9)
+assert.equal(new Set(mappings.flatMap((entry) => entry.skus)).size, 9, 'SKUs must be unique')
+assert.equal(mappings.filter((entry) => entry.kind === 'topup').length, 6)
 
 const indexConfig = JSON.parse(readFileSync(path.join(infra, 'firestore.indexes.json'), 'utf8'))
 assert.ok(Array.isArray(indexConfig.indexes))
@@ -62,6 +72,9 @@ assert.ok(Array.isArray(indexConfig.fieldOverrides))
 
 const service = readFileSync(path.join(infra, 'service', 'server.js'), 'utf8')
 assert.doesNotMatch(service, /groovy-iris|336625531977|idkndr7vfq-ue\.a\.run\.app/)
+assert.match(service, /id="mac-arch-note"/, 'download page must tell Mac customers to select Intel or Apple silicon manually')
+assert.match(service, /if\(\/Mac\/i\.test\(ua\)\)\{const note=/, 'download page must show explicit architecture guidance on Mac')
+assert.doesNotMatch(service, /\/Mac\/i\.test\(ua\)\?'macos-arm64'/, 'download page must not guess that every Mac uses Apple silicon')
 for (const contract of [
   "app.get('/health'",
   "app.get('/ready'",
@@ -113,7 +126,7 @@ const controlPlane = readFileSync(path.join(root, 'server', 'controlPlane.ts'), 
 assert.match(licenseService, /DEFAULT_LICENSE_API_URL = AUTOMNIA_PUBLIC_CLOUD_URL/)
 assert.doesNotMatch(controlPlane, /streamAutomniaCloudRelay|AUTOMNIA_CLOUD_RELAY_URL/)
 assert.match(controlPlane, /AUTOMNIA_OPENCLAW_PROVIDER_ID = AUTOMNIA_CREDITS_PROVIDER_ID/)
-assert.match(controlPlane, /reasoning: true,\s*thinkingLevelMap: AUTOMNIA_GEMINI_37_OPENCLAW_THINKING_LEVEL_MAP,/s, 'Automnia Gemini must expose supported thinking levels to OpenClaw')
+assert.match(controlPlane, /reasoning: true,\s*thinkingLevelMap: bareModelId === 'gemini-4-hydrogen'\s*\? AUTOMNIA_GEMINI_4_HYDROGEN_OPENCLAW_THINKING_LEVEL_MAP\s*:/s, 'Automnia Gemini must expose the supported Gemini 4 thinking levels to OpenClaw')
 assert.match(controlPlane, /synchronizeOpenClawBillingRouteForAgentRun/, 'agent turns must repair a stale hosted Gemini thinking profile before dispatch')
 assert.match(licenseService, /AUTOMNIA_PUBLIC_CLOUD_URL/)
 assert.match(serverCloudConfig, /api\.automnia\.app/)
@@ -129,7 +142,19 @@ for (const gate of [
 ]) assert.ok(verification.includes(gate), `verification gate missing: ${gate}`)
 
 const cutover = readFileSync(path.join(infra, 'switch-traffic.ps1'), 'utf8')
+const deployment = readFileSync(path.join(infra, 'deploy.ps1'), 'utf8')
+const firestoreMigration = readFileSync(path.join(infra, 'migrate-firestore.ps1'), 'utf8')
+assert.match(deployment, /MIGRATION_WRITE_MODE: '\$migrationWriteMode'/, 'staged deployment must explicitly select read-only mode')
+assert.match(deployment, /if \(-not \$RouteImmediately -and \$existing\) \{\s*\$arguments \+= '--no-traffic'\s*\}/, 'later staged revisions must use zero traffic while initial service creation bootstraps read-only')
+assert.match(deployment, /Cloud Run rejects --no-traffic when creating a service for the first/, 'first-time staged service creation must work with Cloud Run')
+assert.match(deployment, /if \(\$RouteImmediately\) \{[\s\S]*?'run', 'services', 'update-traffic'[\s\S]*?'--to-revisions', "\$routedRevision=100"/, 'immediate deployment must route all live traffic to the validated revision')
+assert.match(deployment, /\$routedTraffic[\s\S]*?\[int\]\$_.percent -eq 100/, 'immediate deployment must confirm the full traffic allocation')
+assert.match(deployment, /-BaseUrl \$config\.PermanentBaseUrl[\s\S]*?permanentHealth\.Revision -ne \$routedRevision/, 'immediate deployment must prove the permanent API URL serves the routed revision')
+assert.match(firestoreMigration, /MIGRATION_WRITE_MODE=read_only/, 'full staging refreshes must preserve read-only mode')
+assert.match(firestoreMigration, /-ExpectedWriteMode read_only/, 'full staging refresh health checks must require read-only mode')
 assert.match(cutover, /finalVerification = &\s*\(Join-Path \$PSScriptRoot 'verify\.ps1'\)/, 'cutover must verify after the final delta')
+assert.match(cutover, /-ExpectedWriteMode read_only/, 'final parity must be verified while the target is read-only')
+assert.match(cutover, /MIGRATION_WRITE_MODE=active[\s\S]*?--no-traffic[\s\S]*?--tag=candidate/, 'cutover must check an active candidate before routing it')
 assert.match(cutover, /MIGRATION_WRITE_MODE=read_only/)
 assert.match(cutover, /migrate-firestore\.ps1/)
 assert.match(cutover, /Remove-DomainMapping/)
@@ -137,6 +162,8 @@ assert.match(cutover, /Remove-DomainMapping/)
 const rollback = readFileSync(path.join(infra, 'rollback.ps1'), 'utf8')
 assert.match(rollback, /migrate-firestore\.ps1/)
 assert.match(rollback, /verify\.ps1/)
+assert.match(rollback, /-ExpectedWriteMode read_only/)
+assert.match(rollback, /MIGRATION_WRITE_MODE=active[\s\S]*?--no-traffic[\s\S]*?--tag=candidate/, 'rollback must check an active candidate before routing it')
 assert.match(rollback, /MIGRATION_WRITE_MODE=read_only/)
 
 for (const relative of ['service/server.js', 'service/geminiThinking.js', 'service/relayModelPolicy.js', 'service/tokenOptimization.js', 'tools/firestore-snapshot.mjs', 'tools/live-billing-test.mjs', 'tools/plan-hash.mjs', 'tools/smoke-service.mjs']) {

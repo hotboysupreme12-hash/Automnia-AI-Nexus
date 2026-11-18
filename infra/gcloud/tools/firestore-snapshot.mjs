@@ -7,18 +7,44 @@ if (!projectId || !token) throw new Error('Usage: AUTOMNIA_GCLOUD_ACCESS_TOKEN=.
 const databaseRoot = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents`
 const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Content-Type': 'application/json' }
 const maximumDocuments = Number(process.env.AUTOMNIA_MAX_SNAPSHOT_DOCUMENTS || 100000)
+const snapshotConcurrency = Number(process.env.AUTOMNIA_FIRESTORE_SNAPSHOT_CONCURRENCY || 24)
 const encodeFirestorePath = (value) => value.split('/').map((segment) => encodeURIComponent(segment)).join('/')
+
+if (!Number.isInteger(snapshotConcurrency) || snapshotConcurrency < 1 || snapshotConcurrency > 64) {
+  throw new Error('AUTOMNIA_FIRESTORE_SNAPSHOT_CONCURRENCY must be an integer from 1 to 64.')
+}
+
+async function mapLimit(items, limit, mapper) {
+  const results = new Array(items.length)
+  let nextIndex = 0
+  const worker = async () => {
+    while (true) {
+      const index = nextIndex
+      nextIndex += 1
+      if (index >= items.length) return
+      results[index] = await mapper(items[index], index)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return results
+}
 
 async function requestJson(url, options = {}) {
   const maxAttempts = 5
+  const requestPath = new URL(url).pathname
+    .replace(/(\/documents\/[^/]+\/)[^/:]+/g, '$1<document>')
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      const response = await fetch(url, { ...options, headers: { ...headers, ...(options.headers || {}) } })
+      const response = await fetch(url, {
+        ...options,
+        signal: options.signal || AbortSignal.timeout(30000),
+        headers: { ...headers, ...(options.headers || {}) },
+      })
       const payload = await response.json().catch(() => null)
       if (response.ok) return payload || {}
       const retryable = response.status === 429 || response.status >= 500
       if (!retryable || attempt === maxAttempts) {
-        throw new Error(`Firestore request failed (${response.status}): ${JSON.stringify(payload)}`)
+        throw new Error(`Firestore request failed (${response.status}) at ${requestPath}: ${JSON.stringify(payload)}`)
       }
     } catch (error) {
       if (attempt === maxAttempts) throw error
@@ -81,13 +107,20 @@ const collectionCounts = new Map()
 async function visitCollection(collectionPath) {
   const documents = await listDocuments(collectionPath)
   collectionCounts.set(collectionPath, documents.length)
-  for (const document of documents) {
+  const documentChildren = await mapLimit(documents, snapshotConcurrency, async (document) => {
     const relativePath = document.name.split('/documents/')[1] || ''
-    records.push({ path: relativePath, fields: canonical(document.fields || {}) })
+    return {
+      record: { path: relativePath, fields: canonical(document.fields || {}) },
+      childCollections: await listCollectionIds(relativePath),
+    }
+  })
+  const nestedCollections = []
+  for (const { record, childCollections } of documentChildren) {
+    records.push(record)
     if (records.length > maximumDocuments) throw new Error(`Snapshot exceeded the safety limit of ${maximumDocuments} documents.`)
-    const childCollections = await listCollectionIds(relativePath)
-    for (const child of childCollections) await visitCollection(`${relativePath}/${child}`)
+    for (const child of childCollections) nestedCollections.push(`${record.path}/${child}`)
   }
+  for (const nestedCollection of nestedCollections) await visitCollection(nestedCollection)
 }
 
 for (const collectionId of await listCollectionIds()) await visitCollection(collectionId)

@@ -6,7 +6,9 @@ param(
   [string]$BucketName,
   [switch]$AllowNonEmptyTarget,
   [switch]$SkipSecretCopy,
-  [switch]$SkipGmail
+  [switch]$SkipGmail,
+  [switch]$UseTargetShopifySecrets,
+  [switch]$DataOnly
 )
 
 . (Join-Path $PSScriptRoot 'Common.ps1')
@@ -15,15 +17,27 @@ if (-not $Region) { $Region = $config.Region }
 if ($From -eq $To) { throw 'Source and target projects must be different.' }
 if ($WhatIfPreference) {
   $PSCmdlet.ShouldProcess("$From -> $To", 'plan Firestore and Secret Manager migration') | Out-Null
-  return [pscustomobject]@{ WhatIf = $true; From = $From; To = $To; Region = $Region; SkipGmail = [bool]$SkipGmail }
+  return [pscustomobject]@{ WhatIf = $true; From = $From; To = $To; Region = $Region; SkipGmail = [bool]$SkipGmail; DataOnly = [bool]$DataOnly }
 }
 
 Assert-GcloudSession | Out-Null
 $sourceProject = Assert-ProjectExists -ProjectId $From
 $targetProject = Assert-ProjectExists -ProjectId $To
-$targetService = Get-ServiceDescriptor -ProjectId $To -Region $Region -ServiceName $config.ServiceName
-if (-not $targetService) { throw "Deploy the target first with .\deploy.ps1 -ProjectId $To" }
-$migrationSecretNames = @($config.MigrationSecrets | Where-Object { -not ($SkipGmail -and $_ -eq 'automnia-gmail-oauth-credentials') })
+$targetService = Get-ServiceDescriptor -ProjectId $To -Region $Region -ServiceName $config.ServiceName -AllowMissing
+if (-not $targetService -and -not $DataOnly) { throw "Deploy the target first with .\deploy.ps1 -ProjectId $To" }
+if ($DataOnly) { $SkipSecretCopy = $true }
+$targetShopifySecretNames = if ($UseTargetShopifySecrets -and -not $DataOnly) {
+  @('automnia-shopify-webhook-secrets', 'automnia-shopify-admin-api-token')
+} else { @() }
+foreach ($secretName in $targetShopifySecretNames) {
+  if (-not (Test-SecretVersion -ProjectId $To -SecretName $secretName)) {
+    throw "Target Shopify secret '$secretName' must have an enabled version before migration."
+  }
+}
+$targetShopifySecretsReady = $true
+$migrationSecretNames = @($config.MigrationSecrets | Where-Object {
+  -not ($SkipGmail -and $_ -eq 'automnia-gmail-oauth-credentials') -and $_ -notin $targetShopifySecretNames
+})
 $secretBindings = @($config.SecretBindings.GetEnumerator() | Where-Object { -not ($SkipGmail -and [string]$_.Key -eq 'GMAIL_OAUTH_CREDENTIALS') })
 
 $sourceBefore = Get-FirestoreSnapshot -ProjectId $From
@@ -46,7 +60,7 @@ $sourceFirestoreAgent = "service-$($sourceProject.projectNumber)@gcp-sa-firestor
 $targetFirestoreAgent = "service-$($targetProject.projectNumber)@gcp-sa-firestore.iam.gserviceaccount.com"
 foreach ($agent in @($sourceFirestoreAgent, $targetFirestoreAgent)) {
   if ($PSCmdlet.ShouldProcess($bucketUri, "grant temporary migration access to $agent")) {
-    Invoke-Gcloud -Arguments @('storage', 'buckets', 'add-iam-policy-binding', $bucketUri, '--member', "serviceAccount:$agent", '--role', 'roles/storage.admin') | Out-Null
+    Invoke-Gcloud -Arguments @('storage', 'buckets', 'add-iam-policy-binding', $bucketUri, '--project', $To, '--member', "serviceAccount:$agent", '--role', 'roles/storage.admin') | Out-Null
   }
 }
 
@@ -66,7 +80,7 @@ try {
       'run', 'services', 'update', $config.ServiceName,
       '--project', $To,
       '--region', $Region,
-      '--update-env-vars', "AUTOMNIA_MIGRATION_REFRESH=$timestamp,MIGRATION_WRITE_MODE=active",
+      '--update-env-vars', "AUTOMNIA_MIGRATION_REFRESH=$timestamp,MIGRATION_WRITE_MODE=read_only",
       '--update-secrets', $secretFlags,
       '--no-traffic',
       '--tag=candidate'
@@ -82,10 +96,15 @@ try {
     throw "Post-import Firestore snapshot mismatch. Source=$($sourceAfter | ConvertTo-Json -Compress) Target=$($targetAfter | ConvertTo-Json -Compress)"
   }
 
-  $service = Get-ServiceDescriptor -ProjectId $To -Region $Region -ServiceName $config.ServiceName
-  $candidate = @($service.status.traffic | Where-Object { $_ -and $_.PSObject.Properties['tag'] -and $_.tag -eq 'candidate' } | Select-Object -First 1)
-  $candidateUrl = if ($candidate -and $candidate.url) { [string]$candidate.url } else { [string]$service.status.url }
-  & (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $To -Region $Region -BaseUrl $candidateUrl -SkipGmail:$SkipGmail | Out-Null
+  $candidateUrl = $null
+  $candidateRevision = $null
+  if (-not $DataOnly) {
+    $service = Get-ServiceDescriptor -ProjectId $To -Region $Region -ServiceName $config.ServiceName
+    $candidate = @($service.status.traffic | Where-Object { $_ -and $_.PSObject.Properties['tag'] -and $_.tag -eq 'candidate' } | Select-Object -First 1)
+    $candidateUrl = if ($candidate -and $candidate.url) { [string]$candidate.url } else { [string]$service.status.url }
+    $candidateRevision = [string]$service.status.latestCreatedRevisionName
+    & (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $To -Region $Region -BaseUrl $candidateUrl -ExpectedWriteMode read_only -SkipGmail:$SkipGmail | Out-Null
+  }
 
   $state = [ordered]@{
     kind = 'automnia-firestore-migration'
@@ -100,17 +119,20 @@ try {
     targetBefore = $targetBefore
     targetAfter = $targetAfter
     candidateUrl = $candidateUrl
-    candidateRevision = [string]$service.status.latestCreatedRevisionName
+    candidateRevision = $candidateRevision
     secrets = $secretResults
     secretCopySkipped = [bool]$SkipSecretCopy
+    targetShopifySecretsPreserved = @($targetShopifySecretNames)
+    dataOnly = [bool]$DataOnly
+    switchEligible = -not $DataOnly -and -not $SkipSecretCopy
     gmailSecretSkipped = [bool]$SkipGmail
-    passed = $dataMatched -and -not $SkipSecretCopy
+    passed = $dataMatched -and ($DataOnly -or -not $SkipSecretCopy) -and $targetShopifySecretsReady
   }
   $statePath = Write-StateJson -Name "migration-$From-to-$To-$timestamp.json" -Value $state
-  if (-not $state.passed) { throw 'Migration copied data but is not switch-eligible because secret copying was skipped.' }
-  [pscustomobject]@{ Passed = $true; From = $From; To = $To; Documents = $targetAfter.totalDocuments; Customers = $targetAfter.customerCount; CreditBalanceTotal = $targetAfter.creditBalanceTotal; CandidateUrl = $candidateUrl; StatePath = $statePath }
+  if (-not $state.passed) { throw 'Migration copied data but did not pass its configured checks.' }
+  [pscustomobject]@{ Passed = $true; SwitchEligible = $state.switchEligible; DataOnly = [bool]$DataOnly; From = $From; To = $To; Documents = $targetAfter.totalDocuments; Customers = $targetAfter.customerCount; CreditBalanceTotal = $targetAfter.creditBalanceTotal; CandidateUrl = $candidateUrl; StatePath = $statePath }
 } finally {
   foreach ($agent in @($sourceFirestoreAgent, $targetFirestoreAgent)) {
-    Invoke-Gcloud -Arguments @('storage', 'buckets', 'remove-iam-policy-binding', $bucketUri, '--member', "serviceAccount:$agent", '--role', 'roles/storage.admin') -AllowFailure | Out-Null
+    Invoke-Gcloud -Arguments @('storage', 'buckets', 'remove-iam-policy-binding', $bucketUri, '--project', $To, '--member', "serviceAccount:$agent", '--role', 'roles/storage.admin') -AllowFailure | Out-Null
   }
 }

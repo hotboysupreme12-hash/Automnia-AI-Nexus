@@ -1,3 +1,5 @@
+import { boundedHttpRequest, type BoundedHttpFetch, type BoundedHttpResponse } from '../http/boundedHttpRequest'
+
 export type GatewayHealthPayload = {
   ok?: boolean
   status?: string
@@ -89,16 +91,8 @@ export type GatewayStabilityStatus = {
   error?: string
 }
 
-export type GatewayDiagnosticsHttpResponse = {
-  ok: boolean
-  status: number
-  text: () => Promise<string>
-}
-
-export type GatewayDiagnosticsFetch = (
-  url: string,
-  init?: { signal?: AbortSignal },
-) => Promise<GatewayDiagnosticsHttpResponse>
+export type GatewayDiagnosticsHttpResponse = BoundedHttpResponse
+export type GatewayDiagnosticsFetch = BoundedHttpFetch
 
 export type GatewayDiagnosticsClient = {
   request: (method: string, params?: unknown, options?: { timeoutMs?: number | null; signal?: AbortSignal }) => Promise<unknown>
@@ -114,6 +108,8 @@ export type GatewayDiagnosticsServiceOptions = {
   healthTimeoutMs?: number
   readinessTimeoutMs?: number
   stabilityTimeoutMs?: number
+  healthMaxResponseBytes?: number
+  readinessMaxResponseBytes?: number
 }
 
 function isLooseRecord(value: unknown): value is Record<string, unknown> {
@@ -148,6 +144,8 @@ export function createGatewayDiagnosticsService(options: GatewayDiagnosticsServi
   const healthTimeoutMs = options.healthTimeoutMs ?? 3_000
   const readinessTimeoutMs = options.readinessTimeoutMs ?? 3_000
   const stabilityTimeoutMs = options.stabilityTimeoutMs ?? 2_500
+  const healthMaxResponseBytes = options.healthMaxResponseBytes ?? 64 * 1024
+  const readinessMaxResponseBytes = options.readinessMaxResponseBytes ?? 128 * 1024
 
   function sanitize(message: string, max = 180) {
     return options.sanitizeGatewayMessage(message, max)
@@ -333,11 +331,12 @@ export function createGatewayDiagnosticsService(options: GatewayDiagnosticsServi
     // Gateway route that can leave a plain HTTP client waiting until timeout.
     for (const path of ['/healthz', '/health']) {
       try {
-        const res = await fetchImpl(`http://127.0.0.1:${options.gatewayHttpPort}${path}`, {
-          signal: AbortSignal.timeout(healthTimeoutMs),
-        })
+        const { response: res, text } = await boundedHttpRequest(
+          `http://127.0.0.1:${options.gatewayHttpPort}${path}`,
+          {},
+          { timeoutMs: healthTimeoutMs, maxResponseBytes: healthMaxResponseBytes, fetch: fetchImpl },
+        )
         if (!res.ok) continue
-        const text = await res.text()
         try {
           const body = JSON.parse(text) as GatewayHealthPayload
           const healthy = body.ok === true || /^ok$/i.test(String(body.status || ''))
@@ -359,10 +358,11 @@ export function createGatewayDiagnosticsService(options: GatewayDiagnosticsServi
   async function fetchGatewayReadinessPayload(): Promise<GatewayReadinessSummary> {
     const checkedAt = new Date().toISOString()
     try {
-      const res = await fetchImpl(`http://127.0.0.1:${options.gatewayHttpPort}/readyz`, {
-        signal: AbortSignal.timeout(readinessTimeoutMs),
-      })
-      const text = await res.text()
+      const { response: res, text } = await boundedHttpRequest(
+        `http://127.0.0.1:${options.gatewayHttpPort}/readyz`,
+        {},
+        { timeoutMs: readinessTimeoutMs, maxResponseBytes: readinessMaxResponseBytes, fetch: fetchImpl },
+      )
       let payload: GatewayReadinessPayload | null = null
       try {
         payload = JSON.parse(text) as GatewayReadinessPayload

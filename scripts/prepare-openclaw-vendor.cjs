@@ -85,29 +85,62 @@ function sriSha512File(filePath) {
   return `sha512-${hash.digest('base64')}`
 }
 
-function downloadFile(url, targetPath) {
+const MAX_PACKAGE_DOWNLOAD_ATTEMPTS = 3
+const TRANSIENT_DOWNLOAD_CODES = new Set([
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'EPIPE',
+  'ETIMEDOUT',
+  'EAI_AGAIN',
+])
+
+function isTransientDownloadError(error) {
+  if (Array.isArray(error?.errors) && error.errors.some(isTransientDownloadError)) return true
+  if (TRANSIENT_DOWNLOAD_CODES.has(error?.code)) return true
+  if (error?.statusCode === 429 || error?.statusCode >= 500) return true
+  return /timed?\s*out|timeout|temporar|socket hang up/i.test(String(error?.message || error))
+}
+
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds))
+}
+
+async function downloadFile(url, targetPath, attempt = 1) {
   fs.mkdirSync(path.dirname(targetPath), { recursive: true })
-  return new Promise((resolve, reject) => {
-    const request = https.get(url, { timeout: 180_000 }, (response) => {
-      const status = response.statusCode || 0
-      if (status >= 300 && status < 400 && response.headers.location) {
-        response.resume()
-        downloadFile(new URL(response.headers.location, url).toString(), targetPath).then(resolve, reject)
-        return
-      }
-      if (status < 200 || status >= 300) {
-        response.resume()
-        reject(new Error(`[openclaw-vendor] HTTP ${status} while downloading ${url}`))
-        return
-      }
-      const file = fs.createWriteStream(targetPath)
-      file.on('error', reject)
-      file.on('finish', () => file.close(resolve))
-      response.pipe(file)
+  try {
+    await new Promise((resolve, reject) => {
+      const request = https.get(url, { timeout: 180_000 }, (response) => {
+        const status = response.statusCode || 0
+        if (status >= 300 && status < 400 && response.headers.location) {
+          response.resume()
+          downloadFile(new URL(response.headers.location, url).toString(), targetPath).then(resolve, reject)
+          return
+        }
+        if (status < 200 || status >= 300) {
+          response.resume()
+          const error = new Error(`[openclaw-vendor] HTTP ${status} while downloading ${url}`)
+          error.statusCode = status
+          reject(error)
+          return
+        }
+        const file = fs.createWriteStream(targetPath)
+        file.on('error', reject)
+        file.on('finish', () => file.close(resolve))
+        response.pipe(file)
+      })
+      request.on('timeout', () => request.destroy(new Error(`[openclaw-vendor] Download timed out: ${url}`)))
+      request.on('error', reject)
     })
-    request.on('timeout', () => request.destroy(new Error(`[openclaw-vendor] Download timed out: ${url}`)))
-    request.on('error', reject)
-  })
+  } catch (error) {
+    fs.rmSync(targetPath, { force: true })
+    if (attempt >= MAX_PACKAGE_DOWNLOAD_ATTEMPTS || !isTransientDownloadError(error)) throw error
+    const delayMs = 1000 * attempt
+    console.warn(`[openclaw-vendor] download attempt ${attempt}/${MAX_PACKAGE_DOWNLOAD_ATTEMPTS} failed; retrying in ${delayMs}ms: ${error.message}`)
+    await wait(delayMs)
+    return downloadFile(url, targetPath, attempt + 1)
+  }
 }
 
 function run(command, args, options = {}) {
@@ -221,35 +254,40 @@ function packageArtifactsMetadataPath() {
   return path.join(vendorRoot, 'dist', '.automnia-openclaw-package.json')
 }
 
-function packageArtifactsMatch(packageJson) {
+function packageArtifactsMatch(packageJson, expectedIntegrity) {
   try {
     const metadata = readJson(packageArtifactsMetadataPath())
     return metadata?.schema === 1 &&
       metadata?.package === packageJson.name &&
-      metadata?.version === packageJson.version
+      metadata?.version === packageJson.version &&
+      metadata?.integrity === expectedIntegrity
   } catch {
     return false
   }
 }
 
-function missingPackageArtifacts(packageJson) {
+function missingPackageArtifacts(packageJson, expectedIntegrity) {
   const missing = requiredPackageArtifacts.filter((artifact) => !fs.existsSync(path.join(vendorRoot, artifact)))
-  if (!packageArtifactsMatch(packageJson)) {
+  if (!packageArtifactsMatch(packageJson, expectedIntegrity)) {
     missing.push(path.join('dist', '.automnia-openclaw-package.json'))
   }
   return missing
 }
 
 async function hydratePublishedPackageArtifacts(packageJson) {
-  const missing = missingPackageArtifacts(packageJson)
+  const source = resolvePackageTarball(packageJson)
+  const missing = missingPackageArtifacts(packageJson, source.integrity)
   if (!refresh && missing.length === 0) {
-    return { mode: 'existing-package-artifacts' }
+    return {
+      mode: 'existing-package-artifacts',
+      tarball: source.tarball,
+      integrity: source.integrity,
+    }
   }
 
   if (missing.length) {
     console.log(`[openclaw-vendor] missing published package artifacts: ${missing.join(', ')}`)
   }
-  const source = resolvePackageTarball(packageJson)
   const tarballPath = path.join(cacheRoot, `openclaw-${packageJson.version}.tgz`)
   const extractRoot = fs.mkdtempSync(path.join(tmpdir(), 'automnia-openclaw-package-'))
 
@@ -287,7 +325,7 @@ async function hydratePublishedPackageArtifacts(packageJson) {
       tarball: source.tarball,
       integrity: source.integrity,
     }, null, 2)}\n`)
-    const stillMissing = missingPackageArtifacts(packageJson)
+    const stillMissing = missingPackageArtifacts(packageJson, source.integrity)
     if (stillMissing.length) {
       throw new Error(`[openclaw-vendor] OpenClaw package payload is missing required artifacts: ${stillMissing.join(', ')}`)
     }
@@ -944,11 +982,12 @@ function readMetadata() {
   }
 }
 
-function metadataMatches(metadata, packageJson, shrinkwrapSha256) {
+function metadataMatches(metadata, packageJson, shrinkwrapSha256, packageArtifacts) {
   return Boolean(
     metadata?.schema === 1 &&
     metadata.openclaw?.version === packageJson.version &&
     metadata.openclaw?.shrinkwrapSha256 === shrinkwrapSha256 &&
+    metadata.openclaw?.packageArtifacts?.integrity === packageArtifacts?.integrity &&
     Array.isArray(metadata.requiredRuntimePackages) &&
     requiredRuntimePackages.every((packageName) => metadata.requiredRuntimePackages.includes(packageName)),
   )
@@ -1124,7 +1163,7 @@ async function main() {
   if (!refresh && fs.existsSync(nodeModulesRoot)) {
     const missing = validateInstalledPackages(lock)
     const metadata = readMetadata()
-    if (missing.length === 0 && metadataMatches(metadata, packageJson, shrinkwrapSha256)) {
+    if (missing.length === 0 && metadataMatches(metadata, packageJson, shrinkwrapSha256, packageArtifacts)) {
       if (packageJson.dependencies?.['@openclaw/ai']) ensureRelayAiTransportCompatibility(vendorRoot)
       console.log(`[openclaw-vendor] OpenClaw ${packageJson.version} production dependencies already prepared`)
       return

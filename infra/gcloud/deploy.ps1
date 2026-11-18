@@ -13,6 +13,7 @@ param(
 $config = Get-AutomniaConfig
 if (-not $Region) { $Region = $config.Region }
 if (-not $FirestoreLocation) { $FirestoreLocation = $config.FirestoreLocation }
+$migrationWriteMode = if ($RouteImmediately) { 'active' } else { 'read_only' }
 if ($WhatIfPreference) {
   $PSCmdlet.ShouldProcess("$ProjectId/$Region/$($config.ServiceName)", 'plan complete Automnia Cloud deployment') | Out-Null
   return [pscustomobject]@{ WhatIf = $true; ProjectId = $ProjectId; Region = $Region; ServiceName = $config.ServiceName; SkipGmail = [bool]$SkipGmail }
@@ -124,6 +125,7 @@ INSTALLER_LINUX_DEB_X64_OBJECT: '$($config.InstallerLinuxDebX64Object)'
 SHOPIFY_STORE_DOMAIN: '$($config.ShopifyStoreDomain)'
 SHOPIFY_APP_CLIENT_ID: '$($config.ShopifyAppClientId)'
 SHOPIFY_API_VERSION: '$($config.ShopifyApiVersion)'
+MIGRATION_WRITE_MODE: '$migrationWriteMode'
 EMAIL_PROVIDER: '$($config.EmailProvider)'
 EMAIL_SENDER: '$($config.EmailSender)'
 VERTEX_LOCATION: '$($config.VertexLocation)'
@@ -175,7 +177,14 @@ AUTOMNIA_KNOWLEDGE_SERVING_CONFIG: 'projects/$projectNumber/locations/global/col
     '--labels=automnia-component=provisioner,managed-by=automnia-gcloud-package',
     '--tag=candidate'
   )
-  if ($existing -and -not $RouteImmediately) { $arguments += '--no-traffic' }
+  if (-not $RouteImmediately -and $existing) {
+    $arguments += '--no-traffic'
+  } elseif (-not $RouteImmediately) {
+    # Cloud Run rejects --no-traffic when creating a service for the first
+    # time. The bootstrap revision is read-only and has no production DNS;
+    # subsequent deployments use a tagged zero-traffic candidate.
+    Write-Host 'Bootstrapping the new Cloud Run service in read-only mode; later candidate revisions will use zero traffic.'
+  }
   if ($PSCmdlet.ShouldProcess("$ProjectId/$Region/$($config.ServiceName)", 'deploy Cloud Run source revision')) {
     Invoke-Gcloud -Arguments $arguments | Out-Null
   }
@@ -189,7 +198,7 @@ if ($service.status -and $service.status.PSObject.Properties['traffic'] -and $se
   $candidateTraffic = @($service.status.traffic | Where-Object { $_ -and $_.PSObject.Properties['tag'] -and $_.tag -eq 'candidate' } | Select-Object -First 1)
 }
 $candidateUrl = if ($candidateTraffic -and $candidateTraffic.url) { [string]$candidateTraffic.url } else { [string]$service.status.url }
-$health = & (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $ProjectId -Region $Region -BaseUrl $candidateUrl -SkipGmail:$SkipGmail
+$health = & (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $ProjectId -Region $Region -BaseUrl $candidateUrl -ExpectedWriteMode $migrationWriteMode -SkipGmail:$SkipGmail
 if ($PSCmdlet.ShouldProcess("$ProjectId/$Region/$($config.BillingRetryJobName)", 'configure Shopify billing retry scheduler')) {
   $retryJobName = [string]$config.BillingRetryJobName
   $retryJobUri = "$($config.PermanentBaseUrl.TrimEnd('/'))/admin/shopify/billing-retries"
@@ -206,10 +215,52 @@ if ($PSCmdlet.ShouldProcess("$ProjectId/$Region/$($config.BillingRetryJobName)",
     '--oidc-token-audience', [string]$config.PermanentBaseUrl
   )
   if ($retryJob.ExitCode -ne 0) {
-    Invoke-Gcloud -Arguments (@('scheduler', 'jobs', 'create', 'http', $retryJobName) + $retryJobArguments) | Out-Null
+    if ($RouteImmediately) {
+      Invoke-Gcloud -Arguments (@('scheduler', 'jobs', 'create', 'http', $retryJobName) + $retryJobArguments) | Out-Null
+    } else {
+      # Create staging jobs on a distant schedule so they cannot fire while
+      # the new service is being prepared beside the live source scheduler.
+      $deferredCreateArguments = @($retryJobArguments)
+      $scheduleIndex = [Array]::IndexOf($deferredCreateArguments, '--schedule')
+      if ($scheduleIndex -lt 0) { throw 'Billing scheduler arguments are missing --schedule.' }
+      $deferredCreateArguments[$scheduleIndex + 1] = '0 0 1 1 *'
+      Invoke-Gcloud -Arguments (@('scheduler', 'jobs', 'create', 'http', $retryJobName) + $deferredCreateArguments) | Out-Null
+      Invoke-Gcloud -Arguments @('scheduler', 'jobs', 'pause', $retryJobName, '--project', $ProjectId, '--location', $Region) | Out-Null
+      Invoke-Gcloud -Arguments (@('scheduler', 'jobs', 'update', 'http', $retryJobName) + $retryJobArguments) | Out-Null
+    }
   } else {
+    if (-not $RouteImmediately) {
+      Invoke-Gcloud -Arguments @('scheduler', 'jobs', 'pause', $retryJobName, '--project', $ProjectId, '--location', $Region) | Out-Null
+    }
     Invoke-Gcloud -Arguments (@('scheduler', 'jobs', 'update', 'http', $retryJobName) + $retryJobArguments) | Out-Null
   }
+  if ($RouteImmediately) {
+    Invoke-Gcloud -Arguments @('scheduler', 'jobs', 'resume', $retryJobName, '--project', $ProjectId, '--location', $Region) | Out-Null
+  }
+}
+if ($RouteImmediately) {
+  $routedRevision = [string]$health.Revision
+  if (-not $routedRevision) { throw 'Cannot route Cloud Run traffic because the validated candidate revision name is empty.' }
+  if ($PSCmdlet.ShouldProcess("$ProjectId/$Region/$($config.ServiceName)", "route 100% of Cloud Run traffic to $routedRevision")) {
+    Invoke-Gcloud -Arguments @(
+      'run', 'services', 'update-traffic', $config.ServiceName,
+      '--to-revisions', "$routedRevision=100",
+      '--project', $ProjectId,
+      '--region', $Region
+    ) | Out-Null
+  }
+  $service = Get-ServiceDescriptor -ProjectId $ProjectId -Region $Region -ServiceName $config.ServiceName
+  $routedTraffic = @($service.status.traffic | Where-Object {
+    $_ -and $_.PSObject.Properties['revisionName'] -and
+    [string]$_.revisionName -eq $routedRevision -and
+    $_.PSObject.Properties['percent'] -and [int]$_.percent -eq 100
+  })
+  if (-not $routedTraffic) { throw "Cloud Run did not confirm 100% traffic on $routedRevision." }
+  $permanentHealth = & (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $ProjectId -Region $Region -BaseUrl $config.PermanentBaseUrl -ExpectedWriteMode $migrationWriteMode -SkipGmail:$SkipGmail
+  if ([string]$permanentHealth.Revision -ne $routedRevision) {
+    throw "Permanent API URL served revision $($permanentHealth.Revision), expected $routedRevision after traffic routing."
+  }
+  $health = $permanentHealth
 }
 $timestamp = [DateTimeOffset]::UtcNow.ToString('yyyyMMddTHHmmssZ')
 $state = [ordered]@{

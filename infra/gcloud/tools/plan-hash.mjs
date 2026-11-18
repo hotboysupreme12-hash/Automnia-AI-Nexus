@@ -10,11 +10,21 @@ const TOKENS_PER_CREDIT = 1_000
 
 function tierRank(tier) {
   const normalized = String(tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
-  if (normalized.includes('enterprise')) return 3
-  if (normalized.includes('pro')) return 2
+  if (normalized === 'frontier' || normalized === 'frontier_tier' || normalized === 'automnia_frontier' || normalized.endsWith('_frontier')) return 4
+  if (normalized.includes('enterprise') || normalized.includes('pro')) return 3
   if (normalized === 'starter' || normalized.includes('starter') || normalized === 'byok' || normalized.includes('byok')) return 1
   if (normalized.includes('credit') || normalized.includes('refill') || normalized.includes('topup')) return 0
   return normalized ? 1 : 0
+}
+
+function hasProSubscriptionTerms({ tier, mode, planPriceCents }) {
+  const normalizedTier = String(tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
+  return mode === 'hosted_credits' && normalizedTier.includes('pro') && Number(planPriceCents) === 2_999
+}
+
+function hasPermanentTierAccess(tier) {
+  const normalized = String(tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
+  return normalized.includes('enterprise') || tierRank(normalized) >= 4
 }
 
 const normalized = source.flatMap((candidate) => {
@@ -25,14 +35,18 @@ const normalized = source.flatMap((candidate) => {
   const kind = candidate.kind === 'topup' ? 'topup' : candidate.kind === 'subscription' ? 'subscription' : 'license'
   if (!tier || !mode || !Number.isFinite(initialTokens) || initialTokens < 0) return []
   const ids = (field) => Array.isArray(candidate[field]) ? candidate[field].map((value) => String(value || '').trim()).filter(Boolean) : []
+  const planPriceCents = Number.isInteger(Number(candidate.planPriceCents)) && Number(candidate.planPriceCents) >= 0
+    ? Number(candidate.planPriceCents)
+    : null
   return [{
     tier,
     mode,
-    planPriceCents: Number.isInteger(Number(candidate.planPriceCents)) && Number(candidate.planPriceCents) >= 0 ? Number(candidate.planPriceCents) : null,
+    planPriceCents,
     initialTokens: Math.floor(initialTokens),
     initialCredits: Math.round((Math.floor(initialTokens) / TOKENS_PER_CREDIT) * 1000) / 1000,
     kind,
-    permanentAccess: candidate.permanentAccess === true || mode === 'byok' || tierRank(tier) >= 2,
+    permanentAccess: !hasProSubscriptionTerms({ tier, mode, planPriceCents })
+      && (candidate.permanentAccess === true || mode === 'byok' || hasPermanentTierAccess(tier)),
     trialDays: Number.isInteger(Number(candidate.trialDays)) && Number(candidate.trialDays) > 0 ? Number(candidate.trialDays) : 0,
     productIds: ids('productIds'),
     variantIds: ids('variantIds'),

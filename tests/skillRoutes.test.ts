@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
-import { lstat, mkdtemp, mkdir, readFile, rm, truncate, writeFile } from 'node:fs/promises'
+import { lstat, mkdtemp, mkdir, readFile, realpath, rm, truncate, writeFile } from 'node:fs/promises'
 import type { AddressInfo } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
@@ -15,6 +15,13 @@ type SkillRouteTestOverrides = {
   runOpenClaw?: (args: string[], timeoutMs?: number, options?: CommandOptions) => Promise<{ stdout: string; stderr: string; code: number }>
   runOpenClawWithManagedSkillsWorkspace?: (args: string[], timeoutMs: number) => Promise<{ stdout: string; stderr: string; code: number }>
   skillPreviewTtlMs?: number
+}
+
+async function makeSkillTestTempRoot(prefix: string) {
+  // macOS exposes its temporary directory through /var, which is a symlink to
+  // /private/var. Use the physical path because the skill path checks reject
+  // symlinked ancestors by design.
+  return mkdtemp(path.join(await realpath(os.tmpdir()), prefix))
 }
 
 const reviewOutput = [
@@ -67,7 +74,7 @@ async function withSkillRouteServer<T>(app: Express, run: (baseUrl: string) => P
 }
 
 test('skill integrity endpoint returns bounded hashes for the installed skill and support files', async () => {
-  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'automnia-skill-integrity-'))
+  const tempRoot = await makeSkillTestTempRoot('automnia-skill-integrity-')
   const sharedRoot = path.join(tempRoot, 'shared')
   const skillDir = path.join(sharedRoot, 'example-skill')
   const skillPath = path.join(skillDir, 'SKILL.md')
@@ -111,7 +118,7 @@ test('skill integrity endpoint returns bounded hashes for the installed skill an
 })
 
 test('Skill Workshop API compares a verified baseline, quarantines before skills check, and restores explicitly', async () => {
-  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'automnia-skill-workshop-route-'))
+  const tempRoot = await makeSkillTestTempRoot('automnia-skill-workshop-route-')
   const sharedRoot = path.join(tempRoot, 'shared')
   const skillDir = path.join(sharedRoot, 'example-skill')
   const skillPath = path.join(skillDir, 'SKILL.md')
@@ -165,7 +172,7 @@ test('Skill Workshop API compares a verified baseline, quarantines before skills
 })
 
 test('skill integrity endpoint rejects oversized files before reading them', async () => {
-  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'automnia-skill-integrity-large-'))
+  const tempRoot = await makeSkillTestTempRoot('automnia-skill-integrity-large-')
   const sharedRoot = path.join(tempRoot, 'shared')
   const skillDir = path.join(sharedRoot, 'example-skill')
   const skillPath = path.join(skillDir, 'SKILL.md')
@@ -188,7 +195,7 @@ test('skill integrity endpoint rejects oversized files before reading them', asy
 })
 
 test('skill integrity endpoint bounds empty directory traversal', async () => {
-  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'automnia-skill-integrity-dirs-'))
+  const tempRoot = await makeSkillTestTempRoot('automnia-skill-integrity-dirs-')
   const sharedRoot = path.join(tempRoot, 'shared')
   const skillDir = path.join(sharedRoot, 'example-skill')
   const skillPath = path.join(skillDir, 'SKILL.md')
@@ -208,7 +215,7 @@ test('skill integrity endpoint bounds empty directory traversal', async () => {
 })
 
 test('skill integrity server errors do not disclose local paths', async () => {
-  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'automnia-skill-integrity-error-'))
+  const tempRoot = await makeSkillTestTempRoot('automnia-skill-integrity-error-')
   const sharedRoot = path.join(tempRoot, 'shared')
   const missingSkillPath = path.join(sharedRoot, 'example-skill', 'SKILL.md')
   try {
@@ -302,7 +309,7 @@ test('ClawHub Review becomes an explicit one-time confirmation before install', 
 })
 
 test('ClawHub preview stages and diffs in isolated state, then applies only after explicit preview confirmation', async () => {
-  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'automnia-skill-preview-route-'))
+  const tempRoot = await makeSkillTestTempRoot('automnia-skill-preview-route-')
   const sharedRoot = path.join(tempRoot, 'shared')
   const installedDir = path.join(sharedRoot, 'demo')
   await mkdir(installedDir, { recursive: true })
@@ -317,6 +324,7 @@ test('ClawHub preview stages and diffs in isolated state, then applies only afte
       const stateRoot = commandOptions?.envOverrides?.OPENCLAW_STATE_DIR || ''
       stagedRoots.push(path.dirname(stateRoot))
       assert.ok(stateRoot)
+      if (process.platform === 'darwin') assert.equal(await realpath(path.dirname(stateRoot)), path.dirname(stateRoot))
       assert.notEqual(path.resolve(stateRoot), path.resolve(sharedRoot))
       assert.ok(commandOptions?.cwd && path.resolve(commandOptions.cwd).startsWith(path.resolve(path.dirname(stateRoot))))
       assert.equal(path.resolve(commandOptions?.envOverrides?.OPENCLAW_CONFIG_PATH || ''), path.join(path.resolve(stateRoot), 'openclaw.json'))
@@ -393,7 +401,7 @@ test('ClawHub preview stages and diffs in isolated state, then applies only afte
 })
 
 test('failed and expired ClawHub previews cannot be applied and are cleaned up', async () => {
-  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'automnia-skill-preview-expiry-'))
+  const tempRoot = await makeSkillTestTempRoot('automnia-skill-preview-expiry-')
   const sharedRoot = path.join(tempRoot, 'shared')
   await mkdir(sharedRoot, { recursive: true })
   const stagedRoots: string[] = []
@@ -404,6 +412,7 @@ test('failed and expired ClawHub previews cannot be applied and are cleaned up',
     runOpenClaw: async (args, _timeoutMs, commandOptions) => {
       const stateRoot = commandOptions?.envOverrides?.OPENCLAW_STATE_DIR || ''
       stagedRoots.push(path.dirname(stateRoot))
+      if (process.platform === 'darwin') assert.equal(await realpath(path.dirname(stateRoot)), path.dirname(stateRoot))
       if (args[1] === 'search') return { stdout: JSON.stringify({ results: [{ ownerHandle: 'example', slug: 'demo', version: '2.0.0' }] }), stderr: '', code: 0 }
       stageCount += 1
       if (stageCount === 1) return { stdout: '', stderr: 'download failed', code: 1 }

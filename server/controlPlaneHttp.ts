@@ -189,6 +189,7 @@ const API_ERROR_DETAIL_MAX_OBJECT_KEYS = 80
 const API_ERROR_REDACTED_VALUE = '[redacted]'
 const API_ERROR_DETAIL_CIRCULAR = '[circular]'
 const API_ERROR_DETAIL_DEPTH_EXCEEDED = '[depth-exceeded]'
+const API_ERROR_CONFIRMATION_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 function isSensitiveApiErrorKey(key: string) {
   const normalized = key.replace(/[^a-z0-9]/gi, '').toLowerCase()
@@ -242,6 +243,10 @@ export function sanitizeApiErrorDetail(detail: unknown, depth = 0, seen: WeakSet
     for (const [key, value] of entries.slice(0, API_ERROR_DETAIL_MAX_OBJECT_KEYS)) {
       if (isSensitiveApiErrorKey(key)) {
         cleanObject[key] = API_ERROR_REDACTED_VALUE
+        continue
+      }
+      if (key === 'confirmationId' && typeof value === 'string' && API_ERROR_CONFIRMATION_UUID_PATTERN.test(value)) {
+        cleanObject[key] = value
         continue
       }
       const cleanValue = sanitizeApiErrorDetail(value, depth + 1, seen)

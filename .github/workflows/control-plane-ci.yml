@@ -43,6 +43,9 @@ jobs:
       - name: Prepare vendored OpenClaw dependencies
         run: npm run prepare:openclaw-vendor
 
+      - name: Prepare reproducible runtime bundles
+        run: npm run prepare:runtime-bundles
+
       - name: Initialize CI evidence folders
         shell: pwsh
         run: |
@@ -90,9 +93,6 @@ jobs:
         run: |
           npm run smoke:electron-e2e 2>&1 | Tee-Object -FilePath release/evidence/ci-logs/electron-e2e-smoke.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Prepare reproducible runtime bundles
-        run: npm run prepare:runtime-bundles
 
       - name: Package desktop directory
         shell: pwsh

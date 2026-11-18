@@ -5,113 +5,149 @@
     "kind": "topup",
     "planPriceCents": 100,
     "initialTokens": 100000,
-    "productIds": [],
-    "variantIds": ["47352874270889"],
-    "skus": ["AUTO-REFILL-100K"]
+    "productIds": [
+      "15507599098134"
+    ],
+    "variantIds": [
+      "68026928791830"
+    ],
+    "skus": [
+      "AUTO-REFILL-100K"
+    ]
   },
   {
     "tier": "credit_refill",
     "mode": "hosted_credits",
     "kind": "topup",
     "initialTokens": 500000,
-    "productIds": [],
-    "variantIds": ["47340005589161"],
-    "skus": ["AUTO-REFILL-500K"]
+    "planPriceCents": 500,
+    "productIds": [
+      "15507599098134"
+    ],
+    "variantIds": [
+      "68026928824598"
+    ],
+    "skus": [
+      "AUTO-REFILL-500K"
+    ]
   },
   {
     "tier": "credit_refill",
     "mode": "hosted_credits",
     "kind": "topup",
     "initialTokens": 1000000,
-    "productIds": [],
-    "variantIds": ["47340005621929"],
-    "skus": ["AUTO-REFILL-1M"]
+    "planPriceCents": 1000,
+    "productIds": [
+      "15507599098134"
+    ],
+    "variantIds": [
+      "68026928857366"
+    ],
+    "skus": [
+      "AUTO-REFILL-1M"
+    ]
   },
   {
     "tier": "credit_refill",
     "mode": "hosted_credits",
     "kind": "topup",
     "initialTokens": 2500000,
-    "productIds": [],
-    "variantIds": ["47340005654697"],
-    "skus": ["AUTO-REFILL-2500K"]
+    "planPriceCents": 2500,
+    "productIds": [
+      "15507599098134"
+    ],
+    "variantIds": [
+      "68026928890134"
+    ],
+    "skus": [
+      "AUTO-REFILL-2500K"
+    ]
   },
   {
     "tier": "credit_refill",
     "mode": "hosted_credits",
     "kind": "topup",
     "initialTokens": 5000000,
-    "productIds": [],
-    "variantIds": ["47340005687465"],
-    "skus": ["AUTO-REFILL-5M"]
+    "planPriceCents": 5000,
+    "productIds": [
+      "15507599098134"
+    ],
+    "variantIds": [
+      "68026928922902"
+    ],
+    "skus": [
+      "AUTO-REFILL-5M"
+    ]
   },
   {
     "tier": "credit_refill",
     "mode": "hosted_credits",
     "kind": "topup",
     "initialTokens": 10000000,
-    "productIds": [],
-    "variantIds": ["47340005720233"],
-    "skus": ["AUTO-REFILL-10M"]
-  },
-  {
-    "tier": "credit_refill",
-    "mode": "hosted_credits",
-    "kind": "topup",
-    "initialTokens": 1000000,
-    "productIds": ["9020233089193"],
-    "variantIds": ["47350394388649"],
-    "skus": ["AUTO-REFILL-FREE-1M"]
-  },
-  {
-    "tier": "credit_refill",
-    "mode": "hosted_credits",
-    "kind": "topup",
-    "initialTokens": 5000000,
-    "productIds": ["9020233154729"],
-    "variantIds": ["47350394454185"],
-    "skus": ["AUTO-REFILL-FREE-5M"]
-  },
-  {
-    "tier": "credit_refill",
-    "mode": "hosted_credits",
-    "kind": "topup",
-    "initialTokens": 10000000,
-    "productIds": ["9020233187497"],
-    "variantIds": ["47350394486953"],
-    "skus": ["AUTO-REFILL-FREE-10M"]
+    "planPriceCents": 10000,
+    "productIds": [
+      "15507599098134"
+    ],
+    "variantIds": [
+      "68026928955670"
+    ],
+    "skus": [
+      "AUTO-REFILL-10M"
+    ]
   },
   {
     "tier": "starter",
     "mode": "hosted_credits",
     "kind": "subscription",
     "planPriceCents": 1999,
-    "trialDays": 3,
     "initialTokens": 22000000,
-    "productIds": ["9017938215081"],
-    "variantIds": ["47340005851305"],
-    "sellingPlanIds": ["19818938537"],
-    "skus": ["AUTO-SUB-STARTER-MONTHLY"]
-  },
-  {
-    "tier": "starter",
-    "mode": "hosted_credits",
-    "kind": "subscription",
-    "planPriceCents": 0,
-    "initialTokens": 22000000,
-    "productIds": ["9020824486057"],
-    "variantIds": [],
-    "skus": ["AUTO-SUB-STARTER-QA-FREE"]
+    "productIds": [
+      "15507599032598"
+    ],
+    "variantIds": [
+      "68026928726294"
+    ],
+    "sellingPlanIds": [
+      "11294179606"
+    ],
+    "skus": [
+      "AUTO-SUB-STARTER-MONTHLY"
+    ]
   },
   {
     "tier": "pro",
     "mode": "hosted_credits",
+    "kind": "subscription",
+    "planPriceCents": 2999,
+    "initialTokens": 55000000,
+    "productIds": [
+      "15507599065366"
+    ],
+    "variantIds": [
+      "68026928759062"
+    ],
+    "sellingPlanIds": [
+      "11294212374"
+    ],
+    "skus": [
+      "AUTO-SUB-PRO-MONTHLY"
+    ]
+  },
+  {
+    "tier": "byok",
+    "mode": "byok",
     "kind": "license",
     "planPriceCents": 2999,
+    "initialTokens": 0,
     "permanentAccess": true,
-    "initialTokens": 55000000,
-    "productIds": ["9017938182313"],
-    "variantIds": ["47340005818537"],
-    "skus": ["AUTO-SUB-PRO-MONTHLY"]
+    "productIds": [
+      "15507599130902"
+    ],
+    "variantIds": [
+      "68026928988438"
+    ],
+    "skus": [
+      "AUTO-BYOK-ONETIME"
+    ]
   }
 ]

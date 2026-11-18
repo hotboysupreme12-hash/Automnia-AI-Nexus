@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
-import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { accessSync, closeSync, constants as fsConstants, existsSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import net from 'node:net'
@@ -8,8 +8,26 @@ import net from 'node:net'
 const root = process.cwd()
 const releaseRoot = path.join(root, 'release')
 const productName = 'Automnia AI Nexus'
+const packageJson = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'))
+const expectedOpenClawVersion = String(JSON.parse(readFileSync(path.join(root, 'vendor', 'openclaw', 'package.json'), 'utf8')).version || '').trim()
+assert.ok(expectedOpenClawVersion, 'release smoke must know the pinned OpenClaw version')
+const linuxExecutableName = String(packageJson.build?.linux?.executableName || packageJson.name || '').trim()
+const explicitLinuxAppImagePath = process.platform === 'linux'
+  ? String(process.env.AUTOMNIA_PACKAGED_LINUX_APPIMAGE || '').trim()
+  : ''
+const useLinuxAppImage = Boolean(explicitLinuxAppImagePath)
 
 function resolveMacUnpackedRoot() {
+  const explicitAppPath = String(process.env.AUTOMNIA_PACKAGED_MAC_APP_PATH || '').trim()
+  if (explicitAppPath) {
+    const resolvedAppPath = path.resolve(explicitAppPath)
+    assert.ok(
+      existsSync(path.join(resolvedAppPath, 'Contents', 'MacOS', productName)),
+      `packaged launch smoke expected ${productName}.app at AUTOMNIA_PACKAGED_MAC_APP_PATH=${resolvedAppPath}`,
+    )
+    return path.dirname(resolvedAppPath)
+  }
+
   const candidates = [
     path.join(releaseRoot, process.arch === 'arm64' ? 'mac-arm64' : 'mac'),
     path.join(releaseRoot, 'mac-arm64'),
@@ -22,21 +40,29 @@ function resolveMacUnpackedRoot() {
 
 const unpackedRoot = process.platform === 'darwin'
   ? resolveMacUnpackedRoot()
-  : path.join(releaseRoot, process.platform === 'win32' ? 'win-unpacked' : 'linux-unpacked')
+  : process.platform === 'linux' && String(process.env.AUTOMNIA_PACKAGED_LINUX_ROOT || '').trim()
+    ? path.resolve(String(process.env.AUTOMNIA_PACKAGED_LINUX_ROOT).trim())
+    : path.join(releaseRoot, process.platform === 'win32' ? 'win-unpacked' : 'linux-unpacked')
 const macAppPath = path.join(unpackedRoot, `${productName}.app`)
 const launcherPath = process.platform === 'win32'
   ? path.join(unpackedRoot, 'Automnia AI Nexus.exe')
   : process.platform === 'darwin'
     ? path.join(macAppPath, 'Contents', 'MacOS', productName)
-  : path.join(unpackedRoot, 'automnia')
+  : useLinuxAppImage
+    ? path.resolve(explicitLinuxAppImagePath)
+    : path.join(unpackedRoot, linuxExecutableName)
 const electronRuntimePath = process.platform === 'win32'
   ? path.join(unpackedRoot, 'electron.exe')
   : launcherPath
 const resourcesDir = process.platform === 'darwin'
   ? path.join(macAppPath, 'Contents', 'Resources')
   : path.join(unpackedRoot, 'resources')
-const launcherCwd = process.platform === 'darwin' ? path.dirname(launcherPath) : unpackedRoot
-const launcherExitTimeoutMs = process.platform === 'darwin' ? 30_000 : 10_000
+const launcherCwd = process.platform === 'darwin' || useLinuxAppImage ? path.dirname(launcherPath) : unpackedRoot
+const launcherExitTimeoutMs = useLinuxAppImage
+  ? 180_000
+  : process.platform === 'darwin' || process.platform === 'linux'
+    ? 60_000
+    : 10_000
 const requiredPackagedFiles = [
   launcherPath,
   electronRuntimePath,
@@ -47,11 +73,17 @@ const requiredPackagedFiles = [
   path.join(resourcesDir, 'openclaw'),
 ]
 
-for (const filePath of requiredPackagedFiles) {
-  assert.ok(existsSync(filePath), `packaged launch smoke requires ${filePath}; run node scripts/package-desktop.cjs --dir first`)
+if (useLinuxAppImage) {
+  assert.ok(existsSync(launcherPath), `packaged launch smoke requires AUTOMNIA_PACKAGED_LINUX_APPIMAGE=${launcherPath}`)
+  assert.ok(statSync(launcherPath).isFile(), 'packaged AppImage must be a file')
+  accessSync(launcherPath, fsConstants.X_OK)
+} else {
+  for (const filePath of requiredPackagedFiles) {
+    assert.ok(existsSync(filePath), `packaged launch smoke requires ${filePath}; run node scripts/package-desktop.cjs --dir first`)
+  }
+  assert.ok(statSync(launcherPath).isFile(), 'packaged launcher must be a file')
+  assert.ok(statSync(electronRuntimePath).isFile(), 'packaged Electron runtime must be a file')
 }
-assert.ok(statSync(launcherPath).isFile(), 'packaged launcher must be a file')
-assert.ok(statSync(electronRuntimePath).isFile(), 'packaged Electron runtime must be a file')
 
 async function freePort() {
   return await new Promise<number>((resolve, reject) => {
@@ -116,7 +148,13 @@ async function removeTempRootWithWindowsRetries(tempRootPath: string) {
   console.warn(lastError instanceof Error ? lastError.message : String(lastError))
 }
 
-async function waitForLogPatterns(logPath: string, patterns: RegExp[], timeoutMs = 60_000) {
+async function waitForLogPatterns(
+  logPath: string,
+  patterns: RegExp[],
+  timeoutMs = 60_000,
+  hasLauncherFinished: () => boolean = () => false,
+  getLauncherOutput: () => string = () => '',
+) {
   const found = new Set<number>()
   const start = Date.now()
   let content = ''
@@ -127,6 +165,10 @@ async function waitForLogPatterns(logPath: string, patterns: RegExp[], timeoutMs
         if (pattern.test(content)) found.add(index)
       })
       if (found.size === patterns.length) return content
+    }
+    if (hasLauncherFinished()) {
+      const diagnostics = getLauncherOutput()
+      throw new Error(`packaged launcher exited before its launch checks completed\n${content || '(no launch log was created)'}${diagnostics ? `\n${diagnostics}` : ''}`)
     }
     await new Promise((resolve) => setTimeout(resolve, 250))
   }
@@ -147,6 +189,9 @@ const apiPort = await freePort()
 const frontendPort = await freePort()
 const gatewayPort = await freePort()
 const browserRelayPort = await freePort()
+let launcherStdout = ''
+let launcherStderr = ''
+const appendOutputTail = (current: string, chunk: Buffer | string) => `${current}${chunk.toString()}`.slice(-16_384)
 const env = {
   ...process.env,
   CONTROL_CENTER_PORT: String(apiPort),
@@ -158,8 +203,10 @@ const env = {
   CONTROL_CENTER_TOKEN: 'packaged-electron-e2e',
   AUTOMNIA_ELECTRON_E2E: '1',
   AUTOMNIA_ELECTRON_E2E_ALLOW_PARALLEL: '1',
+  AUTOMNIA_ELECTRON_E2E_ASSERT_PTY: '1',
+  AUTOMNIA_ELECTRON_E2E_KEEP_WINDOW_HIDDEN: '1',
   AUTOMNIA_ELECTRON_E2E_LOG_PATH: logPath,
-  AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS: '1500',
+  AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS: useLinuxAppImage ? '15000' : '1500',
   AUTOMNIA_ELECTRON_E2E_ASSERT_NAVIGATION: '1',
   AUTOMNIA_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL: '1',
   AUTOMNIA_ELECTRON_E2E_SKIP_PORT_CLEANUP: '1',
@@ -170,37 +217,40 @@ const env = {
 }
 
 try {
-  const launcher = spawn(launcherPath, [], {
+  const launcher = spawn(launcherPath, useLinuxAppImage ? ['--appimage-extract-and-run'] : [], {
     cwd: launcherCwd,
     env,
     windowsHide: true,
-    // Do not let descendant Electron processes inherit CI's stdout/stderr
-    // handles; on Windows that can keep the PowerShell pipeline open after
-    // the packaged launcher has completed its smoke-test work.
-    stdio: ['ignore', 'ignore', 'ignore'],
+    // Capture bounded output for early native launcher failures while draining
+    // both pipes so packaged descendants cannot keep the CI shell open.
+    stdio: ['ignore', 'pipe', 'pipe'],
   })
+  launcher.stdout?.on('data', (chunk) => { launcherStdout = appendOutputTail(launcherStdout, chunk) })
+  launcher.stderr?.on('data', (chunk) => { launcherStderr = appendOutputTail(launcherStderr, chunk) })
+  let launcherError: Error | null = null
+  launcher.once('error', (error) => { launcherError = error })
 
-  const launcherStatus = await new Promise<number | null>((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      terminatePackagedLauncher(launcher)
-      const diagnostics = existsSync(logPath) ? readFileSync(logPath, 'utf8').trim() : '(no launch log was created)'
-      reject(new Error(`packaged launcher did not exit within ${launcherExitTimeoutMs / 1000}s\n${diagnostics}`))
-    }, launcherExitTimeoutMs)
-    launcher.once('error', reject)
-    launcher.once('exit', (code) => {
-      clearTimeout(timeout)
-      resolve(code)
-    })
-  })
-  assert.equal(launcherStatus, 0, `packaged launcher exited ${launcherStatus}`)
+  // The branded Windows executable is a small GUI launcher that starts the
+  // bundled electron.exe process and exits with code 0. Its exit alone does
+  // not mean the Automnia app exited; the packaged E2E markers prove startup.
+  const launcherFailedBeforeChecks = () => launcherError !== null ||
+    launcher.signalCode !== null ||
+    (launcher.exitCode !== null && !(process.platform === 'win32' && launcher.exitCode === 0))
 
   await waitForLogPatterns(logPath, [
     /\[automnia-e2e\] port-cleanup-skipped/,
     /\[automnia-e2e\] server-ready/,
     /\[automnia-e2e\] navigation-policy-ok/,
-    /\[automnia-e2e\] auto-quit/,
-    /\[automnia-e2e\] quit-cleanup-complete/,
-  ])
+    /\[automnia-e2e\] pty-native-ok/,
+  ], 60_000, launcherFailedBeforeChecks, () => {
+    const details = [
+      `launcher status: exit=${launcher.exitCode ?? 'unknown'}, signal=${launcher.signalCode ?? 'none'}`,
+      launcherError ? `spawn error: ${launcherError.message}` : '',
+      launcherStdout ? `launcher stdout:\n${launcherStdout}` : '',
+      launcherStderr ? `launcher stderr:\n${launcherStderr}` : '',
+    ].filter(Boolean)
+    return details.join('\n')
+  })
 
   assert.ok(existsSync(userDataDir), 'packaged startup must recreate a missing Automnia user-data directory')
   assert.ok(existsSync(openclawDir), 'packaged startup must recreate a missing OpenClaw state directory')
@@ -210,8 +260,11 @@ try {
   const writableRuntimeName = readdirSync(writableRuntimeParent).find((entry) =>
     existsSync(path.join(writableRuntimeParent, entry, 'package.json')),
   )
-  assert.ok(writableRuntimeName, 'packaged startup must create a complete writable OpenClaw runtime')
+  assert.ok(writableRuntimeName, 'packaged startup must create a complete writable OpenClaw runtime while its packaged launch is running')
   const writableRuntimeRoot = path.join(writableRuntimeParent, writableRuntimeName)
+  const writableRuntimePackage = JSON.parse(readFileSync(path.join(writableRuntimeRoot, 'package.json'), 'utf8'))
+  assert.equal(writableRuntimePackage.version, expectedOpenClawVersion, 'installed app must stage the exact OpenClaw version packaged in this release')
+  assert.ok(existsSync(path.join(writableRuntimeRoot, 'openclaw.mjs')), 'staged OpenClaw runtime must include its executable entry point')
   const bundledRuntimeRoot = path.join(resourcesDir, 'openclaw')
   assert.notEqual(path.resolve(writableRuntimeRoot), path.resolve(bundledRuntimeRoot), 'mutable OpenClaw files must not point into the packaged resources directory')
 
@@ -223,6 +276,41 @@ try {
     const descriptor = openSync(writableCodexCli, 'r+')
     closeSync(descriptor)
   }
+
+  if (launcherError) throw launcherError
+  const launcherStatus = await new Promise<number | null>((resolve, reject) => {
+    if (launcher.exitCode !== null) {
+      resolve(launcher.exitCode)
+      return
+    }
+    if (launcher.signalCode !== null) {
+      resolve(null)
+      return
+    }
+    const timeout = setTimeout(() => {
+      terminatePackagedLauncher(launcher)
+      const diagnostics = existsSync(logPath) ? readFileSync(logPath, 'utf8').trim() : '(no launch log was created)'
+      reject(new Error(`packaged launcher did not exit within ${launcherExitTimeoutMs / 1000}s\n${diagnostics}`))
+    }, launcherExitTimeoutMs)
+    launcher.once('exit', (code) => {
+      clearTimeout(timeout)
+      resolve(code)
+    })
+    launcher.once('error', (error) => {
+      clearTimeout(timeout)
+      reject(error)
+    })
+    if (launcherError) {
+      clearTimeout(timeout)
+      reject(launcherError)
+    }
+  })
+  assert.equal(launcherStatus, 0, `packaged launcher exited ${launcherStatus}`)
+
+  await waitForLogPatterns(logPath, [
+    /\[automnia-e2e\] auto-quit/,
+    /\[automnia-e2e\] quit-cleanup-complete/,
+  ])
 } finally {
   killPackagedElectronProcesses()
   await removeTempRootWithWindowsRetries(tempRoot)

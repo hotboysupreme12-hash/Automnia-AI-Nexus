@@ -240,8 +240,18 @@ async function prepareNodeBundle() {
   const verifiedArchive = await verifyNodeArchiveChecksum(archive, archiveFile)
   expandArchive(archiveFile, extractDir)
 
-  const extracted = path.join(extractDir, archive.name)
-  if (!validateBundledNode(extracted)) throw new Error(`Downloaded Node.js archive is missing node/npm binaries: ${archive.name}`)
+  let extracted = path.join(extractDir, archive.name)
+  if (process.platform === 'win32' && !validateBundledNode(extracted)) {
+    console.warn('[runtime-bundles] PowerShell ZIP extraction missed Node/npm; retrying with tar')
+    fs.rmSync(extractDir, { recursive: true, force: true })
+    fs.mkdirSync(extractDir, { recursive: true })
+    run('tar', ['-xf', archiveFile, '-C', extractDir])
+    extracted = path.join(extractDir, archive.name)
+  }
+  if (!validateBundledNode(extracted)) {
+    const presentEntries = fs.existsSync(extracted) ? fs.readdirSync(extracted).slice(0, 20).join(', ') : '(archive root missing)'
+    throw new Error(`Downloaded Node.js archive is missing node/npm binaries: ${archive.name}; node=${executableExists(nodeBinFor(extracted))}; npm=${executableExists(npmBinFor(extracted))}; entries=${presentEntries}`)
+  }
   fs.rmSync(finalDir, { recursive: true, force: true })
   fs.mkdirSync(path.dirname(finalDir), { recursive: true })
   fs.renameSync(extracted, finalDir)

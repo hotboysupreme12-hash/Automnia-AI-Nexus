@@ -1,334 +1,419 @@
 # Changelog
 
-## 2026.10.6
+## 2026.11.5
 
 ### Highlights
 
-- **Patched Node runtime required:** OpenClaw now requires Node 24.22.1+ on the 24 line or 26.12.1+ on the 26 line, which reject TLS chains signed with the compromised certificate keys addressed in the October 2026 Node.js security releases. Docker images ship Node 24.22.1, installers select the patched runtimes, and `openclaw update` refuses with recovery guidance before installing on an older Node instead of breaking the running install. Source builds now pin pnpm 12.15.0. (#179992) Thanks @joshavant.
-- **Safer updates and recovery:** package swaps now refuse unsafe service states, Windows and macOS package-manager updates recover from platform-specific failures, and frozen Gateway startup owners can be retired cleanly. (#171101, #170940, #171936, #171678) Thanks @RomneyDa, @homeworld520, @Yolo521-bot, @stop-time, @AntaresGG, and @TommyLei666.
-- **Data-preserving migrations and backups:** Doctor and migration paths now refuse malformed or lossy workspace imports, preserve malformed Notes bytes, reject unsafe non-UTF-8 wiki rewrites, keep deeply nested SQLite backups, and retain staging evidence when restore inspection fails. (#172293, #172953, #172742, #174573, #168583, #170867, #172028) Thanks @wangmiao0668000666, @RomneyDa, @Leon-SK668, @ericcurtin, @Yolo521-bot, @obviyus, and @altaywtf.
-- **Reliable delivery across restarts:** queued turns, watched child results, dead-lettered deliveries, and streamed replies now survive recovery without disappearing, duplicating, or producing false missing-answer notices. (#170384, #169489, #169932, #173798) Thanks @RomneyDa, @huyengiang101086-spec, and @Yolo521-bot.
-- **Provider and model resilience:** GPT-5.6 tool turns, OpenRouter DeepSeek tool calls, LM Studio overflow recovery, parallel OpenAI reasoning settings, and model retry/fallback budgets now behave consistently. (#176709, #175058, #169189, #169322, #164808) Thanks @RomneyDa, @Linux2010, @ZhimingQ, @xpeng5278-web, and @anyech.
-- **Windows and mobile stability:** fresh Windows state stores, Proxy-backed environments, and stored Anthropic credentials no longer block startup, while iOS Talk and chat connectivity recover from first-reply and timeout failures. (#176174, #176194, #174571, #168416, #169912) Thanks @RomneyDa, @tjarrau-dev, @skyzhao1223, @easyteacher, @scalesmart, @masatohoshino, @Takhoffman, and @Solvely-Colin.
-- **Agent and tool-call recovery:** unfinished tools now time out visibly, context overflow compacts after steered tool results, malformed calls continue after earlier refusals, large patch hunks avoid argument-limit crashes, and stopped yielded tasks stay stopped. (#172983, #172019, #170615, #174477, #169453) Thanks @RomneyDa, @budzation, @mirasrael, @r3n3x, @freeqaz-openai, and @obviyus.
-- **Channel delivery correctness:** WhatsApp retries and stickers, Telegram albums and dual-stack replies, Slack relay recovery, and Discord voice-call replies no longer lose or duplicate messages. (#142434, #164210, #163926, #171564, #173407, #172380) Thanks @ashawwal, @RomneyDa, @andrewwbuilds, @abacha, @Dat1GUI, @brainmonger, @obviyus, and @vincentkoc.
-- **Worker and worktree recovery:** hosts reclaim worker capacity after reboot, partial-clone worktrees repair missing objects, and child-result and exec-wake evidence survives Gateway restarts. (#168863, #168864, #169489, #169645) Thanks @RomneyDa.
+- **Restart-safe conversations:** Queued messages, send permissions, and final chat writes are retained across Gateway restarts. (#196923, #196540, #196493) Authored by @steipete. Thanks @joshavant.
+- **Safer updates:** Failed Doctor or Gateway startup rolls back an activated update, while restored npm packages remain readable by non-root services. (#197851, #193272) Thanks @RomneyDa, @obviyus, and @vincentkoc.
+- **Telegram widgets:** Interactive widgets now render in Telegram messages, including private-chat topics. (#196991, #198022). Related #197923 Thanks @obviyus and @dankarization.
+- **Faster memory recovery:** Large memory-index rebuilds finish reliably, and embedding indexing recovers when a gateway truncates a batch-limit error. (#196378, #187797). Related #187788 Thanks @TameTheGame, @RomneyDa, @vincentkoc, @garrytan, @obviyus, and @fredtanxo.
+- **More reliable model fallback:** A configured primary account no longer blocks Claude CLI fallback, and OpenAI sessions recover from compaction item conflicts. (#198427, #198357). Related #158421 Authored by @steipete. Thanks @RomneyDa, @obviyus, @alkor2000, and @HerbertHuerto.
+- **Usable device folders:** Existing device folders remain selectable with the default runtime, and each folder choice gets a clear, compact menu row. (#190065, #190088) Thanks @RomneyDa and @obviyus.
+- **Content boundaries:** Binary attachments no longer become garbled prompt text, and authenticated browser CDP URLs stay out of tool results. (#198309, #196262). Related #198289 Thanks @Yun-0000, @obviyus, @mulderp82, @PollyBot13, and @sallyom.
 
 ### Changes
 
-- This patch release contains focused reliability fixes only; it does not introduce new user-facing features.
+- **Busy-session messages and security presets:** Personal-mode messages steer compatible work or queue quietly instead of requiring a manual resend. The personal and corporate security presets provide coherent defaults; explicit settings and mandatory access/approval limits still apply. (#185477) Authored by @steipete. Thanks @joshavant.
+- **Compaction:** Set maxSummaryChars to control the summary character cap. (#196207). Related #194408 Thanks @aniruddhaadak80, @RomneyDa, and @garrytan.
+- **Knowledge:** Keep pages within a read-sized budget and extract sections without loading an oversized page. (#186270) Thanks @jalehman.
+- **Breaking: harness and plugin session control:** Third-party harnesses must register session-keyed active runs inside the host runAttempt callback and retain the returned cleanup function. Plugin RPC handlers must replace chatAbortControllers/chatQueuedTurns with authorized Gateway method dispatch. Start-owner observations use startDeadlineAtMs instead of expiresAtMs; bundled consumers are migrated. (#175837) Authored by @steipete. Thanks @RomneyDa, @vincentkoc, and @jalehman.
 
 ### Fixes
 
-- **State and system-agent recovery:** restore access to agents held by affected upgrades, recover held system-agent databases after schema changes, and preserve live configuration when forensic snapshots fail. (#175007, #176783, #171217) Thanks @RomneyDa, @PennyVibe, and @Yolo521-bot.
-- **Windows state and updates:** canonicalize schema ownership across path aliases, serialize Proxy-backed environments before inspection IPC, hide SQLite helper windows during update work, and recognize native Scheduled Task permission failures in every locale. (#176174, #176194, #174969, #178624) Thanks @RomneyDa, @tjarrau-dev, @skyzhao1223, @easyteacher, and @throwingbones.
-- **macOS companion execution:** honor long command and approval deadlines across the companion socket, classify late or lost replies without replaying submitted commands, and preserve native permission details. (#172117) Thanks @holgergruenhagen, @RomneyDa, @ylcn91, and @Colton-Harris.
-- **Doctor and managed plugins:** repair empty retired-plugin metadata, clear resolved migration warnings, and converge app-managed plugins onto the installed core version. (#173851, #177096, #174257) Thanks @RomneyDa, @fengfan201314-eng, @ScientificProgrammer, @yinx65588-boop, @jj5638521, and @kazuyuki-eguchi.
-- **Update diagnostics:** preserve FRV blockers, explain package-journal identity and runtime-retention failures, and avoid cleanup stalls on shared recovery manifests. (#171186, #170385, #169280, #174249) Thanks @vincentkoc, @RomneyDa, @astapenkoav, @council10-kera, and @shoaibulhaque.
-- **SQLite correctness:** preserve transaction outcomes when warning handlers throw, settle peer closes after shared-worker refusal, and prevent retired cache generations from taking worker ownership. (#157151, #173813, #172798) Thanks @vincentkoc and @RomneyDa.
-- **Reply recovery:** preserve side-question and immediate fallback ordering, avoid repeated or missing answers after streamed delivery, and keep stopped yielded tasks from restarting. (#174869, #169305, #173798, #169453) Thanks @RomneyDa and @freeqaz-openai.
-- **Codex and native sessions:** release stalled startup waits and completed subagents after cancellation or cleanup failures, preserve conversations across runtime restarts, keep workspace bindings across reply resets, and settle recovered child binding writes before session readiness. (#168347, #173547, #166368, #160549, #177564) Thanks @RomneyDa, @Kimiyu-186, @alkor2000, @jhgaylor, @vincentkoc, @jjjhenriksen, and @obviyus.
-- **Gateway lifecycle:** retain restart custody, avoid stop-time lease deadlocks, recover worker capacity after reboot, and preserve suppressed-channel configuration across reloads. (#172852, #171308, #168863) Thanks @RomneyDa.
-- **CLI and process diagnostics:** preserve JSON output on Gateway command exits, report resource-disposal and PTY EOF failures, and surface failed diagnostic writes without crashing. (#176795, #173566, #176362, #174622) Thanks @vincentkoc and @RomneyDa.
-- **Scheduled follow-ups:** same-conversation follow-ups scheduled from an authorized operator turn keep that operator's current authority when they run, and one-shot continuations can call `next_check` to check back later. (#176422)
-- **Media and TTS:** time out slow hosted speech synthesis and report playback cache, probe, and quota failures rather than silently dropping cleanup errors. (#175614, #175634, #174668) Thanks @RomneyDa.
+- **Authorization:** Queued automation runs recheck access to owner-private memory before starting, and failed child results remain deliverable after the parent turn ends. (#198697, #197658). Related #198695 Thanks @RomneyDa, @daniel-lxs, and @obviyus.
+- **Conversation history:** Refreshes retain keyed commentary, transcript reads survive concurrent database preparation, and completed empty attempts no longer clutter history. (#188180, #188055, #188111) Thanks @RomneyDa, @vincentkoc, @fuller-stack-dev, and @jalehman.
+- **Gateway recovery:** Resume interrupted turns after workspace preparation, preserve graceful shutdown when restart intent stalls, and acknowledge uploads before workspace preparation. (#196423, #188047, #188728) Authored by @steipete. Thanks @RomneyDa, @TameTheGame, and @vincentkoc.
+- **Gateway reload:** Configuration updates no longer hang when the file watcher wins the reload race; MCP listener work is cancelled when shutdown starts. (#192701, #197119) Thanks @RomneyDa, @zeroaltitude, and @obviyus.
+- **Cron scheduling:** Preserve scheduled account selection, restart retry deadlines and completion-run identity; handle late scheduler wakeups without silently dropping jobs. (#180677, #197449, #197484) Thanks @RomneyDa, @vincentkoc, @giodl73-repo, @Stronggenetics, and @obviyus.
+- **Cron lifecycle:** Configuration hot reload no longer aborts in-flight jobs; startup deadlines and cancellation remain effective, and disabled automatic scheduling releases idle workers. (#197606, #188982, #196387). Related #197591 Authored by @steipete. Thanks @vincentkoc, @RomneyDa, @obviyus, and @wupingyuan81-oss.
+- **Quiet automations:** False trigger checks stay out of chat, and main-session automations can run from a DM without failing before the model call. (#188594, #188700, #180603). Related #180602, #197181 Authored by @steipete. Thanks @RomneyDa, @masatohoshino, @obviyus, and @Suiah98.
+- **Telegram replies and approvals:** Restore ACP replies in progress-stream mode and keep approvals inside their private or forum topic. (#197191, #198038, #192162). Related #195899, #197907, #125166 Thanks @bach205, @obviyus, @dankarization, @claxman, and @Waste2Time.
+- **Telegram hooks and controls:** Supply the runtime session key to delivery hooks and render disabled buttons as non-interactive. (#197519, #191647). Related #197186, #197669, #191645 Thanks @lester076, @obviyus, @rodricksz4h5, @tommyjoseph, and @aspalagin.
+- **Channels:** Deliver captioned Feishu media with block streaming disabled, normalize Unicode directory matches in Matrix and Mattermost, and prevent crafted Matrix formatting from stalling mention checks. (#191585, #187881, #187199, #184432) Thanks @RomneyDa, @forrystudio, @xialonglee, @obviyus, @wangmiao0668000666, and @LeizhenZhang.
+- **iOS voice:** Keep Talk working while the phone is locked and prevent the speech-permission Allow action from crashing the app. (#187864, #196822). Related #185664 Thanks @RomneyDa, @brianmcguire, @ultrakorne, and @obviyus.
+- **Talk startup:** Voice requests no longer stall before the backing agent starts, and failed startup registrations are released. (#183586, #187840). Related #187838 Thanks @RomneyDa, @bdjben, @brokemac79, and @shakkernerd.
+- **Control UI:** Prevent WebKit freezes while replacing an opening menu and avoid event-listener failures while chat details update. (#198658, #198380) Thanks @fuller-stack-dev.
+- **Host desktop:** Finish VNC authentication during readiness probes so repeated checks do not trigger server lockouts. (#193487). Related #193444 Thanks @SebTardif, @obviyus, and @lakemike.
+- **Keyboard and search:** Preserve IME navigation in the worktree picker, provide a keyboard skip to the composer, and match canonically equivalent Unicode attachment names. (#187732, #180896, #187674) Thanks @RomneyDa, @ooiuuii, @obviyus, @goutamadwant, @LiuwqGit, and @huwei-xydt.
+- **UI responsiveness:** Avoid accumulated WebKit slowdown after repeated session switches; release static loading animations and settle aborted data-URL previews. (#194027, #194146, #191451) Authored by @steipete. Thanks @RomneyDa, @vincentkoc, and @wangjx-xydt.
+- **Provider continuity:** Keep provider checkpoints available across credential-source and model switches. (#200063, #200208) Thanks @obviyus.
+- **OpenAI and Anthropic:** Preserve saved-context replay when hooks override requests, and keep Anthropic session prompts stable across completion wakes and message routes. (#199451, #197835, #197925) Thanks @RomneyDa, @vincentkoc, @vyctorbrzezowski, and @obviyus.
+- **Claude CLI and providers:** Recover after a failed live-session cleanup, reconnect after settled local transport failures, and include Claude CLI models without requiring an Anthropic model pin. (#198224, #187375, #191148). Related #195431, #187023 Thanks @obviyus, @mdarapour, @wtfichigo, @etzelm, and @Takhoffman.
+- **Model discovery:** Avoid slow reads with large model configurations and recover provider discovery during concurrent SDK imports. (#198837, #196448). Related #195477 Thanks @RomneyDa, @vincentkoc, @1052326311, and @WG-Mojo.
+- **Provider routing:** Keep OpenRouter requests on their own endpoint; config writes no longer silently switch models to API-key billing. (#185294, #191326). Related #185272 Thanks @vishnusenthil-16, @obviyus, and @etzelm.
+- **Rate limits:** Respect the configured maximum retry delay after tool execution instead of holding a session lane for an oversized wait. (#197611). Related #168101 Authored by @steipete. Thanks @kringsc.
+- **Doctor and upgrades:** Bound Doctor startup waits, honor SIGTERM, and avoid stalling live sessions during hosted checks. (#187936, #191125) Authored by @steipete. Thanks @RomneyDa and @vincentkoc.
+- **Update reliability:** Keep database restoration available while progress polls during Doctor, tolerate harmless empty-WAL transitions, preserve failed post-plugin Doctor warnings, and recognize successful Gateway startup before post-update checks. (#192083, #193134, #192942) Authored by @steipete. Thanks @TameTheGame, @RomneyDa, @vincentkoc, and @fuller-stack-dev.
+- **macOS onboarding:** Preserve the installer terminal handoff so onboarding can install plugins without detached npm terminal failures. (#200247). Related #200244 Thanks @RomneyDa, @vincentkoc, and @miguelbranco80.
+- **Stored state:** Restore cold transcripts for renamed agents before repair, tolerate retained deleted-agent databases, and isolate held databases until explicit restoration. (#196079, #198145, #198180). Related #196066 Authored by @steipete.
+- **Backups:** Compact snapshots inside the staging directory, inspect the backup engine without copying the live database, and preserve SQLite corruption diagnostics. (#194230, #194234, #194497). Related #194208, #194209 Authored by @steipete. Thanks @GoatInAHat.
+- **Backup diagnostics:** Identify busy files during backup capture and retry transient Windows access failures without weakening integrity checks. (#193685) Authored by @steipete. Thanks @wr-web.
+- **Update recovery:** Handle state-path aliases, live cleanup writes and environment-only service overrides without losing restoration progress. (#189004, #189628, #196371) Authored by @steipete. Thanks @RomneyDa.
+- **Update cleanup:** Avoid false failures from leftover snapshot copies or NFS snapshot-directory cleanup, and preserve external plugin data during rehearsal. (#193702, #195409, #196301). Related #195396 Thanks @RomneyDa, @fuller-stack-dev, and @tianping.
+- **Cold storage and startup:** Avoid worker out-of-memory failures during large transcript-index repair, restore cold PostgreSQL conversations after idle readers close, and avoid database-clone stalls during Gateway startup. (#194099, #189991, #190918) Authored by @steipete. Thanks @TameTheGame, @RomneyDa, @vincentkoc, @etzelm, and @Frosmans.
+- **Memory and SQLite:** Avoid redundant Dreaming inventory reads, release completed SQLite readers, and prevent cursor restarts. (#180692, #190242). Related #180657 Thanks @chelsealong, @obviyus, @lisandromachado, and @ava-perry.
+- **Plugin rebuilds:** Release obsolete plugin-generation state instead of growing Gateway memory after every rebuild. (#199042) Thanks @etzelm and @Patrick-Erichsen.
+- **Packages and discovery:** Ship PostgreSQL declarations, point packaged plugin exports at compiled runtime files, and restore Bonjour discovery in npm installs. (#188091, #188639, #199156) Authored by @steipete. Thanks @RomneyDa, @vincentkoc, @galiniliev, and @alfredjbclaw.
+- **Browser and workflow paths:** Preserve native CORS preflights, avoid Lightpanda navigation timeouts, and keep literal workflow paths intact instead of trimming whitespace. (#185028, #196400, #187785) Authored by @steipete. Thanks @vincentkoc, @RomneyDa, @eleqtrizit, @wangmiao0668000666, and @obviyus.
+- **CLI and configuration:** Offer help flags in shell completion, allow dotted-path insertions in JSON and YAML, and stop pending cron inventory reads on interrupt. (#187799, #187828, #187726) Thanks @bajiaoshan, @obviyus, @LinzeShi, and @SunnyShu0925.
 
 ### Complete contribution record
 
-This audited record covers the complete v2026.10.5..bba7238a1be3a0d4e92c371988f94e81011a06b2 history: 293 in-range PRs + 0 retained seed-only PRs = 293 unique PRs. The generation manifest also supplies direct commits as editorial input; the grouped notes above prioritize user impact.
+This audited record covers the complete 90a5029e427822745c59e4f1268db08ade257d5b..a1f3f16e7b2e6a80c89e3ec852a2061120c62069 history: 351 in-range PRs + 0 retained seed-only PRs = 351 unique PRs. The generation manifest also supplies direct commits as editorial input; the grouped notes above prioritize user impact.
+
+Shipped baseline exclusions: v2026.10.10 (3 PRs: #149131, #186953, #187776); v2026.10.9 (1 PRs: #177451); v2026.11.1 (39 PRs: #172116, #179312, #180164, #180169, #180180, #180183, #180191, #180200, #180201, #180203, #180211, #183501, #184919, #185141, #185258, #185432, #186107, #186271, #187664, #187724, #187734, #187835, #187865, #187921, #187991, #187994, #189023, #189130, #189712, #189713, #189715, #189718, #189720, #189748, #189827, #190729, #191468, #191495, #191641); v2026.11.2 (8 PRs: #185917, #186117, #186666, #186782, #188015, #189321, #191560, #191882); v2026.11.3 (0 PRs); v2026.11.4 (41 PRs: #187795, #187819, #187870, #187886, #188404, #188846, #194066, #194353, #194595, #194840, #195390, #196158, #196217, #196250, #196282, #196293, #196337, #196342, #196346, #196401, #196435, #196474, #196480, #196517, #196672, #196742, #196747, #196750, #196877, #196878, #196924, #196927, #196929, #196984, #197032, #197049, #197248, #197323, #197345, #197349, #198107).
 
 #### Pull requests
 
-- **PR #176194** Related #176111. Thanks @skyzhao1223 and @RomneyDa and @easyteacher.
-- **PR #176174** Related #176163. Thanks @RomneyDa and @tjarrau-dev.
-- **PR #175007** Thanks @RomneyDa.
-- **PR #176783** Related #176669. Thanks @RomneyDa and @PennyVibe.
-- **PR #171101** Related #170774, #171036. Thanks @RomneyDa and @homeworld520 and @Yolo521-bot.
-- **PR #171217** Related #171187. Thanks @RomneyDa and @Yolo521-bot.
-- **PR #171678** Related #171513. Thanks @RomneyDa and @TommyLei666.
-- **PR #173851** Related #173659. Thanks @RomneyDa and @fengfan201314-eng.
-- **PR #174257** Related #174120. Thanks @RomneyDa and @kazuyuki-eguchi.
-- **PR #174969** Related #174906. Thanks @RomneyDa and @throwingbones.
-- **PR #176104** Related #176066. Thanks @yinx65588-boop and @RomneyDa and @BGreezy.
-- **PR #176009** Thanks @Alix-007 and @RomneyDa.
-- **PR #176219** Thanks @vincentkoc and @RomneyDa.
-- **PR #167935** Related #167934. Thanks @PollyBot13 and @RomneyDa and @obviyus.
-- **PR #171977** Thanks @SunnyShu0925 and @RomneyDa and @obviyus.
-- **PR #173142** Thanks @SunnyShu0925 and @RomneyDa and @obviyus.
-- **PR #175624** Thanks @SunnyShu0925 and @RomneyDa and @obviyus.
-- **PR #176510** Thanks @RomneyDa.
-- **PR #175642** Related #175599. Thanks @sunlit-deng and @RomneyDa and @seriouslysean.
-- **PR #176603** Related #169077. Thanks @RomneyDa and @hannnnn-l.
-- **PR #176681** Thanks @RomneyDa.
-- **PR #176787** Thanks @RomneyDa.
-- **PR #176691** Thanks @RomneyDa.
-- **PR #176795** Thanks @vincentkoc and @RomneyDa.
-- **PR #176742** Thanks @sunlit-deng and @RomneyDa.
-- **PR #176879** Thanks @RomneyDa.
-- **PR #176876** Thanks @RomneyDa.
-- **PR #176873** Thanks @shakkernerd and @gideonpraise and @RomneyDa.
-- **PR #176997** Related #169256. Thanks @RomneyDa and @etzelm.
-- **PR #175606** Thanks @vincentkoc and @RomneyDa.
-- **PR #177042** Thanks @vincentkoc and @RomneyDa.
-- **PR #176990** Thanks @shakkernerd and @gideonpraise and @RomneyDa.
-- **PR #177038** Thanks @RomneyDa.
-- **PR #177060** Thanks @RomneyDa.
-- **PR #177096** Related #160561, #176966. Thanks @ScientificProgrammer and @yinx65588-boop and @RomneyDa and @jj5638521.
-- **PR #177059** Related #170203. Thanks @RomneyDa and @BodegaClaw.
-- **PR #177066** Thanks @RomneyDa.
-- **PR #177184** Thanks @RomneyDa.
-- **PR #177126** Thanks @shakkernerd and @gideonpraise and @RomneyDa.
-- **PR #177243** Thanks @vincentkoc and @RomneyDa.
-- **PR #177252** Thanks @RomneyDa.
-- **PR #176656** Thanks @RomneyDa.
-- **PR #176182** Thanks @ericcurtin and @RomneyDa.
-- **PR #176206** Thanks @RomneyDa.
-- **PR #172469** Thanks @easonclaw-lgtm and @RomneyDa.
-- **PR #176039** Thanks @RomneyDa.
-- **PR #176362** Thanks @RomneyDa.
-- **PR #173310** Thanks @TurboTheTurtle and @RomneyDa.
-- **PR #176458** Thanks @RomneyDa.
-- **PR #176293** Related #176250. Thanks @goutamadwant and @RomneyDa and @yetval.
-- **PR #175952** Thanks @RomneyDa.
-- **PR #176023** Thanks @RomneyDa.
-- **PR #175229** Thanks @RomneyDa.
-- **PR #175058** Related #174909. Thanks @Linux2010 and @RomneyDa and @ZhimingQ.
-- **PR #175289** Thanks @RomneyDa.
-- **PR #175343** Thanks @RomneyDa.
-- **PR #175416** Thanks @RomneyDa.
-- **PR #173048** Thanks @ericcurtin and @RomneyDa.
-- **PR #175381** Related #175303. Thanks @musatoktas and @RomneyDa and @Yolo521-bot.
-- **PR #175452** Thanks @RomneyDa.
-- **PR #175489** Thanks @RomneyDa.
-- **PR #175532** Thanks @RomneyDa.
-- **PR #172028** Related #171959. Thanks @ericcurtin and @RomneyDa and @Yolo521-bot.
-- **PR #175634** Thanks @RomneyDa.
-- **PR #175625** Thanks @vincentkoc and @RomneyDa.
-- **PR #174590** Related #174504. Thanks @shoaibulhaque and @RomneyDa and @altaywtf and @Yolo521-bot.
-- **PR #175614** Thanks @RomneyDa.
-- **PR #175689** Thanks @RomneyDa.
-- **PR #175703** Thanks @RomneyDa.
-- **PR #175726** Thanks @RomneyDa.
-- **PR #174424** Thanks @RomneyDa.
-- **PR #174299** Thanks @RomneyDa.
-- **PR #174477** Thanks @RomneyDa.
-- **PR #174571** Related #174204. Thanks @RomneyDa and @scalesmart.
-- **PR #174573** Thanks @RomneyDa.
-- **PR #174622** Thanks @RomneyDa.
-- **PR #174668** Thanks @RomneyDa.
-- **PR #172293** Thanks @wangmiao0668000666 and @RomneyDa and @obviyus.
-- **PR #172953** Thanks @Leon-SK668 and @RomneyDa and @obviyus.
-- **PR #172742** Thanks @Leon-SK668 and @RomneyDa and @obviyus.
-- **PR #174750** Related #173351. Thanks @RomneyDa and @Yolo521-bot.
-- **PR #174767** Related #173348. Thanks @skyzhao1223 and @RomneyDa and @Yolo521-bot.
-- **PR #174807** Related #174563. Thanks @RomneyDa and @sunlit-deng and @prizmizm.
-- **PR #174869** Thanks @RomneyDa.
-- **PR #174868** Thanks @RomneyDa.
-- **PR #174030** Thanks @vincentkoc and @RomneyDa.
-- **PR #174195** Thanks @RomneyDa.
-- **PR #174249** Related #174072. Thanks @RomneyDa and @shoaibulhaque and @astapenkoav.
-- **PR #168735** Thanks @SunnyShu0925 and @RomneyDa and @obviyus.
-- **PR #162828** Thanks @SunnyShu0925 and @fuller-stack-dev and @RomneyDa.
-- **PR #165889** Thanks @SunnyShu0925 and @fuller-stack-dev and @RomneyDa.
-- **PR #167619** Thanks @SunnyShu0925 and @fuller-stack-dev and @RomneyDa.
-- **PR #155323** Related #155322. Thanks @masatohoshino and @fuller-stack-dev and @RomneyDa.
-- **PR #173753** Thanks @vincentkoc and @RomneyDa.
-- **PR #173686** Thanks @RomneyDa.
-- **PR #173241** Thanks @wangmiao0668000666 and @RomneyDa and @obviyus.
-- **PR #173798** Thanks @RomneyDa.
-- **PR #173813** Thanks @RomneyDa.
-- **PR #173835** Thanks @RomneyDa.
-- **PR #172903** Thanks @RomneyDa.
-- **PR #173921** Thanks @RomneyDa.
-- **PR #173231** Thanks @pgondhi987 and @RomneyDa.
-- **PR #157151** Thanks @vincentkoc and @RomneyDa.
-- **PR #163959** Thanks @vincentkoc and @RomneyDa.
-- **PR #163665** Thanks @ly85206559 and @RomneyDa and @vincentkoc.
-- **PR #163818** Thanks @RomneyDa and @vincentkoc.
-- **PR #163825** Thanks @RomneyDa and @vincentkoc.
-- **PR #163920** Thanks @RomneyDa and @vincentkoc.
-- **PR #163931** Thanks @RomneyDa and @vincentkoc.
-- **PR #150992** Related #150083. Thanks @wangmiao0668000666 and @RomneyDa and @vincentkoc and @dh-js.
-- **PR #163918** Thanks @RomneyDa and @vincentkoc.
-- **PR #163839** Thanks @RomneyDa and @vincentkoc.
-- **PR #163915** Thanks @RomneyDa and @vincentkoc.
-- **PR #163933** Thanks @RomneyDa and @vincentkoc.
-- **PR #163926** Thanks @RomneyDa and @vincentkoc.
-- **PR #163932** Thanks @RomneyDa and @vincentkoc.
-- **PR #163952** Thanks @RomneyDa and @vincentkoc.
-- **PR #163944** Thanks @RomneyDa and @vincentkoc.
-- **PR #163809** Thanks @RomneyDa and @vincentkoc.
-- **PR #163951** Thanks @RomneyDa and @vincentkoc.
-- **PR #173954** Thanks @RomneyDa.
-- **PR #176709** Thanks @RomneyDa.
-- **PR #173209** Thanks @RomneyDa.
-- **PR #173347** Related #173077. Thanks @RomneyDa and @Winoren and @Yolo521-bot.
-- **PR #142434** Related #142398. Thanks @ashawwal and @RomneyDa and @obviyus.
-- **PR #164210** Related #163559. Thanks @andrewwbuilds and @RomneyDa and @obviyus and @abacha.
-- **PR #173407** Thanks @RomneyDa.
-- **PR #173225** Thanks @RomneyDa.
-- **PR #172639** Thanks @stevenlee-oai and @RomneyDa.
-- **PR #173547** Thanks @Kimiyu-186 and @RomneyDa.
-- **PR #173498** Thanks @obviyus and @RomneyDa.
-- **PR #173560** Related #173546. Thanks @shakkernerd and @RomneyDa.
-- **PR #172223** Related #172222. Thanks @serg0x and @RomneyDa.
-- **PR #173566** Thanks @RomneyDa.
-- **PR #172980** Related #172871. Thanks @RomneyDa and @Oldrich333.
-- **PR #173000** Thanks @RomneyDa.
-- **PR #172983** Related #172899. Thanks @RomneyDa and @budzation.
-- **PR #172780** Thanks @SunnyShu0925 and @RomneyDa.
-- **PR #170608** Thanks @duyufansh2008 and @RomneyDa.
-- **PR #170380** Related #170332. Thanks @DonnieFi and @RomneyDa.
-- **PR #172256** Thanks @SunnyShu0925 and @RomneyDa.
-- **PR #157948** Thanks @PollyBot13 and @fuller-stack-dev and @RomneyDa.
-- **PR #172691** Thanks @joshavant and @RomneyDa.
-- **PR #172798** Thanks @RomneyDa.
-- **PR #172182** Related #172180. Thanks @fhgffy and @skyzhao1223 and @RomneyDa.
-- **PR #172852** Thanks @RomneyDa.
-- **PR #164808** Thanks @anyech and @RomneyDa.
-- **PR #172023** Related #172000. Thanks @RomneyDa and @jeanmonet.
-- **PR #172133** Related #172109. Thanks @RomneyDa and @wangxiajun68.
-- **PR #172270** Thanks @RomneyDa.
-- **PR #172331** Related #172258. Thanks @RomneyDa and @rclarke0.
-- **PR #172380** Related #172233. Thanks @RomneyDa and @brainmonger.
-- **PR #172019** Thanks @mirasrael and @RomneyDa and @obviyus.
-- **PR #171414** Related #171380. Thanks @ericcurtin and @RomneyDa and @obviyus and @asikorskiy.
-- **PR #160549** Thanks @vincentkoc and @RomneyDa.
-- **PR #171208** Thanks @RomneyDa.
-- **PR #171482** Thanks @vincentkoc and @RomneyDa.
-- **PR #171571** Thanks @zhangguiping-xydt and @RomneyDa and @obviyus.
-- **PR #171570** Related #171366. Thanks @RomneyDa and @davidcittadini.
-- **PR #171587** Related #171472. Thanks @RomneyDa.
-- **PR #171564** Related #171438. Thanks @RomneyDa and @Dat1GUI.
-- **PR #154923** Related #149867. Thanks @sxh313 and @RomneyDa and @playhard94.
-- **PR #128886** Related #128859. Thanks @sashankh and @RomneyDa and @shad0wca7.
-- **PR #171936** Related #171797. Thanks @RomneyDa and @AntaresGG.
-- **PR #170967** Thanks @RomneyDa.
-- **PR #170940** Related #170700. Thanks @RomneyDa and @stop-time.
-- **PR #161098** Related #160641. Thanks @xydigitLybnnnn and @RomneyDa and @obviyus and @aniruddhaadak80.
-- **PR #166368** Related #124852. Thanks @alkor2000 and @RomneyDa and @obviyus and @jhgaylor.
-- **PR #169932** Related #169807. Thanks @huyengiang101086-spec and @RomneyDa and @Yolo521-bot.
-- **PR #170372** Related #169972. Thanks @xiajiahang and @RomneyDa and @letsc4.
-- **PR #169893** Related #169674. Thanks @xydigitLybnnnn and @RomneyDa and @farisoftfry.
-- **PR #162771** Related #162525, #162622. Thanks @xydigitLybnnnn and @RomneyDa and @shadow-enthusiast and @islandpreneur007.
-- **PR #171029** Related #171013. Thanks @ericcaiwx-star and @RomneyDa and @brainmonger.
-- **PR #141312** Thanks @hugenshen and @RomneyDa and @obviyus.
-- **PR #171164** Thanks @RomneyDa.
-- **PR #171186** Thanks @vincentkoc and @RomneyDa.
-- **PR #170500** Thanks @SunnyShu0925 and @RomneyDa and @obviyus.
-- **PR #170495** Thanks @SunnyShu0925 and @RomneyDa and @obviyus.
-- **PR #171094** Thanks @SunnyShu0925 and @RomneyDa and @obviyus.
-- **PR #171308** Thanks @RomneyDa.
-- **PR #171180** Related #171106. Thanks @ruel225 and @RomneyDa and @obviyus and @SanderHelgesen.
-- **PR #171365** Related #171034. Thanks @ynaamane and @RomneyDa and @obviyus and @Yolo521-bot.
-- **PR #155019** Related #154834. Thanks @linhongyu510 and @RomneyDa and @obviyus and @jerryliang122.
-- **PR #169280** Thanks @RomneyDa.
-- **PR #169392** Thanks @holgergruenhagen and @RomneyDa and @obviyus.
-- **PR #170867** Thanks @RomneyDa.
-- **PR #170615** Related #170522. Thanks @RomneyDa and @r3n3x.
-- **PR #170063** Related #169950. Thanks @amittell and @RomneyDa.
-- **PR #170913** Thanks @RomneyDa.
-- **PR #166245** Thanks @holgergruenhagen and @RomneyDa.
-- **PR #170048** Thanks @RomneyDa.
-- **PR #170125** Thanks @ly85206559 and @RomneyDa and @obviyus.
-- **PR #165019** Thanks @eleqtrizit and @RomneyDa.
-- **PR #168771** Thanks @SunnyShu0925 and @RomneyDa and @obviyus.
-- **PR #170123** Thanks @ly85206559 and @RomneyDa and @obviyus.
-- **PR #168731** Thanks @SunnyShu0925 and @RomneyDa and @obviyus.
-- **PR #170385** Related #170031. Thanks @RomneyDa and @council10-kera.
-- **PR #170384** Thanks @RomneyDa.
-- **PR #155801** Thanks @SunnyShu0925 and @RomneyDa and @obviyus.
-- **PR #170553** Related #170466. Thanks @obviyus and @RomneyDa and @migelizaga-rgb.
-- **PR #168666** Thanks @holgergruenhagen and @RomneyDa and @obviyus.
-- **PR #169489** Thanks @RomneyDa.
-- **PR #169645** Thanks @RomneyDa.
-- **PR #156835** Thanks @vincentkoc and @RomneyDa.
-- **PR #169936** Thanks @RomneyDa.
-- **PR #169912** Related #169911. Thanks @Solvely-Colin and @RomneyDa.
-- **PR #168864** Thanks @RomneyDa.
-- **PR #168863** Thanks @RomneyDa.
-- **PR #168347** Thanks @RomneyDa.
-- **PR #168905** Thanks @RomneyDa.
-- **PR #168416** Related #168415. Thanks @masatohoshino and @Takhoffman and @RomneyDa.
-- **PR #169180** Related #169121. Thanks @xilopaint and @RomneyDa and @jipeng6036-del.
-- **PR #169278** Related #168026. Thanks @RomneyDa and @obviyus.
-- **PR #169286** Thanks @RomneyDa.
-- **PR #169305** Thanks @RomneyDa.
-- **PR #169189** Related #169187. Thanks @xpeng5278-web and @RomneyDa.
-- **PR #169322** Thanks @RomneyDa.
-- **PR #169453** Thanks @freeqaz-openai and @RomneyDa.
-- **PR #172117** Related #139706. Thanks @holgergruenhagen and @RomneyDa and @ylcn91 and @Colton-Harris.
-- **PR #177564** Thanks @jjjhenriksen and @RomneyDa.
-- **PR #168583** Related #168822. Thanks @wangmiao0668000666 and @RomneyDa and @altaywtf.
-- **PR #175458** Thanks @RomneyDa.
-- **PR #175622** Thanks @RomneyDa.
-- **PR #174297** Thanks @RomneyDa.
-- **PR #169945** Thanks @Stronggenetics and @RomneyDa.
-- **PR #177451** Thanks @montrellcruse.
-- **PR #173711** Related #173564. Thanks @RomneyDa and @8bitsforge.
-- **PR #169529** Related #169054. Thanks @wangmiao0668000666 and @RomneyDa and @Oldrich333.
-- **PR #137273** Thanks @LiuwqGit and @RomneyDa.
-- **PR #177050** Thanks @obviyus and @RomneyDa.
-- **PR #171439** Thanks @RomneyDa.
-- **PR #168022** Thanks @RomneyDa.
-- **PR #167979** Thanks @RomneyDa.
-- **PR #168192** Thanks @RomneyDa.
-- **PR #168882** Thanks @RomneyDa.
-- **PR #168991** Thanks @RomneyDa.
-- **PR #149517**.
-- **PR #151211**.
-- **PR #168152** Thanks @RomneyDa.
-- **PR #168153** Thanks @RomneyDa.
-- **PR #168179** Thanks @RomneyDa.
-- **PR #168266** Thanks @RomneyDa.
-- **PR #168267** Thanks @RomneyDa.
-- **PR #168271** Thanks @RomneyDa.
-- **PR #168333**.
-- **PR #168587** Thanks @roboclaw-bot.
-- **PR #168675** Thanks @RomneyDa.
-- **PR #168722**.
-- **PR #169495** Thanks @RomneyDa.
-- **PR #169496** Thanks @RomneyDa.
-- **PR #169497** Thanks @RomneyDa.
-- **PR #169500** Thanks @RomneyDa.
-- **PR #169595** Thanks @RomneyDa.
-- **PR #169647**.
-- **PR #169672** Thanks @n572770.
-- **PR #169739**.
-- **PR #170274** Thanks @RomneyDa.
-- **PR #170297** Thanks @RomneyDa.
-- **PR #170490** Thanks @RomneyDa.
-- **PR #170704** Thanks @RomneyDa.
-- **PR #170964** Thanks @vincentkoc.
-- **PR #171109**.
-- **PR #171507** Thanks @RomneyDa.
-- **PR #171528** Thanks @jjjhenriksen.
-- **PR #172069**.
-- **PR #172515** Thanks @RomneyDa.
-- **PR #172661** Thanks @RomneyDa.
-- **PR #172668** Thanks @RomneyDa.
-- **PR #172689** Thanks @RomneyDa.
-- **PR #172705** Thanks @RomneyDa.
-- **PR #172745** Thanks @RomneyDa.
-- **PR #172954** Thanks @RomneyDa.
-- **PR #172974** Thanks @RomneyDa.
-- **PR #173068** Thanks @RomneyDa.
-- **PR #173105** Thanks @RomneyDa.
-- **PR #173205** Thanks @RomneyDa.
-- **PR #173465** Thanks @RomneyDa.
-- **PR #173615** Thanks @RomneyDa.
-- **PR #173656** Thanks @RomneyDa.
-- **PR #174556** Thanks @RomneyDa.
-- **PR #174614** Thanks @RomneyDa.
-- **PR #174924** Thanks @RomneyDa.
-- **PR #176779**.
-- **PR #176836** Thanks @xutongxue233.
-- **PR #177716** Thanks @jjjhenriksen.
-- **PR #177844**.
-- **PR #177888** Thanks @etzelm.
-- **PR #178009** Thanks @roboclaw-bot.
-- **PR #178054**.
-- **PR #178170** Thanks @RomneyDa.
-- **PR #178219** Thanks @RomneyDa.
-- **PR #178236**.
-- **PR #178624** Thanks @RomneyDa.
+- **PR #187764** Thanks @vincentkoc.
+- **PR #187732** Thanks @ooiuuii and @obviyus.
+- **PR #187152** Thanks @fuller-stack-dev.
+- **PR #187739** Thanks @wangmiao0668000666 and @obviyus.
+- **PR #185028** Thanks @eleqtrizit.
+- **PR #185785** Thanks @vincentkoc and @joshavant.
+- **PR #187807** Thanks @vincentkoc.
+- **PR #187726** Thanks @SunnyShu0925 and @obviyus.
+- **PR #180692** Related #180657. Thanks @chelsealong, @obviyus, and @lisandromachado.
+- **PR #187674** Thanks @huwei-xydt and @obviyus.
+- **PR #187036** Thanks @wangmiao0668000666 and @obviyus.
+- **PR #187717** Thanks @Alix-007 and @obviyus.
+- **PR #187783** Thanks @vincentkoc.
+- **PR #187785** Thanks @wangmiao0668000666 and @obviyus.
+- **PR #187137** Thanks @fuller-stack-dev.
+- **PR #187199** Thanks @wangmiao0668000666 and @obviyus.
+- **PR #187148** Thanks @obviyus and @wangmiao0668000666.
+- **PR #186092** Thanks @mmaps.
+- **PR #187799** Thanks @bajiaoshan and @obviyus.
+- **PR #187818** Thanks @vincentkoc.
+- **PR #187790** Thanks @joshavant.
+- **PR #187826**
+- **PR #187761** Related #187740. Thanks @shakkernerd.
+- **PR #187762** Thanks @shakkernerd.
+- **PR #185730** Authored by @steipete.
+- **PR #187829** Thanks @vincentkoc.
+- **PR #187821** Thanks @vincentkoc.
+- **PR #187828** Thanks @LinzeShi and @obviyus.
+- **PR #187843** Thanks @vincentkoc.
+- **PR #187830** Thanks @vincentkoc.
+- **PR #187820** Thanks @HootRock and @obviyus.
+- **PR #187840** Related #187838. Thanks @shakkernerd.
+- **PR #187846** Related #187750. Thanks @shakkernerd.
+- **PR #187833** Thanks @goslingmanagment, @dmsrg399, and @obviyus.
+- **PR #187797** Related #187788. Thanks @fredtanxo and @obviyus.
+- **PR #187855** Related #187851. Thanks @shakkernerd.
+- **PR #187858** Thanks @hannesrudolph.
+- **PR #187860**
+- **PR #180896** Thanks @goutamadwant, @LiuwqGit, and @obviyus.
+- **PR #187859** Thanks @vincentkoc.
+- **PR #186651** Thanks @PollyBot13.
+- **PR #187871**
+- **PR #187845** Thanks @joshavant.
+- **PR #187874** Thanks @vincentkoc.
+- **PR #187877** Authored by @steipete.
+- **PR #187831** Thanks @RomneyDa and @montrellcruse.
+- **PR #175837** Authored by @steipete. Thanks @jalehman.
+- **PR #187853** Thanks @coaiMax and @obviyus.
+- **PR #187890** Related #187885. Thanks @shakkernerd.
+- **PR #183706** Related #183705. Authored by @steipete. Thanks @HermanZeng, @fuller-stack-dev, @VACInc, @yxshee, @masatohoshino, @Patrick-Erichsen, @Peetiegonzalez, @Solvely-Colin, @shakkernerd, @RomneyDa, @pattty847, @akshitkhokhani, @HeZ2z, @jalehman, @xiaopan-xydt, @patelmm79, @MoerAI, @jayzhou2309, @kohjunhao, @MonkeyLeeT, @libaojiang, @etzelm, @xydigitLybnnnn, @gideonpraise, @jbax1899, @edosulai, @jason-allen-oneal, @555aaditya, @maxdjohnson, @LiuwqGit, @YangManBOBO, @Terwox, @Glucksberg, @fransqaas, @Alix-007, @PollyBot13, @xilopaint, @obviyus, @HootRock, @hehuang139, @chessing234, @sunlit-deng, @Leon-SK668, @potoior, @Michel-Settembrino, @ayaangazali, @ericcaiwx-star, @vincentkoc, @ceckert, @duyufansh2008, @brianmcguire, @shoaibulhaque, @Takhoffman, @JIRBOY, @MumuTW, @stevenlee-oai, @alkor2000, @jacobtomlinson, @nkeil, @holgergruenhagen, @Tsuki-hash, @wangmiao0668000666, @Navras98, @ensignwesley, @eleqtrizit, @sukhdeepjohar, @creanet-64, @mbelinky, @ooiuuii, @dankarization, @paulcam206, @brokemac79, @vyctorbrzezowski, @anmol0b, @TheRealUnknownSoldier, @KrasimirKralev, @xialonglee, @hugenshen, @openclaw-agent-man, @dlmccoy, @Stronggenetics, @MertBasar0, @avnishkirnalli, @keenranger, @ChuLaiTheGreat, @chelsealong, @jjjhenriksen, @Sedrak-Hovhannisyan, @CassieMei, @jsy, @hannesrudolph, @rogeriochaves, @dlauer, @JustYannicc, @yinx65588-boop, @TheAngryPit, @eliavb43, @boeingchoco, @aniruddhaadak80, @ericcurtin, @mike1122real-hub, @mushuiyu886, @enki, @ywjanewer, @TUARAN, @JasonBuildAI, @jaxonparrott, @maliv2, @beru-ant-king, @ificator, @SunnyShu0925, @shanselman, @loading2332, @Links2008, @sallyom, @nxmxbbd, @joshavant, @ruel225, @diregoblin, @xpeng5278-web, @LiLan0125, @dwc1997, @ablake4427, @harjothkhara, @aniketkrs, @ferrine, @htuyer121, @wr-web, @brandon-julio-t, @rodricksz4h5, @rjdotdev, @shannon0430, @kybrcore, @momothemage, @wuqxuan, @Yuaneen, @Maximora-byte, @CameronVetter, @dmsrg399, @AmelioMansour, @mikasa0818, @L4XB, @gloss-dandelion-cult, @Grynn, @indra622, @ryan-dyer-sp, @ababkin, @Marvinthebored, @felirami, @serg0x, @dylanharrington, @Ricardodpalmeida, @quqi1599, @chuanleiguo, @maxsxu, @miguelbranco80, @lordratner, @fatherkam, @Deltawerks, @Rocuts, @lonexreb, @goutamadwant, @SebTardif, @LeizhenZhang, @pstarkgit, @LeoStehlik, @zongzuoscc, @SC-10749, @gdpu11, @omarshahine, @demos-ra, @xyi74976-del, @LinzeShi, @hamedshehab, @namest504, @Jimmy-xuzimo, @matthematics1137, @MarMarLabs, @bajiaoshan, @hidaba, @licheer-zte, @mikeypaepke-gif, @InsanusMokrassar, @andrewbowlds, @ly85206559, @Yun-0000, @GrahamMcBain, @amittell, @grootbro, and @qingminglong.
+- **PR #187889** Related #187887. Thanks @shakkernerd.
+- **PR #187867** Authored by @steipete.
+- **PR #187897** Thanks @vincentkoc.
+- **PR #187873** Related #187863. Thanks @shakkernerd.
+- **PR #187895** Thanks @joshavant.
+- **PR #187881** Thanks @xialonglee and @obviyus.
+- **PR #187904** Thanks @vincentkoc.
+- **PR #187805** Related #186997. Thanks @lastguru-net and @beru-ant-king.
+- **PR #187375** Related #187023. Thanks @wtfichigo and @obviyus.
+- **PR #187864** Related #185664. Thanks @brianmcguire and @ultrakorne.
+- **PR #187901** Authored by @steipete.
+- **PR #187880** Thanks @atomicdjt and @obviyus.
+- **PR #187915** Thanks @shakkernerd.
+- **PR #187920** Thanks @joshavant.
+- **PR #187929** Thanks @RomneyDa.
+- **PR #187948** Thanks @RomneyDa.
+- **PR #187957** Thanks @RomneyDa.
+- **PR #187992** Thanks @RomneyDa.
+- **PR #188071** Thanks @RomneyDa.
+- **PR #187933** Related #187928. Thanks @shakkernerd.
+- **PR #187967** Thanks @shakkernerd.
+- **PR #188091** Thanks @RomneyDa.
+- **PR #188083** Thanks @RomneyDa.
+- **PR #188098** Thanks @RomneyDa.
+- **PR #188096** Thanks @RomneyDa.
+- **PR #188094** Thanks @RomneyDa.
+- **PR #188093** Thanks @RomneyDa.
+- **PR #188111** Thanks @RomneyDa.
+- **PR #188097** Thanks @RomneyDa.
+- **PR #188532** Thanks @RomneyDa.
+- **PR #188047** Authored by @steipete.
+- **PR #186603** Thanks @galiniliev.
+- **PR #188156** Thanks @stevenlee-oai.
+- **PR #187406** Thanks @vincentkoc.
+- **PR #187473** Thanks @vincentkoc.
+- **PR #188398** Authored by @steipete.
+- **PR #188444** Authored by @steipete.
+- **PR #188554** Authored by @steipete.
+- **PR #188806** Thanks @RomneyDa.
+- **PR #188556** Authored by @steipete.
+- **PR #186270** Thanks @jalehman.
+- **PR #188104** Related #188101. Thanks @shakkernerd.
+- **PR #188853** Authored by @steipete.
+- **PR #187936** Authored by @steipete.
+- **PR #188639** Thanks @galiniliev.
+- **PR #188180** Thanks @fuller-stack-dev.
+- **PR #188792** Authored by @steipete.
+- **PR #187968** Related #187958. Thanks @shakkernerd.
+- **PR #188704** Thanks @shakkernerd.
+- **PR #188324** Authored by @steipete.
+- **PR #188877** Authored by @steipete.
+- **PR #189170** Thanks @RomneyDa.
+- **PR #188982** Authored by @steipete.
+- **PR #189020** Authored by @steipete.
+- **PR #189203** Thanks @RomneyDa.
+- **PR #189004** Authored by @steipete.
+- **PR #189233** Thanks @RomneyDa.
+- **PR #189236** Thanks @RomneyDa.
+- **PR #189008** Authored by @steipete.
+- **PR #189151** Thanks @vincentkoc.
+- **PR #189242** Thanks @RomneyDa.
+- **PR #189252** Thanks @RomneyDa.
+- **PR #189244** Thanks @vincentkoc.
+- **PR #189296** Thanks @RomneyDa.
+- **PR #189385** Thanks @RomneyDa.
+- **PR #189436** Thanks @RomneyDa.
+- **PR #189329** Related #189317. Thanks @shakkernerd.
+- **PR #189533** Thanks @RomneyDa.
+- **PR #189628** Thanks @RomneyDa.
+- **PR #189665** Thanks @RomneyDa.
+- **PR #189722** Thanks @RomneyDa.
+- **PR #189768** Thanks @RomneyDa.
+- **PR #189885** Thanks @RomneyDa.
+- **PR #189514** Thanks @vincentkoc and @freeqaz-openai.
+- **PR #190120** Thanks @RomneyDa.
+- **PR #190166** Thanks @RomneyDa.
+- **PR #190294** Thanks @RomneyDa.
+- **PR #188597** Thanks @RomneyDa.
+- **PR #190352** Thanks @RomneyDa.
+- **PR #190423** Thanks @RomneyDa.
+- **PR #190452** Thanks @RomneyDa.
+- **PR #189692** Thanks @vincentkoc.
+- **PR #187409** Thanks @vincentkoc.
+- **PR #189129** Authored by @steipete.
+- **PR #189386** Authored by @steipete.
+- **PR #189622** Thanks @vincentkoc.
+- **PR #189675** Thanks @vincentkoc.
+- **PR #189707** Thanks @vincentkoc.
+- **PR #189831** Thanks @vincentkoc.
+- **PR #190116** Thanks @vincentkoc.
+- **PR #190628** Thanks @RomneyDa.
+- **PR #190761** Authored by @steipete.
+- **PR #190790** Thanks @shakkernerd.
+- **PR #189340** Thanks @vincentkoc.
+- **PR #190791** Related #190784. Thanks @shakkernerd.
+- **PR #190850** Thanks @RomneyDa.
+- **PR #190864** Thanks @RomneyDa.
+- **PR #191148** Thanks @etzelm and @Takhoffman.
+- **PR #190796** Thanks @vincentkoc.
+- **PR #191451** Thanks @wangjx-xydt and @RomneyDa.
+- **PR #191129** Thanks @vincentkoc.
+- **PR #191125** Authored by @steipete.
+- **PR #187983** Thanks @shakkernerd.
+- **PR #187417** Thanks @vincentkoc.
+- **PR #189702** Thanks @vincentkoc.
+- **PR #189696** Authored by @steipete.
+- **PR #191472** Authored by @steipete.
+- **PR #191638** Thanks @RomneyDa.
+- **PR #191664** Thanks @RomneyDa.
+- **PR #191674** Thanks @RomneyDa.
+- **PR #189731** Thanks @vincentkoc.
+- **PR #189404** Thanks @vincentkoc.
+- **PR #191790** Thanks @RomneyDa.
+- **PR #191793** Thanks @RomneyDa.
+- **PR #191854** Thanks @RomneyDa.
+- **PR #180677** Thanks @vincentkoc.
+- **PR #191904** Thanks @RomneyDa.
+- **PR #191903** Thanks @RomneyDa.
+- **PR #191633** Authored by @steipete. Thanks @RomneyDa.
+- **PR #191838** Thanks @RomneyDa.
+- **PR #193613** Thanks @RomneyDa.
+- **PR #188594** Authored by @steipete.
+- **PR #188700** Authored by @steipete.
+- **PR #189272** Authored by @steipete.
+- **PR #188743** Thanks @RomneyDa.
+- **PR #188814** Thanks @RomneyDa.
+- **PR #188985** Thanks @RomneyDa.
+- **PR #187996** Thanks @RomneyDa.
+- **PR #188019** Thanks @RomneyDa.
+- **PR #188020** Thanks @RomneyDa.
+- **PR #188016** Thanks @RomneyDa.
+- **PR #190754** Thanks @RomneyDa.
+- **PR #192456** Thanks @RomneyDa.
+- **PR #192475** Thanks @RomneyDa.
+- **PR #192494** Thanks @RomneyDa.
+- **PR #192499** Thanks @RomneyDa.
+- **PR #192487** Thanks @RomneyDa.
+- **PR #192389** Thanks @RomneyDa.
+- **PR #192408** Thanks @RomneyDa.
+- **PR #192596** Thanks @RomneyDa.
+- **PR #192684** Thanks @RomneyDa.
+- **PR #191654** Thanks @RomneyDa.
+- **PR #192584** Related #192565. Thanks @RomneyDa.
+- **PR #193071** Thanks @RomneyDa.
+- **PR #192607** Thanks @RomneyDa.
+- **PR #193095** Thanks @RomneyDa.
+- **PR #192590** Thanks @RomneyDa.
+- **PR #192589** Thanks @RomneyDa.
+- **PR #192829** Thanks @RomneyDa.
+- **PR #192591** Related #192563. Thanks @RomneyDa.
+- **PR #192587** Related #192561. Thanks @RomneyDa.
+- **PR #192392** Thanks @RomneyDa.
+- **PR #192628** Thanks @obviyus.
+- **PR #192850** Authored by @steipete.
+- **PR #188918** Thanks @RomneyDa.
+- **PR #190782** Thanks @shakkernerd.
+- **PR #190830** Thanks @shakkernerd.
+- **PR #188765** Authored by @steipete.
+- **PR #193791** Thanks @RomneyDa.
+- **PR #193750** Thanks @RomneyDa.
+- **PR #188543** Authored by @steipete.
+- **PR #195398** Thanks @RomneyDa.
+- **PR #196315** Thanks @RomneyDa.
+- **PR #196355** Thanks @RomneyDa.
+- **PR #194099** Thanks @vincentkoc.
+- **PR #196301** Thanks @RomneyDa.
+- **PR #196386** Related #192547. Thanks @RomneyDa and @vincentkoc.
+- **PR #196898** Thanks @RomneyDa.
+- **PR #196387** Thanks @RomneyDa and @vincentkoc.
+- **PR #189991** Thanks @etzelm.
+- **PR #196448** Related #195477. Thanks @1052326311 and @WG-Mojo.
+- **PR #191326** Thanks @etzelm.
+- **PR #196207** Related #194408. Thanks @aniruddhaadak80, @RomneyDa, and @garrytan.
+- **PR #196400** Thanks @RomneyDa.
+- **PR #196923** Thanks @joshavant.
+- **PR #196423** Authored by @steipete.
+- **PR #196540** Thanks @joshavant.
+- **PR #196493** Authored by @steipete.
+- **PR #197427** Thanks @vincentkoc.
+- **PR #193272** Thanks @obviyus, @RomneyDa, and @vincentkoc.
+- **PR #196371** Thanks @RomneyDa.
+- **PR #188840** Thanks @RomneyDa.
+- **PR #188958** Thanks @RomneyDa.
+- **PR #197449** Thanks @giodl73-repo.
+- **PR #193038** Thanks @vincentkoc.
+- **PR #189959** Thanks @vincentkoc.
+- **PR #190777** Related #190776. Thanks @shakkernerd.
+- **PR #192620** Thanks @vincentkoc.
+- **PR #190758** Thanks @vincentkoc.
+- **PR #190803** Related #190797. Thanks @shakkernerd.
+- **PR #190811** Thanks @shakkernerd.
+- **PR #190808** Related #190802. Thanks @shakkernerd.
+- **PR #190795** Thanks @shakkernerd.
+- **PR #190402** Thanks @vincentkoc.
+- **PR #194158** Thanks @vincentkoc.
+- **PR #188987** Thanks @RomneyDa.
+- **PR #193735** Authored by @steipete.
+- **PR #185477** Authored by @steipete. Thanks @joshavant.
+- **PR #193686** Thanks @vincentkoc.
+- **PR #198397** Thanks @RomneyDa and @vincentkoc.
+- **PR #188836** Thanks @RomneyDa.
+- **PR #190350** Thanks @vincentkoc and @RomneyDa.
+- **PR #192701** Thanks @RomneyDa.
+- **PR #191275** Authored by @steipete.
+- **PR #188728** Authored by @steipete.
+- **PR #198656** Thanks @RomneyDa and @vincentkoc.
+- **PR #188055** Thanks @jalehman and @vincentkoc.
+- **PR #198309** Related #198289. Thanks @Yun-0000, @obviyus, and @mulderp82.
+- **PR #190242** Thanks @ava-perry.
+- **PR #198860** Thanks @RomneyDa.
+- **PR #197658** Thanks @obviyus.
+- **PR #197484** Thanks @Stronggenetics and @obviyus.
+- **PR #197606** Related #197591. Thanks @obviyus and @wupingyuan81-oss.
+- **PR #198224** Related #195431. Thanks @obviyus and @mdarapour.
+- **PR #145741** Related #145636. Thanks @ZengWen-DT, @obviyus, and @bricelb.
+- **PR #197119** Thanks @zeroaltitude and @obviyus.
+- **PR #198697** Related #198695. Thanks @daniel-lxs.
+- **PR #188105** Thanks @obviyus.
+- **PR #197853** Related #197829. Thanks @gulagala001, @obviyus, and @Borekobama.
+- **PR #198357** Authored by @steipete.
+- **PR #199451** Thanks @vyctorbrzezowski.
+- **PR #196693** Thanks @obviyus.
+- **PR #198837** Thanks @vincentkoc.
+- **PR #198427** Related #158421. Thanks @obviyus, @alkor2000, and @HerbertHuerto.
+- **PR #185294** Related #185272. Thanks @vishnusenthil-16 and @obviyus.
+- **PR #188010** Thanks @vincentkoc.
+- **PR #197851** Thanks @obviyus.
+- **PR #197111** Authored by @steipete. Thanks @obviyus.
+- **PR #196378** Thanks @garrytan and @obviyus.
+- **PR #194545** Thanks @RomneyDa and @vincentkoc.
+- **PR #191585** Thanks @forrystudio.
+- **PR #196822** Thanks @obviyus.
+- **PR #194027** Authored by @steipete.
+- **PR #197519** Related #197186, #197669. Thanks @lester076, @obviyus, @rodricksz4h5, and @tommyjoseph.
+- **PR #198038** Related #197907. Thanks @dankarization and @obviyus.
+- **PR #196991** Thanks @obviyus.
+- **PR #198380** Thanks @fuller-stack-dev.
+- **PR #198658** Thanks @fuller-stack-dev.
+- **PR #184432** Thanks @LeizhenZhang and @obviyus.
+- **PR #191647** Related #191645. Thanks @aspalagin and @obviyus.
+- **PR #192162** Related #125166. Thanks @claxman, @obviyus, and @Waste2Time.
+- **PR #198022** Related #197923. Thanks @dankarization and @obviyus.
+- **PR #197271** Authored by @steipete.
+- **PR #194146** Authored by @steipete.
+- **PR #183586** Thanks @bdjben and @brokemac79.
+- **PR #185097** Thanks @RomneyDa.
+- **PR #194230** Related #194208. Authored by @steipete. Thanks @GoatInAHat.
+- **PR #194234** Related #194209. Authored by @steipete. Thanks @GoatInAHat.
+- **PR #194497** Authored by @steipete.
+- **PR #194636** Related #194621. Thanks @wr-web and @sennyhoney.
+- **PR #196079** Related #196066. Authored by @steipete.
+- **PR #198145** Authored by @steipete.
+- **PR #190875** Authored by @steipete. Thanks @chrislro.
+- **PR #190918** Authored by @steipete. Thanks @Frosmans.
+- **PR #198180** Authored by @steipete.
+- **PR #199156** Authored by @steipete. Thanks @alfredjbclaw.
+- **PR #198925** Thanks @RomneyDa and @vincentkoc.
+- **PR #198926** Thanks @RomneyDa and @vincentkoc.
+- **PR #198989** Thanks @RomneyDa and @vincentkoc.
+- **PR #198990** Thanks @RomneyDa and @vincentkoc.
+- **PR #199780** Thanks @RomneyDa.
+- **PR #199785** Thanks @RomneyDa.
+- **PR #199836** Thanks @RomneyDa.
+- **PR #197203** Thanks @obviyus.
+- **PR #197835** Thanks @obviyus.
+- **PR #197893** Thanks @obviyus.
+- **PR #197925** Thanks @obviyus.
+- **PR #199009** Thanks @RomneyDa and @vincentkoc.
+- **PR #199561** Thanks @RomneyDa, @vincentkoc, and @jalehman.
+- **PR #193702** Thanks @fuller-stack-dev.
+- **PR #195409** Related #195396. Thanks @tianping.
+- **PR #196262** Thanks @PollyBot13 and @sallyom.
+- **PR #198645** Authored by @steipete.
+- **PR #198653** Authored by @steipete.
+- **PR #197611** Related #168101. Authored by @steipete. Thanks @kringsc.
+- **PR #180603** Related #180602, #197181. Thanks @masatohoshino, @obviyus, and @Suiah98.
+- **PR #178764** Authored by @steipete.
+- **PR #197191** Related #195899. Thanks @bach205 and @obviyus.
+- **PR #195499** Authored by @steipete.
+- **PR #199564** Thanks @obviyus.
+- **PR #199758** Thanks @RomneyDa.
+- **PR #199110** Thanks @RomneyDa.
+- **PR #199945** Thanks @RomneyDa.
+- **PR #190065** Thanks @obviyus.
+- **PR #190088** Thanks @obviyus.
+- **PR #190246** Thanks @vincentkoc.
+- **PR #200035** Thanks @RomneyDa.
+- **PR #200168** Thanks @RomneyDa.
+- **PR #200171** Thanks @RomneyDa.
+- **PR #190239** Thanks @vincentkoc.
+- **PR #200063** Thanks @obviyus.
+- **PR #200208** Thanks @obviyus.
+- **PR #200247** Related #200244. Thanks @miguelbranco80.
+- **PR #192083** Authored by @steipete.
+- **PR #193134** Thanks @fuller-stack-dev.
+- **PR #192942** Authored by @steipete.
+- **PR #193685** Authored by @steipete. Thanks @wr-web.
+- **PR #199042** Thanks @etzelm and @Patrick-Erichsen.
+- **PR #193487** Related #193444. Thanks @SebTardif, @obviyus, and @lakemike.
+- **PR #199915** Thanks @RomneyDa.
+- **PR #199911** Thanks @RomneyDa.

@@ -59,6 +59,15 @@ assert.match(
   /verifyNodeArchiveChecksum/,
   'runtime bundle prep must verify Node archives before extraction',
 )
+assert.ok(
+  prepareRuntimeBundles.includes('PowerShell ZIP extraction missed Node/npm; retrying with tar'),
+  'Windows runtime preparation must retry ZIP extraction with tar when required files are missing',
+)
+assert.match(
+  prepareRuntimeBundles,
+  /run\('tar', \['-xf', archiveFile, '-C', extractDir\]\)/,
+  'Windows runtime extraction fallback must unpack the verified archive with tar',
+)
 assert.match(
   prepareRuntimeBundles,
   /verifyPackageLockPackage/,
@@ -123,6 +132,16 @@ assert.match(
   prepareOpenClawVendor,
   /sriSha512File/,
   'vendored OpenClaw package hydration must verify the package tarball SRI',
+)
+assert.match(
+  prepareOpenClawVendor,
+  /MAX_PACKAGE_DOWNLOAD_ATTEMPTS = 3/,
+  'vendored OpenClaw package downloads must have a bounded retry count',
+)
+assert.match(
+  prepareOpenClawVendor,
+  /isTransientDownloadError/,
+  'vendored OpenClaw package downloads must retry transient network failures',
 )
 assert.match(
   prepareOpenClawVendor,

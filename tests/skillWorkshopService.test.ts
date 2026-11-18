@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -11,7 +11,10 @@ import {
 } from '../server/services/skills/skillWorkshopService'
 
 async function makeSkillRoot() {
-  const temporary = await mkdtemp(path.join(os.tmpdir(), 'automnia-skill-workshop-'))
+  // macOS exposes its temporary directory through /var, which is a symlink to
+  // /private/var. Use the physical path because the skill path checks reject
+  // symlinked ancestors by design.
+  const temporary = await mkdtemp(path.join(await realpath(os.tmpdir()), 'automnia-skill-workshop-'))
   const root = path.join(temporary, 'skills')
   const skillDir = path.join(root, 'example-skill')
   await mkdir(path.join(skillDir, 'scripts'), { recursive: true })

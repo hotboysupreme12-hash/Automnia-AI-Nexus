@@ -13,9 +13,10 @@ times.
 3. The message contains a durable, unguessable `/download` link. It is not a
    Cloud Storage URL and does not have a ten-minute expiry.
 4. The page checks the configured GCS object paths and only renders installers
-   whose objects actually exist. If multiple platforms are published, it
-   highlights the installer appropriate to Windows, macOS, or Linux while
-   keeping the other published installers available for manual selection.
+   whose objects actually exist. It highlights Windows or Linux when the
+   browser identifies those operating systems. On macOS, customers choose
+   Apple silicon or Intel themselves because browsers do not reliably expose
+   the Mac CPU architecture.
 5. Clicking an installer checks the entitlement again and issues a fresh
    ten-minute GCS V4 signed URL. The browser is then redirected to the file.
 
@@ -53,18 +54,22 @@ After deployment, confirm `GET https://api.automnia.app/health` reports
 platform configuration. It does not replace an object listing; the download
 page performs the live GCS existence checks before showing a platform.
 
-The current bucket publication includes both macOS Apple silicon and macOS
-Intel DMGs. The portal therefore shows both to eligible customers; Windows and
-Linux remain hidden until their corresponding stable objects are uploaded.
+The portal lists each platform only after its configured private object exists.
+This lets the release workflow publish Windows, Intel Mac, Apple silicon Mac,
+Linux AppImage, and Linux `.deb` packages independently without showing broken
+download links.
 
 ## Build and publish installers
 
 The tagged public-release workflow builds every supported artifact, including
 both macOS architectures, and uploads the stable installer objects after the
-update manifest has passed verification. Configure the GitHub Actions variable
-`AUTOMNIA_INSTALLER_BUCKET` to the private bucket created by `deploy.ps1` and
-grant the `GCP_UPDATE_PUBLISHER_SERVICE_ACCOUNT` scoped object-admin access (or
-equivalent create/delete/overwrite permissions) to that bucket. The workflow also requires the existing update signing secret,
+update manifest has passed verification. It uses native GitHub-hosted x64
+Windows, Intel macOS, Apple silicon macOS, and x64 Linux runners, then mounts
+and launches each packaged installer on its matching OS runner. Configure the
+GitHub Actions variable `AUTOMNIA_INSTALLER_BUCKET` to the private bucket
+created by `deploy.ps1`, and grant the `GCP_UPDATE_PUBLISHER_SERVICE_ACCOUNT`
+scoped object-admin access (or equivalent create/delete/overwrite permissions)
+to that bucket. The workflow also requires the existing update signing secret,
 WIF provider, publisher service account, and `AUTOMNIA_UPDATE_BUCKET` variable.
 
 To publish a release, bump the package version, push the matching `vX.Y.Z` tag,
@@ -80,7 +85,8 @@ these exact stable objects for the Cloud Run portal and welcome email:
 | Linux x64 Debian | `releases/current/linux/Automnia-AI-Nexus-x86_64.deb` |
 
 For a local smoke build, build each platform on that platform (or in trusted
-CI). On an Apple-silicon Mac, this creates the M-series DMG:
+CI). The workflow uses native macOS runners for Intel and Apple silicon DMGs.
+On an Apple-silicon Mac, this creates the M-series DMG:
 
 ```bash
 npm ci
@@ -89,8 +95,14 @@ npm run dist:mac -- --arm64
 
 The packaged file is expected under `release/` and is named from the app
 version, for example `Automnia AI Nexus-1.0.0-arm64.dmg`. Rename/copy it only
-at upload time; the bucket object name stays stable. This project deliberately
-does not sign or notarize the package in this flow.
+at upload time; the bucket object name stays stable. The current release flow
+skips platform signing. The macOS DMGs are therefore not Developer ID signed
+or notarized, so Gatekeeper may block them or require customers to approve
+opening the app manually. Windows installers are also unsigned and may show a
+SmartScreen warning. Update manifests are signed separately; that signature
+does not sign the installer. For standard macOS distribution, configure an
+Apple Developer ID certificate and notarization credentials in GitHub Actions,
+then verify the signed app's first-launch behavior on macOS.
 
 Manual upload is only a recovery path. If it is required, replace each stable
 object by uploading to the configured exact destination:

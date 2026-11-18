@@ -26,7 +26,7 @@ import { buildLicenseEmailHtml } from './welcomeEmail.js';
 
 const app = express();
 const port = process.env.PORT || 8080;
-const serviceVersion = '2.10.3';
+const serviceVersion = '2.10.4';
 const schemaVersion = '2026-09-12.5';
 const secrets = (process.env.SHOPIFY_WEBHOOK_SECRETS || process.env.SHOPIFY_WEBHOOK_SECRET || '')
   .split(',')
@@ -223,12 +223,45 @@ function tierRank(tier) {
   return normalized ? 1 : 0;
 }
 
+function hasProSubscriptionTerms(record) {
+  const tier = String(record?.tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  const mode = record?.mode || 'hosted_credits';
+  const price = Number(record?.planPriceCents);
+  return mode === 'hosted_credits' && tier.includes('pro') && price === 2_999;
+}
+
+function hasStarterSubscriptionTerms(record) {
+  const tier = String(record?.tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  const mode = record?.mode || 'hosted_credits';
+  return mode === 'hosted_credits'
+    && (tier === 'starter' || tier === 'starter_subscription' || tier === 'cloud_starter_subscription')
+    && Number(record?.planPriceCents) === 1_999;
+}
+
+function hasMonthlyShopifySubscriptionTerms(record) {
+  return hasStarterSubscriptionTerms(record) || hasProSubscriptionTerms(record);
+}
+
+function hasPermanentTierAccess(tier) {
+  const normalized = String(tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  return normalized.includes('enterprise') || tierRank(normalized) >= 4;
+}
+
 function planHasPermanentAccess(plan) {
-  return creditsOnlyEntitlement(plan) ? false : plan?.permanentAccess === true || plan?.mode === 'byok' || tierRank(plan?.tier) >= 2;
+  if (creditsOnlyEntitlement(plan)) return false;
+  if (plan?.permanentAccess === true) return true;
+  if (hasProSubscriptionTerms(plan)) return false;
+  return plan?.mode === 'byok' || hasPermanentTierAccess(plan?.tier);
 }
 
 function recordHasPermanentAccess(record) {
-  return creditsOnlyEntitlement(record) ? false : record?.permanentAccess === true || record?.mode === 'byok' || tierRank(record?.tier) >= 2;
+  if (creditsOnlyEntitlement(record)) return false;
+  // Preserve an explicit legacy permanent grant when the destination reuses
+  // its price for a new recurring plan. New recurring grants set this flag
+  // false and still require a Shopify contract.
+  if (record?.permanentAccess === true) return true;
+  if (hasProSubscriptionTerms(record)) return false;
+  return record?.mode === 'byok' || hasPermanentTierAccess(record?.tier);
 }
 
 function trialEndTimestamp(record) {
@@ -240,6 +273,8 @@ function isEntitlementActive(record, now = Date.now()) {
   if (!record || record.status === 'revoked') return false;
   if (recordHasPermanentAccess(record)) return true;
   const status = String(record.subscriptionStatus || '').trim().toLowerCase();
+  if (hasMonthlyShopifySubscriptionTerms(record) && !normalizePlanId(record.subscriptionContractId)) return false;
+  if (status === 'permanent' && hasProSubscriptionTerms(record) && record.subscriptionContractId) return true;
   if (status === 'trialing') return trialEndTimestamp(record) > now;
   if (status !== 'active') return false;
   // A trial must not remain usable after its scheduled first billing date if
@@ -271,6 +306,10 @@ function frontierModelAllowedForTier(tier) {
     || normalized === 'pro_tier'
     || normalized === 'enterprise'
     || normalized === 'enterprise_tier';
+}
+
+function proModelAllowedForTier(tier) {
+  return frontierModelAllowedForTier(tier);
 }
 
 function validUsagePriority(value) {
@@ -650,7 +689,7 @@ function downloadPage(record, query, availablePlatforms) {
     url.searchParams.set('platform', option.id);
     return `<a class="download" data-platform="${escapeHtml(option.id)}" href="${escapeHtml(url.toString())}"><strong>${escapeHtml(option.label)}</strong><small>${escapeHtml(option.description)}</small></a>`;
   }).join('');
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Download Automnia</title><meta name="referrer" content="no-referrer"><style>body{margin:0;background:#081016;color:#e5edf5;font:16px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.wrap{max-width:680px;margin:0 auto;padding:64px 20px}h1{margin:0 0 10px;font-size:32px}p{color:#a7b7c7;line-height:1.55}.card{margin-top:28px;padding:24px;border:1px solid #28404a;border-radius:16px;background:#101b24}.download{display:block;margin:12px 0;padding:17px 18px;border:1px solid #3d6871;border-radius:12px;background:#102d31;color:#eafffb;text-decoration:none}.download:hover{background:#164248}.download strong,.download small{display:block}.download small{margin-top:5px;color:#a7c7c7}.note{font-size:13px}</style></head><body><main class="wrap"><h1>Download Automnia AI Nexus</h1><p>Your Automnia access is active for order ${safeOrder}. Choose your installer below.</p><section class="card">${links || '<p>Installers are being published. Please contact Automnia support.</p>'}</section><p class="note">Each installer link is generated just for this download and expires shortly. Return to this page whenever you need a fresh download while your subscription remains active.</p></main><script>const ua=navigator.userAgent||'';const target=/Windows/i.test(ua)?'windows-x64':/Mac/i.test(ua)?'macos-arm64':/Linux/i.test(ua)?'linux-appimage-x64':'';const el=target&&document.querySelector('[data-platform="'+target+'"]');if(el)el.style.outline='2px solid #77ebd7';</script></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Download Automnia</title><meta name="referrer" content="no-referrer"><style>body{margin:0;background:#081016;color:#e5edf5;font:16px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.wrap{max-width:680px;margin:0 auto;padding:64px 20px}h1{margin:0 0 10px;font-size:32px}p{color:#a7b7c7;line-height:1.55}.card{margin-top:28px;padding:24px;border:1px solid #28404a;border-radius:16px;background:#101b24}.download{display:block;margin:12px 0;padding:17px 18px;border:1px solid #3d6871;border-radius:12px;background:#102d31;color:#eafffb;text-decoration:none}.download:hover{background:#164248}.download strong,.download small{display:block}.download small{margin-top:5px;color:#a7c7c7}.note{font-size:13px}</style></head><body><main class="wrap"><h1>Download Automnia AI Nexus</h1><p>Your Automnia access is active for order ${safeOrder}. Choose your installer below.</p><p id="mac-arch-note" class="note" hidden>On Mac, choose Apple silicon for M-series Macs or Intel for Intel Macs. A browser cannot reliably identify the Mac processor architecture.</p><section class="card">${links || '<p>Installers are being published. Please contact Automnia support.</p>'}</section><p class="note">Each installer link is generated just for this download and expires shortly. Return to this page whenever you need a fresh download while your subscription remains active.</p></main><script>const ua=navigator.userAgent||'';const target=/Windows/i.test(ua)?'windows-x64':/Linux/i.test(ua)?'linux-appimage-x64':'';const el=target&&document.querySelector('[data-platform="'+target+'"]');if(el)el.style.outline='2px solid #77ebd7';if(/Mac/i.test(ua)){const note=document.getElementById('mac-arch-note');if(note)note.hidden=false;}</script></body></html>`;
 }
 
 function normalizePlanId(value) {
@@ -682,14 +721,18 @@ function readPlanMappings(value) {
       const ids = (field) => Array.isArray(candidate[field])
         ? candidate[field].map(normalizePlanId).filter(Boolean)
         : [];
+      const planPriceCents = Number.isInteger(Number(candidate.planPriceCents)) && Number(candidate.planPriceCents) >= 0
+        ? Number(candidate.planPriceCents)
+        : null;
       return [{
         tier,
         mode,
-        planPriceCents: Number.isInteger(Number(candidate.planPriceCents)) && Number(candidate.planPriceCents) >= 0 ? Number(candidate.planPriceCents) : null,
+        planPriceCents,
         initialTokens: Math.floor(initialTokens),
         initialCredits: tokensToCredits(initialTokens),
         kind,
-        permanentAccess: candidate.permanentAccess === true || mode === 'byok' || tierRank(tier) >= 2,
+        permanentAccess: !hasProSubscriptionTerms({ tier, mode, planPriceCents })
+          && (candidate.permanentAccess === true || mode === 'byok' || hasPermanentTierAccess(tier)),
         trialDays: Number.isInteger(Number(candidate.trialDays)) && Number(candidate.trialDays) > 0 ? Number(candidate.trialDays) : 0,
         productIds: ids('productIds'),
         variantIds: ids('variantIds'),
@@ -714,7 +757,7 @@ function legacyTierConfiguration(tierName, itemTitles = '') {
     return { tier: 'cloud_starter_subscription', mode: 'hosted_credits', planPriceCents: 1_999, initialTokens: 22_000_000, kind: 'subscription' };
   }
   if (normalizedTier.includes('pro') || normalizedTitles.includes('pro')) {
-    return { tier: 'pro_tier', mode: 'hosted_credits', initialTokens: 55_000_000, kind: 'subscription', permanentAccess: true };
+    return { tier: 'pro_tier', mode: 'hosted_credits', initialTokens: 55_000_000, kind: 'subscription', permanentAccess: false };
   }
   return { tier: 'founding_beta_byok', mode: 'byok', initialTokens: 0, kind: 'license' };
 }
@@ -775,7 +818,9 @@ function publicLicense(record) {
     billingUnitVersion: 2,
     tokensPerCredit: TOKENS_PER_CREDIT,
     status: record.status,
-    subscriptionStatus: record.subscriptionStatus || null,
+    subscriptionStatus: hasProSubscriptionTerms(record) && record.permanentAccess !== true && record.subscriptionStatus === 'permanent'
+      ? 'active'
+      : record.subscriptionStatus || null,
     active: isEntitlementActive(record),
     trialDays: Number.isInteger(Number(record.trialDays)) ? Number(record.trialDays) : 0,
     trialStartedAt: record.trialStartedAt || null,
@@ -1009,6 +1054,7 @@ async function updateHostedEntitlement({ record, order, tierConfig, topic, deliv
   const eventId = webhookEventId(topic, deliveryId, `order:${orderId}`);
   const now = new Date().toISOString();
   const contractId = normalizePlanId(order.subscription_contract_id || order.subscriptionContractId) || null;
+  const nextBillingAt = shopifyDateFromPayload(order, 'next_billing_date', 'nextBillingDate', 'nextBillingAt');
   const incomingRank = tierRank(tierConfig.tier);
   const currentRank = tierRank(record.tier);
   const shouldUpgrade = incomingRank > currentRank || (
@@ -1046,6 +1092,7 @@ async function updateHostedEntitlement({ record, order, tierConfig, topic, deliv
       subscriptionStatus: nextSubscriptionStatus,
       ...(record.trialEndsAt ? { trialConvertedAt: record.trialConvertedAt || now } : {}),
       subscriptionContractId: contractId || record.subscriptionContractId || null,
+      ...(tierConfig.kind === 'subscription' && nextBillingAt ? { nextBillingAt } : {}),
       lastShopifyOrderId: orderId,
       lastWebhookEventId: eventId,
       updatedAt: now,
@@ -1078,6 +1125,7 @@ async function updateHostedEntitlement({ record, order, tierConfig, topic, deliv
         : tierConfig.kind === 'subscription' ? 'active' : current.subscriptionStatus || null,
       subscriptionContractId: contractId || current.subscriptionContractId || null,
       ...(current.trialEndsAt ? { trialConvertedAt: current.trialConvertedAt || now } : {}),
+      ...(tierConfig.kind === 'subscription' && nextBillingAt ? { nextBillingAt } : {}),
       lastShopifyOrderId: orderId,
       updatedAt: now,
     };
@@ -1223,7 +1271,7 @@ async function claimDueSubscriptionBillingAttempt(record, now) {
     && !record.billingAttemptDispatchedAt;
   const isRecurring = Number.isFinite(nextBillingAt)
     && nextBillingAt <= nowTimestamp
-    && record.trialConvertedAt
+    && (!Number.isFinite(trialEndsAt) || Boolean(record.trialConvertedAt))
     && String(record.subscriptionStatus || '').toLowerCase() === 'active'
     && String(record.billingAttemptDispatchedFor || '') !== String(record.nextBillingAt || '');
   if (!isInitial && !isRecurring) return null;
@@ -1261,7 +1309,7 @@ async function claimDueSubscriptionBillingAttempt(record, now) {
       && billingAttemptClaimAvailable(current.billingAttemptClaimedAt, nowTimestamp);
     const currentIsRecurring = Number.isFinite(currentNextBillingAt)
       && currentNextBillingAt <= nowTimestamp
-      && current.trialConvertedAt
+      && (!Number.isFinite(currentTrialEndsAt) || Boolean(current.trialConvertedAt))
       && String(current.subscriptionStatus || '').toLowerCase() === 'active'
       && String(current.billingAttemptDispatchedFor || '') !== String(current.nextBillingAt || '')
       && billingAttemptClaimAvailable(current.billingAttemptClaimedAt, nowTimestamp);
@@ -1381,7 +1429,7 @@ async function processDueBillingRetries() {
     try {
       const result = await createSubscriptionBillingAttempt(claimed, claimed.billingRetryIdempotencyKey);
       if (result.accepted) accepted += 1;
-      else await rescheduleBillingRetry(claimed, now);
+      else await recordBillingAttemptFailure(claimed, result.errorCode, now);
     } catch (error) {
       console.error(JSON.stringify({ event: 'shopify_billing_retry_dispatch_failed', contractId: normalizeShopifyContractId(claimed.subscriptionContractId), message: String(error?.message || error).slice(0, 240) }));
       await rescheduleBillingRetry(claimed, now);
@@ -2680,9 +2728,12 @@ app.post('/v1/chat/completions', requireWritesEnabled, async (req, res) => {
     const messages = messageOptimization.messages;
     const converted = vertexContentsFromOpenAiMessages(messages);
     if (!converted.contents.length) return openAiError(res, 400, 'At least one text, tool-call, or tool-response message is required.');
-    const targetModel = resolveAutomniaRelayModel(req.body?.model);
+  const targetModel = resolveAutomniaRelayModel(req.body?.model);
     if (!targetModel) return openAiError(res, 400, 'The requested model is not an enabled Automnia hosted relay model.');
-    if (targetModel === 'gemini-4-argon' && !frontierModelAllowedForTier(access.record.tier)) {
+    if (targetModel === 'gemini-4-argon' && !proModelAllowedForTier(access.record.tier)) {
+      return openAiError(res, 403, 'Automnia Pro requires a Pro, Enterprise, or Automnia Frontier entitlement.', 'model_not_allowed', 'automnia_pro_entitlement_required');
+    }
+    if (targetModel === 'gemini-4-carbon' && !frontierModelAllowedForTier(access.record.tier)) {
       return openAiError(res, 403, 'Automnia Frontier requires a Pro, Enterprise, or Automnia Frontier entitlement.', 'model_not_allowed', 'automnia_frontier_entitlement_required');
     }
     const toolCount = toolOptimization.tools.length;
@@ -2872,6 +2923,16 @@ function hasValidShopifySignature(rawBody, received) {
     const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('base64');
     return received.length === expected.length && crypto.timingSafeEqual(Buffer.from(received), Buffer.from(expected));
   });
+}
+
+function normalizedShopifyStoreDomain(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return '';
+  try {
+    return new URL(raw.includes('://') ? raw : `https://${raw}`).hostname.toLowerCase();
+  } catch {
+    return '';
+  }
 }
 
 function customerEmailFromShopify(payload) {
@@ -3284,9 +3345,90 @@ async function setStarterContractRecurringPrice(contractId, tierConfig) {
   return { updatedLines: targetLines.length, price: targetPrice };
 }
 
-function orderPaymentConfirmed(order) {
+function shopifyMoneyCents(value) {
+  const amount = value && typeof value === 'object'
+    ? value.shop_money?.amount ?? value.presentment_money?.amount ?? value.amount
+    : value;
+  const parsed = Number(amount);
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) : null;
+}
+
+function shopifyOrderTotalCents(order) {
+  for (const amount of [
+    order?.current_total_price_set,
+    order?.total_price_set,
+    order?.current_total_price,
+    order?.total_price,
+    order?.currentTotalPrice,
+    order?.totalPrice,
+  ]) {
+    const cents = shopifyMoneyCents(amount);
+    if (cents !== null) return cents;
+  }
+  return null;
+}
+
+function matchingOrderLineItem(order, tierConfig) {
+  const lineItems = Array.isArray(order?.line_items) ? order.line_items : [];
+  return lineItems.find((lineItem) => {
+    const productId = normalizePlanId(lineItem?.product_id);
+    const variantId = normalizePlanId(lineItem?.variant_id);
+    const sellingPlanId = normalizePlanId(lineItem?.selling_plan_id || lineItem?.sellingPlanId);
+    const sku = String(lineItem?.sku || '').trim().toLowerCase();
+    return (productId && tierConfig.productIds?.includes(productId))
+      || (variantId && tierConfig.variantIds?.includes(variantId))
+      || (sellingPlanId && tierConfig.sellingPlanIds?.includes(sellingPlanId))
+      || (sku && tierConfig.skus?.includes(sku));
+  }) || null;
+}
+
+function orderPaymentConfirmed(order, tierConfig = null) {
   const financialStatus = String(order?.financial_status || order?.financialStatus || '').trim().toLowerCase();
-  return financialStatus === 'paid' || financialStatus === 'partially_paid';
+  if (financialStatus !== 'paid' && financialStatus !== 'partially_paid') return false;
+  const orderTotalCents = shopifyOrderTotalCents(order);
+  if (orderTotalCents === null || orderTotalCents <= 0) return false;
+  if (!tierConfig) return true;
+
+  const expectedUnitPriceCents = Number(tierConfig.planPriceCents);
+  if (!Number.isInteger(expectedUnitPriceCents) || expectedUnitPriceCents <= 0) return false;
+  const lineItem = matchingOrderLineItem(order, tierConfig);
+  if (!lineItem) return false;
+  const unitPriceCents = shopifyMoneyCents(lineItem.price_set || lineItem.priceSet || lineItem.price);
+  if (unitPriceCents === null || unitPriceCents < expectedUnitPriceCents) return false;
+  const quantityValue = Number(lineItem.quantity);
+  const quantity = Number.isSafeInteger(quantityValue) && quantityValue > 0 ? quantityValue : 1;
+  let discountCents = shopifyMoneyCents(lineItem.total_discount_set || lineItem.totalDiscountSet || lineItem.total_discount || lineItem.totalDiscount);
+  if (discountCents === null && Array.isArray(lineItem.discount_allocations)) {
+    discountCents = lineItem.discount_allocations.reduce((total, allocation) => {
+      return total + (shopifyMoneyCents(allocation?.amount_set || allocation?.amountSet || allocation?.amount) || 0);
+    }, 0);
+  }
+  if (discountCents === null) discountCents = 0;
+  const chargedLineCents = (unitPriceCents * quantity) - discountCents;
+  return Number.isSafeInteger(chargedLineCents) && chargedLineCents > 0;
+}
+
+async function recordRejectedShopifyOrder(order, deliveryId, tierConfig) {
+  const orderId = String(order?.id || 'unknown');
+  const eventId = webhookEventId('orders/paid', deliveryId, `order:${orderId}`);
+  const data = {
+    topic: 'orders/paid',
+    deliveryId: deliveryId || null,
+    orderId,
+    tier: tierConfig?.tier || null,
+    tokensGranted: 0,
+    creditsGranted: 0,
+    action: 'rejected',
+    reason: 'missing_paid_amount_or_mapped_line_charge',
+    createdAt: new Date().toISOString(),
+  };
+  if (useInMemoryStorage || !shopifyWebhookEvents) return;
+  try {
+    await shopifyWebhookEvents.doc(eventId).create(data);
+  } catch (error) {
+    if (error?.code === 6 || String(error?.code || '').toLowerCase() === 'already-exists') return;
+    throw error;
+  }
 }
 
 async function handlePaidOrder(order, deliveryId, trialWindow = null) {
@@ -3296,19 +3438,43 @@ async function handlePaidOrder(order, deliveryId, trialWindow = null) {
   if (!orderId || !customerEmail) throw new Error('Paid Shopify order is missing an order ID or customer email.');
   if (!tierConfig) throw new Error('Paid Shopify order does not match an owner-configured plan mapping.');
 
+  // A subscription-contract webhook can explicitly authorize a configured
+  // trial. Every other entitlement must have a positive order total and a
+  // non-zero charge for its mapped line item. Shopify can mark a $0 order as
+  // "paid", which must not mint a full credit grant.
+  if (!trialWindow && !orderPaymentConfirmed(order, tierConfig)) {
+    await recordRejectedShopifyOrder(order, deliveryId, tierConfig);
+    console.warn(JSON.stringify({ event: 'shopify_zero_value_order_rejected', orderId, tier: tierConfig.tier }));
+    return { action: 'order_rejected_unpaid' };
+  }
+
+  const existing = await findLicenseByEmail(customerEmail);
+  if (existing && String(existing.lastShopifyOrderId || '') === orderId) {
+    const delivery = await deliverLicenseEmail(existing);
+    return {
+      action: delivery.action === 'email_sent' ? 'license_delivery_recovered' : 'duplicate_ignored',
+      license: delivery.record || existing,
+    };
+  }
+
+  let processedOrder = order;
+  if (tierConfig.kind === 'subscription') {
+    const contractId = normalizePlanId(order.subscription_contract_id || order.subscriptionContractId)
+      || contractIdFromShopify(order, { allowPayloadId: false });
+    if (!contractId) throw new Error('Paid subscription order is missing its Shopify subscription contract ID.');
+    const nextBillingAt = shopifyDateFromPayload(order, 'next_billing_date', 'nextBillingDate', 'nextBillingAt')
+      || await fetchShopifyContractNextBillingDate(contractId);
+    if (!nextBillingAt || !Number.isFinite(Date.parse(nextBillingAt)) || Date.parse(nextBillingAt) <= Date.now()) {
+      throw new Error('Paid subscription order is missing a future Shopify billing date.');
+    }
+    processedOrder = { ...order, subscription_contract_id: contractId, nextBillingAt };
+  }
+
   // An upgrade or top-up updates the existing entitlement and retains its
   // license key. A BYOK customer can therefore upgrade without reactivating
   // the desktop app or losing their connected provider configuration.
-  const existing = await findLicenseByEmail(customerEmail);
   if (existing) {
-    if (String(existing.lastShopifyOrderId || '') === orderId) {
-      const delivery = await deliverLicenseEmail(existing);
-      return {
-        action: delivery.action === 'email_sent' ? 'license_delivery_recovered' : 'duplicate_ignored',
-        license: delivery.record || existing,
-      };
-    }
-    const updated = await updateHostedEntitlement({ record: existing, order, tierConfig, topic: 'orders/paid', deliveryId });
+    const updated = await updateHostedEntitlement({ record: existing, order: processedOrder, tierConfig, topic: 'orders/paid', deliveryId });
     if (!updated) throw new Error('The active license disappeared while applying the Shopify entitlement update.');
     const delivery = await deliverLicenseEmail(updated);
     console.log(JSON.stringify({ event: tierConfig.kind === 'topup' ? 'credits_topped_up' : 'subscription_updated', orderId, licenseOrderId: updated.orderId, tier: updated.tier, mode: updated.mode, creditBalance: pooledCreditBalance(updated), tokenBalance: pooledTokenBalance(updated) }));
@@ -3316,7 +3482,9 @@ async function handlePaidOrder(order, deliveryId, trialWindow = null) {
   }
 
   const licenseKey = generateLicenseKey(tierConfig.mode === 'hosted_credits' ? 'AUT-CLOUD' : 'AUT-BYOK');
-  const contractId = contractIdFromShopify(order, { allowPayloadId: false });
+  const contractId = normalizePlanId(processedOrder.subscription_contract_id || processedOrder.subscriptionContractId)
+    || contractIdFromShopify(processedOrder, { allowPayloadId: false });
+  const nextBillingAt = shopifyDateFromPayload(processedOrder, 'next_billing_date', 'nextBillingDate', 'nextBillingAt');
   const createdAt = new Date().toISOString();
   const record = {
     orderId,
@@ -3348,7 +3516,7 @@ async function handlePaidOrder(order, deliveryId, trialWindow = null) {
       trialStartedAt: trialWindow.startedAt,
       trialEndsAt: trialWindow.endsAt,
       nextBillingAt: trialWindow.nextBillingAt,
-    } : {}),
+    } : tierConfig.kind === 'subscription' && nextBillingAt ? { nextBillingAt } : {}),
     lastShopifyOrderId: orderId,
     createdAt,
     updatedAt: createdAt,
@@ -3405,14 +3573,22 @@ async function handleSubscriptionContractCreated(payload, deliveryId) {
   // A contract-create event can arrive before orders/paid. It is safe to use
   // as a fallback only when Shopify confirms payment; a non-trial unpaid
   // contract must remain locked until the payment webhook arrives.
-  if (orderPaymentConfirmed(order)) return handlePaidOrder(order, deliveryId);
+  if (orderPaymentConfirmed(order, tierConfig)) {
+    const nextBillingAt = shopifyDateFromPayload(payload, 'next_billing_date', 'nextBillingDate')
+      || await fetchShopifyContractNextBillingDate(contractId);
+    if (!nextBillingAt) throw new Error('Paid subscription contract is missing its next billing date.');
+    return handlePaidOrder({ ...order, subscription_contract_id: contractId, nextBillingAt }, deliveryId);
+  }
   return { action: 'subscription_contract_waiting_for_payment' };
 }
 
 async function handleSubscriptionState(payload, topic, deliveryId) {
   const contractId = contractIdFromShopify(payload, { allowPayloadId: topic.startsWith('subscription_contracts/') });
-  const customerEmail = customerEmailFromShopify(payload);
-  const record = await findLicenseBySubscriptionId(contractId) || await findLicenseByEmail(customerEmail);
+  if (!contractId) {
+    console.warn(JSON.stringify({ event: 'subscription_state_ignored', topic, reason: 'missing_contract_id' }));
+    return { action: 'ignored' };
+  }
+  const record = await findLicenseBySubscriptionId(contractId);
   if (!record) {
     console.warn(JSON.stringify({ event: 'subscription_state_ignored', topic, contractId: contractId || null, reason: 'license_not_found' }));
     return { action: 'ignored' };
@@ -3427,6 +3603,8 @@ async function handleSubscriptionState(payload, topic, deliveryId) {
                 : topic.endsWith('/challenged') ? 'payment_challenged'
                   : null
   );
+  const preservesNonBillableContractState = topic === 'subscription_billing_attempts/success'
+    && ['paused', 'cancelled', 'expired', 'failed'].includes(String(record.subscriptionStatus || '').trim().toLowerCase());
   let nextBillingAt = shopifyDateFromPayload(payload, 'next_billing_date', 'nextBillingDate');
   if (topic === 'subscription_billing_attempts/success' && !nextBillingAt && contractId) {
     try {
@@ -3440,7 +3618,7 @@ async function handleSubscriptionState(payload, topic, deliveryId) {
     topic,
     deliveryId,
     subscriptionContractId: contractId || record.subscriptionContractId || null,
-    subscriptionStatus,
+    subscriptionStatus: preservesNonBillableContractState ? null : subscriptionStatus,
     nextBillingAt,
     billingFailureCode: billingFailureCodeFromShopify(payload),
   });
@@ -3464,6 +3642,11 @@ app.post('/shopify/webhooks/:webhookName', requireWritesEnabled, express.raw({ t
   if (!topic) return res.status(404).json({ error: 'Webhook endpoint not found.' });
   if (!secrets.length) return res.status(503).json({ error: 'Webhook verification is not configured.' });
   if (!hasValidShopifySignature(req.body, req.get('x-shopify-hmac-sha256') || '')) return res.status(401).json({ error: 'Invalid webhook signature.' });
+  const configuredShopDomain = normalizedShopifyStoreDomain(shopifyAdminStoreDomain);
+  const incomingShopDomain = normalizedShopifyStoreDomain(req.get('x-shopify-shop-domain') || '');
+  if (!configuredShopDomain || incomingShopDomain !== configuredShopDomain) {
+    return res.status(401).json({ error: 'Webhook store is not authorized.' });
+  }
 
   const deliveryId = String(req.get('x-shopify-webhook-id') || '').trim();
   if (!deliveryId) return res.status(400).json({ error: 'Missing Shopify webhook delivery ID.' });

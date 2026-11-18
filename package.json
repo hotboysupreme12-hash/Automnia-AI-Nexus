@@ -1,7 +1,7 @@
 {
   "name": "automnia-ai-nexus",
   "private": true,
-  "version": "1.0.24",
+  "version": "1.0.25",
   "description": "Automnia AI Nexus is a desktop AI workspace and operations console for orchestrating agents, model providers, tools, plugins, and connected workflows through a secure OpenClaw-powered runtime.",
   "author": {
     "name": "Automnia AI"
@@ -241,6 +241,7 @@
         "AppImage",
         "deb"
       ],
+      "executableName": "automnia-ai-nexus",
       "category": "Development",
       "maintainer": "Automnia AI",
       "artifactName": "${productName}-${version}-${arch}.${ext}"
@@ -307,7 +308,7 @@
     "autoprefixer": "^10.4.24",
     "concurrently": "^9.2.1",
     "cross-spawn": "^7.0.6",
-    "electron": "^42.0.1",
+    "electron": "^45.3.4",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.0",
     "eslint": "^9.39.1",

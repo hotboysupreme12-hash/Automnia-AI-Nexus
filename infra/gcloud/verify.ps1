@@ -4,7 +4,9 @@ param(
   [ValidatePattern('^[a-z][a-z0-9-]{4,28}[a-z0-9]$')][string]$SourceProjectId,
   [string]$Region,
   [string]$CandidateUrl,
-  [switch]$SkipGmail
+  [ValidateSet('active', 'read_only')][string]$ExpectedWriteMode = 'active',
+  [switch]$SkipGmail,
+  [switch]$AllowShopifyConfigMigration
 )
 
 . (Join-Path $PSScriptRoot 'Common.ps1')
@@ -21,7 +23,7 @@ Assert-ProjectExists -ProjectId $SourceProjectId | Out-Null
 if (-not $CandidateUrl -and $migrationState -and $migrationState.Data.candidateUrl) { $CandidateUrl = [string]$migrationState.Data.candidateUrl }
 if (-not $CandidateUrl) {
   $service = Get-ServiceDescriptor -ProjectId $ProjectId -Region $Region -ServiceName $config.ServiceName
-  $candidate = @($service.status.traffic | Where-Object { $_.tag -eq 'candidate' } | Select-Object -First 1)
+  $candidate = @($service.status.traffic | Where-Object { $_ -and $_.PSObject.Properties['tag'] -and $_.tag -eq 'candidate' } | Select-Object -First 1)
   $CandidateUrl = if ($candidate -and $candidate.url) { [string]$candidate.url } else { [string]$service.status.url }
 }
 $CandidateUrl = $CandidateUrl.TrimEnd('/')
@@ -41,9 +43,34 @@ function Get-IndexContractSignature {
 }
 
 try {
-  $sourceSnapshot = Get-FirestoreSnapshot -ProjectId $SourceProjectId
-  $targetSnapshot = Get-FirestoreSnapshot -ProjectId $ProjectId
-  Add-VerificationCheck -Name 'firestore-document-hash' -Passed ($sourceSnapshot.globalHash -eq $targetSnapshot.globalHash) -Expected $sourceSnapshot.globalHash -Actual $targetSnapshot.globalHash
+  $sourceSnapshot = $null
+  $targetSnapshot = $null
+  $snapshotProofDetail = ''
+  if ($migrationState -and $migrationState.Data) {
+    $proof = $migrationState.Data
+    $proofCreatedAt = [DateTimeOffset]::MinValue
+    $proofTimestampValid = [DateTimeOffset]::TryParse([string]$proof.createdAt, [ref]$proofCreatedAt) -and
+      ([DateTimeOffset]::UtcNow - $proofCreatedAt.ToUniversalTime()).TotalMinutes -ge -1 -and
+      ([DateTimeOffset]::UtcNow - $proofCreatedAt.ToUniversalTime()).TotalMinutes -le 15
+    $sourceProof = $proof.sourceAfter
+    $targetProof = $proof.targetAfter
+    $proofMatches = $proofTimestampValid -and $proof.passed -eq $true -and $proof.switchEligible -eq $true -and
+      $proof.fromProjectId -eq $SourceProjectId -and $proof.toProjectId -eq $ProjectId -and
+      $sourceProof.projectId -eq $SourceProjectId -and $targetProof.projectId -eq $ProjectId -and
+      $sourceProof.globalHash -and $sourceProof.globalHash -eq $targetProof.globalHash -and
+      $sourceProof.totalDocuments -eq $targetProof.totalDocuments
+    if ($proofMatches) {
+      $sourceSnapshot = $sourceProof
+      $targetSnapshot = $targetProof
+      $snapshotProofDetail = "Reused fresh final snapshot proof from $($migrationState.Path)."
+    }
+  }
+  if (-not $sourceSnapshot -or -not $targetSnapshot) {
+    $sourceSnapshot = Get-FirestoreSnapshot -ProjectId $SourceProjectId
+    $targetSnapshot = Get-FirestoreSnapshot -ProjectId $ProjectId
+    $snapshotProofDetail = 'Captured fresh source and target snapshots during verification.'
+  }
+  Add-VerificationCheck -Name 'firestore-document-hash' -Passed ($sourceSnapshot.globalHash -eq $targetSnapshot.globalHash) -Expected $sourceSnapshot.globalHash -Actual $targetSnapshot.globalHash -Detail $snapshotProofDetail
   Add-VerificationCheck -Name 'customer-count' -Passed ($sourceSnapshot.customerCount -eq $targetSnapshot.customerCount) -Expected $sourceSnapshot.customerCount -Actual $targetSnapshot.customerCount
   Add-VerificationCheck -Name 'active-customer-count' -Passed ($sourceSnapshot.activeCustomerCount -eq $targetSnapshot.activeCustomerCount) -Expected $sourceSnapshot.activeCustomerCount -Actual $targetSnapshot.activeCustomerCount
   Add-VerificationCheck -Name 'credit-balance-total' -Passed ($sourceSnapshot.creditBalanceTotal -eq $targetSnapshot.creditBalanceTotal) -Expected $sourceSnapshot.creditBalanceTotal -Actual $targetSnapshot.creditBalanceTotal
@@ -75,14 +102,39 @@ try {
   $localPlanHash = Get-LocalPlanMappingHash
   $sourcePlanHash = Get-ServicePlanMappingHash -ProjectId $SourceProjectId -Region $Region -ServiceName $config.ServiceName
   $targetPlanHash = Get-ServicePlanMappingHash -ProjectId $ProjectId -Region $Region -ServiceName $config.ServiceName
-  Add-VerificationCheck -Name 'shopify-plan-mappings-local-target' -Passed ($localPlanHash -eq $targetPlanHash) -Expected $localPlanHash -Actual $targetPlanHash
-  Add-VerificationCheck -Name 'shopify-plan-mappings-source-target' -Passed ($sourcePlanHash -eq $targetPlanHash) -Expected $sourcePlanHash -Actual $targetPlanHash
+  $localMappingCompatible = $localPlanHash -eq $targetPlanHash
+  $localMappingDetail = ''
+  if ($AllowShopifyConfigMigration) {
+    $localMappingCompatible = $localMappingCompatible -or $localPlanHash -eq $sourcePlanHash
+    $localMappingDetail = 'During a store migration, the checked-out map must match either the source or destination service.'
+  }
+  Add-VerificationCheck -Name 'shopify-plan-mappings-local-compatible' -Passed $localMappingCompatible -Expected "$sourcePlanHash or $targetPlanHash" -Actual $localPlanHash -Detail $localMappingDetail
+  $sourceTargetMappingsMatch = $sourcePlanHash -eq $targetPlanHash
+  $planMigrationDetail = ''
+  if ($AllowShopifyConfigMigration) {
+    $sourceTargetMappingsMatch = $true
+    $planMigrationDetail = 'Source and destination Shopify plans intentionally differ during migration.'
+  }
+  Add-VerificationCheck -Name 'shopify-plan-mappings-source-target' -Passed $sourceTargetMappingsMatch -Expected $sourcePlanHash -Actual $targetPlanHash -Detail $planMigrationDetail
 } catch {
   Add-VerificationCheck -Name 'shopify-plan-mappings' -Passed $false -Expected 'matching local, source, and target mappings' -Actual $_.Exception.Message
 }
 
 $secretFingerprints = [ordered]@{}
-foreach ($secretName in @($config.MigrationSecrets)) {
+$targetSpecificShopifySecrets = if ($AllowShopifyConfigMigration) {
+  @('automnia-shopify-webhook-secrets', 'automnia-shopify-admin-api-token')
+} else { @() }
+foreach ($secretName in $targetSpecificShopifySecrets) {
+  try {
+    $hasVersion = Test-SecretVersion -ProjectId $ProjectId -SecretName $secretName
+    $secretFingerprints[$secretName] = if ($hasVersion) { 'target-specific' } else { $null }
+    Add-VerificationCheck -Name "secret:$secretName" -Passed $hasVersion -Expected 'enabled target-specific version' -Actual $hasVersion -Detail 'This Shopify app belongs to the destination store, so its credential must remain target-specific.'
+  } catch {
+    Add-VerificationCheck -Name "secret:$secretName" -Passed $false -Expected 'enabled target-specific version' -Actual $_.Exception.Message
+  }
+}
+$verifiedSecretNames = @($config.MigrationSecrets | Where-Object { $_ -notin $targetSpecificShopifySecrets })
+foreach ($secretName in $verifiedSecretNames) {
   try {
     $sourceHash = Get-SecretFingerprint -ProjectId $SourceProjectId -SecretName $secretName
     $targetHash = Get-SecretFingerprint -ProjectId $ProjectId -SecretName $secretName
@@ -126,7 +178,7 @@ try {
 }
 
 try {
-  $health = & (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $ProjectId -Region $Region -BaseUrl $CandidateUrl -SkipGmail:$SkipGmail
+  $health = & (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $ProjectId -Region $Region -BaseUrl $CandidateUrl -ExpectedWriteMode $ExpectedWriteMode -SkipGmail:$SkipGmail
   Add-VerificationCheck -Name 'cloud-run-health' -Passed $health.Passed -Expected $true -Actual $health.Passed
 } catch {
   Add-VerificationCheck -Name 'cloud-run-health' -Passed $false -Expected $true -Actual $_.Exception.Message
@@ -135,8 +187,9 @@ try {
 try {
   $previousToken = $env:AUTOMNIA_GCLOUD_ACCESS_TOKEN
   try {
-    $env:AUTOMNIA_GCLOUD_ACCESS_TOKEN = Get-GoogleAccessToken
-    $liveJson = & node (Join-Path $PSScriptRoot 'tools\live-billing-test.mjs') $ProjectId $CandidateUrl
+    $env:AUTOMNIA_GCLOUD_ACCESS_TOKEN = Get-GoogleAccessToken -ProjectId $ProjectId
+    $sourceBaseUrl = Get-ServiceUrl -ProjectId $SourceProjectId -Region $Region -ServiceName $config.ServiceName
+    $liveJson = & node (Join-Path $PSScriptRoot 'tools\live-billing-test.mjs') $ProjectId $CandidateUrl $sourceBaseUrl
     if ($LASTEXITCODE -ne 0 -or -not $liveJson) { throw 'Live billing test process failed.' }
     $liveBilling = ([string]$liveJson) | ConvertFrom-Json
   } finally {

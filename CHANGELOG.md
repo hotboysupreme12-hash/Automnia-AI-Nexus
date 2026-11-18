@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.25 - 2026-11-18
+
+### OpenClaw runtime and installers
+
+- Replaces the bundled OpenClaw 2026.10.6 runtime with 2026.11.5.
+- Updates the packaged Electron runtime to 45.3.4.
+- Adds Apple silicon DMG and ZIP builds to the GitHub release pipeline and publishes the ARM64 DMG to customer downloads.
+- Refreshes the Windows installer and makes it available through the secure customer download page and public download alias.
+
 ## 1.0.24 - 2026-09-29
 
 ### Release publication

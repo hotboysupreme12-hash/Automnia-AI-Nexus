@@ -17,6 +17,28 @@ $ProductName = [string]$PackageMetadata.build.productName
 if (-not $ProductName) { $ProductName = [string]$PackageMetadata.productName }
 if (-not $ProductName) { $ProductName = [string]$PackageMetadata.name }
 $ExpectedAppExeName = "$ProductName.exe"
+$MachineInstallRegistryRoots = @(
+  'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
+  'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+)
+$ExistingMachineInstall = $null
+foreach ($RegistryRoot in $MachineInstallRegistryRoots) {
+  if (-not (Test-Path -LiteralPath $RegistryRoot)) { continue }
+  foreach ($RegistryKey in Get-ChildItem -LiteralPath $RegistryRoot -ErrorAction SilentlyContinue) {
+    $InstalledApplication = Get-ItemProperty -LiteralPath $RegistryKey.PSPath -ErrorAction SilentlyContinue
+    $DisplayNameProperty = $InstalledApplication.PSObject.Properties['DisplayName']
+    if ($DisplayNameProperty -and [string]$DisplayNameProperty.Value -like "$ProductName*") {
+      $ExistingMachineInstall = $InstalledApplication
+      break
+    }
+  }
+  if ($ExistingMachineInstall) { break }
+}
+if ($ExistingMachineInstall) {
+  $ExistingLocation = [string]$ExistingMachineInstall.InstallLocation
+  if (-not $ExistingLocation) { $ExistingLocation = 'the registered machine install path' }
+  throw "$ProductName is already installed machine-wide at $ExistingLocation. This lifecycle requires a clean Windows runner because a silent upgrade would invoke UAC and could change the existing app."
+}
 if (-not $EvidenceDir) { $EvidenceDir = Join-Path $Root 'release\evidence' }
 if (-not $UpdateManifestPath) { $UpdateManifestPath = Join-Path $Root 'release\updates\update-manifest.json' }
 if (-not $UpdateSignaturePath) { $UpdateSignaturePath = Join-Path $Root 'release\updates\update-manifest.json.sig' }
@@ -107,6 +129,73 @@ function Install-Automnia {
   return $AppExe
 }
 
+function Get-InstalledAutomniaProcesses {
+  $InstallPrefix = [IO.Path]::GetFullPath($InstallRoot).TrimEnd([char[]]@('\', '/')) + '\'
+  return @(Get-CimInstance -ClassName Win32_Process -ErrorAction Stop | Where-Object {
+    $ExecutablePath = [string]$_.ExecutablePath
+    $ExecutablePath -and $ExecutablePath.StartsWith($InstallPrefix, [StringComparison]::OrdinalIgnoreCase)
+  })
+}
+
+function Stop-InstalledAutomniaProcesses {
+  param([string]$Label)
+  foreach ($OwnedProcess in @(Get-InstalledAutomniaProcesses)) {
+    Stop-Process -Id ([int]$OwnedProcess.ProcessId) -Force -ErrorAction Stop
+  }
+  $StopDeadline = [DateTime]::UtcNow.AddSeconds(30)
+  do {
+    $RemainingProcesses = @(Get-InstalledAutomniaProcesses)
+    if (-not $RemainingProcesses) { return }
+    Start-Sleep -Milliseconds 250
+  } while ([DateTime]::UtcNow -lt $StopDeadline)
+  $RemainingNames = @($RemainingProcesses | ForEach-Object { "$($_.Name) (PID $($_.ProcessId))" }) -join ', '
+  throw "$Label could not stop installer-owned Automnia processes: $RemainingNames"
+}
+
+function Remove-DirectoryWithRetry {
+  param(
+    [string]$Path,
+    [string]$Label,
+    [int]$TimeoutSeconds = 30
+  )
+  $Target = [IO.Path]::GetFullPath($Path)
+  $Deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+  $LastError = $null
+  do {
+    if (-not (Test-Path -LiteralPath $Target)) { return }
+    try {
+      Remove-Item -LiteralPath $Target -Recurse -Force -ErrorAction Stop
+    } catch {
+      $LastError = $_.Exception.Message
+    }
+    if (-not (Test-Path -LiteralPath $Target)) { return }
+    Start-Sleep -Milliseconds 250
+  } while ([DateTime]::UtcNow -lt $Deadline)
+
+  if (Test-Path -LiteralPath $Target) {
+    $Remaining = @(Get-ChildItem -LiteralPath $Target -Force -ErrorAction SilentlyContinue | Select-Object -First 8 -ExpandProperty Name) -join ', '
+    $Detail = if ($LastError) { " Last error: $LastError" } else { '' }
+    throw "$Label could not remove its isolated directory: $Target. Remaining entries: $Remaining.$Detail"
+  }
+}
+
+function Uninstall-Automnia {
+  param([string]$Label)
+  Stop-InstalledAutomniaProcesses -Label $Label
+  $AppExe = Join-Path $InstallRoot $ExpectedAppExeName
+  $Uninstaller = Get-ChildItem -LiteralPath $InstallRoot -Filter 'Uninstall*.exe' -File -Recurse |
+    Select-Object -First 1 -ExpandProperty FullName
+  if (-not $Uninstaller) { throw "$Label could not find the NSIS uninstaller under $InstallRoot." }
+  Invoke-CheckedProcess -FilePath $Uninstaller -ArgumentList @('/S') -Label $Label -TimeoutSeconds 180 | Out-Null
+  $UninstallDeadline = [DateTime]::UtcNow.AddSeconds(30)
+  while ((Test-Path -LiteralPath $AppExe) -and [DateTime]::UtcNow -lt $UninstallDeadline) {
+    Start-Sleep -Milliseconds 250
+  }
+  if (Test-Path -LiteralPath $AppExe) { throw "$Label left $ExpectedAppExeName in place." }
+  Remove-DirectoryWithRetry -Path $InstallRoot -Label $Label
+  return $Uninstaller
+}
+
 function Wait-ForE2eLog {
   param(
     [string]$Path,
@@ -135,7 +224,7 @@ function Invoke-InstalledSmoke {
   $Old = @{}
   foreach ($Name in @(
     'CONTROL_CENTER_PORT', 'CONTROL_CENTER_FRONTEND_PORT', 'OPENCLAW_GATEWAY_PORT', 'OPENCLAW_BROWSER_RELAY_PORT',
-    'CONTROL_CENTER_AUTOSTART_GATEWAY', 'AUTOMNIA_ELECTRON_E2E', 'AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS',
+    'CONTROL_CENTER_AUTOSTART_GATEWAY', 'AUTOMNIA_ELECTRON_E2E', 'AUTOMNIA_ELECTRON_E2E_ASSERT_PTY', 'AUTOMNIA_ELECTRON_E2E_KEEP_WINDOW_HIDDEN', 'AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS',
     'AUTOMNIA_ELECTRON_E2E_ASSERT_NAVIGATION', 'AUTOMNIA_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL',
     'AUTOMNIA_ELECTRON_E2E_SKIP_PORT_CLEANUP', 'AUTOMNIA_ELECTRON_E2E_LOG_PATH', 'AUTOMNIA_USER_DATA_DIR',
     'OPENCLAW_STATE_DIR', 'OPENCLAW_HOME', 'CONTROL_CENTER_WORKSPACE_ROOT'
@@ -147,6 +236,8 @@ function Invoke-InstalledSmoke {
     $env:OPENCLAW_BROWSER_RELAY_PORT = [string](Get-FreePort)
     $env:CONTROL_CENTER_AUTOSTART_GATEWAY = '0'
     $env:AUTOMNIA_ELECTRON_E2E = '1'
+    $env:AUTOMNIA_ELECTRON_E2E_ASSERT_PTY = '1'
+    $env:AUTOMNIA_ELECTRON_E2E_KEEP_WINDOW_HIDDEN = '1'
     $env:AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS = '3500'
     $env:AUTOMNIA_ELECTRON_E2E_ASSERT_NAVIGATION = '1'
     $env:AUTOMNIA_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL = '1'
@@ -158,7 +249,7 @@ function Invoke-InstalledSmoke {
     $env:CONTROL_CENTER_WORKSPACE_ROOT = Join-Path $TempRoot ("workspace-$Label")
     Invoke-CheckedProcess -FilePath $AppExe -ArgumentList @() -Label "$Label packaged launch" -TimeoutSeconds 120 | Out-Null
     $Log = Wait-ForE2eLog -Path $LogPath -Label "$Label packaged launch" -TimeoutSeconds 120
-    foreach ($Marker in @('server-ready', 'navigation-policy-ok', 'quit-cleanup-complete')) {
+    foreach ($Marker in @('server-ready', 'navigation-policy-ok', 'pty-native-ok', 'quit-cleanup-complete')) {
       if ($Log -notmatch [Regex]::Escape($Marker)) { throw "$Label packaged launch did not record $Marker." }
     }
     return $LogPath
@@ -271,16 +362,11 @@ try {
   Write-LifecycleLog -Name 'fresh-install.log' -Lines @("Installer: $InstallerPath", "Install root: $InstallRoot", "Application: $FreshExe", "E2E log: $FreshLog", 'Status: passed') | Out-Null
 
   if ($PreviousInstallerPath -and (Test-Path -LiteralPath $PreviousInstallerPath -PathType Leaf)) {
-    if (Test-Path -LiteralPath $InstallRoot) { Remove-Item -LiteralPath $InstallRoot -Recurse -Force }
+    Uninstall-Automnia -Label 'fresh-version uninstall before previous-version install' | Out-Null
     Install-Automnia -Path (Resolve-Path -LiteralPath $PreviousInstallerPath).Path -Label 'previous-version install' | Out-Null
     $UpgradeMode = 'previous-version'
   } else {
-    $ExistingUninstaller = Get-ChildItem -LiteralPath $InstallRoot -Filter 'Uninstall*.exe' -File -Recurse | Select-Object -First 1 -ExpandProperty FullName
-    if (-not $ExistingUninstaller) { throw 'same-version reinstall could not find the existing NSIS uninstaller.' }
-    Invoke-CheckedProcess -FilePath $ExistingUninstaller -ArgumentList @('/S') -Label 'same-version uninstall before clean reinstall' -TimeoutSeconds 180 | Out-Null
-    $UninstallDeadline = [DateTime]::UtcNow.AddSeconds(30)
-    while ((Test-Path -LiteralPath $InstallRoot) -and [DateTime]::UtcNow -lt $UninstallDeadline) { Start-Sleep -Milliseconds 250 }
-    if (Test-Path -LiteralPath $InstallRoot) { Remove-Item -LiteralPath $InstallRoot -Recurse -Force }
+    Uninstall-Automnia -Label 'same-version uninstall before clean reinstall' | Out-Null
     $UpgradeMode = 'clean-reinstall'
   }
   $UpgradeExe = Install-Automnia -Path $InstallerPath -Label 'upgrade install'
@@ -291,12 +377,7 @@ try {
   $RollbackLog = Invoke-InstalledSmoke -AppExe $UpgradeExe -Label 'rollback-existing-version'
   Add-Content -LiteralPath (Join-Path $LifecycleDir 'corrupted-update.log') -Value "Existing installed version remained launchable: $RollbackLog"
 
-  $Uninstaller = Get-ChildItem -LiteralPath $InstallRoot -Filter 'Uninstall*.exe' -File -Recurse | Select-Object -First 1 -ExpandProperty FullName
-  if (-not $Uninstaller) { throw 'NSIS uninstaller was not found after installation.' }
-  Invoke-CheckedProcess -FilePath $Uninstaller -ArgumentList @('/S') -Label 'silent uninstall' -TimeoutSeconds 180 | Out-Null
-  $Deadline = [DateTime]::UtcNow.AddSeconds(30)
-  while ((Test-Path -LiteralPath $UpgradeExe) -and [DateTime]::UtcNow -lt $Deadline) { Start-Sleep -Milliseconds 250 }
-  if (Test-Path -LiteralPath $UpgradeExe) { throw "$ExpectedAppExeName remained after silent uninstall." }
+  $Uninstaller = Uninstall-Automnia -Label 'silent uninstall'
   Write-LifecycleLog -Name 'uninstall.log' -Lines @("Uninstaller: $Uninstaller", "$ExpectedAppExeName removed: true", 'Status: passed') | Out-Null
 
   if ($PlatformSigningRequired) {
@@ -339,9 +420,12 @@ try {
   }
 } finally {
   try {
-    if (Test-Path -LiteralPath $TempRoot) {
-      Remove-Item -LiteralPath $TempRoot -Recurse -Force -ErrorAction Stop
-    }
+    Stop-InstalledAutomniaProcesses -Label 'final lifecycle cleanup'
+  } catch {
+    Write-Warning "[release-lifecycle] installer-owned process cleanup incomplete: $($_.Exception.Message)"
+  }
+  try {
+    Remove-DirectoryWithRetry -Path $TempRoot -Label 'final temporary cleanup'
   } catch {
     if (Test-Path -LiteralPath $TempRoot) {
       Write-Warning "[release-lifecycle] temporary cleanup incomplete: $($_.Exception.Message)"

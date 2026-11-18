@@ -16,6 +16,11 @@ This page covers playback in OpenClaw clients. Channel delivery, inbound media
 understanding, and live voice conversations use separate paths; see
 [Image and media support](/nodes/images),
 [Media understanding](/nodes/media-understanding), and [Talk mode](/nodes/talk).
+For oversized videos selected in the Control UI composer, see
+[pre-upload video preparation](/web/control-ui/chat#video-preparation-compatibility).
+Its browser codec requirements and qualification gaps are separate from the
+Gateway playback policy below; a playback rendition cannot fix a file that was
+refused before upload.
 
 ## Client support
 
@@ -95,6 +100,11 @@ Managed download tickets check current session access and the selected message's
 attachment reference in visible history. For indexed messages, issuing a ticket
 does not read the original file or validate unrelated transcript payloads. The
 HTTP request transfers the file separately.
+
+Managed media cleanup reads transcript history in bounded pages. If a single
+message exceeds the 8 MiB page limit, cleanup retains that session's media and
+logs a warning while continuing to clean other sessions. Incomplete history
+is never treated as proof that an attachment is unreferenced.
 
 Download filenames preserve Unicode characters and literal percent sequences
 such as `%20`.

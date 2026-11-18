@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
+import type { BoundedProcessResult } from '../process/boundedProcessService'
 
 export const DEFAULT_TELEGRAM_SPOOLED_HANDLER_TIMEOUT_MS = 2 * 60 * 60 * 1000
 
@@ -96,12 +97,7 @@ export type GatewaySpawnSpec = {
   shell: boolean
 }
 
-export type SpawnTextResult = {
-  stdout: string
-  stderr: string
-  code: number | null
-  timedOut: boolean
-}
+export type SpawnTextResult = BoundedProcessResult
 
 type GatewayHealthResult = {
   healthy: boolean
@@ -584,6 +580,7 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
         env,
         shell: spec.shell,
         stdio: 'pipe',
+        detached: process.platform !== 'win32',
         ...(process.platform === 'win32' ? { windowsHide: true } : {}),
       })
       let settled = false

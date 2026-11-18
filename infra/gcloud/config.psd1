@@ -6,11 +6,11 @@
   # separate from the Cloud Run and Firestore regions prevents a regional
   # endpoint from rejecting the reference model used for chat and tools.
   VertexLocation = 'global'
-  AutomniaRelayModel = 'gemini-3.7-flash'
-  AutomniaRelayFallbackModels = @('gemini-3.6-flash', 'gemini-2.5-flash')
+  AutomniaRelayModel = 'gemini-4-hydrogen'
+  AutomniaRelayFallbackModels = @('gemini-3.8-flash')
   # Models exposed to customer clients. The primary/fallback chain above is
   # still the only operational chain used after a request is accepted.
-  AutomniaRelaySelectableModels = @('gemini-4-argon', 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.5-flash')
+  AutomniaRelaySelectableModels = @('gemini-4-carbon', 'gemini-4-argon', 'gemini-4-hydrogen', 'gemini-3.8-flash')
   # Customer-facing credits are a compact display unit. The Cloud Run ledger
   # remains authoritative in raw Vertex tokens.
   TokensPerCredit = 1000
@@ -33,7 +33,7 @@
   KnowledgeDataStoreId = 'automnia-knowledge'
   KnowledgeEngineId = 'automnia-assistant-grounded'
   KnowledgeModelVersion = 'gemini-3.1-pro-preview/answer_gen/v1'
-  KnowledgeFallbackModelVersion = 'gemini-2.5-flash/answer_gen/v1'
+  KnowledgeFallbackModelVersion = 'gemini-3.5-flash/answer_gen/v1'
   PermanentBaseUrl = 'https://api.automnia.app'
   PermanentDomain = 'api.automnia.app'
   BillingRetrySchedule = '*/15 * * * *'
@@ -47,8 +47,8 @@
   InstallerMacosX64Object = 'releases/current/macos/Automnia-AI-Nexus-x64.dmg'
   InstallerLinuxAppImageX64Object = 'releases/current/linux/Automnia-AI-Nexus-x86_64.AppImage'
   InstallerLinuxDebX64Object = 'releases/current/linux/Automnia-AI-Nexus-x86_64.deb'
-  ShopifyStoreDomain = 'unbkay-k3.myshopify.com'
-  ShopifyAppClientId = 'd0972d80b936c44961e9490b1d113432'
+  ShopifyStoreDomain = 'j12hqc-h2.myshopify.com'
+  ShopifyAppClientId = 'd7cbdd39abd29f52bd7fa5130f5efa35'
   ShopifyApiVersion = '2026-07'
   ShopifyCheckoutUrl = 'https://automnia.app/collections/automnia-plans-and-refills'
   EmailProvider = 'microsoft_graph'

@@ -11,10 +11,12 @@ read_when:
 Publishing sends a skill folder or plugin package to ClawHub under the owner you
 choose. ClawHub checks that your token can publish for that owner, validates the
 metadata, name, version, files, and source information, then stores the release
-and starts automated security checks.
+as pending and runs automated security checks on that exact artifact.
 
-If validation fails, nothing is published. New releases may also stay out of
-normal install and download surfaces until review finishes.
+If validation fails, nothing is published. A pending release stays out of
+search, install, and download surfaces until the security checks pass. If the
+checks find malicious content, fail repeatedly, or time out, the release is not
+published.
 
 ## Skills
 
@@ -34,6 +36,73 @@ the authenticated user. Publishing skips unchanged content. A new skill starts
 at `1.0.0`, and later changes automatically publish the next patch version. Pass
 `--version` only when you need an explicit version.
 
+### Skill catalog metadata
+
+Categories place a skill in the category filters on the ClawHub skills browse
+page. Topics become the filter chips offered inside a selected category. Set both
+when you publish:
+
+```bash
+clawhub skill publish ./my-skill \
+  --categories development,operations \
+  --topics "git,worktree,cleanup"
+```
+
+Both flags take comma-separated values. Categories must be slugs from this list,
+matched exactly, so `Development` is rejected. Topics are free-form labels;
+ClawHub stores what you pass and displays the normalized form, so `Git Worktree`
+appears as `#git-worktree`.
+
+| Slug            | Description                                                               |
+| --------------- | ------------------------------------------------------------------------- |
+| `integrations`  | Connect services, fetch data, reconcile records, and operate APIs.        |
+| `automation`    | Build repeatable processes, scheduled jobs, pipelines, and orchestration. |
+| `research`      | Search, browse, scrape, summarize, monitor, and extract web information.  |
+| `development`   | Inspect, edit, test, build, debug, and operate codebases.                 |
+| `productivity`  | Manage tasks, calendars, email, meetings, projects, and business work.    |
+| `communication` | Message, publish, and operate social or communication services.           |
+| `creative`      | Create and edit images, video, audio, music, design, and writing.         |
+| `knowledge`     | Work with documents, notes, knowledge bases, teaching, and learning.      |
+| `agents`        | Change how an agent plans, reflects, learns, remembers, or collaborates.  |
+| `operations`    | Inspect, monitor, deploy, and operate local systems or infrastructure.    |
+| `security`      | Audit, scan, authenticate, and protect systems or data.                   |
+| `finance`       | Work with payments, budgets, banking, shopping, markets, and commerce.    |
+| `lifestyle`     | Travel, health, fitness, cooking, sports, home, and daily-life utilities. |
+| `other`         | Skills that do not yet fit another browse category.                       |
+
+Rules ClawHub applies to both fields:
+
+- A skill can carry at most 3 categories and at most 5 topics.
+- An unknown category slug fails the publish. `--dry-run` does not check slugs;
+  the registry validates them when the publish runs.
+- `other` is dropped when it is passed alongside a specific category. The
+  3-category limit is applied after that, so `other,development,operations`
+  stores two categories rather than failing.
+- Repeats are dropped rather than rejected, and they are matched after
+  normalization, so `git,Git` is one topic. Both limits count what is left after
+  that, not what you passed.
+- Each topic is at most 48 characters, and topics cannot contain invisible
+  formatting characters.
+- These topic names are reserved by ClawHub and are rejected: `approved`,
+  `audited`, `certified`, `clawhub`, `community`, `curated`, `endorsed`,
+  `featured`, `official`, `officials`, `openclaw`, `recommended`, `staff-pick`,
+  `trusted`, `trusted-publisher`, `verified`. The check runs on the normalized
+  form, so `Official` and `staff pick` are rejected too.
+- A skill first published without `--categories` is stored as `other`, so it only
+  appears under the Other category.
+- On a later publish, omitting `--categories` or `--topics` keeps the values
+  already stored. Pass the flag again to change them. Passing an empty value
+  clears the field: `--categories ""` returns the skill to `other`, and
+  `--topics ""` removes its topics.
+- Passing either flag publishes even when the files have not changed, so fixing
+  metadata this way creates a new patch version.
+
+Skill owners can also edit categories and topics from the skill's settings page
+on ClawHub. That is the quickest fix for a skill that was already published into
+`other`.
+
+### Publishing from a catalog repo
+
 For catalog repos, use ClawHub's reusable
 [`skill-publish.yml` workflow](https://github.com/openclaw/clawhub/blob/main/.github/workflows/skill-publish.yml).
 It calls `skill publish` for each immediate skill folder under `root` (default:
@@ -51,6 +120,20 @@ jobs:
 ```
 
 Use `dry_run: true` to preview new and changed skills without publishing.
+
+Automatic changelog generation and preview use a ten-second provider deadline, including response-body reads. If the provider is unavailable or times out, ClawHub returns local fallback notes so publishing and preview can continue.
+
+The workflow forwards optional `changelog`, `categories`, and `topics` inputs to
+`skill publish`, plus `clear_categories` and `clear_topics` for removing metadata
+a skill already carries. A skill first published without `categories` is stored
+as `other`, the same as [`clawhub sync`](/clawhub/cli#sync); you can also set catalog
+metadata later from the skill's settings page.
+
+Like `tags`, `categories` and `topics` apply to **every** skill the run
+publishes, and supplying them suspends the unchanged-skill skip — the run
+releases a new patch version of each selected skill, including skills whose files
+did not change. Pass `skill_path` to bound that to one skill. See the
+[workflow notes](/clawhub/cli#github-actions-1) for the full behavior.
 
 ## Plugins
 
@@ -78,10 +161,21 @@ to keep out of public issues.
 ### Before Publishing a Plugin
 
 - Pick an owner that matches the package scope.
+- A code plugin's manifest `id` must be unique within that publisher's packages.
+  Different publishers can distribute the same runtime id under distinct scoped
+  package names. Choose the explicit scoped name to install a community package;
+  known bare OpenClaw aliases select the official package. One OpenClaw
+  installation still uses one plugin for each runtime id.
 - Include `openclaw.plugin.json`. Code plugins also need `package.json` with
   `openclaw.compat.pluginApi` and `openclaw.build.openclawVersion`.
-- To show a custom plugin catalog icon on the homepage and plugin list pages,
-  add `icon` to `openclaw.plugin.json` with any HTTPS image URL.
+- Publish every entrypoint `package.json` declares. ClawHub rejects a code
+  plugin when a file named by `openclaw.extensions`, `openclaw.runtimeExtensions`,
+  `openclaw.setupEntry`, or `openclaw.runtimeSetupEntry` is missing from the
+  upload, using OpenClaw's install rules: a declared runtime entry must exist,
+  and a TypeScript entry without a runtime entry needs compiled JavaScript such
+  as `dist/index.js`. Build first, then publish the folder or `.tgz`.
+- To show a custom plugin catalog icon, include `assets/icon.png` at the package
+  root in the published archive. Use a valid PNG no larger than 512 KiB.
 - Include source repository and exact commit metadata, or use the CLI from a
   GitHub-backed checkout so it can detect them.
 - Run `clawhub package validate <source>` before publishing. For package,
@@ -90,6 +184,70 @@ to keep out of public issues.
 - Run `clawhub package publish <source> --dry-run` before creating a release.
 - Expect new releases to stay out of public install surfaces until automated
   security checks and verification finish.
+
+Plugin Inspector does not run during publish and never blocks it. After a
+release is accepted, ClawHub scans it with Plugin Inspector as monitoring, and
+again in the nightly scan; findings appear on the plugin's validation tab. If
+Inspector itself fails or times out, ClawHub records that as an Inspector
+outcome, not as a problem with your plugin, and scans the release again later.
+Run `clawhub package validate <source>` to see the same findings before you
+publish.
+
+### Plugin Icons
+
+ClawHub uses the bundled `assets/icon.png` for plugin catalog artwork. Manifest
+`icon` URLs and paths are ignored. If your npm package uses a `files` allowlist,
+include the asset there and check `npm pack --dry-run` to confirm it will ship.
+Missing or invalid artwork falls back to the plugin category glyph.
+
+Existing releases with only a manifest icon URL also use the category glyph.
+Publish a new release containing `assets/icon.png` to restore custom artwork.
+ClawHub validates and hosts the bundled PNG; an external image URL is not a
+supported substitute.
+
+Maintainers can repair existing latest releases with
+`maintenance:repairPluginIconsInternal` after deploying bundled icon support.
+The repair uses an asset already in the release, or, for official `@openclaw`
+packages owned by the active OpenClaw publisher, the asset at the release's
+recorded OpenClaw source commit. Run the default dry run for each of
+`family: "code-plugin"` and `family: "bundle-plugin"`, following each returned
+`cursor` until `isDone`. Apply from the initial cursor with `dryRun: false`, then
+repeat the dry run to verify no remaining matches. URL-only releases without a
+bundled asset cannot be restored by this repair.
+
+### Plugin Catalog Metadata
+
+Choose the single main reason someone installs the plugin. Code plugins and
+bundle plugins can declare one category in their root `openclaw.plugin.json`:
+
+```json
+{
+  "id": "example-agent-runtime",
+  "categories": ["agent-runtimes"]
+}
+```
+
+Merge the `categories` field into your existing manifest. Use a current plugin
+category slug, such as `context`, `memory`, or `developer-tools`; explicit
+declarations take priority over automatic classification. Each new release must
+declare exactly one category or omit the field.
+
+When `categories` is omitted, ClawHub generates one category from bounded package
+metadata and documentation using its configured model (default: GPT-5.6 Luna).
+It falls back to `other` when classification is unavailable. A previous release's
+category is not an author declaration and is not preserved merely by omission.
+
+The package CLI's `--categories` flag and reusable workflow's `categories` and
+`clear_categories` inputs are deprecated for plugins. They remain accepted but
+are ignored, with a warning on stderr. Move a chosen category into the manifest;
+remove the field to return to automatic classification. This also applies to
+`--categories ""`, which no longer clears plugin categories. Experimental Template
+publishes and skill publishing retain their existing category behavior.
+
+Topics remain separate: use `--topics` or the workflow's `topics` input to set
+them, omit the input to preserve existing topics, or use `--topics ""` /
+`clear_topics: true` to clear them. See the [package CLI reference](/clawhub/cli#package-publish-%3Csource%3E)
+and [topic rules](#skill-catalog-metadata).
 
 ### Trusted Publishing for Packages
 
@@ -122,7 +280,9 @@ The current reusable package publish workflow supports secretless trusted
 publishing for `workflow_dispatch` publishes when `id-token: write` is
 available. Tag-push real publishes still need `clawhub_token`, so keep
 `CLAWHUB_TOKEN` available for tag releases, first publishes, untrusted packages,
-or break-glass publishes.
+or break-glass publishes. When the CLI falls back from trusted publishing,
+it uses a saved token for the target registry. If no fallback token is available,
+it reports the original trusted-publishing error rather than a login error.
 
 Real publishes through the reusable workflow wait for the staged attempt to
 become public by default. The workflow fails when security checks block or fail
@@ -141,6 +301,46 @@ clawhub package trusted-publisher delete @owner/package-name
 
 Deleting trusted publisher config is the rollback path. It disables future
 trusted publish token minting until a package manager sets config again.
+
+### OpenClaw release recovery
+
+OpenClaw automated releases stay non-public until their exact release-parent
+attempt succeeds. If that parent fails or is cancelled, the publish attempt
+fails permanently. A human recovery dispatch requires protected environment
+approval and a version 2 recovery receipt identifying the original authorized
+child. Recovery must use the same workflow ref and SHA, candidate, tooling, and
+package inventory. That workflow route does not accept cancelled parents.
+
+Already-failed staged plugin attempts can instead be recovered under fresh
+publisher authority, without changing the old workflow or its outcome:
+
+```sh
+clawhub package recover <attempt-id> \
+  --manual-override-reason "Retry the retained release artifacts after workflow failure" \
+  --wait --json
+```
+
+This uses a normal ClawHub user token and current package publish access.
+It creates a successor with the same retained artifacts and version, runs new
+security checks, and preserves the failed attempt and original authorization
+as audit history. Current token or publisher-access revocation still blocks
+publication. It cannot override moderation or revive an active attempt.
+Without `--wait`, the result is explicitly pending. The equivalent HTTP route is
+[`POST /api/v1/publish/attempts/{id}/recover`](/clawhub/http-api#post-%2Fapi%2Fv1%2Fpublish%2Fattempts%2F%7Bid%7D%2Frecover).
+
+Operators can preview orphaned package attempts, supplying an exact `version`,
+optional `slugPrefix` or `attemptIds`, and a `reason`:
+
+```sh
+bunx convex run --prod maintenance:discardStalePackagePublishAttemptsInternal \
+  '{"version":"2026.9.1","slugPrefix":"@openclaw/","reason":"Release parent failed after staging"}'
+```
+
+It defaults to a dry run; add `"dryRun":false` to discard each pending release
+and retire its attempt. Signed-in admins can run the same operation as the
+`maintenance:discardStalePackagePublishAttempts` action. The reason appears as
+`error` at `/api/v1/publish/attempts/<id>`, so use publisher-facing wording.
+Published releases and terminal attempts are never discarded by this operation.
 
 ## FAQ
 
@@ -164,9 +364,14 @@ wrong publisher, transfer ownership instead:
 clawhub package transfer @opik/opik-openclaw --to opik
 ```
 
-Use package or skill transfer only when you have admin access to both the
-current owner and the destination publisher. Package transfer does not let you
-publish into a scope you cannot manage.
+Package transfers require admin access to both the current owner and the
+destination publisher, unless performed by a platform admin. Use `--to <owner>`
+to select an existing, active destination publisher. Scoped package names can
+transfer only to the publisher matching their scope. See
+[`package transfer`](/clawhub/cli#package-transfer-%3Cname%3E) for details.
+
+Skills use the separate [ownership transfer workflow](/clawhub/cli#transfer).
+Transfers to another user normally require recipient acceptance.
 
 If you do not have access to the current owner but believe your org, project, or
 brand is the rightful namespace owner, open an
