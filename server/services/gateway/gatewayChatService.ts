@@ -1535,7 +1535,10 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     try {
       ack = await state.client.request('chat.send', {
         sessionKey,
-        sessionId: params.sessionId,
+        // The Gateway owns the physical session id for this key. `params.sessionId`
+        // is Automnia's local generation id, so sending it as an OpenClaw
+        // session precondition can reject a newly-created session before work
+        // starts with SESSION_WORK_START_CHANGED.
         agentId: params.agentId,
         message: params.message,
         ...(attachments.length ? { attachments } : {}),

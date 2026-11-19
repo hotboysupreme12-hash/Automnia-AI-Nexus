@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { codexPluginAvailableForRuntime, codexPluginNeedsRepair } from '../server/services/plugins/codexPluginHealth'
+import { readFileSync } from 'node:fs'
+import {
+  codexPluginAvailableForRuntime,
+  codexPluginNeedsRepair,
+  OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC,
+} from '../server/services/plugins/codexPluginHealth'
 import type { PluginControlEntry } from '../server/services/plugins/pluginInventoryService'
 
 function plugin(overrides: Partial<PluginControlEntry> = {}): PluginControlEntry {
@@ -41,4 +46,15 @@ test('does not treat a degraded installed entry as runtime-ready', () => {
 test('requires enabled state before declaring Codex available', () => {
   assert.equal(codexPluginAvailableForRuntime(plugin({ enabled: false }), 'C:\\bundled\\codex'), false)
   assert.equal(codexPluginAvailableForRuntime(plugin({ configuredEnabled: false }), 'C:\\bundled\\codex'), false)
+})
+
+test('automatic Codex installation uses the exact official package supported by this OpenClaw runtime', () => {
+  const readinessSource = readFileSync(new URL('../scripts/post-upgrade-openclaw-readiness.mjs', import.meta.url), 'utf8')
+  const releaseVersion = /export const CODEX_PLUGIN_VERSION = '([^']+)'/.exec(readinessSource)?.[1]
+  const controlPlaneSource = readFileSync(new URL('../server/controlPlane.ts', import.meta.url), 'utf8')
+
+  assert.ok(releaseVersion, 'post-upgrade readiness must pin the Codex plugin release')
+  assert.equal(OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC, `npm:@openclaw/codex@${releaseVersion}`)
+  assert.match(controlPlaneSource, /spec:\s*bundledCodexSource\s*\|\|\s*OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC/)
+  assert.doesNotMatch(controlPlaneSource, /spec:\s*bundledCodexSource\s*\|\|\s*'codex'/)
 })

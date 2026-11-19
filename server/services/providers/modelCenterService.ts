@@ -122,7 +122,15 @@ function positiveInteger(value: unknown) {
 }
 
 function modelIdFor(value: Record<string, unknown>) {
-  const id = typeof value.id === 'string' ? value.id.trim() : ''
+  // OpenClaw's `models list --json` catalog uses `key` for its canonical
+  // provider/model reference, while other supported response shapes use `id`.
+  // Accept both so refreshed capability snapshots follow the CLI's current
+  // schema without weakening model ID validation.
+  const id = typeof value.id === 'string'
+    ? value.id.trim()
+    : typeof value.key === 'string'
+      ? value.key.trim()
+      : ''
   return OPENCLAW_MODEL_ID_PATTERN.test(id) ? id : ''
 }
 
@@ -132,8 +140,9 @@ function providerFor(value: Record<string, unknown>, id: string) {
 }
 
 function stringList(value: unknown, allowed?: Set<string>) {
-  if (!Array.isArray(value)) return undefined
-  const values = [...new Set(value.flatMap((entry) => {
+  const entries = Array.isArray(value) ? value : typeof value === 'string' ? [value] : []
+  if (!entries.length) return undefined
+  const values = [...new Set(entries.flatMap((entry) => {
     if (typeof entry !== 'string') return []
     const normalized = entry.trim().toLowerCase()
     return normalized && (!allowed || allowed.has(normalized)) ? [normalized] : []
@@ -531,7 +540,7 @@ export function createModelCenterService(options: ModelCenterServiceOptions) {
     try {
       const result = await options.runOpenClaw([
         'agent', 'exec',
-        '--message', 'Reply with the single word OK.',
+        'Reply with the single word OK.',
         '--model', modelId,
         '--thinking', 'off',
         '--timeout', String(Math.floor(MODEL_PROBE_TIMEOUT_MS / 1000)),
