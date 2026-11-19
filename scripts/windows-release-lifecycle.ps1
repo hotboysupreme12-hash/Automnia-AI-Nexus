@@ -68,6 +68,14 @@ if ($env:AUTOMNIA_WINDOWS_INSTALLER_TIMEOUT_SECONDS) {
   }
   $InstallerTimeoutSeconds = $ParsedInstallerTimeoutSeconds
 }
+$UpgradeInstallerTimeoutSeconds = 1800
+if ($env:AUTOMNIA_WINDOWS_UPGRADE_TIMEOUT_SECONDS) {
+  $ParsedUpgradeInstallerTimeoutSeconds = 0
+  if (-not [int]::TryParse($env:AUTOMNIA_WINDOWS_UPGRADE_TIMEOUT_SECONDS, [ref]$ParsedUpgradeInstallerTimeoutSeconds) -or $ParsedUpgradeInstallerTimeoutSeconds -lt 1) {
+    throw 'AUTOMNIA_WINDOWS_UPGRADE_TIMEOUT_SECONDS must be a positive integer.'
+  }
+  $UpgradeInstallerTimeoutSeconds = $ParsedUpgradeInstallerTimeoutSeconds
+}
 New-Item -ItemType Directory -Force -Path $TempRoot | Out-Null
 
 function Write-LifecycleLog {
@@ -101,17 +109,19 @@ function Invoke-CheckedProcess {
   }
   $Process = Start-Process @StartParameters
   if (-not $Process.WaitForExit($TimeoutSeconds * 1000)) {
+    $ProcessDescription = try { "$($Process.ProcessName) (PID $($Process.Id))" } catch { "PID $($Process.Id)" }
     try { $Process.Kill($true) } catch {}
-    throw "$Label timed out after $TimeoutSeconds seconds."
+    try { $null = $Process.WaitForExit(30000) } catch {}
+    throw "$Label timed out after $TimeoutSeconds seconds. Timed-out process: $ProcessDescription."
   }
   if ($Process.ExitCode -ne 0) { throw "$Label exited with code $($Process.ExitCode)." }
   return $Process.ExitCode
 }
 
 function Install-Automnia {
-  param([string]$Path, [string]$Label)
+  param([string]$Path, [string]$Label, [int]$TimeoutSeconds)
   New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
-  Invoke-CheckedProcess -FilePath $Path -ArgumentList @('/S', "/D=$InstallRoot") -Label $Label -TimeoutSeconds $InstallerTimeoutSeconds | Out-Null
+  Invoke-CheckedProcess -FilePath $Path -ArgumentList @('/S', "/D=$InstallRoot") -Label $Label -TimeoutSeconds $TimeoutSeconds | Out-Null
   $PayloadDeadline = [DateTime]::UtcNow.AddSeconds(120)
   $RequiredPayload = @(
     (Join-Path $InstallRoot $ExpectedAppExeName),
@@ -357,19 +367,23 @@ try {
   Verify-UpdateChannel
 
   if (Test-Path -LiteralPath $InstallRoot) { Remove-Item -LiteralPath $InstallRoot -Recurse -Force }
-  $FreshExe = Install-Automnia -Path $InstallerPath -Label 'fresh install'
+  $FreshExe = Install-Automnia -Path $InstallerPath -Label 'fresh install' -TimeoutSeconds $InstallerTimeoutSeconds
   $FreshLog = Invoke-InstalledSmoke -AppExe $FreshExe -Label 'fresh-install'
   Write-LifecycleLog -Name 'fresh-install.log' -Lines @("Installer: $InstallerPath", "Install root: $InstallRoot", "Application: $FreshExe", "E2E log: $FreshLog", 'Status: passed') | Out-Null
 
   if ($PreviousInstallerPath -and (Test-Path -LiteralPath $PreviousInstallerPath -PathType Leaf)) {
     Uninstall-Automnia -Label 'fresh-version uninstall before previous-version install' | Out-Null
-    Install-Automnia -Path (Resolve-Path -LiteralPath $PreviousInstallerPath).Path -Label 'previous-version install' | Out-Null
+    Install-Automnia -Path (Resolve-Path -LiteralPath $PreviousInstallerPath).Path -Label 'previous-version install' -TimeoutSeconds $InstallerTimeoutSeconds | Out-Null
+    # NSIS checks for app processes before replacing an existing install.
+    # Close only processes rooted in this isolated install directory first.
+    Write-Host '[release-lifecycle] stopping any previous-version app process before the in-place upgrade.'
+    Stop-InstalledAutomniaProcesses -Label 'previous-version pre-upgrade cleanup'
     $UpgradeMode = 'previous-version'
   } else {
     Uninstall-Automnia -Label 'same-version uninstall before clean reinstall' | Out-Null
     $UpgradeMode = 'clean-reinstall'
   }
-  $UpgradeExe = Install-Automnia -Path $InstallerPath -Label 'upgrade install'
+  $UpgradeExe = Install-Automnia -Path $InstallerPath -Label 'upgrade install' -TimeoutSeconds $UpgradeInstallerTimeoutSeconds
   $UpgradeLog = Invoke-InstalledSmoke -AppExe $UpgradeExe -Label 'upgrade'
   Write-LifecycleLog -Name 'upgrade.log' -Lines @("Mode: $UpgradeMode", "Application: $UpgradeExe", "E2E log: $UpgradeLog", 'Status: passed') | Out-Null
 

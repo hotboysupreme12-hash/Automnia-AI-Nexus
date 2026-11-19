@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.26 - 2026-11-18
+
+### Windows installer validation
+
+- Stops processes left by the previous-version installer before exercising an in-place upgrade.
+- Gives the Windows upgrade lifecycle a separate bounded timeout and records the setup process when that limit is reached.
+
 ## 1.0.25 - 2026-11-18
 
 ### OpenClaw runtime and installers
