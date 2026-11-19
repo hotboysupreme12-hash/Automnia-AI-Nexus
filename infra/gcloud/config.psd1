@@ -1,5 +1,5 @@
 @{
-  SchemaVersion = '2026-11-18.2'
+  SchemaVersion = '2026-11-19.1'
   Region = 'us-east1'
   FirestoreLocation = 'us-east1'
   # Automnia's Gemini relay is served through Vertex's global endpoint. Keeping this

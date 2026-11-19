@@ -23,11 +23,16 @@ import {
   AUTOMNIA_RELAY_TOKEN_OPTIMIZATION_VERSION,
 } from './tokenOptimization.js';
 import { buildLicenseEmailHtml } from './welcomeEmail.js';
+import {
+  buildLicenseEmailMimeMessage,
+  encodeGmailRawMessage,
+  encodeMicrosoftGraphRawMessage,
+} from './licenseEmailMime.js';
 
 const app = express();
 const port = process.env.PORT || 8080;
-const serviceVersion = '2.10.6';
-const schemaVersion = '2026-11-18.2';
+const serviceVersion = '2.10.7';
+const schemaVersion = '2026-11-19.1';
 const secrets = (process.env.SHOPIFY_WEBHOOK_SECRETS || process.env.SHOPIFY_WEBHOOK_SECRET || '')
   .split(',')
   .map((value) => value.trim())
@@ -2975,40 +2980,27 @@ function licenseEmailMessage(record, context = {}) {
   ].join('\n');
 }
 
-function encodeMimeHeader(value) {
-  const text = String(value || '').replace(/[\r\n]/g, ' ');
-  if (/^[\x20-\x7E]*$/.test(text)) return text;
-  return `=?UTF-8?B?${Buffer.from(text, 'utf8').toString('base64')}?=`;
+function licenseEmailMimeMessage(record, context = {}) {
+  const to = normalizeEmail(record?.email);
+  if (!isValidMailbox(to) || !isValidMailbox(emailSender)) throw new Error('License email has an invalid sender or recipient.');
+  return buildLicenseEmailMimeMessage({
+    from: `Automnia AI Nexus <${emailSender}>`,
+    to,
+    subject: 'Welcome to Automnia AI Nexus — your license key',
+    text: licenseEmailMessage(record, context),
+    html: buildLicenseEmailHtml(record, context),
+  });
 }
 
 function buildGmailRawMessage(record, context = {}) {
-  const to = normalizeEmail(record?.email);
-  if (!isValidMailbox(to) || !isValidMailbox(emailSender)) throw new Error('Gmail license email has an invalid sender or recipient.');
-  const boundary = `automnia-${crypto.randomBytes(12).toString('hex')}`;
-  const subject = 'Welcome to Automnia AI Nexus — your license key';
-  const message = [
-    `From: Automnia AI Nexus <${emailSender}>`,
-    `To: ${to}`,
-    `Subject: ${encodeMimeHeader(subject)}`,
-    'MIME-Version: 1.0',
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    '',
-    `--${boundary}`,
-    'Content-Type: text/plain; charset=UTF-8',
-    'Content-Transfer-Encoding: 8bit',
-    '',
-    licenseEmailMessage(record, context),
-    '',
-    `--${boundary}`,
-    'Content-Type: text/html; charset=UTF-8',
-    'Content-Transfer-Encoding: 8bit',
-    '',
-    buildLicenseEmailHtml(record, context),
-    '',
-    `--${boundary}--`,
-    '',
-  ].join('\r\n');
-  return Buffer.from(message, 'utf8').toString('base64url');
+  return encodeGmailRawMessage(licenseEmailMimeMessage(record, context));
+}
+
+function buildMicrosoftGraphRawMessage(record, context = {}) {
+  // The Graph sendMail MIME form preserves the product From display name while
+  // sending from the configured support mailbox. JSON sendMail omitted the
+  // From header, so Exchange substituted the mailbox owner's personal name.
+  return encodeMicrosoftGraphRawMessage(licenseEmailMimeMessage(record, context));
 }
 
 async function parseJsonResponse(response) {
@@ -3101,15 +3093,8 @@ async function sendMicrosoftGraphLicenseEmail(record, context = {}) {
   if (!isValidMailbox(to) || !isValidMailbox(emailSender)) throw new Error('Microsoft Graph license email has an invalid sender or recipient.');
   const response = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(emailSender)}/sendMail`, {
     method: 'POST',
-    headers: { Accept: 'application/json', Authorization: `Bearer ${await getMicrosoftGraphAccessToken()}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message: {
-        subject: 'Welcome to Automnia AI Nexus — your license key',
-        body: { contentType: 'HTML', content: buildLicenseEmailHtml(record, context) },
-        toRecipients: [{ emailAddress: { address: to } }],
-      },
-        saveToSentItems: true,
-    }),
+    headers: { Accept: 'application/json', Authorization: `Bearer ${await getMicrosoftGraphAccessToken()}`, 'Content-Type': 'text/plain' },
+    body: buildMicrosoftGraphRawMessage(record, context),
   });
   if (!response.ok) {
     const payload = await parseJsonResponse(response);
