@@ -125,6 +125,27 @@ function startStaticServer() {
         })
         return
       }
+      if (requestPath === '/api/license/status') {
+        sendJson(response, 200, {
+          ok: true,
+          data: {
+            active: true,
+            email: 'settings-persistence@example.test',
+            tier: 'pro',
+            mode: 'byok',
+            planPriceCents: null,
+            byokAllowed: true,
+            permanentAccess: true,
+            subscriptionStatus: 'permanent',
+            usagePriority: 'provider_first',
+            creditBalance: null,
+            creditBalanceUpdatedAt: null,
+            activatedAt: new Date().toISOString(),
+            verifiedAt: new Date().toISOString(),
+          },
+        })
+        return
+      }
       if (requestPath === '/api/party/overview') {
         sendJson(response, 200, { party: [] })
         return
@@ -221,6 +242,7 @@ const path = require('node:path')
 
 const targetUrl = process.env.AUTOMNIA_SETTINGS_SMOKE_URL
 const screenshotPath = process.env.AUTOMNIA_SETTINGS_SMOKE_SCREENSHOT
+const sessionToken = ${JSON.stringify(uiSmokeSessionToken)}
 if (!targetUrl || !screenshotPath) {
   throw new Error('AUTOMNIA_SETTINGS_SMOKE_URL and AUTOMNIA_SETTINGS_SMOKE_SCREENSHOT are required.')
 }
@@ -268,24 +290,25 @@ async function changeSettings(window) {
     "    }",
     "    return null",
     "  }",
-    "  const setSelect = (select, value) => {",
-    "    const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set",
-    "    if (setter) setter.call(select, value)",
-    "    else select.value = value",
-    "    select.dispatchEvent(new Event('input', { bubbles: true }))",
-    "    select.dispatchEvent(new Event('change', { bubbles: true }))",
+    "  const selectedValue = (panel, setting) => {",
+    "    const button = panel?.querySelector('[data-dui-setting=\"' + setting + '\"] button[aria-pressed=\"true\"]')",
+    "    return button ? button.textContent.trim().toLowerCase() : ''",
+    "  }",
+    "  const clickOption = (panel, setting, label) => {",
+    "    const buttons = [...(panel?.querySelectorAll('[data-dui-setting=\"' + setting + '\"] button') || [])]",
+    "    const button = buttons.find((candidate) => candidate.textContent.trim().toLowerCase() === label)",
+    "    if (button) button.click()",
+    "    return Boolean(button)",
     "  }",
     "  const snapshot = () => {",
     "    const panel = document.querySelector('[data-dui-panel=\"settings\"]')",
-    "    const densitySelect = panel ? panel.querySelector('select[data-dui-setting=\"density\"]') : null",
-    "    const motionSelect = panel ? panel.querySelector('select[data-dui-setting=\"motion\"]') : null",
     "    const stored = JSON.parse(window.localStorage.getItem('automnia-ui-settings-v1') || '{}')",
     "    const notice = panel ? panel.querySelector('.dui-settings-status') : null",
     "    return {",
     "      settingsPanelPresent: Boolean(panel),",
     "      settingsNavAriaCurrent: document.querySelector('#nexus-nav-settings')?.getAttribute('aria-current') || '',",
-    "      densitySelectValue: densitySelect ? densitySelect.value : '',",
-    "      motionSelectValue: motionSelect ? motionSelect.value : '',",
+    "      densitySelectValue: selectedValue(panel, 'density'),",
+    "      motionSelectValue: selectedValue(panel, 'motion'),",
     "      rootDensity: document.documentElement.dataset.duiDensity || '',",
     "      rootMotion: document.documentElement.dataset.duiMotion || '',",
     "      storedDensity: stored.density || '',",
@@ -299,12 +322,13 @@ async function changeSettings(window) {
     "    if (!settingsNavItem) return snapshot()",
     "    settingsNavItem.click()",
     "    const panel = await waitFor(() => document.querySelector('[data-dui-panel=\"settings\"]'))",
-    "    const densitySelect = panel ? panel.querySelector('select[data-dui-setting=\"density\"]') : null",
-    "    const motionSelect = panel ? panel.querySelector('select[data-dui-setting=\"motion\"]') : null",
-    "    if (!panel || !densitySelect || !motionSelect) return snapshot()",
-    "    setSelect(densitySelect, 'spacious')",
+    "    const appearanceSection = panel ? await waitFor(() => panel.querySelector('[data-settings-section=\"appearance\"]')) : null",
+    "    if (!panel || !appearanceSection) return snapshot()",
+    "    appearanceSection.click()",
+    "    await waitFor(() => panel.querySelector('[data-dui-setting=\"density\"] button'))",
+    "    if (!clickOption(panel, 'density', 'spacious')) return snapshot()",
     "    await waitFor(() => document.documentElement.dataset.duiDensity === 'spacious')",
-    "    setSelect(motionSelect, 'reduced')",
+    "    if (!clickOption(panel, 'motion', 'reduced')) return snapshot()",
     "    await waitFor(() => document.documentElement.dataset.duiMotion === 'reduced')",
     "    await waitFor(() => {",
     "      const stored = JSON.parse(window.localStorage.getItem('automnia-ui-settings-v1') || '{}')",
@@ -332,15 +356,17 @@ async function verifySettings(window) {
     "  }",
     "  const snapshot = () => {",
     "    const panel = document.querySelector('[data-dui-panel=\"settings\"]')",
-    "    const densitySelect = panel ? panel.querySelector('select[data-dui-setting=\"density\"]') : null",
-    "    const motionSelect = panel ? panel.querySelector('select[data-dui-setting=\"motion\"]') : null",
+    "    const selectedValue = (setting) => {",
+    "      const button = panel?.querySelector('[data-dui-setting=\"' + setting + '\"] button[aria-pressed=\"true\"]')",
+    "      return button ? button.textContent.trim().toLowerCase() : ''",
+    "    }",
     "    const stored = JSON.parse(window.localStorage.getItem('automnia-ui-settings-v1') || '{}')",
     "    const notice = panel ? panel.querySelector('.dui-settings-status') : null",
     "    return {",
     "      settingsPanelPresent: Boolean(panel),",
     "      settingsNavAriaCurrent: document.querySelector('#nexus-nav-settings')?.getAttribute('aria-current') || '',",
-    "      densitySelectValue: densitySelect ? densitySelect.value : '',",
-    "      motionSelectValue: motionSelect ? motionSelect.value : '',",
+    "      densitySelectValue: selectedValue('density'),",
+    "      motionSelectValue: selectedValue('motion'),",
     "      rootDensity: document.documentElement.dataset.duiDensity || '',",
     "      rootMotion: document.documentElement.dataset.duiMotion || '',",
     "      storedDensity: stored.density || '',",
@@ -352,8 +378,11 @@ async function verifySettings(window) {
     "    await waitFor(() => document.documentElement.dataset.duiDensity === 'spacious' && document.documentElement.dataset.duiMotion === 'reduced')",
     "    const settingsNavItem = await waitFor(() => document.querySelector('#nexus-nav-settings'))",
     "    if (settingsNavItem) settingsNavItem.click()",
-    "    await waitFor(() => document.querySelector('[data-dui-panel=\"settings\"] select[data-dui-setting=\"density\"]')?.value === 'spacious')",
-    "    await waitFor(() => document.querySelector('[data-dui-panel=\"settings\"] select[data-dui-setting=\"motion\"]')?.value === 'reduced')",
+    "    const panel = await waitFor(() => document.querySelector('[data-dui-panel=\"settings\"]'))",
+    "    const appearanceSection = panel ? await waitFor(() => panel.querySelector('[data-settings-section=\"appearance\"]')) : null",
+    "    if (appearanceSection) appearanceSection.click()",
+    "    await waitFor(() => snapshot().densitySelectValue === 'spacious')",
+    "    await waitFor(() => snapshot().motionSelectValue === 'reduced')",
     "    return snapshot()",
     "  })()",
     "})()",
@@ -386,6 +415,10 @@ app.whenReady().then(async () => {
     },
   })
   await window.loadURL(targetUrl)
+  await window.webContents.executeJavaScript('window.localStorage.removeItem("control-center-signed-out"); window.localStorage.setItem("control-center-token", ' + JSON.stringify(sessionToken) + ')')
+  const authenticatedReload = new Promise((resolve) => window.webContents.once('did-finish-load', resolve))
+  window.webContents.reloadIgnoringCache()
+  await authenticatedReload
   await wait(1200)
   const seed = await changeSettings(window)
   assertSnapshot(seed, 'seed')
@@ -494,7 +527,7 @@ try {
     mode: 'settings-density-motion-persistence',
     sourcePins: {
       packageScript: 'smoke:phase-k-settings-persistence',
-      settingsPanelSelectors: ['select[data-dui-setting="density"]', 'select[data-dui-setting="motion"]'],
+      settingsPanelSelectors: ['[data-dui-setting="density"] button[aria-pressed="true"]', '[data-dui-setting="motion"] button[aria-pressed="true"]'],
       storageKey: 'automnia-ui-settings-v1',
       rootDatasets: ['data-dui-density', 'data-dui-motion'],
     },

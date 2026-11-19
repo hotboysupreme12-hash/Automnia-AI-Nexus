@@ -1,5 +1,5 @@
 import { apiUrl } from '../utils/apiUrl'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiErrorMessage, apiRequest, type ApiErrorEnvelope, type ApiRequestOptions } from '../api/client'
 import { getRuntimeMonitorClearGeneration, markRuntimeMonitorCleared } from './runtimeMonitorClear'
 
@@ -647,14 +647,66 @@ export async function updateCronShift(payload: {
 }
 
 export async function listCronShifts(options: ApiRequestOptions = {}): Promise<RuntimeCronJob[]> {
-  const result = await apiRequest<{ shifts?: RuntimeCronJob[] }>('/api/shifts', {
+  const result = await apiRequest<{ shifts?: RuntimeCronJob[]; error?: string }>('/api/shifts', {
     ...options,
     cache: options.cache ?? 'no-store',
     timeoutMs: options.timeoutMs ?? 20_000,
   })
   if (!result.ok) throw new Error(apiErrorMessage(result.error))
+  if (typeof result.data.error === 'string' && result.data.error.trim()) throw new Error(result.data.error.trim())
   if (!Array.isArray(result.data.shifts)) throw new Error('Cron list response missing shifts.')
   return result.data.shifts
+}
+
+export function useRuntimeCronJobs(intervalMs = 8_000) {
+  const [jobs, setJobs] = useState<RuntimeCronJob[]>([])
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [ready, setReady] = useState(false)
+  const requestRef = useRef<Promise<void> | null>(null)
+
+  const loadCronJobs = useCallback((showRefreshing = false) => {
+    if (requestRef.current) {
+      if (!showRefreshing) return requestRef.current
+      setRefreshing(true)
+      return requestRef.current.finally(() => setRefreshing(false))
+    }
+    if (showRefreshing) setRefreshing(true)
+
+    const request = listCronShifts({ timeoutMs: 20_000 })
+      .then((nextJobs) => {
+        setJobs(nextJobs)
+        setError('')
+        setReady(true)
+      })
+      .catch((loadError) => {
+        setError(loadError instanceof Error ? loadError.message : String(loadError))
+        setReady(true)
+      })
+      .finally(() => {
+        setLoading(false)
+        setRefreshing(false)
+        requestRef.current = null
+      })
+
+    requestRef.current = request
+    return request
+  }, [])
+
+  const refresh = useCallback(() => loadCronJobs(true), [loadCronJobs])
+
+  useEffect(() => {
+    const initialLoad = window.setTimeout(() => void loadCronJobs(), 0)
+    if (intervalMs <= 0) return () => window.clearTimeout(initialLoad)
+    const timer = window.setInterval(() => void loadCronJobs(), Math.max(2_000, intervalMs))
+    return () => {
+      window.clearTimeout(initialLoad)
+      window.clearInterval(timer)
+    }
+  }, [intervalMs, loadCronJobs])
+
+  return { jobs, error, loading: loading || refreshing, ready, refresh }
 }
 
 let cachedCronShiftHydration: { loadedAt: number; shifts: RuntimeCronJob[] } | null = null

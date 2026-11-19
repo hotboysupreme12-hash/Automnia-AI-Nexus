@@ -4,6 +4,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import net from 'node:net'
+import { createRuntimeLedgerStore, runtimeLedgerPathsForStateRoot } from '../server/state/runtimeLedgerStore'
+import { createLicenseService } from '../server/services/license/licenseService'
 
 const root = process.cwd()
 const CONTROL_TOKEN = 'phase-k-monitor-runtime-evidence'
@@ -50,7 +52,7 @@ async function freePort() {
   })
 }
 
-function spawnServer(port: number, stateDir: string, workspaceRoot: string, homeDir: string, gatewayLogPath: string) {
+function spawnServer(port: number, gatewayPort: number, stateDir: string, workspaceRoot: string, homeDir: string, gatewayLogPath: string) {
   mkdirSync(stateDir, { recursive: true })
   const configPath = path.join(stateDir, 'openclaw.json')
   if (!existsSync(configPath)) writeFileSync(configPath, '{}\n', 'utf8')
@@ -61,6 +63,7 @@ function spawnServer(port: number, stateDir: string, workspaceRoot: string, home
       HOME: homeDir,
       USERPROFILE: homeDir,
       CONTROL_CENTER_PORT: String(port),
+      OPENCLAW_GATEWAY_PORT: String(gatewayPort),
       CONTROL_CENTER_TOKEN: CONTROL_TOKEN,
       CONTROL_CENTER_LOGIN_MAX_ATTEMPTS: '3',
       CONTROL_CENTER_LOGIN_BASE_LOCKOUT_MS: '1000',
@@ -76,6 +79,7 @@ function spawnServer(port: number, stateDir: string, workspaceRoot: string, home
       CONTROL_CENTER_RUNTIME_STATUS_RESPONSE_TIMEOUT_MS: '15000',
       CONTROL_CENTER_RUNTIME_SUMMARY_RESPONSE_TIMEOUT_MS: '10000',
       CONTROL_CENTER_WORKSPACE_ROOT: workspaceRoot,
+      AUTOMNIA_LICENSE_API_URL: 'https://license-smoke.invalid',
       OPENCLAW_STATE_DIR: stateDir,
       OPENCLAW_HOME: stateDir,
       OPENCLAW_CONFIG_PATH: configPath,
@@ -316,15 +320,16 @@ function validateMonitorSourceWiring() {
   assert.ok(nexusShell.includes("monitor: { label: 'Monitor'"), 'NexusShell should expose the Monitor workspace')
   assert.ok(nexusShell.includes("onClick={() => selectTab('monitor')}"), 'NexusShell should open Monitor from runtime status chrome')
   assert.ok(nexusShell.includes("{tab === 'monitor' &&"), 'NexusShell should mount Monitor when the Monitor tab is active')
-  assert.ok(nexusShell.includes('<LiveOperationMonitor />'), 'NexusShell should render LiveOperationMonitor for Monitor')
+  assert.ok(nexusShell.includes('<LiveOperationMonitor status={runtimeStatus}'), 'NexusShell should render LiveOperationMonitor with current runtime evidence')
   assert.ok(liveMonitor.includes('data-dui-panel="monitor"'), 'LiveOperationMonitor should expose the Monitor panel marker')
-  assert.ok(liveMonitor.includes("const [tab, setTab] = useState<MonitorTab>('gateway')"), 'Monitor should open on the Gateway runtime tab')
-  assert.ok(liveMonitor.includes('useRuntimeStatus(5000)'), 'Monitor should subscribe to runtime status')
+  assert.ok(liveMonitor.includes("const [tab, setTab] = useRememberedState<MonitorTab>('monitor-tab', 'gateway')"), 'Monitor should open on the Gateway runtime tab')
+  assert.ok(nexusShell.includes('useRuntimeSummaryStatus(runtimeSummaryPollInterval)'), 'Monitor should subscribe to the polled runtime summary')
+  assert.ok(liveMonitor.includes('useRuntimeCronJobs(8_000)'), 'Monitor should refresh scheduled jobs from the scheduler endpoint')
   assert.ok(liveMonitor.includes('RuntimeGatewayPanel status={runtimeStatus}'), 'Monitor should pass runtime status into the Gateway panel')
   assert.ok(liveMonitor.includes('GatewayActivityCard activity={activity}'), 'Monitor should render Gateway channel activity evidence')
-  assert.ok(liveMonitor.includes('<GatewayLogTailCard logs={logs} />'), 'Monitor should render Gateway log-tail evidence')
-  assert.ok(liveMonitor.includes('Active Cron Jobs'), 'Monitor should render active cron job evidence')
-  assert.ok(liveMonitor.includes('DoctorPanel run={displayedDoctorRun}'), 'Monitor should render persisted Doctor runtime diagnostics')
+  assert.ok(liveMonitor.includes('GatewayActivityPanel agentById={agentById} gatewayLogs={projectedGatewayLogs}'), 'Monitor should render Gateway log-tail evidence')
+  assert.ok(liveMonitor.includes('<h3>Automated Jobs</h3>'), 'Monitor should render active cron job evidence')
+  assert.ok(liveMonitor.includes('<DoctorPanel') && liveMonitor.includes('run={displayedDoctorRun}'), 'Monitor should render persisted Doctor runtime diagnostics')
   assert.ok(runtimeHook.includes("apiRequest<RuntimeStatus>(`/api/openclaw/runtime/status${forceRefresh ? '?refresh=1' : ''}`"), 'useRuntimeStatus should poll the runtime status API')
   return {
     workspaceNavigation: true,
@@ -361,6 +366,7 @@ function evidenceHasSecretMaterial(value: unknown) {
 }
 
 const port = await freePort()
+const gatewayPort = await freePort()
 const tempRoot = mkdtempSync(path.join(tmpdir(), 'automnia-phase-k-monitor-runtime-'))
 const stateDir = path.join(tempRoot, 'state')
 const workspaceRoot = path.join(tempRoot, 'workspace-root')
@@ -371,12 +377,37 @@ mkdirSync(homeDir, { recursive: true })
 mkdirSync(phaseKEvidenceDir, { recursive: true })
 
 const monitorUi = validateMonitorSourceWiring()
-const child = spawnServer(port, stateDir, workspaceRoot, homeDir, gatewayLogPath)
+const licenseLedger = createRuntimeLedgerStore(runtimeLedgerPathsForStateRoot(stateDir))
+const licenseService = createLicenseService({
+  read: licenseLedger.readControlCenterState,
+  write: licenseLedger.writeControlCenterState,
+  remove: licenseLedger.deleteControlCenterState,
+  apiUrl: 'https://license-smoke.invalid',
+  fetch: async () => new Response(JSON.stringify({
+    ok: true,
+    active: true,
+    email: 'phase-k-monitor@example.test',
+    tier: 'pro',
+    mode: 'byok',
+    planPriceCents: null,
+    byokAllowed: true,
+    permanentAccess: true,
+    subscriptionStatus: 'permanent',
+    creditBalance: null,
+    creditBalanceUpdatedAt: null,
+    activatedAt: new Date().toISOString(),
+    verifiedAt: new Date().toISOString(),
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+})
+await licenseService.activate({ email: 'phase-k-monitor@example.test', licenseKey: 'AUT-TEST-PHASE-K-001' })
+licenseLedger.close()
+
+const child = spawnServer(port, gatewayPort, stateDir, workspaceRoot, homeDir, gatewayLogPath)
 
 try {
   await waitForReady(child, port)
-  seedGatewayMonitorEvidence(gatewayLogPath)
   const token = await login(port)
+  seedGatewayMonitorEvidence(gatewayLogPath)
   const status = await api<RuntimeStatusPayload>(port, '/api/openclaw/runtime/status?refresh=1', {
     token,
     requestId: 'phase-k-monitor-runtime-status',

@@ -125,7 +125,8 @@ public static class AutomniaWindowTextDiagnostics {
   public static string[] GetWindowDetails(int targetProcessId) {
     var details = new List<string>();
     EnumWindows((window, _) => {
-      GetWindowThreadProcessId(window, out uint ownerProcessId);
+      uint ownerProcessId;
+      GetWindowThreadProcessId(window, out ownerProcessId);
       if (ownerProcessId != (uint)targetProcessId) return true;
       AddWindowDetails(details, window, "window");
       EnumChildWindows(window, (child, __) => {

@@ -11,7 +11,6 @@ import { abortRuntimeRun, restartGatewayRuntime, useRuntimeSummaryStatus } from 
 import type { GatewayStabilityStatus, RuntimeRun, RuntimeStatus } from '../../hooks/useRuntimeStatus'
 import {
   commandConsoleQueueAgeMs,
-  commandConsoleSessionKey,
   isCommandConsoleQueueStale,
   makeCommandConsoleDraftStorageKey,
   readCommandConsoleDraft,

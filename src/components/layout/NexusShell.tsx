@@ -13,6 +13,7 @@ import type { RuntimeCronJob } from '../../hooks/useRuntimeStatus'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
 import { useWorkspaceScroll } from '../../hooks/useWorkspaceScroll'
 import type { HelpNavigationTarget } from '../help/HelpAssistantPanel'
+import type { SettingsSectionId } from '../settings/SettingsPanel'
 import { ActivePartyStrip } from '../party/ActivePartyStrip'
 import { PartySelector } from '../party/PartySelector'
 import { applyStoredUiSettings } from '../settings/uiSettings'
@@ -281,7 +282,7 @@ export function NexusShell() {
     return () => window.removeEventListener('automnia:persistence-warning', warn)
   }, [])
   const [pluginsFocusQuery, setPluginsFocusQuery] = useState('')
-  const [settingsFocusSection, setSettingsFocusSection] = useState<'account' | 'appearance' | 'workspace' | 'voice' | 'missions' | 'agents' | 'data'>('account')
+  const [settingsFocusSection, setSettingsFocusSection] = useState<SettingsSectionId>('account')
   const [settingsFocusRequest, setSettingsFocusRequest] = useState(0)
   const [focusCommandConsole, setFocusCommandConsole] = useState(false)
   const closeHelp = useCallback(() => setHelpOpen(false), [])
@@ -350,7 +351,7 @@ export function NexusShell() {
       return
     }
     if (target.startsWith('settings-')) {
-      setSettingsFocusSection(target.replace('settings-', '') as 'account' | 'appearance' | 'workspace' | 'voice' | 'missions' | 'agents' | 'data')
+      setSettingsFocusSection(target.replace('settings-', '') as SettingsSectionId)
       setSettingsFocusRequest((request) => request + 1)
       selectTab('settings')
       return

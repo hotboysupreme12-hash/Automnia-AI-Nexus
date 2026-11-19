@@ -80,7 +80,7 @@ assert(
   'updateCronShift should use apiRequest',
 )
 assert(
-  runtimeHook.includes("apiRequest<{ shifts?: RuntimeCronJob[] }>('/api/shifts'"),
+  runtimeHook.includes("apiRequest<{ shifts?: RuntimeCronJob[]; error?: string }>('/api/shifts'"),
   'listCronShifts should use apiRequest',
 )
 assert(!runtimeHook.includes("fetchJsonWithTimeout<{ ok?: boolean; error?: string; detail?: unknown; shiftId?: string }>(apiUrl('/api/shifts/stop')"), 'stopCronShift should not use legacy fetch helper')
