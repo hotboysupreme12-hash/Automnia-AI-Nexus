@@ -26,15 +26,15 @@ import { buildLicenseEmailHtml } from './welcomeEmail.js';
 
 const app = express();
 const port = process.env.PORT || 8080;
-const serviceVersion = '2.10.4';
-const schemaVersion = '2026-09-12.5';
+const serviceVersion = '2.10.6';
+const schemaVersion = '2026-11-18.2';
 const secrets = (process.env.SHOPIFY_WEBHOOK_SECRETS || process.env.SHOPIFY_WEBHOOK_SECRET || '')
   .split(',')
   .map((value) => value.trim())
   .filter(Boolean);
 const useInMemoryStorage = process.env.LOCAL_IN_MEMORY_LICENSES === 'true';
 const writeMode = process.env.MIGRATION_WRITE_MODE === 'read_only' ? 'read_only' : 'active';
-const adminApiToken = process.env.ADMIN_API_TOKEN || '';
+const adminApiToken = String(process.env.ADMIN_API_TOKEN || '').trim();
 const shopifyAdminApiToken = process.env.SHOPIFY_ADMIN_API_TOKEN || '';
 const shopifyAdminCredential = parseShopifyAdminCredential(shopifyAdminApiToken);
 const shopifyStoreDomain = String(process.env.SHOPIFY_STORE_DOMAIN || '').trim();
@@ -94,9 +94,11 @@ const planMappings = readPlanMappings(process.env.SHOPIFY_PLAN_MAPPINGS);
 const planMappingHash = crypto.createHash('sha256').update(JSON.stringify(planMappings)).digest('hex');
 
 const provisionedCustomers = new Map();
+const testLicenseEmailDeliveries = new Map();
 const firestore = useInMemoryStorage ? null : new Firestore({ projectId: process.env.GOOGLE_CLOUD_PROJECT || undefined });
 const licenses = firestore?.collection('automnia_licenses');
 const licenseIndexes = firestore?.collection('automnia_license_indexes');
+const licenseEmailDeliveries = firestore?.collection('automnia_license_email_deliveries');
 const creditTopups = firestore?.collection('automnia_credit_topups');
 const creditUsage = firestore?.collection('automnia_credit_usage');
 const shopifyWebhookEvents = firestore?.collection('automnia_shopify_webhook_events');
@@ -880,11 +882,11 @@ function buildOnboardingPackage(order, licenseKey, tierConfig) {
     customerEmail,
     telegramStartUrl,
     instructions: [
-      '1. Open the Automnia App or portal activation screen.',
-      `2. Enter your checkout email (${customerEmail}) and license key (${licenseKey}) once to link the account.`,
-      `3. Access: ${planHasPermanentAccess(tierConfig) ? 'Permanent access tied to this Automnia account.' : tierConfig.mode === 'hosted_credits' ? 'Automnia Cloud credits.' : 'BYOK (Bring Your Own API Keys).'}`,
-      ...(tierConfig.trialDays > 0 ? [`4. Your free trial lasts ${tierConfig.trialDays} days. Shopify will bill the saved payment method after the trial unless you cancel before then.`] : []),
-      `${tierConfig.trialDays > 0 ? 5 : 4}. After linking, sign in with your password or Google account. Future upgrades merge automatically into this same account and key.`,
+      '1. Open the Automnia AI Nexus app and choose Link a purchase or Account & License.',
+      `2. Enter your purchase email (${customerEmail}) and license key (${licenseKey}) to link your access.`,
+      '3. Create or sign in with your Automnia password. Google sign-in is optional.',
+      `4. ${planHasPermanentAccess(tierConfig) ? 'Permanent access is tied to your Automnia account.' : tierConfig.mode === 'hosted_credits' ? 'Your Automnia Cloud credits are available in this account.' : 'Connect your own provider keys in Automnia Settings.'} Future plan changes keep the same account and license key.`,
+      ...(tierConfig.trialDays > 0 ? [`5. Your free trial lasts ${tierConfig.trialDays} days. Shopify will bill the saved payment method after the trial unless you cancel before then.`] : []),
     ],
   };
 }
@@ -2939,17 +2941,30 @@ function customerEmailFromShopify(payload) {
   return normalizeEmail(payload?.email || payload?.customer?.email || payload?.customer_email || payload?.customerEmail);
 }
 
-function licenseEmailMessage(record) {
+function licenseEmailMessage(record, context = {}) {
   const onboarding = record?.onboarding || {};
-  const instructions = Array.isArray(onboarding.instructions) && onboarding.instructions.length
+  const instructions = context.isAccountUpdate
+    ? [
+      'Open the Automnia AI Nexus app and choose Account & License.',
+      'Use the purchase email and license key in this message to link or recover your existing account.',
+      'Sign in with your Automnia password. Google sign-in is optional.',
+      'Your account keeps the same license key across plan changes.',
+    ]
+    : Array.isArray(onboarding.instructions) && onboarding.instructions.length
     ? onboarding.instructions
     : [
-      '1. Open the Automnia App or portal activation screen.',
-      '2. Enter the email address used for this purchase and the license key below.',
-      '3. After linking, sign in with your Automnia password or Google account.',
+      '1. Open the Automnia AI Nexus app and choose Link a purchase or Account & License.',
+      '2. Enter the purchase email and license key below to link your access.',
+      '3. Create or sign in with your Automnia password. Google sign-in is optional.',
     ];
+  const intro = context.zeroValueOrder
+    ? 'This $0 order did not add plan access or credits. This message contains the license key for your existing account.'
+    : context.isAccountUpdate
+      ? 'Your new plan order is linked to your existing Automnia account. Keep using the same license key below.'
+    : 'Thank you for your Automnia purchase.';
   return [
-    'Thank you for your Automnia purchase.',
+    intro,
+    ...(context.purchasePlan ? [`This purchase: ${context.purchasePlan}`] : []),
     '',
     `Your Automnia license key: ${String(record?.licenseKey || '').trim()}`,
     ...(record?.downloadAccessUrl ? ['', `Download Automnia: ${record.downloadAccessUrl}`] : []),
@@ -2966,7 +2981,7 @@ function encodeMimeHeader(value) {
   return `=?UTF-8?B?${Buffer.from(text, 'utf8').toString('base64')}?=`;
 }
 
-function buildGmailRawMessage(record) {
+function buildGmailRawMessage(record, context = {}) {
   const to = normalizeEmail(record?.email);
   if (!isValidMailbox(to) || !isValidMailbox(emailSender)) throw new Error('Gmail license email has an invalid sender or recipient.');
   const boundary = `automnia-${crypto.randomBytes(12).toString('hex')}`;
@@ -2982,13 +2997,13 @@ function buildGmailRawMessage(record) {
     'Content-Type: text/plain; charset=UTF-8',
     'Content-Transfer-Encoding: 8bit',
     '',
-    licenseEmailMessage(record),
+    licenseEmailMessage(record, context),
     '',
     `--${boundary}`,
     'Content-Type: text/html; charset=UTF-8',
     'Content-Transfer-Encoding: 8bit',
     '',
-    buildLicenseEmailHtml(record),
+    buildLicenseEmailHtml(record, context),
     '',
     `--${boundary}--`,
     '',
@@ -3020,8 +3035,11 @@ async function getGmailAccessToken() {
   }
 }
 
-async function sendGmailLicenseEmail(record) {
-  if (testEmailDeliveryStub) return { stubbed: true, provider: 'stub' };
+async function sendGmailLicenseEmail(record, context = {}) {
+  if (testEmailDeliveryStub) {
+    console.log(JSON.stringify({ event: 'test_license_email_delivery', shopifyOrderId: context.shopifyOrderId || null }));
+    return { stubbed: true, provider: 'stub' };
+  }
   if (!emailDeliveryConfigured || emailProvider !== 'gmail') throw new Error('Gmail license email delivery is not configured.');
 
   const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
@@ -3031,14 +3049,14 @@ async function sendGmailLicenseEmail(record) {
       Authorization: `Bearer ${await getGmailAccessToken()}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ raw: buildGmailRawMessage(record) }),
+    body: JSON.stringify({ raw: buildGmailRawMessage(record, context) }),
   });
   const payload = await parseJsonResponse(response);
   const errorPayload = payload?.error;
   if (!response.ok || !payload?.id) {
     console.error(JSON.stringify({
       event: 'gmail_license_email_rejected',
-      orderId: record?.lastShopifyOrderId || record?.orderId || null,
+      orderId: context.shopifyOrderId || record?.lastShopifyOrderId || record?.orderId || null,
       httpStatus: response.status,
       error: String(errorPayload?.message || 'Gmail did not confirm the sent message.').slice(0, 500),
       reason: errorPayload?.errors?.[0]?.reason || null,
@@ -3047,7 +3065,7 @@ async function sendGmailLicenseEmail(record) {
   }
   console.log(JSON.stringify({
     event: 'gmail_license_email_sent',
-    orderId: record?.lastShopifyOrderId || record?.orderId || null,
+    orderId: context.shopifyOrderId || record?.lastShopifyOrderId || record?.orderId || null,
     messageId: String(payload.id).slice(0, 200),
   }));
   return { stubbed: false, provider: 'gmail_api', messageId: payload.id };
@@ -3073,8 +3091,11 @@ async function getMicrosoftGraphAccessToken() {
   return payload.access_token;
 }
 
-async function sendMicrosoftGraphLicenseEmail(record) {
-  if (testEmailDeliveryStub) return { stubbed: true, provider: 'stub' };
+async function sendMicrosoftGraphLicenseEmail(record, context = {}) {
+  if (testEmailDeliveryStub) {
+    console.log(JSON.stringify({ event: 'test_license_email_delivery', shopifyOrderId: context.shopifyOrderId || null }));
+    return { stubbed: true, provider: 'stub' };
+  }
   if (!emailDeliveryConfigured || emailProvider !== 'microsoft_graph') throw new Error('Microsoft Graph email delivery is not configured.');
   const to = normalizeEmail(record?.email);
   if (!isValidMailbox(to) || !isValidMailbox(emailSender)) throw new Error('Microsoft Graph license email has an invalid sender or recipient.');
@@ -3084,7 +3105,7 @@ async function sendMicrosoftGraphLicenseEmail(record) {
     body: JSON.stringify({
       message: {
         subject: 'Welcome to Automnia AI Nexus — your license key',
-        body: { contentType: 'HTML', content: buildLicenseEmailHtml(record) },
+        body: { contentType: 'HTML', content: buildLicenseEmailHtml(record, context) },
         toRecipients: [{ emailAddress: { address: to } }],
       },
         saveToSentItems: true,
@@ -3092,19 +3113,19 @@ async function sendMicrosoftGraphLicenseEmail(record) {
   });
   if (!response.ok) {
     const payload = await parseJsonResponse(response);
-    console.error(JSON.stringify({ event: 'microsoft_graph_license_email_rejected', orderId: record?.lastShopifyOrderId || record?.orderId || null, httpStatus: response.status, error: String(payload?.error?.message || 'Microsoft Graph rejected the email.').slice(0, 500) }));
+    console.error(JSON.stringify({ event: 'microsoft_graph_license_email_rejected', orderId: context.shopifyOrderId || record?.lastShopifyOrderId || record?.orderId || null, httpStatus: response.status, error: String(payload?.error?.message || 'Microsoft Graph rejected the email.').slice(0, 500) }));
     throw new Error('Microsoft Graph rejected the license email delivery request.');
   }
   // Graph returns 202 when Exchange accepts the submission into its transport
   // pipeline. That is not proof that the recipient mailbox accepted delivery;
   // a later NDR can still be generated by Exchange Online.
-  console.log(JSON.stringify({ event: 'microsoft_graph_license_email_accepted', orderId: record?.lastShopifyOrderId || record?.orderId || null }));
+  console.log(JSON.stringify({ event: 'microsoft_graph_license_email_accepted', orderId: context.shopifyOrderId || record?.lastShopifyOrderId || record?.orderId || null }));
   return { stubbed: false, provider: 'microsoft_graph' };
 }
 
-async function sendLicenseEmail(record) {
-  if (emailProvider === 'microsoft_graph') return sendMicrosoftGraphLicenseEmail(record);
-  return sendGmailLicenseEmail(record);
+async function sendLicenseEmail(record, context = {}) {
+  if (emailProvider === 'microsoft_graph') return sendMicrosoftGraphLicenseEmail(record, context);
+  return sendGmailLicenseEmail(record, context);
 }
 
 function deliveryLeaseIsActive(delivery) {
@@ -3113,97 +3134,189 @@ function deliveryLeaseIsActive(delivery) {
   return startedAt > 0 && Date.now() - startedAt < emailDeliveryLeaseMs;
 }
 
-async function claimLicenseEmailDelivery(record) {
+function licenseEmailDeliveryId(licenseOrderId, shopifyOrderId) {
+  return crypto.createHash('sha256').update(`${licenseOrderId}\u0000${shopifyOrderId}`).digest('hex');
+}
+
+function emailDeliveryProjection(delivery) {
+  return {
+    status: delivery.status,
+    shopifyOrderId: delivery.shopifyOrderId,
+    purchasePlan: delivery.purchasePlan || '',
+    isAccountUpdate: delivery.isAccountUpdate === true,
+    zeroValueOrder: delivery.zeroValueOrder === true,
+    attempts: delivery.attempts,
+    attemptId: delivery.attemptId || null,
+    startedAt: delivery.startedAt || null,
+    lastAttemptAt: delivery.lastAttemptAt || null,
+    sentAt: delivery.sentAt || null,
+    lastError: delivery.lastError || null,
+  };
+}
+
+async function claimLicenseEmailDelivery(record, shopifyOrderId, emailContext) {
   const now = new Date().toISOString();
   const attemptId = crypto.randomUUID();
-  const previous = record?.emailDelivery || {};
-  if (previous.status === 'sent') return { action: 'email_already_sent', record };
-  if (deliveryLeaseIsActive(previous)) return { action: 'email_delivery_in_progress', record };
-  const emailDelivery = {
+  const normalizedShopifyOrderId = String(shopifyOrderId || '').trim();
+  if (!record?.orderId || !normalizedShopifyOrderId) throw new Error('A license and Shopify order ID are required for email delivery.');
+  const deliveryId = licenseEmailDeliveryId(record.orderId, normalizedShopifyOrderId);
+  const delivery = {
+    licenseOrderId: String(record.orderId),
+    shopifyOrderId: normalizedShopifyOrderId,
+    purchasePlan: String(emailContext.purchasePlan || '').slice(0, 180),
+    isAccountUpdate: emailContext.isAccountUpdate === true,
+    zeroValueOrder: emailContext.zeroValueOrder === true,
     status: 'sending',
     attemptId,
-    attempts: Math.max(0, Number(previous.attempts) || 0) + 1,
+    attempts: 0,
     startedAt: now,
     lastAttemptAt: now,
+    updatedAt: now,
   };
 
   if (useInMemoryStorage) {
-    Object.assign(record, { emailDelivery });
-    return { action: 'email_delivery_claimed', attemptId, record };
+    const previous = testLicenseEmailDeliveries.get(deliveryId);
+    if (previous?.status === 'sent') return { action: 'email_already_sent', record, delivery: previous };
+    if (deliveryLeaseIsActive(previous)) return { action: 'email_delivery_in_progress', record, delivery: previous };
+    // Older license records only had one emailDelivery flag. Migrate the
+    // initial order's sent state once; later Shopify orders get independent
+    // delivery records and are never suppressed by that legacy flag.
+    if (!previous && normalizedShopifyOrderId === String(record.orderId) && record.emailDelivery?.status === 'sent') {
+      const migrated = {
+        licenseOrderId: String(record.orderId), shopifyOrderId: normalizedShopifyOrderId,
+        status: 'sent', attempts: Math.max(0, Number(record.emailDelivery.attempts) || 0),
+        sentAt: record.emailDelivery.sentAt || now, legacyMigrated: true, createdAt: now, updatedAt: now,
+      };
+      testLicenseEmailDeliveries.set(deliveryId, migrated);
+      return { action: 'email_already_sent', record, delivery: migrated };
+    }
+    delivery.attempts = Math.max(0, Number(previous?.attempts) || 0) + 1;
+    testLicenseEmailDeliveries.set(deliveryId, delivery);
+    if (String(record.lastShopifyOrderId || record.orderId) === normalizedShopifyOrderId) {
+      record.emailDelivery = emailDeliveryProjection(delivery);
+    }
+    return { action: 'email_delivery_claimed', attemptId, deliveryId, record, delivery, emailContext };
   }
 
   const licenseRef = licenses.doc(record.orderId);
+  const deliveryRef = licenseEmailDeliveries.doc(deliveryId);
   return firestore.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(licenseRef);
-    if (!snapshot.exists) return { action: 'license_not_found', record: null };
-    const current = snapshot.data();
-    const currentDelivery = current.emailDelivery || {};
-    if (currentDelivery.status === 'sent') return { action: 'email_already_sent', record: { ...current, _ref: licenseRef } };
-    if (deliveryLeaseIsActive(currentDelivery)) return { action: 'email_delivery_in_progress', record: { ...current, _ref: licenseRef } };
-    transaction.update(licenseRef, { emailDelivery });
-    return { action: 'email_delivery_claimed', attemptId, record: { ...current, emailDelivery, _ref: licenseRef } };
+    const [licenseSnapshot, deliverySnapshot] = await Promise.all([transaction.get(licenseRef), transaction.get(deliveryRef)]);
+    if (!licenseSnapshot.exists) return { action: 'license_not_found', record: null };
+    const current = licenseSnapshot.data();
+    const previous = deliverySnapshot.exists ? deliverySnapshot.data() : null;
+    if (previous?.status === 'sent') return { action: 'email_already_sent', record: { ...current, _ref: licenseRef }, delivery: previous };
+    if (deliveryLeaseIsActive(previous)) return { action: 'email_delivery_in_progress', record: { ...current, _ref: licenseRef }, delivery: previous };
+    if (!previous && normalizedShopifyOrderId === String(current.orderId) && current.emailDelivery?.status === 'sent') {
+      const migrated = {
+        licenseOrderId: String(current.orderId), shopifyOrderId: normalizedShopifyOrderId,
+        status: 'sent', attempts: Math.max(0, Number(current.emailDelivery.attempts) || 0),
+        sentAt: current.emailDelivery.sentAt || now, legacyMigrated: true, createdAt: now, updatedAt: now,
+      };
+      transaction.create(deliveryRef, migrated);
+      return { action: 'email_already_sent', record: { ...current, _ref: licenseRef }, delivery: migrated };
+    }
+    delivery.attempts = Math.max(0, Number(previous?.attempts) || 0) + 1;
+    if (previous?.createdAt) delivery.createdAt = previous.createdAt;
+    transaction.set(deliveryRef, delivery);
+    const patch = String(current.lastShopifyOrderId || current.orderId) === normalizedShopifyOrderId
+      ? { emailDelivery: emailDeliveryProjection(delivery) }
+      : {};
+    if (Object.keys(patch).length) transaction.update(licenseRef, patch);
+    return { action: 'email_delivery_claimed', attemptId, deliveryId, record: { ...current, ...patch, _ref: licenseRef }, delivery, emailContext };
   });
 }
 
-async function finishLicenseEmailDelivery(record, attemptId) {
+async function finishLicenseEmailDelivery(claim, providerResult) {
   const sentAt = new Date().toISOString();
-  const emailDelivery = {
-    ...(record?.emailDelivery || {}),
+  const delivery = {
+    ...claim.delivery,
     status: 'sent',
     sentAt,
+    provider: providerResult?.provider || null,
     lastError: null,
+    updatedAt: sentAt,
   };
   if (useInMemoryStorage) {
-    Object.assign(record, { emailDelivery });
-    return record;
+    const currentDelivery = testLicenseEmailDeliveries.get(claim.deliveryId);
+    if (currentDelivery?.attemptId !== claim.attemptId) return { ...claim.record };
+    testLicenseEmailDeliveries.set(claim.deliveryId, delivery);
+    if (String(claim.record.lastShopifyOrderId || claim.record.orderId) === delivery.shopifyOrderId) {
+      claim.record.emailDelivery = emailDeliveryProjection(delivery);
+    }
+    return claim.record;
   }
-  const licenseRef = licenses.doc(record.orderId);
+  const licenseRef = licenses.doc(claim.record.orderId);
+  const deliveryRef = licenseEmailDeliveries.doc(claim.deliveryId);
   return firestore.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(licenseRef);
-    if (!snapshot.exists) return null;
-    const current = snapshot.data();
-    if (current.emailDelivery?.attemptId !== attemptId) return { ...current, _ref: licenseRef };
-    transaction.update(licenseRef, { emailDelivery });
-    return { ...current, emailDelivery, _ref: licenseRef };
+    const [licenseSnapshot, deliverySnapshot] = await Promise.all([transaction.get(licenseRef), transaction.get(deliveryRef)]);
+    if (!licenseSnapshot.exists || !deliverySnapshot.exists) return null;
+    const current = licenseSnapshot.data();
+    const currentDelivery = deliverySnapshot.data();
+    if (currentDelivery.attemptId !== claim.attemptId) return { ...current, _ref: licenseRef };
+    transaction.update(deliveryRef, { status: delivery.status, sentAt, provider: delivery.provider, lastError: null, updatedAt: sentAt });
+    const patch = String(current.lastShopifyOrderId || current.orderId) === delivery.shopifyOrderId
+      && current.emailDelivery?.attemptId === claim.attemptId
+      ? { emailDelivery: emailDeliveryProjection(delivery) }
+      : {};
+    if (Object.keys(patch).length) transaction.update(licenseRef, patch);
+    return { ...current, ...patch, _ref: licenseRef };
   });
 }
 
-async function failLicenseEmailDelivery(record, attemptId) {
-  const emailDelivery = {
-    ...(record?.emailDelivery || {}),
+async function failLicenseEmailDelivery(claim) {
+  const failedAt = new Date().toISOString();
+  const delivery = {
+    ...claim.delivery,
     status: 'pending',
     lastError: 'delivery_failed',
-    lastAttemptAt: new Date().toISOString(),
+    lastAttemptAt: failedAt,
+    updatedAt: failedAt,
   };
   if (useInMemoryStorage) {
-    Object.assign(record, { emailDelivery });
-    return record;
+    const currentDelivery = testLicenseEmailDeliveries.get(claim.deliveryId);
+    if (currentDelivery?.attemptId !== claim.attemptId) return claim.record;
+    testLicenseEmailDeliveries.set(claim.deliveryId, delivery);
+    if (String(claim.record.lastShopifyOrderId || claim.record.orderId) === delivery.shopifyOrderId) {
+      claim.record.emailDelivery = emailDeliveryProjection(delivery);
+    }
+    return claim.record;
   }
-  const licenseRef = licenses.doc(record.orderId);
+  const licenseRef = licenses.doc(claim.record.orderId);
+  const deliveryRef = licenseEmailDeliveries.doc(claim.deliveryId);
   return firestore.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(licenseRef);
-    if (!snapshot.exists) return null;
-    const current = snapshot.data();
-    if (current.emailDelivery?.attemptId !== attemptId) return { ...current, _ref: licenseRef };
-    transaction.update(licenseRef, { emailDelivery });
-    return { ...current, emailDelivery, _ref: licenseRef };
+    const [licenseSnapshot, deliverySnapshot] = await Promise.all([transaction.get(licenseRef), transaction.get(deliveryRef)]);
+    if (!licenseSnapshot.exists || !deliverySnapshot.exists) return null;
+    const current = licenseSnapshot.data();
+    const currentDelivery = deliverySnapshot.data();
+    if (currentDelivery.attemptId !== claim.attemptId) return { ...current, _ref: licenseRef };
+    transaction.update(deliveryRef, { status: 'pending', lastError: 'delivery_failed', lastAttemptAt: failedAt, updatedAt: failedAt });
+    const patch = String(current.lastShopifyOrderId || current.orderId) === delivery.shopifyOrderId
+      && current.emailDelivery?.attemptId === claim.attemptId
+      ? { emailDelivery: emailDeliveryProjection(delivery) }
+      : {};
+    if (Object.keys(patch).length) transaction.update(licenseRef, patch);
+    return { ...current, ...patch, _ref: licenseRef };
   });
 }
 
-async function deliverLicenseEmail(record) {
-  const claim = await claimLicenseEmailDelivery(record);
+async function deliverLicenseEmail(record, shopifyOrderId = record?.lastShopifyOrderId || record?.orderId, emailContext = {}) {
+  const context = { ...emailContext, shopifyOrderId: String(shopifyOrderId || '').trim() };
+  const claim = await claimLicenseEmailDelivery(record, context.shopifyOrderId, context);
   if (claim.action === 'email_already_sent') return claim;
   if (claim.action === 'email_delivery_in_progress') throw new Error('License email delivery is already in progress.');
   if (claim.action === 'license_not_found' || !claim.record) throw new Error('Provisioned license was not found for email delivery.');
+  claim.attemptId = claim.delivery.attemptId;
   try {
-    await sendLicenseEmail(claim.record);
+    const providerResult = await sendLicenseEmail(claim.record, context);
+    claim.providerResult = providerResult;
   } catch (error) {
-    await failLicenseEmailDelivery(claim.record, claim.attemptId);
+    await failLicenseEmailDelivery(claim);
     throw error;
   }
-  const completed = await finishLicenseEmailDelivery(claim.record, claim.attemptId);
+  const completed = await finishLicenseEmailDelivery(claim, claim.providerResult);
   if (!completed) throw new Error('Provisioned license disappeared after email delivery.');
-  return { action: 'email_sent', record: completed };
+  return { action: 'email_sent', record: completed, delivery: { ...claim.delivery, status: 'sent' } };
 }
 
 function normalizeShopifyContractId(value) {
@@ -3431,12 +3544,30 @@ async function recordRejectedShopifyOrder(order, deliveryId, tierConfig) {
   }
 }
 
+function licenseEmailContextForOrder(order, tierConfig, isAccountUpdate) {
+  const lineItems = Array.isArray(order?.line_items) ? order.line_items : [];
+  const purchasePlan = lineItems
+    .map((item) => [item?.title, item?.variant_title].filter(Boolean).join(' · '))
+    .filter(Boolean)
+    .join(', ')
+    .slice(0, 180) || String(tierConfig?.tier || 'Automnia plan');
+  return {
+    shopifyOrderId: String(order?.id || '').trim(),
+    orderName: String(order?.name || '').trim().slice(0, 80),
+    purchasePlan,
+    isAccountUpdate: isAccountUpdate === true,
+  };
+}
+
 async function handlePaidOrder(order, deliveryId, trialWindow = null) {
   const orderId = String(order?.id || '').trim();
   const customerEmail = customerEmailFromShopify(order);
   const tierConfig = configuredTierForOrder(order);
   if (!orderId || !customerEmail) throw new Error('Paid Shopify order is missing an order ID or customer email.');
   if (!tierConfig) throw new Error('Paid Shopify order does not match an owner-configured plan mapping.');
+
+  let existing = await findLicenseByEmail(customerEmail);
+  const emailContext = licenseEmailContextForOrder(order, tierConfig, Boolean(existing && String(existing.orderId) !== orderId));
 
   // A subscription-contract webhook can explicitly authorize a configured
   // trial. Every other entitlement must have a positive order total and a
@@ -3445,12 +3576,45 @@ async function handlePaidOrder(order, deliveryId, trialWindow = null) {
   if (!trialWindow && !orderPaymentConfirmed(order, tierConfig)) {
     await recordRejectedShopifyOrder(order, deliveryId, tierConfig);
     console.warn(JSON.stringify({ event: 'shopify_zero_value_order_rejected', orderId, tier: tierConfig.tier }));
+    const financialStatus = String(order?.financial_status || order?.financialStatus || '').trim().toLowerCase();
+    const zeroValuePaidOrder = financialStatus === 'paid' && shopifyOrderTotalCents(order) === 0;
+    if (existing && zeroValuePaidOrder && String(existing.lastShopifyOrderId || '') !== orderId) {
+      const contractId = tierConfig.kind === 'subscription'
+        ? normalizePlanId(order.subscription_contract_id || order.subscriptionContractId) || contractIdFromShopify(order, { allowPayloadId: false })
+        : null;
+      if (contractId && existing.subscriptionContractId !== contractId) {
+        existing = await updateShopifyState({
+          record: existing,
+          topic: 'subscription_contracts/create',
+          deliveryId: `${deliveryId || orderId}:contract-link`,
+          subscriptionContractId: contractId,
+        }) || existing;
+      }
+      const delivery = await deliverLicenseEmail(existing, orderId, {
+        ...emailContext,
+        isAccountUpdate: true,
+        zeroValueOrder: true,
+      });
+      return { action: delivery.action === 'email_sent' ? 'zero_value_order_key_emailed' : 'zero_value_order_key_already_sent', license: delivery.record || existing };
+    }
     return { action: 'order_rejected_unpaid' };
   }
 
-  const existing = await findLicenseByEmail(customerEmail);
+  const incomingContractId = tierConfig.kind === 'subscription'
+    ? normalizePlanId(order.subscription_contract_id || order.subscriptionContractId) || contractIdFromShopify(order, { allowPayloadId: false })
+    : null;
   if (existing && String(existing.lastShopifyOrderId || '') === orderId) {
-    const delivery = await deliverLicenseEmail(existing);
+    if (incomingContractId && existing.subscriptionContractId !== incomingContractId) {
+      const nextBillingAt = shopifyDateFromPayload(order, 'next_billing_date', 'nextBillingDate', 'nextBillingAt');
+      existing = await updateShopifyState({
+        record: existing,
+        topic: 'subscription_contracts/create',
+        deliveryId: `${deliveryId || orderId}:contract-link`,
+        subscriptionContractId: incomingContractId,
+        nextBillingAt,
+      }) || existing;
+    }
+    const delivery = await deliverLicenseEmail(existing, orderId, emailContext);
     return {
       action: delivery.action === 'email_sent' ? 'license_delivery_recovered' : 'duplicate_ignored',
       license: delivery.record || existing,
@@ -3459,8 +3623,7 @@ async function handlePaidOrder(order, deliveryId, trialWindow = null) {
 
   let processedOrder = order;
   if (tierConfig.kind === 'subscription') {
-    const contractId = normalizePlanId(order.subscription_contract_id || order.subscriptionContractId)
-      || contractIdFromShopify(order, { allowPayloadId: false });
+    const contractId = incomingContractId;
     if (!contractId) throw new Error('Paid subscription order is missing its Shopify subscription contract ID.');
     const nextBillingAt = shopifyDateFromPayload(order, 'next_billing_date', 'nextBillingDate', 'nextBillingAt')
       || await fetchShopifyContractNextBillingDate(contractId);
@@ -3476,7 +3639,7 @@ async function handlePaidOrder(order, deliveryId, trialWindow = null) {
   if (existing) {
     const updated = await updateHostedEntitlement({ record: existing, order: processedOrder, tierConfig, topic: 'orders/paid', deliveryId });
     if (!updated) throw new Error('The active license disappeared while applying the Shopify entitlement update.');
-    const delivery = await deliverLicenseEmail(updated);
+    const delivery = await deliverLicenseEmail(updated, orderId, { ...emailContext, isAccountUpdate: true });
     console.log(JSON.stringify({ event: tierConfig.kind === 'topup' ? 'credits_topped_up' : 'subscription_updated', orderId, licenseOrderId: updated.orderId, tier: updated.tier, mode: updated.mode, creditBalance: pooledCreditBalance(updated), tokenBalance: pooledTokenBalance(updated) }));
     return { action: tierConfig.kind === 'topup' ? 'topup_applied' : 'subscription_updated', license: delivery.record || updated };
   }
@@ -3522,7 +3685,7 @@ async function handlePaidOrder(order, deliveryId, trialWindow = null) {
     updatedAt: createdAt,
   };
   const persisted = await persistProvisionedLicense(record);
-  const delivery = await deliverLicenseEmail(persisted);
+  const delivery = await deliverLicenseEmail(persisted, orderId, emailContext);
   console.log(JSON.stringify({ event: 'customer_provisioned', orderId: persisted.orderId, tier: persisted.tier, mode: persisted.mode, creditBalance: pooledCreditBalance(persisted), tokenBalance: tokenBalanceForSource(persisted), emailDelivery: delivery.action }));
   return { action: 'license_provisioned', license: delivery.record || persisted };
 }
@@ -3568,6 +3731,22 @@ async function handleSubscriptionContractCreated(payload, deliveryId) {
       subscription_contract_id: contractId,
     }, deliveryId, trialWindow);
     return { ...result, action: result.action === 'license_provisioned' ? 'trial_provisioned' : result.action };
+  }
+
+  if (!orderPaymentConfirmed(order, tierConfig)) {
+    // A zero or unpaid Shopify contract can belong to a customer who already
+    // has access (for example, a paused test plan). Link the contract for
+    // future lifecycle webhooks without granting or changing access/credits.
+    const existingAccount = await findLicenseByEmail(customerEmailFromShopify(order));
+    if (existingAccount && existingAccount.subscriptionContractId !== contractId) {
+      const linked = await updateShopifyState({
+        record: existingAccount,
+        topic: 'subscription_contracts/create',
+        deliveryId,
+        subscriptionContractId: contractId,
+      });
+      return { action: 'subscription_contract_linked_waiting_for_payment', license: linked || existingAccount };
+    }
   }
 
   // A contract-create event can arrive before orders/paid. It is safe to use
@@ -3693,12 +3872,19 @@ app.post('/admin/email-delivery/retry', express.json({ limit: '32kb' }), require
   try {
     const record = await findLicenseByOrderId(orderId);
     if (!record) return res.status(404).json({ ok: false, error: 'Provisioned license was not found.' });
-    const delivery = await deliverLicenseEmail(record);
+    const shopifyOrderId = String(req.body?.shopifyOrderId || record.lastShopifyOrderId || record.orderId).trim();
+    const previousProjection = record.emailDelivery?.shopifyOrderId === shopifyOrderId ? record.emailDelivery : {};
+    const delivery = await deliverLicenseEmail(record, shopifyOrderId, {
+      purchasePlan: previousProjection.purchasePlan || '',
+      isAccountUpdate: previousProjection.isAccountUpdate === true || shopifyOrderId !== String(record.orderId),
+      zeroValueOrder: previousProjection.zeroValueOrder === true,
+    });
     return res.status(200).json({
       ok: true,
       action: delivery.action,
       orderId,
-      status: delivery.record?.emailDelivery?.status || null,
+      shopifyOrderId,
+      status: delivery.delivery?.status || delivery.record?.emailDelivery?.status || null,
     });
   } catch (error) {
     console.error('Failed to retry Automnia license email delivery:', { orderId, message: error instanceof Error ? error.message : String(error) });

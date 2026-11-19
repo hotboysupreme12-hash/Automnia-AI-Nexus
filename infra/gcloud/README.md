@@ -142,7 +142,16 @@ The webhook is acknowledged only after the license email is confirmed. If
 Microsoft Graph mail delivery is unavailable, the handler returns a retryable
 response and keeps the delivery state pending; use the authenticated
 `/admin/email-delivery/retry` endpoint after the credential is repaired for an
-already-provisioned order.
+already-provisioned order. Delivery state is tracked per Shopify order, so an
+earlier welcome email cannot suppress the key email for a later upgrade,
+subscription switch, or refill. Retries may include both the license `orderId`
+and the Shopify `shopifyOrderId` to target a particular purchase.
+
+A Shopify order with a zero total never grants a new entitlement or credits.
+For an existing customer, a zero-dollar order can resend the current license key
+to the email already on the account; the message makes clear that the order
+added no access or credits. A new customer still needs a valid paid order or an
+authorized trial before a license is created.
 
 The Shopify app may retain `write_orders` for other administrative workflows,
 but customer email delivery no longer requires it.

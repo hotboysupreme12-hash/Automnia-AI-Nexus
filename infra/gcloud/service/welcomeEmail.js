@@ -35,30 +35,46 @@ function accessDescription(record) {
   return 'Automnia Cloud credits are available for this account.';
 }
 
-function onboardingInstructions(record) {
+function onboardingInstructions(record, context = {}) {
   const instructions = Array.isArray(record?.onboarding?.instructions) ? record.onboarding.instructions : [];
-  return instructions.length
+  return context.isAccountUpdate
+    ? [
+      'Open the Automnia AI Nexus app and choose Account & License.',
+      'Use the purchase email and license key in this message to link or recover your existing account.',
+      'Sign in with your Automnia password. Google sign-in is optional.',
+      'Your account keeps the same license key across plan changes.',
+    ]
+    : instructions.length
     ? instructions
     : [
       'Open the Automnia AI Nexus app.',
       'Choose Link a purchase or Account & License.',
       'Enter the purchase email and license key from this message.',
-      'Finish by signing in with your password or Google account.',
+      'Create or sign in with your Automnia password. Google sign-in is optional.',
     ];
 }
 
-export function buildLicenseEmailHtml(record) {
+export function buildLicenseEmailHtml(record, context = {}) {
   const name = escapeHtml(record?.onboarding?.customerName || 'there');
   const email = escapeHtml(record?.email || '');
   const licenseKey = escapeHtml(record?.licenseKey || '');
   const tier = escapeHtml(record?.tier || 'Automnia access');
+  const purchasePlan = escapeHtml(context.purchasePlan || '');
   const access = escapeHtml(accessDescription(record));
   const downloadAccessUrl = String(record?.downloadAccessUrl || '').trim();
   const greeting = name === 'there' ? 'Welcome to Automnia.' : `Welcome, ${name}.`;
+  const headline = context.zeroValueOrder
+    ? 'Existing account · Your license key is enclosed'
+    : context.isAccountUpdate ? 'Account updated · Your license key is ready' : 'Access provisioned · Ready to activate';
+  const introduction = context.zeroValueOrder
+    ? 'This $0 order did not add plan access or credits. This message contains the license key for your existing account, which remains available to you.'
+    : context.isAccountUpdate
+    ? 'Your new plan order is linked to your existing Automnia account. Keep using the same license key below to access your account.'
+    : 'Thank you for choosing Automnia AI Nexus. Your purchase has been provisioned and your account is ready to link.';
   const downloadSection = downloadAccessUrl
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:26px 0 0;border:1px solid #B9D8F1;border-radius:14px;background:#EEF7FF;"><tr><td style="padding:22px 22px 20px;"><div style="margin:0 0 8px;color:${brand.blue};font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;">Your secure download</div><p style="margin:0 0 16px;color:${brand.lightMuted};font-size:14px;line-height:1.6;">Use this private page whenever you need an installer. It checks your active access and creates a fresh, short-lived download link.</p><a href="${escapeHtml(downloadAccessUrl)}" style="display:inline-block;padding:13px 18px;border-radius:8px;background:${brand.ink};color:${brand.cyan};font-size:14px;font-weight:800;text-decoration:none;">Download Automnia <span aria-hidden="true">→</span></a></td></tr></table>`
     : '';
-  const instructions = onboardingInstructions(record)
+  const instructions = onboardingInstructions(record, context)
     .map((instruction, index) => `<tr><td valign="top" style="padding:0 12px 14px 0;"><div style="width:26px;height:26px;border-radius:50%;background:${brand.ink};color:${brand.cyan};font-size:12px;font-weight:800;line-height:26px;text-align:center;">${index + 1}</div></td><td valign="top" style="padding:2px 0 14px;color:${brand.lightMuted};font-size:14px;line-height:1.55;">${escapeHtml(String(instruction).replace(/^\d+\.\s*/, ''))}</td></tr>`)
     .join('');
 
@@ -73,16 +89,17 @@ export function buildLicenseEmailHtml(record) {
             <a href="${automniaAppUrl}" style="display:inline-block;text-decoration:none;"><img src="${automniaLogoUrl}" width="300" alt="Automnia AI Nexus" style="display:block;width:300px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;"></a>
             <div style="margin-top:18px;color:${brand.muted};font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;">Your intelligent command center</div>
           </td></tr>
-          <tr><td style="padding:14px 24px;text-align:center;background:${brand.cyan};color:${brand.ink};font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;">Access provisioned · Ready to activate</td></tr>
+          <tr><td style="padding:14px 24px;text-align:center;background:${brand.cyan};color:${brand.ink};font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;">${headline}</td></tr>
           <tr><td style="padding:38px 34px 30px;background:${brand.lightCanvas};">
             <h1 style="margin:0 0 12px;color:${brand.lightText};font-size:28px;line-height:1.2;letter-spacing:-.02em;">${greeting}</h1>
-            <p style="margin:0 0 26px;color:${brand.lightMuted};font-size:15px;line-height:1.7;">Thank you for choosing Automnia AI Nexus. Your purchase has been provisioned and your account is ready to link.</p>
+            <p style="margin:0 0 26px;color:${brand.lightMuted};font-size:15px;line-height:1.7;">${introduction}</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #A9D4F2;border-radius:15px;background:${brand.lightPanel};">
               <tr><td style="padding:24px 24px 22px;border-left:4px solid ${brand.cyan};">
                 <div style="margin:0 0 16px;color:${brand.blue};font-size:11px;font-weight:900;letter-spacing:.15em;text-transform:uppercase;">Your secure access details</div>
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                   <tr><td style="padding:0 0 10px;color:${brand.lightMuted};font-size:13px;line-height:1.5;"><strong style="color:${brand.lightText};">Purchase email</strong><br>${email}</td></tr>
                   <tr><td style="padding:0;color:${brand.lightMuted};font-size:13px;line-height:1.5;"><strong style="color:${brand.lightText};">Plan</strong><br>${tier}</td></tr>
+                  ${purchasePlan ? `<tr><td style="padding:10px 0 0;color:${brand.lightMuted};font-size:13px;line-height:1.5;"><strong style="color:${brand.lightText};">This purchase</strong><br>${purchasePlan}</td></tr>` : ''}
                   <tr><td style="padding:18px 0 0;"><div style="padding:16px 17px;border:1px solid #2B5D78;border-radius:10px;background:${brand.ink};color:${brand.cyan};font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:17px;font-weight:900;letter-spacing:.08em;line-height:1.45;word-break:break-word;">${licenseKey}</div></td></tr>
                   <tr><td style="padding:12px 0 0;color:${brand.lightMuted};font-size:13px;line-height:1.6;">${access}</td></tr>
                 </table>
