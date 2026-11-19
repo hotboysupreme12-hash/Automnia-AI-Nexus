@@ -1,7 +1,7 @@
 {
   "name": "automnia-ai-nexus",
   "private": true,
-  "version": "1.0.26",
+  "version": "1.0.27",
   "description": "Automnia AI Nexus is a desktop AI workspace and operations console for orchestrating agents, model providers, tools, plugins, and connected workflows through a secure OpenClaw-powered runtime.",
   "author": {
     "name": "Automnia AI"
@@ -48,7 +48,7 @@
     "smoke:release-evidence": "tsx scripts/smoke-release-evidence.ts",
     "smoke:release-signing": "tsx scripts/smoke-release-signing.ts",
     "smoke:release-lifecycle": "tsx scripts/smoke-release-lifecycle.ts",
-    "smoke:release-validation": "tsx scripts/smoke-release-validation.ts",
+    "smoke:release-validation": "tsx scripts/smoke-release-validation.ts && node scripts/smoke-update-stage-macos-metadata.cjs",
     "smoke:electron-e2e": "tsx scripts/smoke-electron-e2e.ts",
     "smoke:packaged-electron-launch": "tsx scripts/smoke-packaged-electron-launch.ts",
     "smoke:packaged-openclaw-gateway": "tsx scripts/smoke-packaged-openclaw-gateway.ts",
@@ -181,6 +181,9 @@
     "directories": {
       "output": "release"
     },
+    "toolsets": {
+      "appimage": "1.0.3"
+    },
     "publish": [
       {
         "provider": "generic",
@@ -253,6 +256,7 @@
       ],
       "category": "public.app-category.developer-tools",
       "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "minimumSystemVersion": "13.5.0",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "extendInfo": {
@@ -326,7 +330,13 @@
   },
   "overrides": {
     "onnxruntime-node": "1.29.0",
-    "sharp": "0.35.4",
-    "adm-zip": "0.6.1"
+    "sharp": "0.35.5",
+    "adm-zip": "0.6.1",
+    "app-builder-lib@26.18.1": {
+      "minimatch@^10.2.5": "11.0.9"
+    },
+    "@electron/universal@2.0.3": {
+      "minimatch@^9.0.3": "11.0.9"
+    }
   }
 }

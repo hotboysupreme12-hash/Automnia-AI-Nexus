@@ -108,7 +108,7 @@ Review `config.psd1` before the first deployment:
 - `PermanentBaseUrl` and `PermanentDomain` default to `https://api.automnia.app` / `api.automnia.app`.
 - `DnsProjectId` and `DnsZone` can be filled in to make DNS record changes automatic when Cloud DNS hosts the zone. Leave them blank for another DNS provider and add the returned mapping records there once.
 - `Region`, Firestore location, checkout URL, service name, API list, roles, secret names, and collection contract are centralized here.
-- `EmailProvider` and `EmailSender` configure the account that sends the branded Automnia welcome letter, teal logo, license key, and login instructions. Microsoft 365 is the default provider: the `automnia-microsoft-graph-mail-credentials` secret contains JSON with `tenant_id`, `client_id`, and `client_secret` for an Entra app granted Microsoft Graph `Mail.Send` application permission with admin consent. The provisioner calls Graph `users/{sender}/sendMail` directly, so paid orders do not depend on Shopify's outstanding-invoice state. Gmail OAuth remains supported for legacy deployments through the corresponding Gmail environment variables and secret binding.
+- `EmailMailbox` is the licensed Microsoft 365 mailbox addressed by Graph, while `EmailSender` is the visible From address in the branded Automnia license email. The current mailbox is `support@automnia.app`, and `licenses@automnia.app` is configured as its From alias. The `automnia-microsoft-graph-mail-credentials` secret contains JSON with `tenant_id`, `client_id`, and `client_secret` for an Entra app granted Microsoft Graph `Mail.Send` application permission with admin consent. Exchange Online must also have “send from aliases” enabled for the tenant or it may rewrite the alias to the primary address. That setting is tenant-wide. The provisioner calls Graph `users/{EmailMailbox}/sendMail` directly, so paid orders do not depend on Shopify's outstanding-invoice state. Gmail OAuth remains supported for legacy deployments through the corresponding Gmail environment variables and secret binding.
 - `KnowledgeDataStoreId` and `KnowledgeEngineId` identify the private Agent Search resources used by `/api/knowledge/answer`. Those resources must exist in a new project before the service is routed to traffic; the current production project already has them.
 
 The base domain must be purchased and verified by the operating Google account. If it is not already verified:
@@ -142,7 +142,16 @@ The webhook is acknowledged only after the license email is confirmed. If
 Microsoft Graph mail delivery is unavailable, the handler returns a retryable
 response and keeps the delivery state pending; use the authenticated
 `/admin/email-delivery/retry` endpoint after the credential is repaired for an
-already-provisioned order.
+already-provisioned order. Delivery state is tracked per Shopify order, so an
+earlier welcome email cannot suppress the key email for a later upgrade,
+subscription switch, or refill. Retries may include both the license `orderId`
+and the Shopify `shopifyOrderId` to target a particular purchase.
+
+A Shopify order with a zero total never grants a new entitlement or credits.
+For an existing customer, a zero-dollar order can resend the current license key
+to the email already on the account; the message makes clear that the order
+added no access or credits. A new customer still needs a valid paid order or an
+authorized trial before a license is created.
 
 The Shopify app may retain `write_orders` for other administrative workflows,
 but customer email delivery no longer requires it.

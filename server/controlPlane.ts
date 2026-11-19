@@ -255,7 +255,11 @@ import {
   createPluginRuntimeService,
   type PluginRuntimeService,
 } from './services/plugins/pluginRuntimeService'
-import { codexPluginAvailableForRuntime, codexPluginNeedsRepair } from './services/plugins/codexPluginHealth'
+import {
+  codexPluginAvailableForRuntime,
+  codexPluginNeedsRepair,
+  OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC,
+} from './services/plugins/codexPluginHealth'
 import { pluginToggleRequiresGatewayRestart } from './services/plugins/pluginRestartPolicy'
 import { computeShiftDurationMinutes } from './shiftContracts'
 import type {
@@ -12833,11 +12837,11 @@ async function ensureCodexPluginInstalledForOpenAiRuntime(config: OpenClawConfig
           ? `[plugins/codex] Codex plugin is degraded; repairing from ${bundledCodexSource || 'the pinned official package'}.`
           : bundledCodexSource
             ? `[plugins/codex] Codex plugin is enabled; installing bundled codex plugin from ${bundledCodexSource}.`
-            : '[plugins/codex] Codex plugin is enabled; installing official codex plugin with --pin.',
+          : `[plugins/codex] Codex plugin is enabled; installing ${OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC} with --pin.`,
       )
       try {
         const result = await installOpenClawPlugin({
-          spec: bundledCodexSource || 'codex',
+          spec: bundledCodexSource || OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC,
           pluginId: 'codex',
           pin: !bundledCodexSource,
           enable: true,

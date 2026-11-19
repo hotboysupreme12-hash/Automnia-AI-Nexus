@@ -10,7 +10,7 @@ Automnia AI lets you run powerful agents like a local operations team. Use one f
 
 **AI Nexus** · **Custom agents** · **Missions** · **Schedules** · **Plugins** · **Runtime monitor** · **Approval-first automation** · **Local-first control**
 
-[Assistant Operations Manual](docs/AUTOMNIA_ASSISTANT_OPERATIONS_MANUAL.md) · [User Guide](docs/USER_GUIDE.md) · [UI Reference](docs/AUTOMNIA_UI_REFERENCE.md) · [Support Guide](docs/BETA_SUPPORT.md) · [Release Notes](docs/BETA_RELEASE_NOTES.md) · [CI Evidence](docs/CI_EVIDENCE.md) · [Data Handling](DATA_HANDLING.md) · [Security](SECURITY.md) · [Release Governance](docs/RELEASE_GOVERNANCE.md)
+[Assistant Operations Manual](docs/AUTOMNIA_ASSISTANT_OPERATIONS_MANUAL.md) · [User Guide](docs/USER_GUIDE.md) · [UI Reference](docs/AUTOMNIA_UI_REFERENCE.md) · [Support Guide](docs/BETA_SUPPORT.md) · [Installer Support](docs/INSTALLER_SUPPORT.md) · [Release Notes](docs/BETA_RELEASE_NOTES.md) · [CI Evidence](docs/CI_EVIDENCE.md) · [Data Handling](DATA_HANDLING.md) · [Security](SECURITY.md) · [Release Governance](docs/RELEASE_GOVERNANCE.md)
 
 </div>
 
@@ -168,9 +168,9 @@ npm run release:sign
 npm run release:validate
 ```
 
-Set `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE` or `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM` before optional checksum-evidence signing. The early public workflow permits unsigned Windows/macOS packages, but it still requires `AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM` for the cryptographically signed GCS update channel. Set `AUTOMNIA_RELEASE_REQUIRE_SIGNING=1` later when platform and release signing are enabled.
+Manual public-release workflow runs build unsigned candidates for install testing and do not publish customer downloads. Tagged customer releases require Windows Authenticode and macOS Developer ID plus Apple notarization credentials; the workflow fails closed when they are missing. The signed updater channel still requires `AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM`. See [Installer Support](docs/INSTALLER_SUPPORT.md) for the target architectures, operating-system floors, and per-platform validation.
 
-Signed public-release evidence also needs `distribution-signing.json` so reviewers can verify consumer signing, update-channel signing, install, upgrade, rollback, and uninstall evidence. The early unsigned workflow retains the lifecycle logs and signed update-channel evidence without requiring platform-signing evidence.
+Set `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE` or `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM` for optional checksum-evidence signing. Tagged releases also produce `distribution-signing.json` with consumer signature, update-channel signature, and install, upgrade, rollback, and uninstall evidence.
 
 For complete setup, read the [User Guide](docs/USER_GUIDE.md). For recovery and feedback details, read the [Support Guide](docs/BETA_SUPPORT.md).
 
@@ -184,6 +184,7 @@ Automnia AI is stable for Windows, macOS, and Linux.
 | --- | --- |
 | Learn the app | [User Guide](docs/USER_GUIDE.md) |
 | Get help or send feedback | [Support Guide](docs/BETA_SUPPORT.md) |
+| Install the desktop app on a supported system | [Installer Support](docs/INSTALLER_SUPPORT.md) |
 | Review release notes | [Release Notes](docs/BETA_RELEASE_NOTES.md) |
 | Review hosted CI proof | [CI Evidence](docs/CI_EVIDENCE.md) |
 | Check exact provider model support and compatibility | [Provider model compatibility](docs/PROVIDER_MODEL_COMPATIBILITY.md) |

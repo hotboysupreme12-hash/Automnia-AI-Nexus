@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.27 - 2026-11-19
+
+### Cross-architecture macOS updates
+
+- Combines Intel and Apple silicon ZIP metadata so each Mac receives an update package built for its processor.
+- Retains the Apple silicon ZIP checksum and block map in the signed stable update feed.
+
 ## 1.0.26 - 2026-11-18
 
 ### Windows installer validation

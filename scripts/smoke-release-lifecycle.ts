@@ -44,6 +44,8 @@ assert.match(lifecycle, /AUTOMNIA_WINDOWS_INSTALLER_TIMEOUT_SECONDS/, 'Windows l
 assert.match(lifecycle, /Label 'fresh install' -TimeoutSeconds \$InstallerTimeoutSeconds/, 'Windows lifecycle validation must bound fresh installation time')
 assert.match(lifecycle, /AUTOMNIA_WINDOWS_UPGRADE_TIMEOUT_SECONDS/, 'Windows lifecycle validation must allow a separately bounded in-place upgrade')
 assert.match(lifecycle, /Label 'upgrade install' -TimeoutSeconds \$UpgradeInstallerTimeoutSeconds/, 'Windows lifecycle validation must use the longer upgrade timeout')
+assert.match(lifecycle, /Write-ProcessTreeSnapshot/, 'Windows installer timeout diagnostics must capture the active process tree')
+assert.match(lifecycle, /MainWindowTitle/, 'Windows installer timeout diagnostics must capture hidden modal-window titles')
 assert.match(lifecycle, /if \(\$ArgumentList -and \$ArgumentList\.Count -gt 0\)/, 'Windows lifecycle validation must omit empty Start-Process argument lists')
 assert.ok(lifecycle.includes("ArgumentList @('/currentuser', '/S', \"/D=$InstallRoot\")"), 'Windows lifecycle installs must pin the isolated upgrade test to the per-user scope')
 assert.match(lifecycle, /CommandLine\.IndexOf\(\$InstallLocation[\s\S]*?ParentProcessId/, 'Windows lifecycle cleanup must also find test-owned helpers spawned from system executable paths')
@@ -67,6 +69,7 @@ assert.match(lifecycle, /-and \(\$RequiredPayload \| Where-Object/, 'Windows lif
 assert.match(lifecycle, /\$ErrorActionPreference = 'Continue'/, 'Windows lifecycle validation must capture expected integrity-test stderr instead of aborting on it')
 assert.match(lifecycle, /\$ExitCode = \$LASTEXITCODE/, 'Windows lifecycle validation must assert the expected integrity-test exit code')
 assert.match(lifecycle, /temporary cleanup incomplete/, 'Windows lifecycle cleanup races must not mask completed release evidence')
+assert.match(read('.github/workflows/public-release.yml'), /Upload Windows lifecycle diagnostics[\s\S]*?if: \$\{\{ always\(\) \}\}[\s\S]*?path: release\/evidence\/lifecycle\//, 'Windows lifecycle diagnostics must survive a failed lifecycle step as an Actions artifact')
 
 assert.match(backupLibrary, /backup-manifest\.json/, 'state backups must carry a verification manifest')
 assert.match(backupLibrary, /symbolic_link_not_followed/, 'state backups must skip symlink traversal without following targets')

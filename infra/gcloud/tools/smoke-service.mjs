@@ -5,6 +5,12 @@ import { readFile } from 'node:fs/promises'
 import net from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { buildLicenseEmailHtml } from '../service/welcomeEmail.js'
+import {
+  buildLicenseEmailMimeMessage,
+  encodeGmailRawMessage,
+  encodeMicrosoftGraphRawMessage,
+} from '../service/licenseEmailMime.js'
 
 const infraRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const serviceRoot = path.join(infraRoot, 'service')
@@ -18,6 +24,34 @@ assert.doesNotMatch(welcomeEmail, /#48E8FF|#58AAFF/)
 assert.match(welcomeEmail, /role="presentation"/)
 assert.match(welcomeEmail, /Your secure access details/)
 assert.match(welcomeEmail, /Get started in four steps/)
+assert.match(welcomeEmail, /Google sign-in is optional/)
+const newCustomerEmail = buildLicenseEmailHtml({ email: 'new@example.test', licenseKey: 'AUT-TEST-0001', tier: 'starter' })
+assert.match(newCustomerEmail, /Create or sign in with your Automnia password\. Google sign-in is optional\./)
+const upgradedCustomerEmail = buildLicenseEmailHtml(
+  { email: 'existing@example.test', licenseKey: 'AUT-TEST-0002', tier: 'pro' },
+  { isAccountUpdate: true, purchasePlan: 'Automnia Pro Monthly <script>' },
+)
+assert.match(upgradedCustomerEmail, /Automnia Pro Monthly &lt;script&gt;/, 'Plan details in upgrade emails must be HTML escaped')
+assert.match(upgradedCustomerEmail, /Your new plan order is linked to your existing Automnia account/)
+assert.match(upgradedCustomerEmail, /same license key below/)
+const licenseMimeMessage = buildLicenseEmailMimeMessage({
+  from: 'Automnia AI Nexus <support@automnia.app>',
+  to: 'customer@example.test',
+  subject: 'Welcome to Automnia AI Nexus — your license key',
+  text: 'Your Automnia license key is ready.',
+  html: '<p>Your Automnia license key is ready.</p>',
+})
+assert.match(licenseMimeMessage, /^From: Automnia AI Nexus <support@automnia\.app>\r$/m)
+assert.match(licenseMimeMessage, /multipart\/alternative/)
+assert.match(Buffer.from(encodeGmailRawMessage(licenseMimeMessage), 'base64url').toString('utf8'), /^From: Automnia AI Nexus/)
+assert.match(Buffer.from(encodeMicrosoftGraphRawMessage(licenseMimeMessage), 'base64').toString('utf8'), /^From: Automnia AI Nexus/)
+assert.match(provisionerService, /'Content-Type': 'text\/plain'/)
+assert.match(provisionerService, /buildMicrosoftGraphRawMessage\(record, context\)/)
+const zeroValueAccountEmail = buildLicenseEmailHtml(
+  { email: 'existing@example.test', licenseKey: 'AUT-TEST-0003', tier: 'pro' },
+  { isAccountUpdate: true, zeroValueOrder: true, purchasePlan: 'Automnia Pro Monthly' },
+)
+assert.match(zeroValueAccountEmail, /This \$0 order did not add plan access or credits/)
 assert.match(provisionerService, /publishedInstallerPlatforms/)
 assert.match(provisionerService, /file\(objectName\)\.exists\(\)/)
 assert.match(provisionerService, /app\.get\('\/download\/installer'/)
@@ -74,11 +108,16 @@ async function runMode(writeMode) {
       SHOPIFY_API_VERSION: '2026-07',
       SHOPIFY_ADMIN_API_TOKEN: 'local-smoke-shopify-admin-token',
       AUTOMNIA_TEST_EMAIL_DELIVERY: 'stub',
+      EMAIL_PROVIDER: 'microsoft_graph',
+      EMAIL_MAILBOX: 'support@automnia.app',
+      EMAIL_SENDER: 'licenses@automnia.app',
       SHOPIFY_WEBHOOK_SECRETS: 'local-smoke-webhook-value',
-      ADMIN_API_TOKEN: 'local-smoke-admin-value',
+      ADMIN_API_TOKEN: 'local-smoke-admin-value\r\n',
     },
   })
+  let stdout = ''
   let stderr = ''
+  child.stdout.on('data', (chunk) => { stdout += String(chunk) })
   child.stderr.on('data', (chunk) => { stderr += String(chunk) })
   try {
     const baseUrl = `http://127.0.0.1:${port}`
@@ -98,6 +137,9 @@ async function runMode(writeMode) {
     assert.equal(health.commerce.checkoutConfigured, true)
     assert.equal(health.commerce.webhookSecretsConfigured, true)
     assert.equal(health.commerce.emailDeliveryConfigured, true)
+    assert.equal(health.commerce.emailDeliveryProvider, 'microsoft_graph')
+    assert.equal(health.commerce.emailDeliverySender, 'licenses@automnia.app')
+    assert.equal(health.commerce.emailDeliveryMailbox, 'support@automnia.app')
 
     const ready = await fetch(`${baseUrl}/ready`).then((response) => response.json())
     assert.equal(ready.ok, true)
@@ -183,6 +225,13 @@ async function runMode(writeMode) {
       assert.equal(provisioned.records[0]?.usagePriority, 'automnia_only')
       assert.equal(provisioned.records[0]?.creditBalance, 22_000, 'Starter must display 22,000 credits for its 22,000,000-token grant')
 
+      const duplicateStarterOrder = await sendPaidOrder('smoke-starter', 'AUTO-SUB-STARTER-MONTHLY', 'owner@example.test', 1, {
+        subscription_contract_id: 'starter-contract-smoke',
+        next_billing_date: '2099-01-01T12:00:00.000Z',
+      })
+      assert.equal(duplicateStarterOrder.status, 200)
+      assert.equal((await duplicateStarterOrder.json()).action, 'duplicate_ignored')
+
       const refillOrder = await sendPaidOrder('smoke-owner-refill-10m', 'AUTO-REFILL-10M')
       assert.equal(refillOrder.status, 200)
       assert.equal((await refillOrder.json()).action, 'topup_applied')
@@ -255,6 +304,13 @@ async function runMode(writeMode) {
       assert.equal(provisioned.records[0]?.usagePriority, 'automnia_only')
       assert.equal(provisioned.records[0]?.creditBalance, 107_300, 'Pro must add 55,000 credits to the existing wallet')
 
+      const duplicateProOrder = await sendPaidOrder('smoke-pro', 'AUTO-SUB-PRO-MONTHLY', 'owner@example.test', 1, {
+        subscription_contract_id: '123456789',
+        next_billing_date: nextProBillingAt,
+      })
+      assert.equal(duplicateProOrder.status, 200)
+      assert.equal((await duplicateProOrder.json()).action, 'duplicate_ignored')
+
       const zeroValueProOrder = await sendPaidOrder('smoke-zero-value-pro', 'AUTO-SUB-PRO-MONTHLY', 'zero-value@example.test', 1, {
         subscription_contract_id: 'zero-value-contract-smoke',
         next_billing_date: '2099-02-01T12:00:00.000Z',
@@ -276,6 +332,32 @@ async function runMode(writeMode) {
       assert.equal((await zeroValueDuplicateProOrder.json()).action, 'order_rejected_unpaid', 'A zero-value replay must be rejected before duplicate delivery recovery')
       provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
       assert.equal(provisioned.records.find((record) => record.email === 'owner@example.test')?.creditBalance, 107_300, 'Rejecting a zero-value replay must not change an existing balance')
+
+      const zeroValueExistingAccountOrder = await sendPaidOrder('smoke-owner-free-plan-key', 'AUTO-SUB-PRO-MONTHLY', 'owner@example.test', 1, {
+        subscription_contract_id: 'owner-free-plan-contract',
+        total_price: '0.00',
+        line_items: [{ sku: 'AUTO-SUB-PRO-MONTHLY', quantity: 1, price: '29.99', total_discount: '29.99' }],
+      })
+      assert.equal(zeroValueExistingAccountOrder.status, 200)
+      assert.equal((await zeroValueExistingAccountOrder.json()).action, 'zero_value_order_key_emailed', 'An existing customer should receive their current key after a zero-dollar Shopify order, without a new entitlement')
+      provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
+      assert.equal(provisioned.records.find((record) => record.email === 'owner@example.test')?.creditBalance, 107_300, 'A zero-dollar order email must not add credits')
+      const duplicateZeroValueExistingAccountOrder = await sendPaidOrder('smoke-owner-free-plan-key', 'AUTO-SUB-PRO-MONTHLY', 'owner@example.test', 1, {
+        subscription_contract_id: 'owner-free-plan-contract',
+        total_price: '0.00',
+        line_items: [{ sku: 'AUTO-SUB-PRO-MONTHLY', quantity: 1, price: '29.99', total_discount: '29.99' }],
+      })
+      assert.equal(duplicateZeroValueExistingAccountOrder.status, 200)
+      assert.equal((await duplicateZeroValueExistingAccountOrder.json()).action, 'zero_value_order_key_already_sent')
+      const retrySpecificOrder = await fetch(`${baseUrl}/admin/email-delivery/retry`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer local-smoke-admin-value', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: 'smoke-starter', shopifyOrderId: 'smoke-owner-free-plan-key' }),
+      })
+      assert.equal(retrySpecificOrder.status, 200)
+      const retrySpecificOrderResult = await retrySpecificOrder.json()
+      assert.equal(retrySpecificOrderResult.action, 'email_already_sent')
+      assert.equal(retrySpecificOrderResult.status, 'sent', 'An admin retry must report the status of the requested Shopify order')
 
       const starterToProStarter = await sendPaidOrder('smoke-starter-to-pro-starter', 'AUTO-SUB-STARTER-MONTHLY', 'starter-to-pro@example.test', 1, {
         subscription_contract_id: 'starter-to-pro-starter-contract',
@@ -393,12 +475,57 @@ async function runMode(writeMode) {
       assert.equal(lifecycleRecord?.subscriptionStatus, 'cancelled', 'A delayed successful billing webhook must not reactivate a cancelled contract')
       assert.equal(lifecycleRecord?.paymentStatus, 'paid')
 
+      const contractLinkOrder = await sendPaidOrder('smoke-contract-link-paid', 'AUTO-SUB-PRO-MONTHLY', 'contract-link@example.test', 1, {
+        subscription_contract_id: 'original-contract-link',
+        next_billing_date: '2099-01-01T12:00:00.000Z',
+      })
+      assert.equal(contractLinkOrder.status, 200)
+      const unpaidContractCreate = await sendShopifyWebhook('subscription-contracts-create', 'smoke-contract-link-create', {
+        id: 'contract-link-after-unpaid-create',
+        status: 'ACTIVE',
+        origin_order: {
+          id: 'smoke-contract-link-zero-order',
+          email: 'contract-link@example.test',
+          financial_status: 'paid',
+          total_price: '0.00',
+          line_items: [{ sku: 'AUTO-SUB-PRO-MONTHLY', quantity: 1, price: '29.99', total_discount: '29.99' }],
+        },
+      })
+      assert.equal(unpaidContractCreate.status, 200)
+      assert.equal((await unpaidContractCreate.json()).action, 'subscription_contract_linked_waiting_for_payment')
+      let contractLinkRecord = (await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())).records.find((record) => record.email === 'contract-link@example.test')
+      assert.equal(contractLinkRecord?.creditBalance, 55_000, 'Linking an unpaid contract must not grant credits')
+      const pauseLinkedContract = await sendShopifyWebhook('subscription-contracts-pause', 'smoke-contract-link-pause', {
+        id: 'contract-link-after-unpaid-create',
+        status: 'PAUSED',
+      })
+      assert.equal(pauseLinkedContract.status, 200)
+      assert.equal((await pauseLinkedContract.json()).action, 'subscription_state_updated', 'The lifecycle hook must locate the license linked during contract creation')
+      contractLinkRecord = (await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())).records.find((record) => record.email === 'contract-link@example.test')
+      assert.equal(contractLinkRecord?.subscriptionStatus, 'paused', 'A subsequent pause event must update the linked license state')
+
       const firstOrderQuantityRefill = await sendPaidOrder('smoke-first-order-refill-100k-quantity-2', 'AUTO-REFILL-100K', 'quantity-owner@example.test', 2)
       assert.equal(firstOrderQuantityRefill.status, 200)
       provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
       assert.equal(provisioned.records.find((record) => record.email === 'quantity-owner@example.test')?.creditBalance, 200, 'A first order with quantity 2 must provision 200 credits')
     }
-    return { writeMode, planMappingHash: health.commerce.planMappingHash, activationStatus: activation.status }
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    const deliveredEmailOrders = stdout.split(/\r?\n/)
+      .filter((line) => line.includes('"event":"test_license_email_delivery"'))
+      .map((line) => {
+        try { return JSON.parse(line).shopifyOrderId } catch { return null }
+      })
+      .filter(Boolean)
+    if (writeMode === 'active') {
+      const emailCount = (shopifyOrderId) => deliveredEmailOrders.filter((value) => value === shopifyOrderId).length
+      for (const orderId of ['smoke-starter', 'smoke-owner-refill-10m', 'smoke-pro', 'smoke-owner-free-plan-key', 'smoke-starter-to-pro-starter', 'smoke-starter-to-pro-upgrade', 'smoke-starter-again', 'smoke-contract-link-paid']) {
+        assert.equal(emailCount(orderId), 1, `Successful order ${orderId} must send exactly one license key email despite duplicate webhook delivery`)
+      }
+      assert.equal(emailCount('smoke-zero-value-pro'), 0, 'A zero-value order must not trigger an entitlement email')
+    } else {
+      assert.equal(deliveredEmailOrders.length, 0, 'Read-only mode must not send license emails')
+    }
+    return { writeMode, planMappingHash: health.commerce.planMappingHash, activationStatus: activation.status, emailDeliveries: deliveredEmailOrders.length }
   } finally {
     child.kill()
     await Promise.race([
@@ -426,7 +553,7 @@ async function runUnconfiguredDeliveryCheck() {
       SHOPIFY_CHECKOUT_URL: 'https://example.test/automnia-checkout',
       SHOPIFY_STORE_DOMAIN: 'j12hqc-h2.myshopify.com',
       SHOPIFY_WEBHOOK_SECRETS: 'local-smoke-webhook-value',
-      ADMIN_API_TOKEN: 'local-smoke-admin-value',
+      ADMIN_API_TOKEN: 'local-smoke-admin-value\r\n',
     },
   })
   let stderr = ''

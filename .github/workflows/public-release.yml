@@ -15,11 +15,11 @@ permissions:
 
 jobs:
   windows:
-    name: Unsigned Windows installer and lifecycle evidence
+    name: Windows x64 installer and lifecycle evidence
     runs-on: windows-2025
     timeout-minutes: 90
     env:
-      AUTOMNIA_RELEASE_REQUIRE_SIGNING: '0'
+      AUTOMNIA_RELEASE_REQUIRE_SIGNING: ${{ github.event_name == 'push' && '1' || '0' }}
       AUTOMNIA_UPDATE_REQUIRE_SIGNING: '1'
       AUTOMNIA_UPDATE_CHANNEL: stable-x64
     steps:
@@ -41,6 +41,18 @@ jobs:
         run: |
           if ([string]::IsNullOrWhiteSpace($env:UPDATE_KEY)) { throw 'Missing required release secret: AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM' }
 
+      - name: Require Windows Authenticode credentials for tagged release
+        if: ${{ github.event_name == 'push' }}
+        shell: pwsh
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          $missing = @()
+          if ([string]::IsNullOrWhiteSpace($env:WIN_CSC_LINK)) { $missing += 'WIN_CSC_LINK' }
+          if ([string]::IsNullOrWhiteSpace($env:WIN_CSC_KEY_PASSWORD)) { $missing += 'WIN_CSC_KEY_PASSWORD' }
+          if ($missing.Count -gt 0) { throw "Missing required Windows signing secrets: $($missing -join ', ')" }
+
       - name: Install locked dependencies
         run: npm ci
 
@@ -61,10 +73,13 @@ jobs:
       - name: Verify release candidate source
         run: npm run verify:release-candidate
 
-      - name: Build unsigned NSIS installer
+      - name: Build NSIS installer
         env:
-          AUTOMNIA_SKIP_PLATFORM_SIGNING: '1'
+          AUTOMNIA_SKIP_PLATFORM_SIGNING: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+          AUTOMNIA_PLATFORM_SIGNING_REQUIRED: ${{ github.event_name == 'push' && '1' || '0' }}
           AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG: '1'
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
         run: npm run dist:win
 
       - name: Launch packaged OpenClaw Gateway and verify the pinned runtime
@@ -93,10 +108,19 @@ jobs:
 
       - name: Run install, upgrade, rollback, and uninstall lifecycle
         env:
-          AUTOMNIA_PLATFORM_SIGNING_REQUIRED: '0'
+          AUTOMNIA_PLATFORM_SIGNING_REQUIRED: ${{ github.event_name == 'push' && '1' || '0' }}
           AUTOMNIA_WINDOWS_INSTALLER_TIMEOUT_SECONDS: '900'
           AUTOMNIA_WINDOWS_UPGRADE_TIMEOUT_SECONDS: '1800'
         run: npm run release:lifecycle:windows
+
+      - name: Upload Windows lifecycle diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: automnia-windows-lifecycle-${{ github.run_id }}
+          path: release/evidence/lifecycle/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Generate release SBOM and checksums
         run: npm run release:evidence
@@ -108,10 +132,10 @@ jobs:
           AUTOMNIA_RELEASE_SIGNING_KEY_ID: ${{ vars.AUTOMNIA_RELEASE_SIGNING_KEY_ID }}
         run: npm run release:sign
 
-      - name: Validate unsigned public release chain
+      - name: Validate public release chain
         run: npm run release:validate
 
-      - name: Upload unsigned Windows release candidate
+      - name: Upload Windows release candidate
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: automnia-windows-public-release
@@ -123,9 +147,9 @@ jobs:
           retention-days: 90
 
   macos:
-    name: Unsigned macOS DMG and ZIP
+    name: Intel macOS DMG and ZIP
     runs-on: macos-15-intel
-    timeout-minutes: 90
+    timeout-minutes: 150
     steps:
       - name: Check out release source
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -145,6 +169,39 @@ jobs:
       - name: Prepare runtime bundles for readiness checks
         run: npm run prepare:runtime-bundles
 
+      - name: Require macOS signing and notarization credentials for tagged release
+        if: ${{ github.event_name == 'push' }}
+        shell: bash
+        env:
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in MAC_CSC_LINK MAC_CSC_KEY_PASSWORD APPLE_API_KEY_P8_BASE64 APPLE_API_KEY_ID APPLE_API_ISSUER APPLE_TEAM_ID; do
+            if [[ -z "${!name:-}" ]]; then missing+=("$name"); fi
+          done
+          if ((${#missing[@]})); then
+            printf 'Missing required macOS signing/notarization secrets: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+
+      - name: Prepare Apple notarization key for tagged release
+        if: ${{ github.event_name == 'push' }}
+        shell: bash
+        env:
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+        run: |
+          set -euo pipefail
+          api_key_path="$RUNNER_TEMP/automnia-notary-key.p8"
+          printf '%s' "$APPLE_API_KEY_P8_BASE64" | tr -d '\r\n' | openssl base64 -d -A > "$api_key_path"
+          chmod 600 "$api_key_path"
+          printf 'APPLE_API_KEY=%s\n' "$api_key_path" >> "$GITHUB_ENV"
+
       - name: Embed update verification configuration
         env:
           AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM: ${{ secrets.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM }}
@@ -156,15 +213,21 @@ jobs:
       - name: Verify release candidate source
         run: npm run verify:release-candidate
 
-      - name: Build unsigned Intel Mac DMG and ZIP
+      - name: Build Intel Mac DMG and ZIP
         shell: bash
         env:
-          AUTOMNIA_SKIP_PLATFORM_SIGNING: '1'
+          AUTOMNIA_SKIP_PLATFORM_SIGNING: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+          AUTOMNIA_PLATFORM_SIGNING_REQUIRED: ${{ github.event_name == 'push' && '1' || '0' }}
           AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG: '1'
           AUTOMNIA_TARGET_ARCH: x64
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: bash scripts/build-macos-release.sh x64
 
-      - name: Validate unsigned macOS package outputs
+      - name: Validate macOS package outputs
         shell: bash
         run: |
           set -euo pipefail
@@ -187,11 +250,21 @@ jobs:
           test -d "$source_app"
           archs="$(lipo -archs "$source_app/Contents/MacOS/Automnia AI Nexus")"
           test "$archs" = "x86_64"
+          minimum_os="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$source_app/Contents/Info.plist")"
+          [[ "$minimum_os" == "13.5.0" ]]
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            codesign --verify --deep --strict --verbose=2 "$source_app"
+            xcrun stapler validate "$source_app"
+            spctl --assess --type exec --verbose=4 "$source_app"
+          fi
           ditto "$source_app" "$installed_app"
           hdiutil detach "$mount_dir" -quiet
           AUTOMNIA_PACKAGED_MAC_APP_PATH="$installed_app" npm run smoke:packaged-electron-launch
 
-      - name: Upload unsigned macOS release candidate
+      - name: Extract, architecture-check, and launch Intel updater ZIP
+        run: bash scripts/smoke-macos-release-zip.sh x64
+
+      - name: Upload macOS release candidate
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: automnia-macos-public-release
@@ -204,9 +277,9 @@ jobs:
           retention-days: 90
 
   macos-arm64:
-    name: Unsigned Apple silicon macOS DMG and ZIP
+    name: Apple silicon macOS DMG and ZIP
     runs-on: macos-15
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - name: Check out release source
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -226,14 +299,62 @@ jobs:
       - name: Prepare runtime bundles for readiness checks
         run: npm run prepare:runtime-bundles
 
+      - name: Require macOS signing and notarization credentials for tagged release
+        if: ${{ github.event_name == 'push' }}
+        shell: bash
+        env:
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in MAC_CSC_LINK MAC_CSC_KEY_PASSWORD APPLE_API_KEY_P8_BASE64 APPLE_API_KEY_ID APPLE_API_ISSUER APPLE_TEAM_ID; do
+            if [[ -z "${!name:-}" ]]; then missing+=("$name"); fi
+          done
+          if ((${#missing[@]})); then
+            printf 'Missing required macOS signing/notarization secrets: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+
+      - name: Prepare Apple notarization key for tagged release
+        if: ${{ github.event_name == 'push' }}
+        shell: bash
+        env:
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+        run: |
+          set -euo pipefail
+          api_key_path="$RUNNER_TEMP/automnia-notary-key.p8"
+          printf '%s' "$APPLE_API_KEY_P8_BASE64" | tr -d '\r\n' | openssl base64 -d -A > "$api_key_path"
+          chmod 600 "$api_key_path"
+          printf 'APPLE_API_KEY=%s\n' "$api_key_path" >> "$GITHUB_ENV"
+
+      - name: Embed update verification configuration
+        env:
+          AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM: ${{ secrets.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM }}
+          AUTOMNIA_UPDATE_SIGNING_KEY_ID: ${{ vars.AUTOMNIA_UPDATE_SIGNING_KEY_ID }}
+          AUTOMNIA_UPDATE_BASE_URL: ${{ vars.AUTOMNIA_UPDATE_BASE_URL }}-x64
+          AUTOMNIA_UPDATE_CHANNEL: stable-x64
+        run: npm run release:update-build-config
+
       - name: Verify release candidate source
         run: npm run verify:release-candidate
 
-      - name: Build unsigned Apple silicon Mac DMG and ZIP
+      - name: Build Apple silicon Mac DMG and ZIP
         shell: bash
         env:
-          AUTOMNIA_SKIP_PLATFORM_SIGNING: '1'
+          AUTOMNIA_SKIP_PLATFORM_SIGNING: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+          AUTOMNIA_PLATFORM_SIGNING_REQUIRED: ${{ github.event_name == 'push' && '1' || '0' }}
+          AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG: '1'
           AUTOMNIA_TARGET_ARCH: arm64
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: bash scripts/build-macos-release.sh arm64
 
       - name: Validate Apple silicon package outputs
@@ -259,17 +380,29 @@ jobs:
           test -d "$source_app"
           archs="$(lipo -archs "$source_app/Contents/MacOS/Automnia AI Nexus")"
           test "$archs" = "arm64"
+          minimum_os="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$source_app/Contents/Info.plist")"
+          [[ "$minimum_os" == "13.5.0" ]]
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            codesign --verify --deep --strict --verbose=2 "$source_app"
+            xcrun stapler validate "$source_app"
+            spctl --assess --type exec --verbose=4 "$source_app"
+          fi
           ditto "$source_app" "$installed_app"
           hdiutil detach "$mount_dir" -quiet
           AUTOMNIA_PACKAGED_MAC_APP_PATH="$installed_app" npm run smoke:packaged-electron-launch
 
-      - name: Upload unsigned Apple silicon release candidate
+      - name: Extract, architecture-check, and launch Apple silicon updater ZIP
+        run: bash scripts/smoke-macos-release-zip.sh arm64
+
+      - name: Upload Apple silicon release candidate
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: automnia-macos-arm64-public-release
           path: |
             release/**/*-arm64.dmg
             release/**/*-arm64.zip
+            release/**/*.blockmap
+            release/latest*.yml
           if-no-files-found: error
           retention-days: 90
 
@@ -336,7 +469,7 @@ jobs:
           sudo apt-get remove -y "$package_name"
           trap - EXIT
 
-      - name: Verify and launch x86_64 AppImage under virtual display
+      - name: Verify and launch x86_64 AppImage using its native runtime under virtual display
         shell: bash
         run: |
           set -euo pipefail
@@ -345,8 +478,7 @@ jobs:
           chmod +x "$appimage_path"
           machine="$(readelf -h "$appimage_path" | awk -F: '/Machine:/ { gsub(/^[[:space:]]+/, "", $2); print $2 }')"
           test "$machine" = "Advanced Micro Devices X86-64"
-          APPIMAGE_EXTRACT_AND_RUN=1 \
-            AUTOMNIA_PACKAGED_LINUX_APPIMAGE="$GITHUB_WORKSPACE/$appimage_path" \
+          AUTOMNIA_PACKAGED_LINUX_APPIMAGE="$GITHUB_WORKSPACE/$appimage_path" \
             AUTOMNIA_ELECTRON_E2E_NO_SANDBOX=1 \
             timeout --signal=TERM --kill-after=10s 300s xvfb-run -a node --input-type=module <<'APPIMAGE_SMOKE'
           import assert from 'node:assert/strict'
@@ -427,9 +559,8 @@ jobs:
               OPENCLAW_STATE_DIR: openclawDir,
               OPENCLAW_HOME: openclawDir,
               CONTROL_CENTER_WORKSPACE_ROOT: workspaceRoot,
-              APPIMAGE_EXTRACT_AND_RUN: '1',
             }
-            child = spawn(appImagePath, ['--appimage-extract-and-run'], {
+            child = spawn(appImagePath, [], {
               cwd: path.dirname(appImagePath),
               env,
               detached: true,
@@ -486,7 +617,7 @@ jobs:
             const exit = await waitForExit(child, 60000)
             assert.equal(exit.code, 0, `AppImage launcher exited with code ${exit.code} and signal ${exit.signal}\n${content}\n${launcherOutput}`)
             passed = true
-            console.log('AppImage no-FUSE launch smoke ok')
+            console.log('AppImage default-runtime launch smoke ok')
           } finally {
             if (child && !passed && child.exitCode === null && child.signalCode === null) {
               try { process.kill(-child.pid, 'SIGTERM') } catch { child.kill('SIGTERM') }
