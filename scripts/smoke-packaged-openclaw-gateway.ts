@@ -262,7 +262,11 @@ try {
   const readyDeadline = Date.now() + 45_000
   while (Date.now() < readyDeadline) {
     refreshOutputFromDesktopLog()
-    if (launcher.exitCode !== null || launcher.signalCode) {
+    // The Windows customer launcher is a small .NET wrapper that starts
+    // electron.exe as a separate process and exits with code 0. Readiness is
+    // proven by the isolated Control Center API below, not by the wrapper's
+    // lifetime.
+    if (launcher.signalCode || (launcher.exitCode !== null && launcher.exitCode !== 0)) {
       throw new Error(`packaged launcher exited before the Control Center API became ready: code=${launcher.exitCode} signal=${launcher.signalCode}`)
     }
     try {
@@ -273,7 +277,10 @@ try {
     }
     await new Promise((resolve) => setTimeout(resolve, 250))
   }
-  assert.ok(Date.now() < readyDeadline, 'packaged Control Center API did not become ready')
+  assert.ok(
+    Date.now() < readyDeadline,
+    `packaged Control Center API did not become ready (launcher code=${launcher.exitCode} signal=${launcher.signalCode})`,
+  )
   assert.ok(existsSync(userDataDir), 'packaged startup must create a missing Automnia user-data directory')
   assert.ok(existsSync(openclawDir), 'packaged startup must create a missing OpenClaw state directory')
 

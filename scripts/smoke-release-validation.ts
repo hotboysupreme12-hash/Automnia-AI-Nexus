@@ -20,6 +20,7 @@ const validatorSource = readFileSync(path.join(root, 'scripts/validate-release-a
 const workflowSource = readFileSync(path.join(root, '.github/workflows/control-plane-ci.yml'), 'utf8')
 const publicReleaseWorkflow = readFileSync(path.join(root, '.github/workflows/public-release.yml'), 'utf8')
 const readme = readFileSync(path.join(root, 'README.md'), 'utf8')
+const packagedGatewaySmoke = readFileSync(path.join(root, 'scripts/smoke-packaged-openclaw-gateway.ts'), 'utf8')
 
 assert.match(validatorSource, /parseChecksumManifest/, 'release validation must parse the checksum manifest')
 assert.match(validatorSource, /sha256File/, 'release validation must recompute artifact checksums')
@@ -43,6 +44,7 @@ assert.match(workflowSource, /npm run release:validate/, 'CI must validate packa
 assert.match(readme, /npm run release:validate/, 'README must document release validation')
 assert.match(readme, /Tagged customer releases require Windows Authenticode and macOS Developer ID plus Apple notarization credentials/, 'README must document mandatory platform signing for tagged customer releases')
 assert.match(readme, /distribution-signing\.json/, 'README must document consumer distribution signing evidence')
+assert.match(packagedGatewaySmoke, /launcher\.exitCode !== 0/, 'packaged Windows smoke must allow the detached customer launcher to exit successfully while it verifies the Electron child through API readiness')
 
 function run(command: string, args: string[], env: NodeJS.ProcessEnv, expectedStatus = 0) {
   const result = spawnSync(command, args, {

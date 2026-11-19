@@ -331,6 +331,12 @@
   "overrides": {
     "onnxruntime-node": "1.29.0",
     "sharp": "0.35.5",
-    "adm-zip": "0.6.1"
+    "adm-zip": "0.6.1",
+    "app-builder-lib@26.18.1": {
+      "minimatch@^10.2.5": "11.0.9"
+    },
+    "@electron/universal@2.0.3": {
+      "minimatch@^9.0.3": "11.0.9"
+    }
   }
 }
