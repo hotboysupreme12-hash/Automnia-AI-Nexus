@@ -98,6 +98,15 @@ jobs:
           AUTOMNIA_WINDOWS_UPGRADE_TIMEOUT_SECONDS: '1800'
         run: npm run release:lifecycle:windows
 
+      - name: Upload Windows lifecycle diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: automnia-windows-lifecycle-${{ github.run_id }}
+          path: release/evidence/lifecycle/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Generate release SBOM and checksums
         run: npm run release:evidence
 
