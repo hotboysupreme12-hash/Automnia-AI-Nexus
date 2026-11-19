@@ -127,7 +127,7 @@ assert.ok(macOSReleaseBuild.includes('["hdiutil", "info", "-plist"]') && macOSRe
 assert.ok(macOSReleaseBuild.includes('npm run dist:mac -- "--$architecture" dmg'), 'macOS release build must retry only the DMG target after transient eject contention')
 assert.match(publicRelease, /Build unsigned Intel Mac DMG and ZIP[\s\S]*?AUTOMNIA_TARGET_ARCH:\s*x64/, 'Intel macOS packaging must prepare an Intel Node runtime even on Apple silicon runners')
 assert.match(publicRelease, /macos-arm64:\s*\n\s*name: Unsigned Apple silicon macOS DMG and ZIP\s*\n\s*runs-on: macos-15[\s\S]*?bash scripts\/build-macos-release\.sh arm64/, 'Apple silicon packaging must run on the GitHub ARM macOS runner')
-const armReleaseJob = publicRelease.match(/macos-arm64:[\s\S]*?\n  linux:/)?.[0] || ''
+const armReleaseJob = publicRelease.match(/macos-arm64:[\s\S]*?\n {2}linux:/)?.[0] || ''
 assert.match(armReleaseJob, /AUTOMNIA_UPDATE_BASE_URL:\s*\$\{\{\s*vars\.AUTOMNIA_UPDATE_BASE_URL\s*\}\}-x64/, 'Apple silicon clients must use the shared signed cross-architecture update feed')
 assert.match(armReleaseJob, /Embed update verification configuration[\s\S]*?run: npm run release:update-build-config/, 'Apple silicon release must embed update feed and verification-key configuration')
 assert.match(armReleaseJob, /AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG:\s*'1'/, 'Apple silicon package creation must fail if signed updater configuration is absent')
