@@ -95,6 +95,7 @@ jobs:
         env:
           AUTOMNIA_PLATFORM_SIGNING_REQUIRED: '0'
           AUTOMNIA_WINDOWS_INSTALLER_TIMEOUT_SECONDS: '900'
+          AUTOMNIA_WINDOWS_UPGRADE_TIMEOUT_SECONDS: '1800'
         run: npm run release:lifecycle:windows
 
       - name: Generate release SBOM and checksums
