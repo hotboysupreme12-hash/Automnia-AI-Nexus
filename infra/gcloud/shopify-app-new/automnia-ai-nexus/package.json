@@ -1,0 +1,24 @@
+{
+  "name": "automnia-ai-nexus",
+  "version": "1.0.0",
+  "license": "UNLICENSED",
+  "workspaces": [
+    "extensions/*"
+  ],
+  "scripts": {
+    "shopify": "shopify",
+    "build": "shopify app build",
+    "dev": "shopify app dev",
+    "info": "shopify app info",
+    "generate": "shopify app generate",
+    "deploy": "shopify app deploy"
+  },
+  "dependencies": {
+    "@shopify/cli": "4.8.2"
+  },
+  "trustedDependencies": [
+    "@shopify/plugin-cloudflare"
+  ],
+  "author": "hotbo",
+  "private": true
+}
