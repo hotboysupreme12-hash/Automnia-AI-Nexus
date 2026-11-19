@@ -91,7 +91,7 @@ async function runMode(writeMode) {
       SHOPIFY_ADMIN_API_TOKEN: 'local-smoke-shopify-admin-token',
       AUTOMNIA_TEST_EMAIL_DELIVERY: 'stub',
       SHOPIFY_WEBHOOK_SECRETS: 'local-smoke-webhook-value',
-      ADMIN_API_TOKEN: 'local-smoke-admin-value',
+      ADMIN_API_TOKEN: 'local-smoke-admin-value\r\n',
     },
   })
   let stdout = ''
@@ -529,7 +529,7 @@ async function runUnconfiguredDeliveryCheck() {
       SHOPIFY_CHECKOUT_URL: 'https://example.test/automnia-checkout',
       SHOPIFY_STORE_DOMAIN: 'j12hqc-h2.myshopify.com',
       SHOPIFY_WEBHOOK_SECRETS: 'local-smoke-webhook-value',
-      ADMIN_API_TOKEN: 'local-smoke-admin-value',
+      ADMIN_API_TOKEN: 'local-smoke-admin-value\r\n',
     },
   })
   let stderr = ''

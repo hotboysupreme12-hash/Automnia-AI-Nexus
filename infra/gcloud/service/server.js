@@ -26,15 +26,15 @@ import { buildLicenseEmailHtml } from './welcomeEmail.js';
 
 const app = express();
 const port = process.env.PORT || 8080;
-const serviceVersion = '2.10.5';
-const schemaVersion = '2026-11-18.1';
+const serviceVersion = '2.10.6';
+const schemaVersion = '2026-11-18.2';
 const secrets = (process.env.SHOPIFY_WEBHOOK_SECRETS || process.env.SHOPIFY_WEBHOOK_SECRET || '')
   .split(',')
   .map((value) => value.trim())
   .filter(Boolean);
 const useInMemoryStorage = process.env.LOCAL_IN_MEMORY_LICENSES === 'true';
 const writeMode = process.env.MIGRATION_WRITE_MODE === 'read_only' ? 'read_only' : 'active';
-const adminApiToken = process.env.ADMIN_API_TOKEN || '';
+const adminApiToken = String(process.env.ADMIN_API_TOKEN || '').trim();
 const shopifyAdminApiToken = process.env.SHOPIFY_ADMIN_API_TOKEN || '';
 const shopifyAdminCredential = parseShopifyAdminCredential(shopifyAdminApiToken);
 const shopifyStoreDomain = String(process.env.SHOPIFY_STORE_DOMAIN || '').trim();
