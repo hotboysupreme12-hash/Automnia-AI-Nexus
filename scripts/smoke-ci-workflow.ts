@@ -11,7 +11,10 @@ const auditPath = path.join(root, '.github', 'workflows', 'dependency-audit.yml'
 const packageJson = JSON.parse(read('package.json')) as {
   name?: string
   scripts?: Record<string, string>
-  build?: { linux?: { executableName?: string } }
+  build?: {
+    linux?: { executableName?: string }
+    toolsets?: { appimage?: string }
+  }
 }
 const scripts = packageJson.scripts || {}
 const testCiScript = scripts['test:ci'] || ''
@@ -34,6 +37,7 @@ const packageDesktop = read('scripts/package-desktop.cjs')
 const packagedElectronLaunchSmoke = read('scripts/smoke-packaged-electron-launch.ts')
 const packagedOpenClawGatewaySmoke = read('scripts/smoke-packaged-openclaw-gateway.ts')
 const macOSReleaseBuild = read('scripts/build-macos-release.sh')
+const macOSReleaseArchiveSmoke = read('scripts/smoke-macos-release-zip.sh')
 const electronE2eSmoke = read('scripts/smoke-electron-e2e.ts')
 const controlPlaneSource = read('server/controlPlane.ts')
 
@@ -114,7 +118,7 @@ assert.match(publicRelease, /AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG:\s*'1'/, 'p
 assert.match(publicRelease, /AUTOMNIA_SKIP_PLATFORM_SIGNING:\s*'1'/, 'early public releases must explicitly select unsigned platform packaging')
 assert.ok(publicRelease.includes('AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM'), 'public release workflow must require the update signing secret')
 assert.match(publicRelease, /macos:\s*\n\s*name: Unsigned macOS DMG and ZIP\s*\n\s*runs-on: macos-15-intel/, 'Intel macOS release dependencies must be installed on a native Intel runner')
-assert.match(publicRelease, /macos:\s*\n\s*name: Unsigned macOS DMG and ZIP\s*\n\s*runs-on: macos-15-intel\s*\n\s*timeout-minutes:\s*120/, 'Intel macOS release validation must allow the native build and full DMG install-and-launch smoke to finish')
+assert.match(publicRelease, /macos:\s*\n\s*name: Unsigned macOS DMG and ZIP\s*\n\s*runs-on: macos-15-intel\s*\n\s*timeout-minutes:\s*150/, 'Intel macOS release validation must allow the native build and DMG plus updater ZIP launch smokes to finish')
 assert.ok(publicRelease.includes('bash scripts/build-macos-release.sh x64'), 'public release must build an Intel macOS artifact')
 assert.ok(publicRelease.includes('bash scripts/build-macos-release.sh arm64'), 'public release must build an Apple silicon macOS artifact')
 assert.ok(macOSReleaseBuild.includes('npm run dist:mac -- "--$architecture"'), 'macOS release build must use electron-builder for the selected architecture')
@@ -123,6 +127,17 @@ assert.ok(macOSReleaseBuild.includes('["hdiutil", "info", "-plist"]') && macOSRe
 assert.ok(macOSReleaseBuild.includes('npm run dist:mac -- "--$architecture" dmg'), 'macOS release build must retry only the DMG target after transient eject contention')
 assert.match(publicRelease, /Build unsigned Intel Mac DMG and ZIP[\s\S]*?AUTOMNIA_TARGET_ARCH:\s*x64/, 'Intel macOS packaging must prepare an Intel Node runtime even on Apple silicon runners')
 assert.match(publicRelease, /macos-arm64:\s*\n\s*name: Unsigned Apple silicon macOS DMG and ZIP\s*\n\s*runs-on: macos-15[\s\S]*?bash scripts\/build-macos-release\.sh arm64/, 'Apple silicon packaging must run on the GitHub ARM macOS runner')
+const armReleaseJob = publicRelease.match(/macos-arm64:[\s\S]*?\n  linux:/)?.[0] || ''
+assert.match(armReleaseJob, /AUTOMNIA_UPDATE_BASE_URL:\s*\$\{\{\s*vars\.AUTOMNIA_UPDATE_BASE_URL\s*\}\}-x64/, 'Apple silicon clients must use the shared signed cross-architecture update feed')
+assert.match(armReleaseJob, /Embed update verification configuration[\s\S]*?run: npm run release:update-build-config/, 'Apple silicon release must embed update feed and verification-key configuration')
+assert.match(armReleaseJob, /AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG:\s*'1'/, 'Apple silicon package creation must fail if signed updater configuration is absent')
+assert.ok(publicRelease.includes('bash scripts/smoke-macos-release-zip.sh x64'), 'Intel update ZIP must be extracted, architecture-checked, and launched')
+assert.ok(publicRelease.includes('bash scripts/smoke-macos-release-zip.sh arm64'), 'Apple silicon update ZIP must be extracted, architecture-checked, and launched')
+assert.ok(macOSReleaseArchiveSmoke.includes('unzip -tq'), 'macOS updater ZIP smoke must verify archive integrity')
+assert.ok(macOSReleaseArchiveSmoke.includes('ditto -x -k'), 'macOS updater ZIP smoke must extract the app using the native archive utility')
+assert.ok(macOSReleaseArchiveSmoke.includes('lipo -archs'), 'macOS updater ZIP smoke must verify the executable architecture')
+assert.ok(macOSReleaseArchiveSmoke.includes('npm run smoke:packaged-electron-launch'), 'macOS updater ZIP smoke must launch the extracted packaged app')
+assert.ok(packageJson.build?.toolsets?.appimage === '1.0.3', 'AppImage releases must use the static runtime without the deprecated FUSE2 dependency')
 assert.match(publicRelease, /AUTOMNIA_UPDATE_CHANNEL:\s*stable-x64/, 'x64 update artifacts must use the isolated signed update channel')
 assert.match(publicRelease, /node scripts\/publish-update-channel\.cjs release/, 'x64 releases must use the dual-bucket channel publisher')
 assert.match(publicRelease, /AUTOMNIA_LEGACY_UPDATE_BUCKET/, 'the release publisher must require the legacy bucket')
@@ -150,13 +165,14 @@ assert.ok(publicRelease.includes('deb_path="$(realpath "$deb_path")"'), 'public 
 assert.ok(publicRelease.includes('test -x "$app_root/$linux_executable_name"'), 'public release must validate the Debian package executable name from package metadata')
 assert.ok(publicRelease.includes('AUTOMNIA_PACKAGED_LINUX_ROOT'), 'public release must launch the installed Debian package')
 assert.ok(publicRelease.includes('AUTOMNIA_PACKAGED_LINUX_APPIMAGE'), 'public release must launch the built AppImage')
-assert.ok(publicRelease.includes('APPIMAGE_EXTRACT_AND_RUN=1'), 'public release must smoke-test AppImage without requiring FUSE on the runner')
+assert.ok(!publicRelease.includes('APPIMAGE_EXTRACT_AND_RUN') && !publicRelease.includes('--appimage-extract-and-run'), 'AppImage smoke must exercise the customer default launch path')
+assert.ok(publicRelease.includes('child = spawn(appImagePath, [],'), 'AppImage smoke must launch without an extraction fallback flag')
 assert.match(publicRelease, /AUTOMNIA_ELECTRON_E2E_KEEP_WINDOW_HIDDEN:\s*'1'/, 'AppImage smoke must keep its test window hidden on interactive runners')
 assert.ok(publicRelease.includes('readelf -h'), 'public release must verify the AppImage ELF architecture')
 assert.equal(packageJson.build?.linux?.executableName, packageJson.name, 'Linux executable name must match the installed Debian package executable')
 assert.ok(packagedElectronLaunchSmoke.includes('linuxExecutableName'), 'packaged Linux launch smoke must use the configured Linux executable name')
 assert.match(packagedElectronLaunchSmoke, /process.platform === 'darwin' \|\| useLinuxAppImage \? 180_000 : 60_000/, 'packaged macOS and AppImage startup smoke must allow bounded first-launch runtime staging')
-assert.match(packagedElectronLaunchSmoke, /useLinuxAppImage\s*\?\s*180_000/, 'AppImage extract-and-run smoke must allow time to unpack the bundled Linux application')
+assert.match(packagedElectronLaunchSmoke, /useLinuxAppImage\s*\?\s*180_000/, 'AppImage native-runtime smoke must allow time to stage the bundled Linux application')
 assert.ok(packagedElectronLaunchSmoke.includes('main-process-loaded'), 'packaged startup smoke must capture the Electron main-process startup phase')
 assert.ok(packagedElectronLaunchSmoke.includes('openclaw-runtime-resolution-complete'), 'packaged startup smoke must prove OpenClaw runtime staging finished')
 assert.ok(packagedElectronLaunchSmoke.includes('if (launcherProcess) await terminatePackagedLauncher(launcherProcess)'), 'packaged startup smoke must finish app process cleanup before removing its temporary data')

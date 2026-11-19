@@ -134,7 +134,7 @@ jobs:
   macos:
     name: Unsigned macOS DMG and ZIP
     runs-on: macos-15-intel
-    timeout-minutes: 120
+    timeout-minutes: 150
     steps:
       - name: Check out release source
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -200,6 +200,9 @@ jobs:
           hdiutil detach "$mount_dir" -quiet
           AUTOMNIA_PACKAGED_MAC_APP_PATH="$installed_app" npm run smoke:packaged-electron-launch
 
+      - name: Extract, architecture-check, and launch Intel updater ZIP
+        run: bash scripts/smoke-macos-release-zip.sh x64
+
       - name: Upload unsigned macOS release candidate
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -215,7 +218,7 @@ jobs:
   macos-arm64:
     name: Unsigned Apple silicon macOS DMG and ZIP
     runs-on: macos-15
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - name: Check out release source
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -235,6 +238,14 @@ jobs:
       - name: Prepare runtime bundles for readiness checks
         run: npm run prepare:runtime-bundles
 
+      - name: Embed update verification configuration
+        env:
+          AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM: ${{ secrets.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM }}
+          AUTOMNIA_UPDATE_SIGNING_KEY_ID: ${{ vars.AUTOMNIA_UPDATE_SIGNING_KEY_ID }}
+          AUTOMNIA_UPDATE_BASE_URL: ${{ vars.AUTOMNIA_UPDATE_BASE_URL }}-x64
+          AUTOMNIA_UPDATE_CHANNEL: stable-x64
+        run: npm run release:update-build-config
+
       - name: Verify release candidate source
         run: npm run verify:release-candidate
 
@@ -242,6 +253,7 @@ jobs:
         shell: bash
         env:
           AUTOMNIA_SKIP_PLATFORM_SIGNING: '1'
+          AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG: '1'
           AUTOMNIA_TARGET_ARCH: arm64
         run: bash scripts/build-macos-release.sh arm64
 
@@ -271,6 +283,9 @@ jobs:
           ditto "$source_app" "$installed_app"
           hdiutil detach "$mount_dir" -quiet
           AUTOMNIA_PACKAGED_MAC_APP_PATH="$installed_app" npm run smoke:packaged-electron-launch
+
+      - name: Extract, architecture-check, and launch Apple silicon updater ZIP
+        run: bash scripts/smoke-macos-release-zip.sh arm64
 
       - name: Upload unsigned Apple silicon release candidate
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -347,7 +362,7 @@ jobs:
           sudo apt-get remove -y "$package_name"
           trap - EXIT
 
-      - name: Verify and launch x86_64 AppImage under virtual display
+      - name: Verify and launch x86_64 AppImage using its native runtime under virtual display
         shell: bash
         run: |
           set -euo pipefail
@@ -356,8 +371,7 @@ jobs:
           chmod +x "$appimage_path"
           machine="$(readelf -h "$appimage_path" | awk -F: '/Machine:/ { gsub(/^[[:space:]]+/, "", $2); print $2 }')"
           test "$machine" = "Advanced Micro Devices X86-64"
-          APPIMAGE_EXTRACT_AND_RUN=1 \
-            AUTOMNIA_PACKAGED_LINUX_APPIMAGE="$GITHUB_WORKSPACE/$appimage_path" \
+          AUTOMNIA_PACKAGED_LINUX_APPIMAGE="$GITHUB_WORKSPACE/$appimage_path" \
             AUTOMNIA_ELECTRON_E2E_NO_SANDBOX=1 \
             timeout --signal=TERM --kill-after=10s 300s xvfb-run -a node --input-type=module <<'APPIMAGE_SMOKE'
           import assert from 'node:assert/strict'
@@ -438,9 +452,8 @@ jobs:
               OPENCLAW_STATE_DIR: openclawDir,
               OPENCLAW_HOME: openclawDir,
               CONTROL_CENTER_WORKSPACE_ROOT: workspaceRoot,
-              APPIMAGE_EXTRACT_AND_RUN: '1',
             }
-            child = spawn(appImagePath, ['--appimage-extract-and-run'], {
+            child = spawn(appImagePath, [], {
               cwd: path.dirname(appImagePath),
               env,
               detached: true,
@@ -497,7 +510,7 @@ jobs:
             const exit = await waitForExit(child, 60000)
             assert.equal(exit.code, 0, `AppImage launcher exited with code ${exit.code} and signal ${exit.signal}\n${content}\n${launcherOutput}`)
             passed = true
-            console.log('AppImage no-FUSE launch smoke ok')
+            console.log('AppImage default-runtime launch smoke ok')
           } finally {
             if (child && !passed && child.exitCode === null && child.signalCode === null) {
               try { process.kill(-child.pid, 'SIGTERM') } catch { child.kill('SIGTERM') }
