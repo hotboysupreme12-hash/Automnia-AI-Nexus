@@ -114,6 +114,7 @@ assert.match(publicRelease, /AUTOMNIA_UPDATE_REQUIRE_EMBEDDED_CONFIG:\s*'1'/, 'p
 assert.match(publicRelease, /AUTOMNIA_SKIP_PLATFORM_SIGNING:\s*'1'/, 'early public releases must explicitly select unsigned platform packaging')
 assert.ok(publicRelease.includes('AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM'), 'public release workflow must require the update signing secret')
 assert.match(publicRelease, /macos:\s*\n\s*name: Unsigned macOS DMG and ZIP\s*\n\s*runs-on: macos-15-intel/, 'Intel macOS release dependencies must be installed on a native Intel runner')
+assert.match(publicRelease, /macos:\s*\n\s*name: Unsigned macOS DMG and ZIP\s*\n\s*runs-on: macos-15-intel\s*\n\s*timeout-minutes:\s*120/, 'Intel macOS release validation must allow the native build and full DMG install-and-launch smoke to finish')
 assert.ok(publicRelease.includes('bash scripts/build-macos-release.sh x64'), 'public release must build an Intel macOS artifact')
 assert.ok(publicRelease.includes('bash scripts/build-macos-release.sh arm64'), 'public release must build an Apple silicon macOS artifact')
 assert.ok(macOSReleaseBuild.includes('npm run dist:mac -- "--$architecture"'), 'macOS release build must use electron-builder for the selected architecture')
