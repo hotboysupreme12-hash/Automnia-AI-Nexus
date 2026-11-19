@@ -1,5 +1,5 @@
 @{
-  SchemaVersion = '2026-09-12.5'
+  SchemaVersion = '2026-11-18.1'
   Region = 'us-east1'
   FirestoreLocation = 'us-east1'
   # Automnia's Gemini relay is served through Vertex's global endpoint. Keeping this
@@ -106,6 +106,7 @@
     'automnia_credit_topups'
     'automnia_credit_usage'
     'automnia_shopify_webhook_events'
+    'automnia_license_email_deliveries'
     'automnia_deployment_metadata'
   )
 }
