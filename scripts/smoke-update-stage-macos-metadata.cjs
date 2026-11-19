@@ -9,7 +9,7 @@ const yaml = require('js-yaml')
 
 const repoRoot = path.resolve(__dirname, '..')
 const stageScript = path.join(repoRoot, 'scripts', 'stage-update-channel.cjs')
-const version = '1.0.26'
+const version = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8')).version
 
 function sha512(value) {
   return crypto.createHash('sha512').update(value).digest('base64')
@@ -39,9 +39,13 @@ function runScenario({ armMetadata }) {
   const arm64ZipName = `Automnia AI Nexus-${version}-arm64.zip`
   const x64Zip = Buffer.from('fixture intel mac update zip')
   const arm64Zip = Buffer.from('fixture apple silicon mac update zip')
+  const x64Blockmap = Buffer.from('fixture intel mac blockmap')
+  const arm64Blockmap = Buffer.from('fixture apple silicon mac blockmap')
   fs.writeFileSync(path.join(x64Root, x64ZipName), x64Zip)
+  fs.writeFileSync(path.join(x64Root, `${x64ZipName}.blockmap`), x64Blockmap)
   fs.writeFileSync(path.join(x64Root, `Automnia AI Nexus-${version}-x64.dmg`), 'intel dmg fixture')
   fs.writeFileSync(path.join(arm64Root, arm64ZipName), arm64Zip)
+  fs.writeFileSync(path.join(arm64Root, `${arm64ZipName}.blockmap`), arm64Blockmap)
   fs.writeFileSync(path.join(arm64Root, `Automnia AI Nexus-${version}-arm64.dmg`), 'arm64 dmg fixture')
   writeMetadata(path.join(x64Root, 'latest-mac.yml'), x64ZipName, x64Zip)
   if (armMetadata) writeMetadata(path.join(arm64Root, 'latest-mac.yml'), arm64ZipName, arm64Zip)
@@ -67,6 +71,8 @@ function runScenario({ armMetadata }) {
     const armEntry = metadata.files.find((entry) => entry.url === arm64ZipName)
     assert.equal(armEntry.sha512, sha512(arm64Zip), 'Apple silicon ZIP checksum must match the staged file')
     assert.equal(armEntry.size, arm64Zip.length, 'Apple silicon ZIP size must match the staged file')
+    assert.equal(fs.readFileSync(path.join(outputRoot, `${x64ZipName}.blockmap`)).toString(), x64Blockmap.toString(), 'Intel ZIP blockmap must be staged beside its archive')
+    assert.equal(fs.readFileSync(path.join(outputRoot, `${arm64ZipName}.blockmap`)).toString(), arm64Blockmap.toString(), 'Apple silicon ZIP blockmap must be staged beside its archive')
     const macZipForArch = (isArm64) => {
       const isArm64File = (entry) => entry.url.includes('arm64')
       const archFiles = metadata.files.filter((entry) => isArm64 ? isArm64File(entry) : !isArm64File(entry))
