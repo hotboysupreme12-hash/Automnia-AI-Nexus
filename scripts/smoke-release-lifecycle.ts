@@ -47,6 +47,8 @@ assert.match(lifecycle, /Label 'upgrade install' -TimeoutSeconds \$UpgradeInstal
 assert.match(lifecycle, /Write-ProcessTreeSnapshot/, 'Windows installer timeout diagnostics must capture the active process tree')
 assert.match(lifecycle, /MainWindowTitle/, 'Windows installer timeout diagnostics must capture hidden modal-window titles')
 assert.match(lifecycle, /if \(\$ArgumentList -and \$ArgumentList\.Count -gt 0\)/, 'Windows lifecycle validation must omit empty Start-Process argument lists')
+assert.ok(lifecycle.includes("ArgumentList @('/currentuser', '/S', \"/D=$InstallRoot\")"), 'Windows lifecycle installs must pin the isolated upgrade test to the per-user scope')
+assert.match(lifecycle, /CommandLine\.IndexOf\(\$InstallLocation[\s\S]*?ParentProcessId/, 'Windows lifecycle cleanup must also find test-owned helpers spawned from system executable paths')
 const previousVersionInstallIndex = lifecycle.indexOf("-Label 'previous-version install'")
 const preUpgradeCleanupIndex = lifecycle.indexOf("Stop-InstalledAutomniaProcesses -Label 'previous-version pre-upgrade cleanup'")
 const candidateUpgradeIndex = lifecycle.indexOf("-Label 'upgrade install'")

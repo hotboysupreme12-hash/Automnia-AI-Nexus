@@ -256,6 +256,7 @@
       ],
       "category": "public.app-category.developer-tools",
       "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "minimumSystemVersion": "13.5.0",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "extendInfo": {

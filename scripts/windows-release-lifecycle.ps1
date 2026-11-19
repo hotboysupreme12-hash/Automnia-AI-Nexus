@@ -173,9 +173,14 @@ function Invoke-CheckedProcess {
   if (-not $Process.HasExited) {
     if ($TraceProcessTree) { Write-ProcessTreeSnapshot -RootProcessId $Process.Id -Label $Label }
     $ProcessDescription = try { "$($Process.ProcessName) (PID $($Process.Id))" } catch { "PID $($Process.Id)" }
-    try { $Process.Kill($true) } catch {}
-    try { $null = $Process.WaitForExit(30000) } catch {}
-    throw "$Label timed out after $TimeoutSeconds seconds. Timed-out process: $ProcessDescription."
+    $TerminationFailure = $null
+    try { $Process.Kill($true) } catch { $TerminationFailure = $_.Exception.Message }
+    try { $null = $Process.WaitForExit(30000) } catch { if (-not $TerminationFailure) { $TerminationFailure = $_.Exception.Message } }
+    if (-not $Process.HasExited -and -not $TerminationFailure) {
+      $TerminationFailure = 'the process tree remained alive after the termination attempt'
+    }
+    $TerminationDetail = if ($TerminationFailure) { " Termination detail: $TerminationFailure." } else { '' }
+    throw "$Label timed out after $TimeoutSeconds seconds. Timed-out process: $ProcessDescription.$TerminationDetail"
   }
   if ($Process.ExitCode -ne 0) { throw "$Label exited with code $($Process.ExitCode)." }
   return $Process.ExitCode
@@ -185,7 +190,10 @@ function Install-Automnia {
   param([string]$Path, [string]$Label, [int]$TimeoutSeconds)
   New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
   $TraceUpgrade = $Label -eq 'upgrade install'
-  Invoke-CheckedProcess -FilePath $Path -ArgumentList @('/S', "/D=$InstallRoot") -Label $Label -TimeoutSeconds $TimeoutSeconds -TraceProcessTree:$TraceUpgrade | Out-Null
+  # Keep all lifecycle installs at the same per-user scope, even on an elevated runner.
+  # Otherwise the previous installer can register per-machine while the candidate
+  # resolves a per-user install, and its in-place upgrade waits on the wrong uninstall path.
+  Invoke-CheckedProcess -FilePath $Path -ArgumentList @('/currentuser', '/S', "/D=$InstallRoot") -Label $Label -TimeoutSeconds $TimeoutSeconds -TraceProcessTree:$TraceUpgrade | Out-Null
   $PayloadDeadline = [DateTime]::UtcNow.AddSeconds(120)
   $RequiredPayload = @(
     (Join-Path $InstallRoot $ExpectedAppExeName),
@@ -204,17 +212,50 @@ function Install-Automnia {
 }
 
 function Get-InstalledAutomniaProcesses {
-  $InstallPrefix = [IO.Path]::GetFullPath($InstallRoot).TrimEnd([char[]]@('\', '/')) + '\'
-  return @(Get-CimInstance -ClassName Win32_Process -ErrorAction Stop | Where-Object {
-    $ExecutablePath = [string]$_.ExecutablePath
-    $ExecutablePath -and $ExecutablePath.StartsWith($InstallPrefix, [StringComparison]::OrdinalIgnoreCase)
-  })
+  $InstallLocation = [IO.Path]::GetFullPath($InstallRoot).TrimEnd([char[]]@('\', '/'))
+  $InstallPrefix = $InstallLocation + '\'
+  $Processes = @(Get-CimInstance -ClassName Win32_Process -ErrorAction Stop)
+  $OwnedProcessIds = [Collections.Generic.HashSet[int]]::new()
+
+  foreach ($Candidate in $Processes) {
+    $ExecutablePath = [string]$Candidate.ExecutablePath
+    $CommandLine = [string]$Candidate.CommandLine
+    if (
+      ($ExecutablePath -and $ExecutablePath.StartsWith($InstallPrefix, [StringComparison]::OrdinalIgnoreCase)) -or
+      ($CommandLine -and $CommandLine.IndexOf($InstallLocation, [StringComparison]::OrdinalIgnoreCase) -ge 0)
+    ) {
+      [void]$OwnedProcessIds.Add([int]$Candidate.ProcessId)
+    }
+  }
+
+  # Native helpers can execute from system paths while their parent process still
+  # belongs to this unique temporary install. Include those descendants for cleanup.
+  do {
+    $AddedChild = $false
+    foreach ($Candidate in $Processes) {
+      $CandidateProcessId = [int]$Candidate.ProcessId
+      if (-not $OwnedProcessIds.Contains($CandidateProcessId) -and $OwnedProcessIds.Contains([int]$Candidate.ParentProcessId)) {
+        [void]$OwnedProcessIds.Add($CandidateProcessId)
+        $AddedChild = $true
+      }
+    }
+  } while ($AddedChild)
+
+  return @($Processes | Where-Object { $OwnedProcessIds.Contains([int]$_.ProcessId) })
 }
 
 function Stop-InstalledAutomniaProcesses {
   param([string]$Label)
-  foreach ($OwnedProcess in @(Get-InstalledAutomniaProcesses)) {
-    Stop-Process -Id ([int]$OwnedProcess.ProcessId) -Force -ErrorAction Stop
+  $OwnedProcesses = @(Get-InstalledAutomniaProcesses)
+  if (-not $OwnedProcesses) {
+    Write-Host "[release-lifecycle] $Label found no test-install-owned processes under $InstallRoot."
+    return
+  }
+  foreach ($OwnedProcess in $OwnedProcesses) {
+    Write-Host "[release-lifecycle] stopping $($OwnedProcess.Name) PID $($OwnedProcess.ProcessId) for $Label."
+    if (Get-Process -Id ([int]$OwnedProcess.ProcessId) -ErrorAction SilentlyContinue) {
+      Stop-Process -Id ([int]$OwnedProcess.ProcessId) -Force -ErrorAction SilentlyContinue
+    }
   }
   $StopDeadline = [DateTime]::UtcNow.AddSeconds(30)
   do {

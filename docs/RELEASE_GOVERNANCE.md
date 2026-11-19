@@ -23,11 +23,17 @@ Local tests are useful developer evidence, but they do not replace hosted packag
 
 ## Early Platform Distribution
 
-Until platform-signing certificates are available, the tag-triggered public workflow may publish unsigned Windows and macOS packages. It uses `AUTOMNIA_SKIP_PLATFORM_SIGNING=1` and `AUTOMNIA_RELEASE_REQUIRE_SIGNING=0`, while keeping `AUTOMNIA_UPDATE_REQUIRE_SIGNING=1` so update metadata and payload selection remain cryptographically protected. Windows SmartScreen and macOS Gatekeeper warnings are expected for these packages.
+Manual `workflow_dispatch` runs produce unsigned candidates for CI installation checks and never publish customer downloads. Version-tagged releases fail before packaging unless Windows Authenticode credentials and macOS Developer ID plus Apple notarization credentials are present. Required signatures are enforced during packaging, then checked again on the finished installers/apps. The updater channel also requires `AUTOMNIA_UPDATE_REQUIRE_SIGNING=1`. See [Installer Support](INSTALLER_SUPPORT.md) for the tested architectures and OS requirements.
 
 ## Release Signing
 
-`AUTOMNIA_RELEASE_REQUIRE_SIGNING=1` remains available for the later signed-release phase. Use `npm run release:sign` with `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE` or `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM` when checksum evidence signing is enabled. The separate update-channel signing key remains required for every published update channel.
+Tagged releases set `AUTOMNIA_RELEASE_REQUIRE_SIGNING=1` so `distribution-signing.json` is required by release validation. Use `npm run release:sign` with `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE` or `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM` when checksum evidence signing is enabled. The separate update-channel signing key remains required for every published update channel.
+
+Configure these repository Actions secrets before tagging a customer release:
+
+- `WIN_CSC_LINK` and `WIN_CSC_KEY_PASSWORD` for the Windows signing certificate.
+- `MAC_CSC_LINK` and `MAC_CSC_KEY_PASSWORD` for the Developer ID Application certificate.
+- `APPLE_API_KEY_P8_BASE64`, `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER` for notarization. `APPLE_TEAM_ID` is also passed to the Mac build.
 
 Automnia AI remains a local desktop app with a localhost API only; do not treat localhost release evidence as proof for an internet-exposed control plane.
 
@@ -40,6 +46,7 @@ Keep the public docs focused on these files:
 - `docs/BETA_SUPPORT.md`
 - `docs/BETA_RELEASE_NOTES.md`
 - `docs/CI_EVIDENCE.md`
+- `docs/INSTALLER_SUPPORT.md`
 - `DATA_HANDLING.md`
 - `SECURITY.md`
 - `docs/RELEASE_GOVERNANCE.md`

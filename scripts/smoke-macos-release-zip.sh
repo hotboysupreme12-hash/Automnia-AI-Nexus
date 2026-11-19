@@ -22,5 +22,7 @@ executable="$app_path/Contents/MacOS/Automnia AI Nexus"
 test -f "$executable"
 actual_arch="$(lipo -archs "$executable")"
 test "$actual_arch" = "$expected_arch"
+minimum_os="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app_path/Contents/Info.plist")"
+[[ "$minimum_os" == "13.5.0" ]]
 
 AUTOMNIA_PACKAGED_MAC_APP_PATH="$app_path" npm run smoke:packaged-electron-launch
