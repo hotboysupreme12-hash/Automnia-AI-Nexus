@@ -67,6 +67,7 @@ import { MicrophoneSettings } from './MicrophoneSettings'
 import { lastPreferenceSaveResult, PREFERENCE_STORAGE_STATUS_EVENT } from './preferenceStorage'
 import { MAX_PREFERENCES_BACKUP_BYTES, parsePreferencesBackup, serializePreferencesBackup, PREFERENCE_GROUP_LABELS, type PreferenceGroup, type PreferencesBackup } from './preferencesBackup'
 import { Button, Dialog } from '../ui'
+import { SettingsAutomatedJobs } from './SettingsAutomatedJobs'
 import {
   DEFAULT_CHANNEL_ACTIVITY_SETTINGS,
   readChannelActivitySettings,
@@ -84,7 +85,7 @@ import {
 } from './telegramSettings'
 
 type NoticeTone = 'neutral' | 'success' | 'warning' | 'error'
-export type SettingsSectionId = 'account' | 'appearance' | 'workspace' | 'voice' | 'missions' | 'agents' | 'telegram' | 'updates' | 'logs' | 'data'
+export type SettingsSectionId = 'account' | 'appearance' | 'workspace' | 'voice' | 'missions' | 'agents' | 'jobs' | 'telegram' | 'updates' | 'logs' | 'data'
 type RuntimeTargetScope = 'party' | 'selection'
 type PendingConfirmation = 'reset-all' | 'reset-runtime' | 'clear-workspace' | null
 type ChannelDeliveryStatus = {
@@ -111,6 +112,7 @@ const SETTINGS_SECTIONS: Array<{
   { id: 'voice', label: 'Voice', description: 'Microphone and dictation', keywords: 'speech microphone local cloud online silence pause noise echo gain recording' },
   { id: 'missions', label: 'Missions', description: 'Mission setup', keywords: 'mission objective duration risk complexity collaboration evidence build test' },
   { id: 'agents', label: 'Agent Behavior', description: 'Timing, reasoning and teamwork', keywords: 'agent runtime heartbeat timeout thinking fast parallel concurrency simultaneous chat commands sequential recovery continuous' },
+  { id: 'jobs', label: 'Automated jobs', description: 'Live active cron schedules', keywords: 'automated jobs cron scheduled schedule scheduler openclaw active running next run' },
   { id: 'telegram', label: 'Telegram', description: 'Chats, replies and permissions', keywords: 'telegram bot commands agents pairing dm group topics streaming reactions polls media history actions settings' },
   { id: 'updates', label: 'Updates', description: 'App version and updates', keywords: 'update upgrade version release download installer restart automatic security' },
   { id: 'logs', label: 'Activity', description: 'Recent activity and history', keywords: 'logs activity agent runs gateway events tail automnia runtime response history channel telegram sms incoming sent retain trim memory' },
@@ -166,6 +168,7 @@ function SettingsGlyph({ name }: { name: SettingsSectionId }) {
     voice: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8" /></>,
     missions: <><path d="m14.5 4.5 5 5-10 10-5-5 10-10Z" /><path d="m12.5 6.5 5 5M5 19l2 2" /></>,
     agents: <><circle cx="12" cy="8" r="4" /><path d="M4.5 21a7.5 7.5 0 0 1 15 0M19 4v4M17 6h4" /></>,
+    jobs: <><circle cx="12" cy="12" r="7.5" /><path d="M12 7.7v4.8l3.2 1.8M7 3.8 4.8 6M17 3.8 19.2 6" /></>,
     telegram: <><path d="m4 11 16-7-5 16-3-6-8-3Z" /><path d="m12 14 3-7-7 3" /></>,
     updates: <><path d="M20 12a8 8 0 1 1-2.34-5.66" /><path d="M20 4v6h-6M12 8v5l3 2" /></>,
     logs: <><path d="M5 5.5h14M5 12h14M5 18.5h9" /><circle cx="3.5" cy="5.5" r=".7" fill="currentColor" stroke="none" /><circle cx="3.5" cy="12" r=".7" fill="currentColor" stroke="none" /><circle cx="3.5" cy="18.5" r=".7" fill="currentColor" stroke="none" /></>,
@@ -1367,6 +1370,14 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     if (section === 'voice') return renderVoice()
     if (section === 'missions') return renderMissions()
     if (section === 'agents') return renderAgents()
+    if (section === 'jobs') return (
+      <div className="dui-settings-section" id="settings-section-jobs" role="tabpanel">
+        <SectionHeader section="jobs" eyebrow="Runtime schedules" />
+        <SettingsCard title="Active cron jobs" description="This list reads the live OpenClaw scheduler, including jobs created outside the Automnia workspace.">
+          <SettingsAutomatedJobs />
+        </SettingsCard>
+      </div>
+    )
     if (section === 'telegram') return renderTelegram()
     if (section === 'updates') return renderUpdates()
     if (section === 'logs') return <SettingsActivityLog />

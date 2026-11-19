@@ -1843,6 +1843,32 @@ html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__empty 
 html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__empty strong { color: #b6cecc; font-size: 11px; }
 html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__empty span { font-size: 10px; }
 
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-jobs { display: grid; gap: 12px; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-jobs__toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 13px; border: 1px solid rgb(117 221 206 / .14); background: rgb(117 221 206 / .035); }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-jobs__toolbar > div { display: grid; min-width: 0; gap: 3px; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-jobs__toolbar strong { color: #c6e7e1; font-size: 12px; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-jobs__toolbar small { color: #779496; font-size: 10px; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-jobs__refresh { flex: 0 0 auto; padding: 6px 9px; border: 1px solid rgb(117 221 206 / .22); color: #a8e9df; background: rgb(117 221 206 / .06); font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; transition: border-color .16s ease, background .16s ease, opacity .16s ease; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-jobs__refresh:hover:not(:disabled) { border-color: rgb(117 221 206 / .44); background: rgb(117 221 206 / .12); }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-jobs__refresh:disabled { cursor: wait; opacity: .55; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-jobs__notice { padding: 10px 12px; border: 1px solid rgb(224 125 137 / .2); color: #e8a6ad; background: rgb(224 125 137 / .045); font-size: 10px; line-height: 1.45; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-jobs__empty { display: grid; justify-items: center; gap: 5px; padding: 28px 16px; border: 1px dashed rgb(255 255 255 / .1); color: #71878a; text-align: center; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-jobs__empty strong { color: #b5cbca; font-size: 11px; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-jobs__empty span { font-size: 10px; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-jobs__list { display: grid; gap: 7px; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-job { display: grid; gap: 10px; padding: 12px 13px; border: 1px solid rgb(255 255 255 / .08); background: rgb(255 255 255 / .018); }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-job__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; min-width: 0; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-job__head > div { display: grid; min-width: 0; gap: 3px; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-job__head strong { overflow: hidden; color: #d9e9e7; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-job__head span { overflow: hidden; color: #789092; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-job__head b { flex: 0 0 auto; padding: 3px 6px; border: 1px solid rgb(108 213 169 / .22); color: #8be0bf; background: rgb(108 213 169 / .05); font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-job__head b[data-state="failed"],
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-job__head b[data-state="error"] { border-color: rgb(224 125 137 / .22); color: #e89aa2; background: rgb(224 125 137 / .05); }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-job__meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin: 0; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-job__meta > div { display: grid; min-width: 0; gap: 3px; padding: 6px 7px; border: 1px solid rgb(255 255 255 / .055); background: rgb(0 0 0 / .12); }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-job__meta dt { color: #61797c; font-size: 8px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-job__meta dd { overflow: hidden; margin: 0; color: #adc2c0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+
 @media (max-width: 650px) {
   html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-plan-catalog { grid-template-columns: minmax(0, 1fr); }
   html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-plan-card p { min-height: 0; }
@@ -1853,4 +1879,5 @@ html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__empty 
   html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__search { width: 100%; }
   html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__row-head { align-items: flex-start; flex-direction: column; gap: 4px; }
   html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__row-head time { order: -1; }
+  html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-job__meta { grid-template-columns: 1fr; }
 }

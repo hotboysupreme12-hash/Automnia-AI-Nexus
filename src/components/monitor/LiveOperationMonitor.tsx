@@ -2,7 +2,7 @@ import { useRememberedState } from '../../hooks/useRememberedState'
 import { memo, useCallback, useId, useMemo, useState } from 'react'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AgentActivityEvent, AgentOperationState, AgentResponse, MissionEvent, OpenClawAgent } from '../../types/nexus'
-import { clearRuntimeMonitor, restartGatewayRuntime, runRuntimeDoctor, runRuntimeDoctorRepair, stopCronShift, updateCronShift } from '../../hooks/useRuntimeStatus'
+import { clearRuntimeMonitor, restartGatewayRuntime, runRuntimeDoctor, runRuntimeDoctorRepair, stopCronShift, updateCronShift, useRuntimeCronJobs } from '../../hooks/useRuntimeStatus'
 import type { DoctorFinding, DoctorRun, GatewayChannelActivity, GatewayLogEntry, RuntimeCronJob, RuntimeMonitorClearResult, RuntimeStatus } from '../../hooks/useRuntimeStatus'
 import { agentPortraitSrc } from '../../utils/portrait'
 import { useChannelActivitySettings } from '../settings/channelActivitySettings'
@@ -1212,20 +1212,21 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
   onRefresh: () => void
 }) {
   const gateway = status?.gateway
+  const { jobs: listedCronJobs, error: listedCronError, ready: listedCronReady, refresh: refreshCronJobs } = useRuntimeCronJobs(8_000)
   const activeCronJobs = useMemo(() => {
     const seen = new Set<string>()
-    return (status?.shifts?.active || []).filter((job) => {
-      // The server omits these rows, but keep the renderer defensive while an
-      // older status response is still in flight during a gateway refresh.
+    const sourceJobs = listedCronReady && !listedCronError ? listedCronJobs : status?.shifts?.active || []
+    return sourceJobs.filter((job) => {
+      // Keep system-owned scheduler entries out of the user-facing schedule list.
       if (job.systemOwned === true) return false
       const key = job.cronId || job.id
       if (seen.has(key)) return false
       seen.add(key)
       return true
     })
-  }, [status?.shifts?.active])
-  const cronSyncError = status?.shifts?.error || ''
-  const activeCronCount = status?.shifts?.activeCount ?? activeCronJobs.length
+  }, [listedCronError, listedCronJobs, listedCronReady, status?.shifts?.active])
+  const cronSyncError = status?.shifts?.error || (listedCronError && !status?.shifts?.active?.length ? listedCronError : '')
+  const activeCronCount = listedCronReady && !listedCronError ? activeCronJobs.length : status?.shifts?.activeCount ?? activeCronJobs.length
   const manageableCronJobs = useMemo(() => activeCronJobs.filter((job) => job.source !== 'system-cron'), [activeCronJobs])
   const cronListTruncated = activeCronCount > activeCronJobs.length
   const cronCadences = useMemo(() => Array.from(new Set(activeCronJobs.map((job) => job.every).filter(Boolean))), [activeCronJobs])
@@ -1261,12 +1262,13 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
       await stopCronShift(job.id)
       setRuntimeNotice(`Paused scheduled run ${job.name}.`)
       onRefresh()
+      void refreshCronJobs()
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'The scheduled run could not be paused.')
     } finally {
       setCronCancelKey('')
     }
-  }, [onRefresh])
+  }, [onRefresh, refreshCronJobs])
   const pauseAllCronJobs = async (jobs = manageableCronJobs) => {
     if (!jobs.length || cronCancelKey === '__all__') return
     setCronCancelConfirm(false)
@@ -1279,6 +1281,7 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
       }
       setRuntimeNotice(`Paused ${jobs.length} scheduled run${jobs.length === 1 ? '' : 's'}.`)
       onRefresh()
+      void refreshCronJobs()
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'The scheduled runs could not be paused.')
     } finally {
@@ -1318,7 +1321,11 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
       setRuntimeNotice(`Updated scheduled run ${payload.name}.`)
       setCronEditJob(null)
       onRefresh()
-      window.setTimeout(onRefresh, 1200)
+      void refreshCronJobs()
+      window.setTimeout(() => {
+        onRefresh()
+        void refreshCronJobs()
+      }, 1200)
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'The scheduled run could not be updated.')
       throw error
@@ -1326,6 +1333,10 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
       setCronEditKey('')
     }
   }
+  const refreshAll = useCallback(() => {
+    onRefresh()
+    void refreshCronJobs()
+  }, [onRefresh, refreshCronJobs])
   return (
     <div className="dy-gateway-panel grid gap-3">
       {error && (
@@ -1482,7 +1493,7 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
                 <div className="dy-monitor-empty dy-session-empty-state dy-cron-empty-state py-6 text-center text-[12px] font-medium text-amber-100/80" role="alert">
                   <strong>Scheduled runs are unavailable.</strong>
                   <span>We could not read the scheduler right now.</span>
-                  <Button onClick={onRefresh} variant="secondary" size="compact" className="mt-3">Try again</Button>
+                  <Button onClick={refreshAll} variant="secondary" size="compact" className="mt-3">Try again</Button>
                 </div>
               )}
               {!activeCronJobs.length && !cronSyncError && (
