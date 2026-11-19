@@ -270,6 +270,8 @@ jobs:
           path: |
             release/**/*-arm64.dmg
             release/**/*-arm64.zip
+            release/**/*.blockmap
+            release/latest*.yml
           if-no-files-found: error
           retention-days: 90
 

@@ -48,13 +48,78 @@ if (!candidates.length) throw new Error(`No update artifacts found under ${input
 
 fs.rmSync(outputRoot, { recursive: true, force: true })
 fs.mkdirSync(outputRoot, { recursive: true })
-for (const source of candidates) {
+const isProviderMetadata = (filePath) => /^latest(?:-[a-z0-9._-]+)?\.yml$/i.test(path.basename(filePath))
+const artifactCandidates = candidates.filter((filePath) => !isProviderMetadata(filePath))
+const metadataCandidates = candidates.filter(isProviderMetadata)
+
+for (const source of artifactCandidates) {
   const target = path.join(outputRoot, path.basename(source))
   if (fs.existsSync(target)) {
     if (sha256(source) !== sha256(target)) throw new Error(`Conflicting staged update filename: ${path.basename(source)}`)
     continue
   }
   fs.copyFileSync(source, target)
+}
+
+const metadataByName = new Map()
+for (const source of metadataCandidates) {
+  const name = path.basename(source)
+  const key = name.toLowerCase()
+  const sources = metadataByName.get(key) || []
+  sources.push(source)
+  metadataByName.set(key, sources)
+}
+
+for (const [key, sources] of metadataByName) {
+  const target = path.join(outputRoot, path.basename(sources[0]))
+  const documents = sources.map((source) => {
+    const document = yaml.load(fs.readFileSync(source, 'utf8'))
+    if (!document || typeof document !== 'object' || Array.isArray(document) || !document.version) {
+      throw new Error(`Invalid updater metadata: ${source}`)
+    }
+    return { source, document }
+  })
+  const versions = new Set(documents.map(({ document }) => String(document.version).trim()))
+  if (versions.size !== 1) throw new Error(`Updater metadata versions disagree for ${path.basename(target)}`)
+
+  let merged = documents[0].document
+  if (documents.length > 1) {
+    if (key !== 'latest-mac.yml') {
+      const firstHash = sha256(sources[0])
+      if (sources.some((source) => sha256(source) !== firstHash)) {
+        throw new Error(`Conflicting staged update metadata: ${path.basename(target)}`)
+      }
+    } else {
+      const x64Source = documents.find(({ source }) => {
+        const relative = path.relative(inputRoot, source).replace(/\\/g, '/').toLowerCase()
+        return relative.startsWith('macos/') && !relative.startsWith('macos-arm64/')
+      })
+      if (x64Source) merged = x64Source.document
+
+      const filesByUrl = new Map()
+      for (const { document } of documents) {
+        const entries = Array.isArray(document.files) && document.files.length
+          ? document.files
+          : typeof document.path === 'string'
+            ? [{ url: document.path, sha512: document.sha512, size: fs.statSync(path.join(outputRoot, path.basename(document.path))).size }]
+            : []
+        for (const entry of entries) {
+          if (!entry || typeof entry.url !== 'string' || !entry.url.trim()) {
+            throw new Error(`Invalid macOS updater file entry in ${path.basename(target)}`)
+          }
+          const url = entry.url.trim()
+          const existing = filesByUrl.get(url)
+          if (existing && JSON.stringify(existing) !== JSON.stringify(entry)) {
+            throw new Error(`Conflicting macOS updater metadata for ${url}`)
+          }
+          filesByUrl.set(url, entry)
+        }
+      }
+      merged = { ...merged, files: [...filesByUrl.values()] }
+    }
+  }
+
+  fs.writeFileSync(target, yaml.dump(merged, { lineWidth: 120, noRefs: true }), 'utf8')
 }
 
 const metadataFiles = fs.readdirSync(outputRoot).filter((name) => /^latest(?:-[a-z0-9._-]+)?\.yml$/i.test(name))
@@ -68,6 +133,49 @@ const requiredMetadata = [
 for (const [required, metadataName] of requiredMetadata) {
   if (required && !stagedNames.includes(metadataName)) throw new Error(`Missing required updater metadata: ${metadataName}`)
 }
+
+// The Apple silicon job's package upload may omit its own latest-mac.yml.
+// electron-updater selects mac ZIPs by the architecture in the URL, so add a
+// verified arm64 ZIP entry when the x64 metadata does not already contain it.
+const macMetadataPath = path.join(outputRoot, 'latest-mac.yml')
+if (fs.existsSync(macMetadataPath)) {
+  const macMetadata = yaml.load(fs.readFileSync(macMetadataPath, 'utf8'))
+  const macFiles = Array.isArray(macMetadata.files) ? [...macMetadata.files] : []
+  const knownUrls = new Set(macFiles
+    .map((entry) => path.basename(String(entry?.url || '').trim().split(/[?#]/, 1)[0]))
+    .filter(Boolean))
+  if (typeof macMetadata.path === 'string' && macMetadata.path.trim()) {
+    const x64ZipName = path.basename(macMetadata.path.trim())
+    const x64ZipPath = path.join(outputRoot, x64ZipName)
+    if (!knownUrls.has(x64ZipName) && fs.existsSync(x64ZipPath)) {
+      macFiles.push({
+        url: macMetadata.path.trim(),
+        sha512: macMetadata.sha512,
+        size: fs.statSync(x64ZipPath).size,
+      })
+      knownUrls.add(x64ZipName)
+    }
+  }
+  const arm64Zips = stagedNames.filter((name) => /-arm64\.zip$/i.test(name))
+  for (const name of arm64Zips) {
+    if (knownUrls.has(name)) continue
+    const zipPath = path.join(outputRoot, name)
+    const entry = {
+      url: name,
+      sha512: crypto.createHash('sha512').update(fs.readFileSync(zipPath)).digest('base64'),
+      size: fs.statSync(zipPath).size,
+    }
+    const blockMapPath = `${zipPath}.blockmap`
+    if (fs.existsSync(blockMapPath)) entry.blockMapSize = fs.statSync(blockMapPath).size
+    macFiles.push(entry)
+    knownUrls.add(name)
+  }
+  if (macFiles.length) {
+    macMetadata.files = macFiles
+    fs.writeFileSync(macMetadataPath, yaml.dump(macMetadata, { lineWidth: 120, noRefs: true }), 'utf8')
+  }
+}
+
 const metadataVersions = new Set()
 for (const metadataName of metadataFiles) {
   const metadataPath = path.join(outputRoot, metadataName)

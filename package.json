@@ -1,7 +1,7 @@
 {
   "name": "automnia-ai-nexus",
   "private": true,
-  "version": "1.0.26",
+  "version": "1.0.27",
   "description": "Automnia AI Nexus is a desktop AI workspace and operations console for orchestrating agents, model providers, tools, plugins, and connected workflows through a secure OpenClaw-powered runtime.",
   "author": {
     "name": "Automnia AI"
@@ -48,7 +48,7 @@
     "smoke:release-evidence": "tsx scripts/smoke-release-evidence.ts",
     "smoke:release-signing": "tsx scripts/smoke-release-signing.ts",
     "smoke:release-lifecycle": "tsx scripts/smoke-release-lifecycle.ts",
-    "smoke:release-validation": "tsx scripts/smoke-release-validation.ts",
+    "smoke:release-validation": "tsx scripts/smoke-release-validation.ts && node scripts/smoke-update-stage-macos-metadata.cjs",
     "smoke:electron-e2e": "tsx scripts/smoke-electron-e2e.ts",
     "smoke:packaged-electron-launch": "tsx scripts/smoke-packaged-electron-launch.ts",
     "smoke:packaged-openclaw-gateway": "tsx scripts/smoke-packaged-openclaw-gateway.ts",
