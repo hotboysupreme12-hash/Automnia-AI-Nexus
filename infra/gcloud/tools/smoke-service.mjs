@@ -108,6 +108,9 @@ async function runMode(writeMode) {
       SHOPIFY_API_VERSION: '2026-07',
       SHOPIFY_ADMIN_API_TOKEN: 'local-smoke-shopify-admin-token',
       AUTOMNIA_TEST_EMAIL_DELIVERY: 'stub',
+      EMAIL_PROVIDER: 'microsoft_graph',
+      EMAIL_MAILBOX: 'support@automnia.app',
+      EMAIL_SENDER: 'licenses@automnia.app',
       SHOPIFY_WEBHOOK_SECRETS: 'local-smoke-webhook-value',
       ADMIN_API_TOKEN: 'local-smoke-admin-value\r\n',
     },
@@ -134,6 +137,9 @@ async function runMode(writeMode) {
     assert.equal(health.commerce.checkoutConfigured, true)
     assert.equal(health.commerce.webhookSecretsConfigured, true)
     assert.equal(health.commerce.emailDeliveryConfigured, true)
+    assert.equal(health.commerce.emailDeliveryProvider, 'microsoft_graph')
+    assert.equal(health.commerce.emailDeliverySender, 'licenses@automnia.app')
+    assert.equal(health.commerce.emailDeliveryMailbox, 'support@automnia.app')
 
     const ready = await fetch(`${baseUrl}/ready`).then((response) => response.json())
     assert.equal(ready.ok, true)

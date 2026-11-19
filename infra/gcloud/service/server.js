@@ -31,8 +31,8 @@ import {
 
 const app = express();
 const port = process.env.PORT || 8080;
-const serviceVersion = '2.10.7';
-const schemaVersion = '2026-11-19.1';
+const serviceVersion = '2.10.8';
+const schemaVersion = '2026-11-19.2';
 const secrets = (process.env.SHOPIFY_WEBHOOK_SECRETS || process.env.SHOPIFY_WEBHOOK_SECRET || '')
   .split(',')
   .map((value) => value.trim())
@@ -78,6 +78,9 @@ const installerObjects = Object.freeze({
 });
 const emailProvider = String(process.env.EMAIL_PROVIDER || (process.env.MICROSOFT_GRAPH_MAIL_CREDENTIALS ? 'microsoft_graph' : 'gmail')).trim().toLowerCase();
 const emailSender = normalizeEmail(process.env.EMAIL_SENDER || process.env.GMAIL_SENDER || '');
+// Graph's /users/{id}/sendMail route must address the licensed mailbox. The
+// MIME From may be an Exchange alias when tenant alias sending is enabled.
+const emailMailbox = normalizeEmail(process.env.EMAIL_MAILBOX || emailSender);
 const gmailOAuthCredentials = parseGmailOAuthCredentials(process.env.GMAIL_OAUTH_CREDENTIALS || '');
 const microsoftGraphMailCredentials = parseMicrosoftGraphMailCredentials(process.env.MICROSOFT_GRAPH_MAIL_CREDENTIALS || '');
 const gmailOAuthClient = gmailOAuthCredentials
@@ -86,7 +89,7 @@ const gmailOAuthClient = gmailOAuthCredentials
 if (gmailOAuthClient && gmailOAuthCredentials) gmailOAuthClient.setCredentials({ refresh_token: gmailOAuthCredentials.refreshToken });
 const testEmailDeliveryStub = useInMemoryStorage && process.env.AUTOMNIA_TEST_EMAIL_DELIVERY === 'stub';
 const emailDeliveryConfigured = testEmailDeliveryStub || (emailProvider === 'microsoft_graph'
-  ? Boolean(emailSender && microsoftGraphMailCredentials?.tenantId && microsoftGraphMailCredentials?.clientId && microsoftGraphMailCredentials?.clientSecret)
+  ? Boolean(isValidMailbox(emailSender) && isValidMailbox(emailMailbox) && microsoftGraphMailCredentials?.tenantId && microsoftGraphMailCredentials?.clientId && microsoftGraphMailCredentials?.clientSecret)
   : Boolean(emailSender && gmailOAuthCredentials?.refreshToken));
 const emailDeliveryLeaseMs = 5 * 60 * 1000;
 // Vertex meters raw tokens. Automnia exposes a smaller, friendlier credit
@@ -1888,6 +1891,7 @@ app.get('/health', (_req, res) => res.status(200).json({
     emailDeliveryAuthMode: testEmailDeliveryStub ? 'stub' : emailDeliveryConfigured ? `${emailProvider}_api` : 'unconfigured',
     emailDeliveryProvider: emailProvider,
     emailDeliverySender: emailSender || null,
+    emailDeliveryMailbox: emailProvider === 'microsoft_graph' ? emailMailbox || null : null,
     installerPortalConfigured: installerPortalConfigured(),
     installerBucketConfigured: Boolean(installerBucketName),
     installerPlatforms: Object.keys(installerObjects).filter((platform) => installerObjects[platform]),
@@ -3090,8 +3094,8 @@ async function sendMicrosoftGraphLicenseEmail(record, context = {}) {
   }
   if (!emailDeliveryConfigured || emailProvider !== 'microsoft_graph') throw new Error('Microsoft Graph email delivery is not configured.');
   const to = normalizeEmail(record?.email);
-  if (!isValidMailbox(to) || !isValidMailbox(emailSender)) throw new Error('Microsoft Graph license email has an invalid sender or recipient.');
-  const response = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(emailSender)}/sendMail`, {
+  if (!isValidMailbox(to) || !isValidMailbox(emailSender) || !isValidMailbox(emailMailbox)) throw new Error('Microsoft Graph license email has an invalid sender, mailbox, or recipient.');
+  const response = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(emailMailbox)}/sendMail`, {
     method: 'POST',
     headers: { Accept: 'application/json', Authorization: `Bearer ${await getMicrosoftGraphAccessToken()}`, 'Content-Type': 'text/plain' },
     body: buildMicrosoftGraphRawMessage(record, context),
