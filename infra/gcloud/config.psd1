@@ -1,5 +1,5 @@
 @{
-  SchemaVersion = '2026-11-18.2'
+  SchemaVersion = '2026-11-19.2'
   Region = 'us-east1'
   FirestoreLocation = 'us-east1'
   # Automnia's Gemini relay is served through Vertex's global endpoint. Keeping this
@@ -52,9 +52,10 @@
   ShopifyApiVersion = '2026-07'
   ShopifyCheckoutUrl = 'https://automnia.app/collections/automnia-plans-and-refills'
   EmailProvider = 'microsoft_graph'
-  # Set this to the licensed Microsoft 365 mailbox that will send customer
-  # license emails, for example licenses@automnia.app.
-  EmailSender = 'support@automnia.app'
+  # Graph sends through the licensed mailbox while the MIME From can use an
+  # alias on that mailbox. Exchange alias sending must be enabled in the tenant.
+  EmailMailbox = 'support@automnia.app'
+  EmailSender = 'licenses@automnia.app'
   VerificationMaxAgeMinutes = 30
   HealthTimeoutSeconds = 180
   DomainMappingTimeoutMinutes = 30

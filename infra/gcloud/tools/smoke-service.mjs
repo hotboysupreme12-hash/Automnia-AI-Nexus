@@ -6,6 +6,11 @@ import net from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildLicenseEmailHtml } from '../service/welcomeEmail.js'
+import {
+  buildLicenseEmailMimeMessage,
+  encodeGmailRawMessage,
+  encodeMicrosoftGraphRawMessage,
+} from '../service/licenseEmailMime.js'
 
 const infraRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const serviceRoot = path.join(infraRoot, 'service')
@@ -29,6 +34,19 @@ const upgradedCustomerEmail = buildLicenseEmailHtml(
 assert.match(upgradedCustomerEmail, /Automnia Pro Monthly &lt;script&gt;/, 'Plan details in upgrade emails must be HTML escaped')
 assert.match(upgradedCustomerEmail, /Your new plan order is linked to your existing Automnia account/)
 assert.match(upgradedCustomerEmail, /same license key below/)
+const licenseMimeMessage = buildLicenseEmailMimeMessage({
+  from: 'Automnia AI Nexus <support@automnia.app>',
+  to: 'customer@example.test',
+  subject: 'Welcome to Automnia AI Nexus — your license key',
+  text: 'Your Automnia license key is ready.',
+  html: '<p>Your Automnia license key is ready.</p>',
+})
+assert.match(licenseMimeMessage, /^From: Automnia AI Nexus <support@automnia\.app>\r$/m)
+assert.match(licenseMimeMessage, /multipart\/alternative/)
+assert.match(Buffer.from(encodeGmailRawMessage(licenseMimeMessage), 'base64url').toString('utf8'), /^From: Automnia AI Nexus/)
+assert.match(Buffer.from(encodeMicrosoftGraphRawMessage(licenseMimeMessage), 'base64').toString('utf8'), /^From: Automnia AI Nexus/)
+assert.match(provisionerService, /'Content-Type': 'text\/plain'/)
+assert.match(provisionerService, /buildMicrosoftGraphRawMessage\(record, context\)/)
 const zeroValueAccountEmail = buildLicenseEmailHtml(
   { email: 'existing@example.test', licenseKey: 'AUT-TEST-0003', tier: 'pro' },
   { isAccountUpdate: true, zeroValueOrder: true, purchasePlan: 'Automnia Pro Monthly' },
@@ -90,6 +108,9 @@ async function runMode(writeMode) {
       SHOPIFY_API_VERSION: '2026-07',
       SHOPIFY_ADMIN_API_TOKEN: 'local-smoke-shopify-admin-token',
       AUTOMNIA_TEST_EMAIL_DELIVERY: 'stub',
+      EMAIL_PROVIDER: 'microsoft_graph',
+      EMAIL_MAILBOX: 'support@automnia.app',
+      EMAIL_SENDER: 'licenses@automnia.app',
       SHOPIFY_WEBHOOK_SECRETS: 'local-smoke-webhook-value',
       ADMIN_API_TOKEN: 'local-smoke-admin-value\r\n',
     },
@@ -116,6 +137,9 @@ async function runMode(writeMode) {
     assert.equal(health.commerce.checkoutConfigured, true)
     assert.equal(health.commerce.webhookSecretsConfigured, true)
     assert.equal(health.commerce.emailDeliveryConfigured, true)
+    assert.equal(health.commerce.emailDeliveryProvider, 'microsoft_graph')
+    assert.equal(health.commerce.emailDeliverySender, 'licenses@automnia.app')
+    assert.equal(health.commerce.emailDeliveryMailbox, 'support@automnia.app')
 
     const ready = await fetch(`${baseUrl}/ready`).then((response) => response.json())
     assert.equal(ready.ok, true)
