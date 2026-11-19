@@ -67,6 +67,13 @@ function runScenario({ armMetadata }) {
     const armEntry = metadata.files.find((entry) => entry.url === arm64ZipName)
     assert.equal(armEntry.sha512, sha512(arm64Zip), 'Apple silicon ZIP checksum must match the staged file')
     assert.equal(armEntry.size, arm64Zip.length, 'Apple silicon ZIP size must match the staged file')
+    const macZipForArch = (isArm64) => {
+      const isArm64File = (entry) => entry.url.includes('arm64')
+      const archFiles = metadata.files.filter((entry) => isArm64 ? isArm64File(entry) : !isArm64File(entry))
+      return archFiles.find((entry) => entry.url.toLowerCase().endsWith('.zip'))?.url
+    }
+    assert.equal(macZipForArch(false), x64ZipName, 'Intel Mac updater must select the Intel ZIP')
+    assert.equal(macZipForArch(true), arm64ZipName, 'Apple silicon updater must select the arm64 ZIP')
 
     const channelAlias = yaml.load(fs.readFileSync(path.join(outputRoot, 'stable-x64-mac.yml'), 'utf8'))
     assert.deepEqual(channelAlias.files.map((entry) => entry.url).sort(), urls, 'stable-x64 alias must retain both Mac architectures')
