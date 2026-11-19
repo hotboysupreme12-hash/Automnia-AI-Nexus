@@ -92,12 +92,63 @@ function Get-FreePort {
   finally { $Listener.Stop() }
 }
 
+function Get-ProcessTreeSnapshot {
+  param([int]$RootProcessId)
+  $Processes = @(Get-CimInstance -ClassName Win32_Process -ErrorAction Stop)
+  $ProcessById = @{}
+  foreach ($Candidate in $Processes) { $ProcessById[[int]$Candidate.ProcessId] = $Candidate }
+  $Pending = [System.Collections.Generic.Queue[int]]::new()
+  $Seen = @{}
+  $Snapshot = [System.Collections.Generic.List[object]]::new()
+  $Pending.Enqueue($RootProcessId)
+  while ($Pending.Count -gt 0) {
+    $CurrentId = $Pending.Dequeue()
+    if ($Seen.ContainsKey([string]$CurrentId)) { continue }
+    $Seen[[string]$CurrentId] = $true
+    if ($ProcessById.ContainsKey($CurrentId)) {
+      $Current = $ProcessById[$CurrentId]
+      $Snapshot.Add($Current)
+      foreach ($Child in $Processes | Where-Object { [int]$_.ParentProcessId -eq $CurrentId }) {
+        $Pending.Enqueue([int]$Child.ProcessId)
+      }
+    }
+  }
+  return @($Snapshot)
+}
+
+function Write-ProcessTreeSnapshot {
+  param([int]$RootProcessId, [string]$Label)
+  $TraceName = ($Label -replace '[^A-Za-z0-9._-]', '-') + '-process-tree.log'
+  $TracePath = Join-Path $LifecycleDir $TraceName
+  $Lines = [System.Collections.Generic.List[string]]::new()
+  try {
+    $Snapshot = @(Get-ProcessTreeSnapshot -RootProcessId $RootProcessId)
+    if (-not $Snapshot) { $Lines.Add("[release-lifecycle] process tree for PID $RootProcessId is no longer present.") }
+    foreach ($Item in $Snapshot) {
+      $CpuSeconds = 'unavailable'
+      $WindowTitle = ''
+      try {
+        $ProcessInfo = Get-Process -Id ([int]$Item.ProcessId) -ErrorAction Stop
+        if ($null -ne $ProcessInfo.CPU) { $CpuSeconds = [Math]::Round([double]$ProcessInfo.CPU, 1) }
+        $WindowTitle = [string]$ProcessInfo.MainWindowTitle
+      } catch {}
+      $Lines.Add(('[release-lifecycle] pid={0} parent={1} name="{2}" cpuSeconds={3} windowTitle="{4}" executable="{5}" commandLine="{6}"' -f `
+        $Item.ProcessId, $Item.ParentProcessId, $Item.Name, $CpuSeconds, $WindowTitle, $Item.ExecutablePath, $Item.CommandLine))
+    }
+  } catch {
+    $Lines.Add("[release-lifecycle] process-tree snapshot failed: $($_.Exception.Message)")
+  }
+  $Lines | Add-Content -LiteralPath $TracePath -Encoding UTF8
+  $Lines | ForEach-Object { Write-Host $_ }
+}
+
 function Invoke-CheckedProcess {
   param(
     [string]$FilePath,
     [string[]]$ArgumentList,
     [string]$Label,
-    [int]$TimeoutSeconds = 300
+    [int]$TimeoutSeconds = 300,
+    [switch]$TraceProcessTree
   )
   $StartParameters = @{
     FilePath = $FilePath
@@ -108,11 +159,28 @@ function Invoke-CheckedProcess {
     $StartParameters.ArgumentList = $ArgumentList
   }
   $Process = Start-Process @StartParameters
-  if (-not $Process.WaitForExit($TimeoutSeconds * 1000)) {
+  $Deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+  $NextProcessTrace = [DateTime]::UtcNow.AddMinutes(1)
+  while (-not $Process.HasExited) {
+    $RemainingMilliseconds = [int][Math]::Min(60000, [Math]::Max(0, ($Deadline - [DateTime]::UtcNow).TotalMilliseconds))
+    if ($RemainingMilliseconds -le 0 -or $Process.WaitForExit($RemainingMilliseconds)) { break }
+    if ($TraceProcessTree -and [DateTime]::UtcNow -ge $NextProcessTrace) {
+      Write-Host "[release-lifecycle] $Label is still running after $([int]($TimeoutSeconds - ($Deadline - [DateTime]::UtcNow).TotalSeconds)) seconds."
+      Write-ProcessTreeSnapshot -RootProcessId $Process.Id -Label $Label
+      $NextProcessTrace = [DateTime]::UtcNow.AddMinutes(1)
+    }
+  }
+  if (-not $Process.HasExited) {
+    if ($TraceProcessTree) { Write-ProcessTreeSnapshot -RootProcessId $Process.Id -Label $Label }
     $ProcessDescription = try { "$($Process.ProcessName) (PID $($Process.Id))" } catch { "PID $($Process.Id)" }
-    try { $Process.Kill($true) } catch {}
-    try { $null = $Process.WaitForExit(30000) } catch {}
-    throw "$Label timed out after $TimeoutSeconds seconds. Timed-out process: $ProcessDescription."
+    $TerminationFailure = $null
+    try { $Process.Kill($true) } catch { $TerminationFailure = $_.Exception.Message }
+    try { $null = $Process.WaitForExit(30000) } catch { if (-not $TerminationFailure) { $TerminationFailure = $_.Exception.Message } }
+    if (-not $Process.HasExited -and -not $TerminationFailure) {
+      $TerminationFailure = 'the process tree remained alive after the termination attempt'
+    }
+    $TerminationDetail = if ($TerminationFailure) { " Termination detail: $TerminationFailure." } else { '' }
+    throw "$Label timed out after $TimeoutSeconds seconds. Timed-out process: $ProcessDescription.$TerminationDetail"
   }
   if ($Process.ExitCode -ne 0) { throw "$Label exited with code $($Process.ExitCode)." }
   return $Process.ExitCode
@@ -121,7 +189,11 @@ function Invoke-CheckedProcess {
 function Install-Automnia {
   param([string]$Path, [string]$Label, [int]$TimeoutSeconds)
   New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
-  Invoke-CheckedProcess -FilePath $Path -ArgumentList @('/S', "/D=$InstallRoot") -Label $Label -TimeoutSeconds $TimeoutSeconds | Out-Null
+  $TraceUpgrade = $Label -eq 'upgrade install'
+  # Keep all lifecycle installs at the same per-user scope, even on an elevated runner.
+  # Otherwise the previous installer can register per-machine while the candidate
+  # resolves a per-user install, and its in-place upgrade waits on the wrong uninstall path.
+  Invoke-CheckedProcess -FilePath $Path -ArgumentList @('/currentuser', '/S', "/D=$InstallRoot") -Label $Label -TimeoutSeconds $TimeoutSeconds -TraceProcessTree:$TraceUpgrade | Out-Null
   $PayloadDeadline = [DateTime]::UtcNow.AddSeconds(120)
   $RequiredPayload = @(
     (Join-Path $InstallRoot $ExpectedAppExeName),
@@ -140,17 +212,50 @@ function Install-Automnia {
 }
 
 function Get-InstalledAutomniaProcesses {
-  $InstallPrefix = [IO.Path]::GetFullPath($InstallRoot).TrimEnd([char[]]@('\', '/')) + '\'
-  return @(Get-CimInstance -ClassName Win32_Process -ErrorAction Stop | Where-Object {
-    $ExecutablePath = [string]$_.ExecutablePath
-    $ExecutablePath -and $ExecutablePath.StartsWith($InstallPrefix, [StringComparison]::OrdinalIgnoreCase)
-  })
+  $InstallLocation = [IO.Path]::GetFullPath($InstallRoot).TrimEnd([char[]]@('\', '/'))
+  $InstallPrefix = $InstallLocation + '\'
+  $Processes = @(Get-CimInstance -ClassName Win32_Process -ErrorAction Stop)
+  $OwnedProcessIds = [Collections.Generic.HashSet[int]]::new()
+
+  foreach ($Candidate in $Processes) {
+    $ExecutablePath = [string]$Candidate.ExecutablePath
+    $CommandLine = [string]$Candidate.CommandLine
+    if (
+      ($ExecutablePath -and $ExecutablePath.StartsWith($InstallPrefix, [StringComparison]::OrdinalIgnoreCase)) -or
+      ($CommandLine -and $CommandLine.IndexOf($InstallLocation, [StringComparison]::OrdinalIgnoreCase) -ge 0)
+    ) {
+      [void]$OwnedProcessIds.Add([int]$Candidate.ProcessId)
+    }
+  }
+
+  # Native helpers can execute from system paths while their parent process still
+  # belongs to this unique temporary install. Include those descendants for cleanup.
+  do {
+    $AddedChild = $false
+    foreach ($Candidate in $Processes) {
+      $CandidateProcessId = [int]$Candidate.ProcessId
+      if (-not $OwnedProcessIds.Contains($CandidateProcessId) -and $OwnedProcessIds.Contains([int]$Candidate.ParentProcessId)) {
+        [void]$OwnedProcessIds.Add($CandidateProcessId)
+        $AddedChild = $true
+      }
+    }
+  } while ($AddedChild)
+
+  return @($Processes | Where-Object { $OwnedProcessIds.Contains([int]$_.ProcessId) })
 }
 
 function Stop-InstalledAutomniaProcesses {
   param([string]$Label)
-  foreach ($OwnedProcess in @(Get-InstalledAutomniaProcesses)) {
-    Stop-Process -Id ([int]$OwnedProcess.ProcessId) -Force -ErrorAction Stop
+  $OwnedProcesses = @(Get-InstalledAutomniaProcesses)
+  if (-not $OwnedProcesses) {
+    Write-Host "[release-lifecycle] $Label found no test-install-owned processes under $InstallRoot."
+    return
+  }
+  foreach ($OwnedProcess in $OwnedProcesses) {
+    Write-Host "[release-lifecycle] stopping $($OwnedProcess.Name) PID $($OwnedProcess.ProcessId) for $Label."
+    if (Get-Process -Id ([int]$OwnedProcess.ProcessId) -ErrorAction SilentlyContinue) {
+      Stop-Process -Id ([int]$OwnedProcess.ProcessId) -Force -ErrorAction SilentlyContinue
+    }
   }
   $StopDeadline = [DateTime]::UtcNow.AddSeconds(30)
   do {

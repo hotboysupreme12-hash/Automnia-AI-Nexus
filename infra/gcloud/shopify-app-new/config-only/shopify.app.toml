@@ -1,0 +1,69 @@
+# Automnia's Shopify app configuration for the new Shopify organization.
+# The destination app targets the read-only Cloud Run candidate during migration.
+
+client_id = "d7cbdd39abd29f52bd7fa5130f5efa35"
+name = "Automnia AI Nexus"
+application_url = "https://api.automnia.app/health"
+embedded = false
+
+[build]
+
+[webhooks]
+api_version = "2026-07"
+
+  [[webhooks.subscriptions]]
+  uri = "https://api.automnia.app/shopify/webhooks/orders-paid"
+  topics = [ "orders/paid" ]
+
+  [[webhooks.subscriptions]]
+  uri = "https://api.automnia.app/shopify/webhooks/orders-cancelled"
+  topics = [ "orders/cancelled" ]
+
+  [[webhooks.subscriptions]]
+  uri = "https://api.automnia.app/shopify/webhooks/refunds-create"
+  topics = [ "refunds/create" ]
+
+  [[webhooks.subscriptions]]
+  uri = "https://api.automnia.app/shopify/webhooks/subscription-contracts-create"
+  topics = [ "subscription_contracts/create" ]
+
+  [[webhooks.subscriptions]]
+  uri = "https://api.automnia.app/shopify/webhooks/subscription-contracts-update"
+  topics = [ "subscription_contracts/update" ]
+
+  [[webhooks.subscriptions]]
+  uri = "https://api.automnia.app/shopify/webhooks/subscription-contracts-cancel"
+  topics = [ "subscription_contracts/cancel" ]
+
+  [[webhooks.subscriptions]]
+  uri = "https://api.automnia.app/shopify/webhooks/subscription-contracts-expire"
+  topics = [ "subscription_contracts/expire" ]
+
+  [[webhooks.subscriptions]]
+  uri = "https://api.automnia.app/shopify/webhooks/subscription-contracts-fail"
+  topics = [ "subscription_contracts/fail" ]
+
+  [[webhooks.subscriptions]]
+  uri = "https://api.automnia.app/shopify/webhooks/subscription-contracts-pause"
+  topics = [ "subscription_contracts/pause" ]
+
+  [[webhooks.subscriptions]]
+  uri = "https://api.automnia.app/shopify/webhooks/subscription-billing-attempts-success"
+  topics = [ "subscription_billing_attempts/success" ]
+
+  [[webhooks.subscriptions]]
+  uri = "https://api.automnia.app/shopify/webhooks/subscription-billing-attempts-failure"
+  topics = [ "subscription_billing_attempts/failure" ]
+
+  [[webhooks.subscriptions]]
+  uri = "https://api.automnia.app/shopify/webhooks/subscription-billing-attempts-challenged"
+  topics = [ "subscription_billing_attempts/challenged" ]
+
+[access_scopes]
+scopes = "read_customer_payment_methods,read_customers,read_orders,read_own_subscription_contracts,read_products,write_customers,write_orders,write_own_subscription_contracts,write_products,write_purchase_options"
+
+[auth]
+redirect_urls = [ "https://api.automnia.app/health" ]
+
+[sidekick]
+extensions_summary = "View Automnia AI Nexus account settings and use its app tools."

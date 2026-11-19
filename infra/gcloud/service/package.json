@@ -20,6 +20,9 @@
   "overrides": {
     "gaxios": "^7.3.0",
     "google-auth-library": "^10.9.1",
-    "qs": "^6.16.0"
+    "qs": "^6.16.0",
+    "google-gax@5.0.8": {
+      "rimraf@^5.0.1": "6.1.4"
+    }
   }
 }

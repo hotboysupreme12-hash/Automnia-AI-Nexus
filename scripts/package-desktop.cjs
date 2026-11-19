@@ -103,11 +103,21 @@ const openClawVendorPrep = path.join(root, 'scripts', 'prepare-openclaw-vendor.c
 const command = process.execPath
 const requestedArgs = process.argv.slice(2)
 const unsignedDirectoryPackage = requestedArgs.includes('--unsigned') || process.env.AUTOMNIA_SKIP_PLATFORM_SIGNING === '1'
+const platformSigningRequired = process.env.AUTOMNIA_PLATFORM_SIGNING_REQUIRED === '1'
 const forwardedArgs = requestedArgs.filter((arg) => arg !== '--unsigned')
 const hasPublishMode = forwardedArgs.some((arg, index) => arg === '--publish' || arg.startsWith('--publish=') || forwardedArgs[index - 1] === '--publish')
 const publishArgs = hasPublishMode ? [] : ['--publish', 'never']
 const windowsInstallerOutputDirArgs = process.platform === 'win32' && forwardedArgs.includes('--win') && !forwardedArgs.includes('--dir')
   ? ['--config.directories.output=release/win-installer']
+  : []
+if (platformSigningRequired && unsignedDirectoryPackage) {
+  throw new Error('Platform signing is required, but this package build is configured to skip signing.')
+}
+const requiredSigningArgs = platformSigningRequired
+  ? [
+      ...(forwardedArgs.includes('--win') ? ['--config.win.forceCodeSigning=true'] : []),
+      ...(forwardedArgs.includes('--mac') ? ['--config.mac.forceCodeSigning=true'] : []),
+    ]
   : []
 const signingOverrideArgs = unsignedDirectoryPackage
   ? [
@@ -464,7 +474,7 @@ if (unsignedDirectoryPackage) {
   }
 }
 
-const child = spawn(command, [electronBuilderCli, ...forwardedArgs, ...publishArgs, ...signingOverrideArgs, ...windowsInstallerOutputDirArgs], {
+const child = spawn(command, [electronBuilderCli, ...forwardedArgs, ...publishArgs, ...requiredSigningArgs, ...signingOverrideArgs, ...windowsInstallerOutputDirArgs], {
   cwd: root,
   stdio: 'inherit',
   shell: false,
