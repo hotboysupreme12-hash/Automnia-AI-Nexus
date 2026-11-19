@@ -45,6 +45,8 @@ assert.match(lifecycle, /Label 'fresh install' -TimeoutSeconds \$InstallerTimeou
 assert.match(lifecycle, /AUTOMNIA_WINDOWS_UPGRADE_TIMEOUT_SECONDS/, 'Windows lifecycle validation must allow a separately bounded in-place upgrade')
 assert.match(lifecycle, /Label 'upgrade install' -TimeoutSeconds \$UpgradeInstallerTimeoutSeconds/, 'Windows lifecycle validation must use the longer upgrade timeout')
 assert.match(lifecycle, /if \(\$ArgumentList -and \$ArgumentList\.Count -gt 0\)/, 'Windows lifecycle validation must omit empty Start-Process argument lists')
+assert.ok(lifecycle.includes("ArgumentList @('/currentuser', '/S', \"/D=$InstallRoot\")"), 'Windows lifecycle installs must pin the isolated upgrade test to the per-user scope')
+assert.match(lifecycle, /CommandLine\.IndexOf\(\$InstallLocation[\s\S]*?ParentProcessId/, 'Windows lifecycle cleanup must also find test-owned helpers spawned from system executable paths')
 const previousVersionInstallIndex = lifecycle.indexOf("-Label 'previous-version install'")
 const preUpgradeCleanupIndex = lifecycle.indexOf("Stop-InstalledAutomniaProcesses -Label 'previous-version pre-upgrade cleanup'")
 const candidateUpgradeIndex = lifecycle.indexOf("-Label 'upgrade install'")
