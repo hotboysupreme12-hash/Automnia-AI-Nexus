@@ -90,6 +90,39 @@ test('capability refresh persists only bounded provider metadata with source and
   assert.doesNotMatch(JSON.stringify(harness.state), /must-not-persist|private-profile-id/)
 })
 
+test('capability refresh accepts the current OpenClaw model key and scalar input schema', async () => {
+  const harness = createHarness()
+  harness.responses.push({
+    code: 0,
+    stdout: JSON.stringify({
+      count: 1,
+      models: [{
+        key: 'google-vertex/gemini-4-hydrogen',
+        name: 'gemini-4-hydrogen',
+        input: 'text',
+        contextWindow: 1_048_576,
+        local: false,
+        available: null,
+        tags: ['configured', 'alias:Vertex Gemini 4 Hydrogen (balanced)'],
+      }],
+    }),
+  })
+
+  const result = await harness.service.refreshProviderCapabilities('google-vertex')
+
+  assert.equal(result.ok, true)
+  assert.equal(result.snapshot?.models.length, 1)
+  assert.deepEqual(result.snapshot?.models[0], {
+    id: 'google-vertex/gemini-4-hydrogen',
+    provider: 'google-vertex',
+    name: 'gemini-4-hydrogen',
+    contextWindow: 1_048_576,
+    input: ['text'],
+    source: 'openclaw-model-catalog',
+    verifiedAt: '2026-11-17T12:00:00.000Z',
+  })
+})
+
 test('capability refresh resolves reasoning defaults and invalidates them when normalized metadata changes', async () => {
   const harness = createHarness()
   harness.responses.push({
@@ -157,7 +190,8 @@ test('model probe requires a snapshotted configured model and uses strict reques
   assert.equal(probe.result?.maxOutputTokens, MODEL_PROBE_MAX_OUTPUT_TOKENS)
   const call = harness.calls[1]
   assert.equal(call?.timeoutMs, MODEL_PROBE_TIMEOUT_MS)
-  assert.deepEqual(call?.args.slice(0, 2), ['agent', 'exec'])
+  assert.deepEqual(call?.args.slice(0, 3), ['agent', 'exec', 'Reply with the single word OK.'])
+  assert.equal(call?.args.includes('--message'), false)
   assert.ok(call?.args.includes('xai/grok-4.7'))
   assert.ok(call?.args.includes('--timeout'))
   assert.ok(call?.args.includes(String(MODEL_PROBE_TIMEOUT_MS / 1000)))
