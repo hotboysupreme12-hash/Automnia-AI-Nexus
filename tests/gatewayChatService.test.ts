@@ -265,6 +265,7 @@ test('runTurn sends Gateway chat payloads and uses a visible terminal reply with
   assert.equal(harness.clientOptions?.mode, 'backend')
   assert.ok(harness.clientOptions?.scopes.includes('operator.talk.secrets'))
   assert.equal(isRecord(send.params) && send.params.sessionKey, 'agent:agent-alpha:console')
+  assert.equal(isRecord(send.params) && 'sessionId' in send.params, false, 'Gateway owns the physical session id')
   assert.equal(isRecord(send.params) && send.params.message, 'hello')
   assert.equal(isRecord(send.params) && send.params.fastMode, 'auto')
   assert.equal(isRecord(send.params) && send.params.fastAutoOnSeconds, 60)
@@ -387,6 +388,7 @@ test('runTurn isolates fresh Gateway chat turns from stable requested session ke
     isRecord(send.params) && send.params.sessionKey,
     'agent:agent-fresh:control-center:console:fresh:fresh-session-1',
   )
+  assert.equal(isRecord(send.params) && 'sessionId' in send.params, false, 'fresh session sends must not precondition on a client session id')
   for (const [sessionId, freshSession] of [
     ['fresh-session-1', false],
     ['permission-reset-2', true],
@@ -400,6 +402,7 @@ test('runTurn isolates fresh Gateway chat turns from stable requested session ke
     const latest = harness.requests.findLast((request) => request.method === 'chat.send')!
     assert.equal(isRecord(latest.params) && latest.params.sessionKey,
       `agent:agent-fresh:control-center:console:fresh:${sessionId}`)
+    assert.equal(isRecord(latest.params) && 'sessionId' in latest.params, false)
   }
 })
 
