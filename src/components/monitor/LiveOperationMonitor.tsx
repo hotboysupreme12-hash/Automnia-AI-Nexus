@@ -363,9 +363,9 @@ function MonitorTabIcon({ tab }: { tab: MonitorTab }) {
 }
 
 type ActivityItem =
-  | { kind: 'response'; id: string; agentId: string; timestamp: string; ok: boolean; title: string; detail: string; files: string[]; failureKind?: string }
+  | { kind: 'response'; id: string; agentId: string; timestamp: string; ok: boolean; title: string; detail: string; files: string[]; modelId?: string; failureKind?: string }
   | { kind: 'event'; id: string; agentId?: string; timestamp: string; ok: boolean; title: string; detail: string; files: string[]; eventType: MissionEvent['type']; failureKind?: string }
-  | { kind: 'agent-activity'; id: string; agentId: string; timestamp: string; ok: boolean; title: string; detail: string; files: string[]; failureKind?: string }
+  | { kind: 'agent-activity'; id: string; agentId: string; timestamp: string; ok: boolean; title: string; detail: string; files: string[]; modelId?: string; failureKind?: string }
   | { kind: 'gateway-log'; id: string; timestamp: string; ok: boolean; title: string; detail: string; files: string[]; stream: GatewayLogEntry['stream']; level?: string; source?: string }
 
 function compactActivityValue(value: unknown, max = 180): string {
@@ -413,7 +413,7 @@ function isVisibleAgentActivity(event: AgentActivityEvent): boolean {
 
 function makeResponseActivity(entry: AgentResponse): ActivityItem {
   const files = extractFiles(`${entry.prompt}\n${entry.response}`)
-  return { kind: 'response', id: entry.id, agentId: entry.agentId, timestamp: entry.timestamp, ok: entry.ok, title: entry.ok ? 'Completed' : 'Attention', detail: summarizeActivity(entry.response || entry.prompt), files, failureKind: entry.failureKind }
+  return { kind: 'response', id: entry.id, agentId: entry.agentId, timestamp: entry.timestamp, ok: entry.ok, title: entry.ok ? 'Completed' : 'Attention', detail: summarizeActivity(entry.response || entry.prompt), files, modelId: entry.modelId, failureKind: entry.failureKind }
 }
 
 function makeAgentActivity(entry: AgentResponse, event: AgentActivityEvent): ActivityItem {
@@ -427,6 +427,7 @@ function makeAgentActivity(entry: AgentResponse, event: AgentActivityEvent): Act
     title: activityKindLabel(event.type),
     detail,
     files: extractFiles(detail),
+    modelId: entry.modelId,
     ...(event.severity === 'error' ? { failureKind: event.type.replace(/\./g, '_') } : {}),
   }
 }
@@ -1654,6 +1655,12 @@ const GatewayActivityPanel = memo(function GatewayActivityPanel({ agentById, gat
       {activity.map((item) => {
         const agentId = item.kind === 'response' || item.kind === 'event' || item.kind === 'agent-activity' ? item.agentId : undefined
         const agent = agentId ? agentById.get(agentId) : undefined
+        const modelId = item.kind === 'response' || item.kind === 'agent-activity'
+          ? item.modelId || agent?.effectiveModel?.primary || agent?.model?.primary
+          : undefined
+        const modelSource = item.kind === 'response' || item.kind === 'agent-activity'
+          ? item.modelId ? 'Model used for this run' : 'Configured model for this agent'
+          : ''
         const isGatewayLog = item.kind === 'gateway-log'
         const isControlCenter = isGatewayLog || (item.kind === 'event' && !item.agentId)
         const portraitSrc = agent ? agentPortraitSrc(agent.id, agent.portrait) : ''
@@ -1695,6 +1702,7 @@ const GatewayActivityPanel = memo(function GatewayActivityPanel({ agentById, gat
                     </Badge>
                   )}
                   <span className="font-mono text-[12px] text-slate-400">{formatRuntimeTime(item.timestamp)}</span>
+                  {modelId && <span className="dy-gateway-activity-model" title={`${modelSource}: ${modelId}`}>Model: {compactActivityValue(modelId, 72)}</span>}
                 </div>
                 <p className={`mt-1.5 text-[12px] leading-relaxed ${isControlCenter ? 'text-slate-400' : 'text-slate-300/90'} ${isGatewayLog ? 'dy-gateway-activity-message' : ''}`}>{isGatewayLog ? item.detail : <LiveText text={item.detail} />}</p>
                 {isGatewayLog && (
