@@ -41,7 +41,7 @@ assert.match(publicReleaseWorkflow, /AUTOMNIA_RELEASE_REQUIRE_SIGNING/, 'public 
 assert.match(publicReleaseWorkflow, /AUTOMNIA_UPDATE_REQUIRE_SIGNING/, 'public release CI must require signed update manifests')
 assert.match(workflowSource, /npm run release:validate/, 'CI must validate packaged release artifacts')
 assert.match(readme, /npm run release:validate/, 'README must document release validation')
-assert.match(readme, /AUTOMNIA_RELEASE_REQUIRE_SIGNING/, 'README must document mandatory public-release signing validation')
+assert.match(readme, /Tagged customer releases require Windows Authenticode and macOS Developer ID plus Apple notarization credentials/, 'README must document mandatory platform signing for tagged customer releases')
 assert.match(readme, /distribution-signing\.json/, 'README must document consumer distribution signing evidence')
 
 function run(command: string, args: string[], env: NodeJS.ProcessEnv, expectedStatus = 0) {

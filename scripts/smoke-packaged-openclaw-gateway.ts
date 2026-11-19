@@ -251,15 +251,20 @@ try {
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
   })
-  const appendOutput = (chunk: Buffer) => {
-    output = `${output}${chunk.toString('utf8')}`.slice(-500_000)
+  const appendOutput = (chunk: Buffer | string) => {
+    output = `${output}${Buffer.isBuffer(chunk) ? chunk.toString('utf8') : chunk}`.slice(-500_000)
   }
   launcher.stdout.on('data', appendOutput)
   launcher.stderr.on('data', appendOutput)
+  launcher.on('error', (error) => appendOutput(`[packaged-launcher-error] ${String(error)}\n`))
+  launcher.on('exit', (code, signal) => appendOutput(`[packaged-launcher-exit] code=${code} signal=${signal}\n`))
 
   const readyDeadline = Date.now() + 45_000
   while (Date.now() < readyDeadline) {
     refreshOutputFromDesktopLog()
+    if (launcher.exitCode !== null || launcher.signalCode) {
+      throw new Error(`packaged launcher exited before the Control Center API became ready: code=${launcher.exitCode} signal=${launcher.signalCode}`)
+    }
     try {
       const response = await fetch(`http://127.0.0.1:${apiPort}/api/ready`, { signal: AbortSignal.timeout(1000) })
       if (response.ok) break
@@ -333,10 +338,14 @@ try {
     terminateLauncherProcess(launcher)
     await new Promise((resolve) => setTimeout(resolve, 1200))
   }
-  try {
-    rmSync(tempRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 })
-  } catch (error) {
-    console.warn(`[packaged-openclaw-smoke] temporary test state cleanup failed: ${String(error)}`)
+  if (process.env.AUTOMNIA_KEEP_PACKAGED_SMOKE_STATE === '1') {
+    console.warn(`[packaged-openclaw-smoke] preserving test state at ${tempRoot}`)
+  } else {
+    try {
+      rmSync(tempRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 })
+    } catch (error) {
+      console.warn(`[packaged-openclaw-smoke] temporary test state cleanup failed: ${String(error)}`)
+    }
   }
 }
 
