@@ -29,6 +29,8 @@ assert.equal(existsSync(path.join(root, 'scripts', 'apply-production-readiness-d
 
 const workflow = read('.github/workflows/control-plane-ci.yml')
 const publicRelease = read('.github/workflows/public-release.yml')
+assert.match(publicRelease, /workflow_dispatch:[\s\S]*?inputs:[\s\S]*?platforms:[\s\S]*?default:\s*all[\s\S]*?options:[\s\S]*?- all[\s\S]*?- windows/, 'manual release candidates must default to all platforms and allow a focused Windows lifecycle run')
+assert.ok((publicRelease.match(/if: \$\{\{ github\.event_name != 'workflow_dispatch' \|\| inputs\.platforms == 'all' \}\}/g) || []).length === 3, 'Windows-only manual candidates must skip both Mac jobs and Linux while tag releases keep all platforms')
 const updatePromotion = read('.github/workflows/promote-desktop-update.yml')
 const quality = read('.github/workflows/quality-matrix.yml')
 const dependencyAudit = read('.github/workflows/dependency-audit.yml')
@@ -123,8 +125,8 @@ assert.match(publicRelease, /Require macOS signing and notarization credentials 
 assert.ok(packageDesktop.includes("'--config.win.forceCodeSigning=true'") && packageDesktop.includes("'--config.mac.forceCodeSigning=true'"), 'platform release builds must force electron-builder code signing')
 assert.ok(publicRelease.includes('codesign --verify --deep --strict') && publicRelease.includes('xcrun stapler validate') && publicRelease.includes('spctl --assess'), 'tagged Mac releases must verify signature, stapled notarization, and Gatekeeper acceptance')
 assert.ok(publicRelease.includes('AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM'), 'public release workflow must require the update signing secret')
-assert.match(publicRelease, /macos:\s*\n\s*name: Intel macOS DMG and ZIP\s*\n\s*runs-on: macos-15-intel/, 'Intel macOS release dependencies must be installed on a native Intel runner')
-assert.match(publicRelease, /macos:\s*\n\s*name: Intel macOS DMG and ZIP\s*\n\s*runs-on: macos-15-intel\s*\n\s*timeout-minutes:\s*150/, 'Intel macOS release validation must allow the native build and DMG plus updater ZIP launch smokes to finish')
+assert.match(publicRelease, /macos:\s*\r?\n(?:\s*if:[^\r\n]*\r?\n)?\s*name: Intel macOS DMG and ZIP\s*\r?\n\s*runs-on: macos-15-intel/, 'Intel macOS release dependencies must be installed on a native Intel runner')
+assert.match(publicRelease, /macos:\s*\r?\n(?:\s*if:[^\r\n]*\r?\n)?\s*name: Intel macOS DMG and ZIP\s*\r?\n\s*runs-on: macos-15-intel\s*\r?\n\s*timeout-minutes:\s*150/, 'Intel macOS release validation must allow the native build and DMG plus updater ZIP launch smokes to finish')
 assert.ok(publicRelease.includes('bash scripts/build-macos-release.sh x64'), 'public release must build an Intel macOS artifact')
 assert.ok(publicRelease.includes('bash scripts/build-macos-release.sh arm64'), 'public release must build an Apple silicon macOS artifact')
 assert.ok(macOSReleaseBuild.includes('npm run dist:mac -- "--$architecture"'), 'macOS release build must use electron-builder for the selected architecture')
@@ -132,7 +134,7 @@ assert.ok(macOSReleaseBuild.includes("Unable to detach device cleanly: hdiutil: 
 assert.ok(macOSReleaseBuild.includes('["hdiutil", "info", "-plist"]') && macOSReleaseBuild.includes('os.path.commonpath([image_path, root]) == root'), 'DMG recovery must inspect and detach only temporary images from this runner')
 assert.ok(macOSReleaseBuild.includes('npm run dist:mac -- "--$architecture" dmg'), 'macOS release build must retry only the DMG target after transient eject contention')
 assert.match(publicRelease, /Build Intel Mac DMG and ZIP[\s\S]*?AUTOMNIA_TARGET_ARCH:\s*x64/, 'Intel macOS packaging must prepare an Intel Node runtime even on Apple silicon runners')
-assert.match(publicRelease, /macos-arm64:\s*\n\s*name: Apple silicon macOS DMG and ZIP\s*\n\s*runs-on: macos-15[\s\S]*?bash scripts\/build-macos-release\.sh arm64/, 'Apple silicon packaging must run on the GitHub ARM macOS runner')
+assert.match(publicRelease, /macos-arm64:\s*\r?\n\s*if:[^\r\n]*\r?\n\s*name: Apple silicon macOS DMG and ZIP\s*\r?\n\s*runs-on: macos-15[\s\S]*?bash scripts\/build-macos-release\.sh arm64/, 'Apple silicon packaging must run on the GitHub ARM macOS runner')
 const armReleaseJob = publicRelease.match(/macos-arm64:[\s\S]*?\n {2}linux:/)?.[0] || ''
 assert.match(armReleaseJob, /AUTOMNIA_UPDATE_BASE_URL:\s*\$\{\{\s*vars\.AUTOMNIA_UPDATE_BASE_URL\s*\}\}-x64/, 'Apple silicon clients must use the shared signed cross-architecture update feed')
 assert.match(armReleaseJob, /Embed update verification configuration[\s\S]*?run: npm run release:update-build-config/, 'Apple silicon release must embed update feed and verification-key configuration')
