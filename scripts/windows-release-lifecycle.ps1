@@ -57,7 +57,12 @@ $InstallerPath = (Resolve-Path -LiteralPath $InstallerPath).Path
 $EvidenceDir = [IO.Path]::GetFullPath($EvidenceDir)
 $LifecycleDir = Join-Path $EvidenceDir 'lifecycle'
 New-Item -ItemType Directory -Force -Path $LifecycleDir | Out-Null
-$TempRoot = Join-Path ([IO.Path]::GetTempPath()) ("automnia-release-lifecycle-{0}-{1}" -f $PID, [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())
+$TempBase = if ($env:RUNNER_TEMP -and (Test-Path -LiteralPath $env:RUNNER_TEMP -PathType Container)) {
+  $env:RUNNER_TEMP
+} else {
+  [IO.Path]::GetTempPath()
+}
+$TempRoot = Join-Path $TempBase ("automnia-release-lifecycle-{0}-{1}" -f $PID, [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())
 $InstallRoot = Join-Path $TempRoot 'installed'
 $CorruptRoot = Join-Path $TempRoot 'corrupted-release'
 $InstallerTimeoutSeconds = 900
@@ -90,6 +95,60 @@ function Get-FreePort {
   $Listener.Start()
   try { return ([Net.IPEndPoint]$Listener.LocalEndpoint).Port }
   finally { $Listener.Stop() }
+}
+
+if (-not ('AutomniaWindowTextDiagnostics' -as [type])) {
+  Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public static class AutomniaWindowTextDiagnostics {
+  private delegate bool EnumWindowsProc(IntPtr handle, IntPtr parameter);
+
+  [DllImport("user32.dll")]
+  private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr parameter);
+
+  [DllImport("user32.dll")]
+  private static extern bool EnumChildWindows(IntPtr parent, EnumWindowsProc callback, IntPtr parameter);
+
+  [DllImport("user32.dll")]
+  private static extern uint GetWindowThreadProcessId(IntPtr handle, out uint processId);
+
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+  private static extern int GetWindowText(IntPtr handle, StringBuilder text, int maxCount);
+
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+  private static extern int GetClassName(IntPtr handle, StringBuilder className, int maxCount);
+
+  public static string[] GetWindowDetails(int targetProcessId) {
+    var details = new List<string>();
+    EnumWindows((window, _) => {
+      GetWindowThreadProcessId(window, out uint ownerProcessId);
+      if (ownerProcessId != (uint)targetProcessId) return true;
+      AddWindowDetails(details, window, "window");
+      EnumChildWindows(window, (child, __) => {
+        AddWindowDetails(details, child, "control");
+        return true;
+      }, IntPtr.Zero);
+      return true;
+    }, IntPtr.Zero);
+    return details.ToArray();
+  }
+
+  private static void AddWindowDetails(List<string> details, IntPtr handle, string kind) {
+    var text = new StringBuilder(1024);
+    var className = new StringBuilder(256);
+    GetWindowText(handle, text, text.Capacity);
+    GetClassName(handle, className, className.Capacity);
+    var value = string.Join(" ", text.ToString().Split((char[])null, StringSplitOptions.RemoveEmptyEntries));
+    if (value.Length == 0) return;
+    if (value.Length > 300) value = value.Substring(0, 300);
+    details.Add(kind + " class=\"" + className.ToString() + "\" text=\"" + value + "\"");
+  }
+}
+'@ -ErrorAction Stop
 }
 
 function Get-ProcessTreeSnapshot {
@@ -134,6 +193,13 @@ function Write-ProcessTreeSnapshot {
       } catch {}
       $Lines.Add(('[release-lifecycle] pid={0} parent={1} name="{2}" cpuSeconds={3} windowTitle="{4}" executable="{5}" commandLine="{6}"' -f `
         $Item.ProcessId, $Item.ParentProcessId, $Item.Name, $CpuSeconds, $WindowTitle, $Item.ExecutablePath, $Item.CommandLine))
+      try {
+        foreach ($WindowDetail in [AutomniaWindowTextDiagnostics]::GetWindowDetails([int]$Item.ProcessId)) {
+          $Lines.Add("[release-lifecycle] pid=$($Item.ProcessId) $WindowDetail")
+        }
+      } catch {
+        $Lines.Add("[release-lifecycle] window text capture failed for PID $($Item.ProcessId): $($_.Exception.Message)")
+      }
     }
   } catch {
     $Lines.Add("[release-lifecycle] process-tree snapshot failed: $($_.Exception.Message)")

@@ -46,6 +46,8 @@ assert.match(lifecycle, /AUTOMNIA_WINDOWS_UPGRADE_TIMEOUT_SECONDS/, 'Windows lif
 assert.match(lifecycle, /Label 'upgrade install' -TimeoutSeconds \$UpgradeInstallerTimeoutSeconds/, 'Windows lifecycle validation must use the longer upgrade timeout')
 assert.match(lifecycle, /Write-ProcessTreeSnapshot/, 'Windows installer timeout diagnostics must capture the active process tree')
 assert.match(lifecycle, /MainWindowTitle/, 'Windows installer timeout diagnostics must capture hidden modal-window titles')
+assert.match(lifecycle, /AutomniaWindowTextDiagnostics/, 'Windows installer timeout diagnostics must capture hidden dialog and control text')
+assert.match(lifecycle, /\$env:RUNNER_TEMP[\s\S]*?\[IO\.Path\]::GetTempPath\(\)/, 'Windows lifecycle installs must use the short runner temp path to avoid artificial deep install paths')
 assert.match(lifecycle, /if \(\$ArgumentList -and \$ArgumentList\.Count -gt 0\)/, 'Windows lifecycle validation must omit empty Start-Process argument lists')
 assert.ok(lifecycle.includes("ArgumentList @('/currentuser', '/S', \"/D=$InstallRoot\")"), 'Windows lifecycle installs must pin the isolated upgrade test to the per-user scope')
 assert.match(lifecycle, /CommandLine\.IndexOf\(\$InstallLocation[\s\S]*?ParentProcessId/, 'Windows lifecycle cleanup must also find test-owned helpers spawned from system executable paths')
