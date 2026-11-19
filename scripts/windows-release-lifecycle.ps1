@@ -190,9 +190,9 @@ function Install-Automnia {
   param([string]$Path, [string]$Label, [int]$TimeoutSeconds)
   New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
   $TraceUpgrade = $Label -eq 'upgrade install'
-  # Keep all lifecycle installs at the same per-user scope, even on an elevated runner.
-  # Otherwise the previous installer can register per-machine while the candidate
-  # resolves a per-user install, and its in-place upgrade waits on the wrong uninstall path.
+  # Keep both versions in this isolated lifecycle on the same per-user install scope.
+  # An elevated runner can otherwise select a different default scope and leave a
+  # second registration/path that NSIS tries to upgrade in place.
   Invoke-CheckedProcess -FilePath $Path -ArgumentList @('/currentuser', '/S', "/D=$InstallRoot") -Label $Label -TimeoutSeconds $TimeoutSeconds -TraceProcessTree:$TraceUpgrade | Out-Null
   $PayloadDeadline = [DateTime]::UtcNow.AddSeconds(120)
   $RequiredPayload = @(
@@ -228,8 +228,8 @@ function Get-InstalledAutomniaProcesses {
     }
   }
 
-  # Native helpers can execute from system paths while their parent process still
-  # belongs to this unique temporary install. Include those descendants for cleanup.
+  # Helpers can run from system binaries while their command line or parent still
+  # ties them to this isolated install. Include those descendants for cleanup.
   do {
     $AddedChild = $false
     foreach ($Candidate in $Processes) {
