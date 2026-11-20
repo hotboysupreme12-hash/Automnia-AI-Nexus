@@ -1238,7 +1238,7 @@ html.dui-pro-overhaul select.dy-chat-agent-picker:focus-visible {
   box-shadow: 0 0 0 3px rgb(94 211 207 / .13) !important;
 }
 
-html.dui-pro-overhaul .dy-command-console--fullscreen {
+html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console.dy-command-console--fullscreen {
   position: fixed !important;
   inset: 0 !important;
   z-index: 49 !important;

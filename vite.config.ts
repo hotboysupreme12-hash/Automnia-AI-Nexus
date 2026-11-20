@@ -36,6 +36,7 @@ export default defineConfig({
         '**/build/**',
         '**/dist/**',
         '**/dist-server/**',
+        '**/output/**',
         '**/memory/**',
         '**/release/**',
         '**/reports/**',

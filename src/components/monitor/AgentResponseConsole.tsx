@@ -939,6 +939,7 @@ export function AgentResponseConsole() {
   const [responseQuery, setResponseQuery] = useState('')
   const [historySearchOpen, setHistorySearchOpen] = useState(false)
   const [isFullScreen, setIsFullScreen] = useState(false)
+  const wasFullScreenRef = useRef(false)
   const [responseLimit, setResponseLimit] = useState(MESSAGE_RENDER_LIMIT)
   const [followingLatest, setFollowingLatest] = useState(true)
   const historySearchInputRef = useRef<HTMLInputElement | null>(null)
@@ -1027,11 +1028,21 @@ export function AgentResponseConsole() {
     if (!isFullScreen) return
     const previousBodyOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    const focusFrame = window.requestAnimationFrame(() => textareaRef.current?.focus({ preventScroll: true }))
+    textareaRef.current?.focus({ preventScroll: true })
     return () => {
       document.body.style.overflow = previousBodyOverflow
-      window.cancelAnimationFrame(focusFrame)
     }
+  }, [isFullScreen])
+  useLayoutEffect(() => {
+    if (isFullScreen) {
+      wasFullScreenRef.current = true
+      return
+    }
+    if (!wasFullScreenRef.current) return
+    wasFullScreenRef.current = false
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLButtonElement>('button[aria-label="Open full-screen chat"]')?.focus({ preventScroll: true })
+    })
   }, [isFullScreen])
   useEffect(() => {
     if (!isFullScreen || isAgentEditorOpen) return
@@ -2147,9 +2158,9 @@ export function AgentResponseConsole() {
     void clearAgentResponses()
   }
 
-  const fullScreenPortalRoot = isFullScreen && typeof document !== 'undefined'
-    ? document.querySelector<HTMLElement>('.app-bg') || document.body
-    : null
+  // Keep the fixed fullscreen surface at the document root so transformed app
+  // containers cannot constrain its viewport or keyboard focus.
+  const fullScreenPortalRoot = isFullScreen && typeof document !== 'undefined' ? document.body : null
   const consolePanel = (
     <section
       ref={consoleRootRef}
