@@ -9,6 +9,7 @@
 - Classifies Vertex AI billing-eligibility failures as actionable, non-retryable errors instead of retrying them through long agent runs.
 - Skips missing legacy session databases before applying session-path custody checks during restart recovery.
 - Queues automatic and requested runtime backups until the Gateway is ready and has been quiet for 15 minutes, keeping backup I/O away from Gateway startup and active use. An arriving run interrupts and requeues a backup, and snapshot creation avoids redundant full-file hashing passes while still verifying the finished snapshot.
+- Allows this release's Windows and macOS installers to publish unsigned under a guarded v1.0.28-only release setting; the update manifest remains cryptographically signed.
 
 ## 1.0.27 - 2026-11-19
 

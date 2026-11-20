@@ -42,7 +42,8 @@ assert.match(publicReleaseWorkflow, /AUTOMNIA_RELEASE_REQUIRE_SIGNING/, 'public 
 assert.match(publicReleaseWorkflow, /AUTOMNIA_UPDATE_REQUIRE_SIGNING/, 'public release CI must require signed update manifests')
 assert.match(workflowSource, /npm run release:validate/, 'CI must validate packaged release artifacts')
 assert.match(readme, /npm run release:validate/, 'README must document release validation')
-assert.match(readme, /Tagged customer releases require Windows Authenticode and macOS Developer ID plus Apple notarization credentials/, 'README must document mandatory platform signing for tagged customer releases')
+assert.match(readme, /Tagged customer releases ordinarily require Windows Authenticode and macOS Developer ID plus Apple notarization credentials/, 'README must document the normal platform-signing requirement for tagged customer releases')
+assert.match(readme, /v1\.0\.28[\s\S]*AUTOMNIA_ALLOW_UNSIGNED_V1_0_28[\s\S]*updater manifest remains signed/, 'README must document the guarded unsigned v1.0.28 exception and retained updater signing')
 assert.match(readme, /distribution-signing\.json/, 'README must document consumer distribution signing evidence')
 assert.match(packagedGatewaySmoke, /launcher\.exitCode !== 0/, 'packaged Windows smoke must allow the detached customer launcher to exit successfully while it verifies the Electron child through API readiness')
 
