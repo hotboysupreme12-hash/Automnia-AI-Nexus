@@ -154,6 +154,7 @@ assert.match(publicRelease, /node scripts\/publish-update-channel\.cjs release/,
 assert.match(publicRelease, /AUTOMNIA_LEGACY_UPDATE_BUCKET/, 'the release publisher must require the legacy bucket')
 assert.match(publicRelease, /AUTOMNIA_UPDATE_TRUSTED_KEY_SHA256/, 'the release publisher must pin the installed update key')
 assert.match(publicRelease, /node scripts\/publish-update-channel\.cjs preflight/, 'both update buckets must be checked before publication')
+assert.match(publicRelease, /Preflight both update buckets[\s\S]*?gcloud config set storage\/parallel_composite_upload_enabled False[\s\S]*?node scripts\/publish-update-channel\.cjs preflight/, 'the update publisher must avoid temporary composite objects that require delete permission')
 assert.ok(publicRelease.indexOf('node scripts/publish-update-channel.cjs preflight') < publicRelease.indexOf('Publish customer installers'), 'both update buckets must be checked before publishing download aliases')
 assert.match(updatePromotion, /AUTOMNIA_UPDATE_CHANNEL:\s*\$\{\{\s*inputs\.channel\s*\}\}/, 'rollout promotion must select the signed release channel')
 assert.match(updatePromotion, /node scripts\/publish-update-channel\.cjs verify/, 'rollout promotion must verify the original signed release')
