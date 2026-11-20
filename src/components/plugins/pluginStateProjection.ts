@@ -4,6 +4,7 @@ export type { PluginConfigField } from '../../api/plugins'
 export type PluginPageEntry = PluginEntry
 
 export type PluginPageStateKey =
+  | 'available'
   | 'configured'
   | 'disabled'
   | 'enabled'
@@ -23,6 +24,7 @@ export type PluginPageState = {
 export const PLUGIN_FILTERS = [
   { id: 'active', label: 'Active' },
   { id: 'attention', label: 'Needs attention' },
+  { id: 'available', label: 'Available' },
   { id: 'all', label: 'All' },
   { id: 'enabled', label: 'Enabled' },
   { id: 'disabled', label: 'Disabled' },
@@ -79,6 +81,20 @@ function normalizedStatus(plugin: PluginPageEntry) {
   return plugin.status.trim().toLowerCase()
 }
 
+export function pluginCapabilities(plugin: PluginPageEntry) {
+  if (plugin.capabilities) return plugin.capabilities
+  const installed = plugin.installed === true
+  return {
+    install: plugin.installable === true && !installed,
+    toggle: installed,
+    update: false,
+    uninstall: false,
+    inspect: installed,
+    configure: installed && plugin.configFields.length > 0,
+    restart: installed,
+  }
+}
+
 function hasMissingAuth(plugin: PluginPageEntry) {
   return plugin.configFields.some((field) => {
     if (!field.required || field.present) return false
@@ -89,10 +105,13 @@ function hasMissingAuth(plugin: PluginPageEntry) {
 
 export function pluginPageState(plugin: PluginPageEntry): PluginPageState {
   const status = normalizedStatus(plugin)
+  const capabilities = pluginCapabilities(plugin)
 
   if (status === 'failed') return { key: 'failed', label: 'failed', tone: 'failed' }
   if (status === 'unavailable') return { key: 'unavailable', label: 'unavailable', tone: 'unavailable' }
-  if (!plugin.enabled && plugin.installable) return { key: 'disabled', label: 'available', tone: 'disabled' }
+  if (status === 'incompatible') return { key: 'unavailable', label: 'incompatible', tone: 'unavailable' }
+  if (capabilities.install) return { key: 'available', label: 'available', tone: 'disabled' }
+  if (plugin.distribution === 'catalog' && !plugin.installed) return { key: 'unavailable', label: 'check compatibility', tone: 'unavailable' }
   if (!plugin.enabled || status === 'disabled') return { key: 'disabled', label: 'disabled', tone: 'disabled' }
   if (plugin.needsSetup && hasMissingAuth(plugin)) return { key: 'missing-auth', label: 'missing auth', tone: 'setup' }
   if (status === 'configured') return { key: 'configured', label: 'configured', tone: 'configured' }
@@ -112,13 +131,16 @@ export function pluginMatchesFilter(plugin: PluginPageEntry, filter: PluginFilte
   const needsAttention = plugin.needsSetup || state.key === 'failed' || state.key === 'unavailable' || state.key === 'missing-auth'
   if (filter === 'active') return plugin.enabled || needsAttention
   if (filter === 'attention') return needsAttention
+  if (filter === 'available') return pluginCapabilities(plugin).install
   if (filter === 'enabled') return plugin.enabled
-  return state.key === filter
+  return plugin.installed === true && state.key === filter
 }
 
 export function summarizePluginPageStates(plugins: PluginPageEntry[]) {
   const summary = {
     configured: 0,
+    installed: 0,
+    available: 0,
     disabled: 0,
     enabled: 0,
     failed: 0,
@@ -129,10 +151,12 @@ export function summarizePluginPageStates(plugins: PluginPageEntry[]) {
 
   for (const plugin of plugins) {
     const state = pluginPageState(plugin)
+    if (plugin.installed) summary.installed += 1
+    if (pluginCapabilities(plugin).install) summary.available += 1
     if (plugin.enabled) summary.enabled += 1
     if (plugin.needsSetup) summary.setup += 1
     if (state.key === 'configured' || state.key === 'managed') summary.configured += 1
-    if (state.key === 'disabled') summary.disabled += 1
+    if (state.key === 'disabled' && plugin.installed) summary.disabled += 1
     if (state.key === 'failed') summary.failed += 1
     if (state.key === 'missing-auth') summary.missingAuth += 1
     if (state.key === 'unavailable') summary.unavailable += 1

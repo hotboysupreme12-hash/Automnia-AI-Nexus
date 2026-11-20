@@ -6,11 +6,27 @@ export type PluginConfigField = {
   path?: string
   envVar?: string
   providerId?: string
+  valueType?: 'string' | 'number' | 'boolean' | 'enum'
+  integer?: boolean
+  options?: string[]
+  supportedByAutomnia?: boolean
   secret: boolean
   required: boolean
   present: boolean
   acceptsDirectSave: boolean
   help?: string
+}
+
+export type PluginDistribution = 'catalog' | 'installed' | 'bundled' | 'configured' | 'managed'
+export type PluginCompatibility = 'compatible' | 'incompatible' | 'unknown'
+export type PluginCapabilities = {
+  install: boolean
+  toggle: boolean
+  update: boolean
+  uninstall: boolean
+  inspect: boolean
+  configure: boolean
+  restart: boolean
 }
 
 export type PluginEntry = {
@@ -21,7 +37,18 @@ export type PluginEntry = {
   systemImage?: string
   packageName?: string
   installSpec?: string
+  kind?: string
+  catalogSource?: string
+  installChoice?: 'npm' | 'clawhub'
+  minHostVersion?: string
+  hostVersion?: string
+  expectedIntegrity?: string
   installable?: boolean
+  installed?: boolean
+  distribution?: PluginDistribution
+  compatibility?: PluginCompatibility
+  capabilities?: PluginCapabilities
+  unsupportedConfigFields?: string[]
   origin: string
   status: string
   enabled: boolean
@@ -185,7 +212,7 @@ export function runOpenClawPluginCommand(command: string, options: { refreshPlug
 
 export function savePluginSetup(
   pluginId: string,
-  values: Record<string, string>,
+  values: Record<string, string | number | boolean>,
   providerAuth: Record<string, string>,
 ): Promise<PluginApiPayload> {
   return pluginApiData<PluginApiPayload>(
@@ -213,7 +240,7 @@ export function setupClawTalkPlugin(apiKey: string): Promise<PluginApiPayload> {
         install: true,
         restart: true,
       },
-      timeoutMs: 190_000,
+      timeoutMs: 1_400_000,
     },
     'Plugin setup failed.',
   )
@@ -239,7 +266,7 @@ export function installOpenClawPlugin(request: PluginInstallRequest): Promise<Pl
         enable: request.enable ?? true,
         restart: request.restart ?? true,
       },
-      timeoutMs: 260_000,
+      timeoutMs: 1_400_000,
     },
     'Plugin install failed.',
   )
@@ -271,7 +298,7 @@ export function updateOpenClawPlugin(pluginId: string): Promise<PluginApiPayload
     {
       method: 'POST',
       body: { restart: true },
-      timeoutMs: 280_000,
+      timeoutMs: 1_320_000,
     },
     'Plugin update failed.',
   )
@@ -283,7 +310,7 @@ export function updateAllOpenClawPlugins(): Promise<PluginApiPayload> {
     {
       method: 'POST',
       body: { restart: true },
-      timeoutMs: 320_000,
+      timeoutMs: 1_320_000,
     },
     'Plugin update failed.',
   )
@@ -300,7 +327,7 @@ export function inspectOpenClawPluginRuntime(pluginId: string): Promise<PluginAp
 export function restartPluginGateway(): Promise<PluginApiPayload> {
   return pluginApiData<PluginApiPayload>(
     '/api/plugins/gateway/restart',
-    { method: 'POST', timeoutMs: 90_000 },
+    { method: 'POST', timeoutMs: 360_000 },
     'Gateway restart failed.',
   )
 }
@@ -311,7 +338,7 @@ export function uninstallOpenClawPlugin(pluginId: string): Promise<PluginApiPayl
     {
       method: 'POST',
       body: { keepFiles: false, force: true, restart: true },
-      timeoutMs: 280_000,
+      timeoutMs: 1_000_000,
     },
     'Plugin uninstall failed.',
   )

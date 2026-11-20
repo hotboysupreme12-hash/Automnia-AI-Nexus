@@ -47,7 +47,7 @@ function ensureRestartRecoveryClaimStartupRepair(vendorRoot) {
     .filter((name) => /^main-session-restart-recovery-marking-.*\.(?:m?js)$/.test(name))
   if (!candidates.length) {
     const packageJson = JSON.parse(fs.readFileSync(path.join(vendorRoot, 'package.json'), 'utf8'))
-    const nativeRestartResume = ['2026.11.5', '2026.11.6'].includes(packageJson.version) && fs.readdirSync(dist)
+    const nativeRestartResume = packageJson.version === '2026.11.6' && fs.readdirSync(dist)
       .filter((name) => /^session-restart-resume-.*\.mjs$/.test(name))
       .some((name) => {
         const source = fs.readFileSync(path.join(dist, name), 'utf8')

@@ -2,6 +2,9 @@ import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import type { BoundedProcessResult } from '../process/boundedProcessService'
 
 export const DEFAULT_TELEGRAM_SPOOLED_HANDLER_TIMEOUT_MS = 2 * 60 * 60 * 1000
+const PLUGIN_MUTATION_DRAIN_TIMEOUT_MS = 315_000
+const PLUGIN_MUTATION_FORCE_EXIT_TIMEOUT_MS = 15_000
+const PLUGIN_MUTATION_PORT_RELEASE_TIMEOUT_MS = 30_000
 
 export function resolveTelegramSpooledHandlerTimeoutMs(configured = process.env.OPENCLAW_TELEGRAM_SPOOLED_HANDLER_TIMEOUT_MS) {
   const timeoutMs = Number(configured)
@@ -195,6 +198,8 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
   let gatewayEnsureGeneration = 0
   let gatewayEnsureStartedAtMs = 0
   let gatewayRestartInFlight: Promise<{ restarted: boolean; detail: string }> | null = null
+  let pluginOfflineMutationQueue: Promise<void> = Promise.resolve()
+  let pluginOfflineMutationPending = 0
   let gatewayProcessOwnedByControlCenter = false
   let lastGatewayPortReleaseAt = 0
   let gatewayAutoRestartPaused = false
@@ -704,12 +709,20 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
     clearRestartTimer()
     gatewayRestartTimer = setTimeout(() => {
       gatewayRestartTimer = null
+      if (pluginOfflineMutationPending > 0) {
+        options.pushGatewayLog('lifecycle', `restart deferred until the plugin state transaction completes: ${reason}`)
+        return
+      }
       markGatewayRestartOutcome('started')
       void ensureGatewayRunningIfAllowed()
     }, backoffMs)
   }
 
   async function ensureGatewayRunning(): Promise<void> {
+    if (pluginOfflineMutationPending > 0) {
+      await pluginOfflineMutationQueue
+      return ensureGatewayRunning()
+    }
     resumeAutoRestart()
     return ensureGatewayRunningIfAllowed()
   }
@@ -937,6 +950,10 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
   }
 
   async function stopGatewayRuntime(reason = 'manual stop'): Promise<{ stopped: boolean; detail: string; port: number; pid: number | null }> {
+    if (pluginOfflineMutationPending > 0) {
+      await pluginOfflineMutationQueue
+      return stopGatewayRuntime(reason)
+    }
     pauseAutoRestart()
     completeGatewayMigration()
     gatewayStartupGraceUntilMs = 0
@@ -1121,6 +1138,9 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
   }
 
   function tryRestartGatewayService(optionsArg: { force?: boolean; allowExternalTakeover?: boolean; reason?: string } = {}): Promise<{ restarted: boolean; detail: string }> {
+    if (pluginOfflineMutationPending > 0) {
+      return pluginOfflineMutationQueue.then(() => tryRestartGatewayService(optionsArg))
+    }
     if (gatewayRestartInFlight) return gatewayRestartInFlight
 
     const restartPromise = tryRestartGatewayServiceInner(optionsArg).finally(() => {
@@ -1229,6 +1249,154 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
     actions.push('resumed gateway auto-start after plugin install repair')
   }
 
+  async function withGatewayStoppedForPluginMutation<T>(
+    reason: string,
+    operation: () => Promise<T>,
+  ): Promise<{ value: T; restarted: boolean; detail: string }> {
+    pluginOfflineMutationPending += 1
+    const run = pluginOfflineMutationQueue.then(() => withGatewayStoppedForPluginMutationInner(reason, operation))
+    pluginOfflineMutationQueue = run.then(
+      () => { pluginOfflineMutationPending = Math.max(0, pluginOfflineMutationPending - 1) },
+      () => { pluginOfflineMutationPending = Math.max(0, pluginOfflineMutationPending - 1) },
+    )
+    return run
+  }
+
+  async function withGatewayStoppedForPluginMutationInner<T>(
+    reason: string,
+    operation: () => Promise<T>,
+  ): Promise<{ value: T; restarted: boolean; detail: string }> {
+    const restartInFlight = gatewayRestartInFlight
+    if (restartInFlight) await restartInFlight.catch(() => undefined)
+
+    const wasAutoRestartPaused = gatewayAutoRestartPaused
+    const wasHealthMonitorRunning = Boolean(gatewayHealthCheckInterval)
+    const hadStartupInFlight = Boolean(gatewayEnsureInFlight)
+    const hadRestartScheduled = Boolean(gatewayRestartTimer)
+    const originalManagedPid = gatewayProcessOwnedByControlCenter ? gatewayProcess?.pid : undefined
+    const wasManagedGatewayRunning = Boolean(originalManagedPid && options.isPidAlive(originalManagedPid))
+    const shouldRestoreGateway = wasManagedGatewayRunning || (!wasAutoRestartPaused && (
+      hadStartupInFlight || hadRestartScheduled
+    ))
+    const startup = gatewayEnsureInFlight
+
+    pauseAutoRestart()
+    stopGatewayHealthMonitor()
+
+    let value!: T
+    let operationError: unknown
+    let restartError: unknown
+    let restarted = false
+    let restartDetail = 'Gateway was already offline; no restart was needed.'
+
+    try {
+      if (startup) await startup.catch(() => undefined)
+
+      const managedPid = gatewayProcessOwnedByControlCenter ? gatewayProcess?.pid : undefined
+      const managedRunning = Boolean(managedPid && options.isPidAlive(managedPid))
+      if (!managedRunning) {
+        const listenerPid = await gatewayListenerPidForPort(options.gatewayHttpPort).catch(() => null)
+        if (listenerPid && options.isPidAlive(listenerPid)) {
+          throw new Error(
+            `Cannot run ${reason} while external Gateway pid=${listenerPid} owns the OpenClaw state. ` +
+            'No local plugin mutation was attempted. Inspect openclaw gateway status, stop that Gateway through its service owner, then retry from Automnia.',
+          )
+        }
+      } else if (managedPid) {
+        const gracefulStop = await options.terminateProcessTree(managedPid, `plugin mutation drain: ${reason}`)
+        options.pushGatewayLog(
+          'lifecycle',
+          `${reason}: requested graceful Gateway shutdown${gracefulStop.detail ? `; ${gracefulStop.detail}` : ''}`,
+        )
+        let deadline = Date.now() + PLUGIN_MUTATION_DRAIN_TIMEOUT_MS
+        while (Date.now() <= deadline && options.isPidAlive(managedPid)) {
+          await options.delayMs(Math.min(options.startupHealthPollMs, Math.max(1, deadline - Date.now())))
+        }
+        if (options.isPidAlive(managedPid)) {
+          options.pushGatewayLog('lifecycle', `${reason}: graceful Gateway drain expired; escalating for managed pid=${managedPid}`)
+          await options.terminateProcessTree(managedPid, `plugin mutation force stop: ${reason}`, true)
+          deadline = Date.now() + PLUGIN_MUTATION_FORCE_EXIT_TIMEOUT_MS
+          while (Date.now() <= deadline && options.isPidAlive(managedPid)) {
+            await options.delayMs(Math.min(options.startupHealthPollMs, Math.max(1, deadline - Date.now())))
+          }
+        }
+        if (options.isPidAlive(managedPid)) {
+          throw new Error(`Cannot run ${reason}: managed Gateway pid=${managedPid} did not stop after graceful shutdown and force escalation.`)
+        }
+        if (gatewayProcess?.pid === managedPid) {
+          gatewayProcess = null
+          gatewayProcessOwnedByControlCenter = false
+        }
+        clearListenerPidCache()
+      }
+
+      const releaseDeadline = Date.now() + PLUGIN_MUTATION_PORT_RELEASE_TIMEOUT_MS
+      let portBusy = await options.checkTcpPort('127.0.0.1', options.gatewayHttpPort, 700)
+      while (portBusy && Date.now() <= releaseDeadline) {
+        const listenerPid = await gatewayListenerPidForPort(options.gatewayHttpPort).catch(() => null)
+        if (listenerPid && options.isPidAlive(listenerPid) && !wasManagedGatewayRunning) {
+          throw new Error(
+            `Cannot run ${reason}: external Gateway pid=${listenerPid} is using the OpenClaw state. ` +
+            'No local plugin mutation was attempted. Inspect openclaw gateway status and stop it through its service owner before retrying.',
+          )
+        }
+        await options.delayMs(Math.min(options.startupHealthPollMs, Math.max(1, releaseDeadline - Date.now())))
+        portBusy = await options.checkTcpPort('127.0.0.1', options.gatewayHttpPort, 700)
+      }
+      if (portBusy) {
+        throw new Error(`Cannot run ${reason}: the Gateway listener is still active. No plugin files were changed.`)
+      }
+
+      value = await operation()
+    } catch (error) {
+      operationError = error
+    }
+
+    try {
+      if (shouldRestoreGateway) {
+        resumeAutoRestart()
+        const listenerPid = await gatewayListenerPidForPort(options.gatewayHttpPort).catch(() => null)
+        if (listenerPid && options.isPidAlive(listenerPid)) {
+          if (gatewayProcessOwnedByControlCenter && gatewayProcess?.pid && options.isPidAlive(gatewayProcess.pid)) {
+            const health = await waitForExistingGatewayHealth(listenerPid)
+            if (!health) throw new Error(`managed Gateway pid=${listenerPid} was still running but did not become healthy`)
+          } else {
+            throw new Error(
+              `external Gateway pid=${listenerPid} appeared while ${reason} was running; Automnia left it untouched.`,
+            )
+          }
+        } else {
+          await ensureGatewayRunningIfAllowed()
+          const health = await waitForGatewayStartupHealthIfStarting()
+          if (!health.healthy && !await isGatewayHealthy()) {
+            throw new Error(`Gateway did not become healthy after ${reason}.`)
+          }
+        }
+        startGatewayHealthMonitor()
+        if (wasAutoRestartPaused) pauseAutoRestart()
+        restarted = true
+        restartDetail = `Gateway stopped for ${reason} and returned to a healthy state.`
+      } else {
+        if (!wasAutoRestartPaused) resumeAutoRestart()
+        if (wasHealthMonitorRunning) startGatewayHealthMonitor()
+      }
+    } catch (error) {
+      restartError = error
+      if (wasAutoRestartPaused) pauseAutoRestart()
+    }
+
+    if (operationError) {
+      const error = operationError instanceof Error ? operationError : new Error(String(operationError))
+      if (restartError) error.message += ` Gateway recovery also failed: ${String(restartError)}`
+      throw error
+    }
+    if (restartError) {
+      throw new Error(`${reason} completed, but Gateway recovery failed: ${String(restartError)}`)
+    }
+
+    return { value, restarted, detail: restartDetail }
+  }
+
   return {
     buildGatewayRunArgs,
     clearListenerPidCache,
@@ -1251,6 +1419,7 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
     stopGatewayHealthMonitor,
     stopGatewayRuntime,
     tryRestartGatewayService,
+    withGatewayStoppedForPluginMutation,
     waitForGatewayStartupHealthIfStarting,
     ensureGatewayRunning,
   }

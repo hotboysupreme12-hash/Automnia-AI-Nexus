@@ -721,6 +721,90 @@ async function ensureWritablePackagedOpenClawRuntime(bundledRuntime) {
 
   const parent = path.dirname(targetRoot)
   const tempRoot = path.join(parent, `.${path.basename(targetRoot)}.tmp-${process.pid}-${Date.now()}`)
+  const collectWritableDistFiles = async (source) => {
+    const writableFiles = new Set()
+    const distRoot = source
+    const relative = (...parts) => path.join(...parts)
+    const addIfFile = (filePath) => {
+      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+        writableFiles.add(path.relative(distRoot, filePath))
+      }
+    }
+
+    for (const entry of await fs.promises.readdir(distRoot, { withFileTypes: true })) {
+      const lowerName = entry.name.toLowerCase()
+      if (entry.isFile() && (lowerName.includes('telegram') || lowerName.startsWith('bot-message-'))) {
+        writableFiles.add(entry.name)
+      }
+    }
+
+    addIfFile(path.join(source, 'extensions', 'codex', 'node_modules', '@openai', 'codex', 'bin', 'codex.js'))
+    const codexDistRoot = path.join(source, 'extensions', 'codex', 'dist')
+    for (const entry of await fs.promises.readdir(codexDistRoot, { withFileTypes: true }).catch(() => [])) {
+      if (entry.isFile() && /^(?:client|conversation-binding)-.*\.js$/i.test(entry.name)) {
+        writableFiles.add(relative('extensions', 'codex', 'dist', entry.name))
+      }
+    }
+
+    const clawTalkFiles = [
+      ['extensions', 'clawtalk', 'openclaw.plugin.json'],
+      ['extensions', 'clawtalk', 'build', 'index.js'],
+      ['extensions', 'clawtalk', 'build', 'services', 'CoreBridge.js'],
+      ['extensions', 'clawtalk', 'build', 'services', 'SmsHandler.js'],
+      ['extensions', 'clawtalk', 'build', 'services', 'DeepToolHandler.js'],
+    ]
+    for (const parts of clawTalkFiles) addIfFile(path.join(source, ...parts))
+    return Array.from(writableFiles)
+  }
+  const stageWritableDistOverlay = async (source, target) => {
+    const writableFiles = await collectWritableDistFiles(source)
+    const writableKeys = new Set(writableFiles.map((filePath) => path.normalize(filePath).toLowerCase()))
+    const hasWritableDescendant = (relativePath) => {
+      const prefix = `${path.normalize(relativePath).toLowerCase()}${path.sep}`
+      return Array.from(writableKeys).some((filePath) => filePath.startsWith(prefix))
+    }
+    const createDirectoryLink = async (sourcePath, targetPath) => {
+      try {
+        await fs.promises.symlink(sourcePath, targetPath, 'junction')
+      } catch {
+        // Junctions avoid duplicating large immutable OpenClaw directories. If
+        // the profile volume cannot create them, copy that subtree as a safe
+        // fallback and keep the mutable overlay files isolated from Program Files.
+        await fs.promises.cp(sourcePath, targetPath, { recursive: true, force: true })
+      }
+    }
+    const mirrorMutableAncestors = async (sourceRoot, targetRoot, relativeDirectory = '') => {
+      const sourceDirectory = path.join(sourceRoot, relativeDirectory)
+      const targetDirectory = path.join(targetRoot, relativeDirectory)
+      if (relativeDirectory) await fs.promises.mkdir(targetDirectory, { recursive: true })
+      const entries = await fs.promises.readdir(sourceDirectory, { withFileTypes: true })
+      for (const entry of entries) {
+        const relativePath = path.join(relativeDirectory, entry.name)
+        const sourcePath = path.join(sourceRoot, relativePath)
+        const targetPath = path.join(targetRoot, relativePath)
+        if (entry.isDirectory()) {
+          const isBundledExtensionTree = relativePath.toLowerCase() === 'extensions'
+            || relativePath.toLowerCase().startsWith(`extensions${path.sep}`)
+          if (hasWritableDescendant(relativePath) || isBundledExtensionTree) {
+            await fs.promises.mkdir(targetPath, { recursive: true })
+            await mirrorMutableAncestors(sourceRoot, targetRoot, relativePath)
+          } else {
+            await createDirectoryLink(sourcePath, targetPath)
+          }
+          continue
+        }
+        await fs.promises.mkdir(path.dirname(targetPath), { recursive: true })
+        await fs.promises.copyFile(sourcePath, targetPath)
+        if (writableKeys.has(path.normalize(relativePath).toLowerCase())) {
+          await fs.promises.chmod(targetPath, 0o644).catch(() => {})
+        }
+      }
+    }
+
+    await fs.promises.mkdir(target, { recursive: true })
+    await mirrorMutableAncestors(source, target)
+    console.log(`[automnia] staged writable OpenClaw runtime overlay (${writableFiles.length} files)`)
+  }
   const copyBundledDist = async (source, target) => {
     const maxAttempts = process.platform === 'win32' ? 3 : 1
     let lastError = null
@@ -728,7 +812,11 @@ async function ensureWritablePackagedOpenClawRuntime(bundledRuntime) {
       try {
         await fs.promises.rm(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
         await fs.promises.mkdir(path.dirname(target), { recursive: true })
-        await fs.promises.cp(source, target, { recursive: true, force: true })
+        if (process.platform === 'win32') {
+          await stageWritableDistOverlay(source, target)
+        } else {
+          await fs.promises.cp(source, target, { recursive: true, force: true })
+        }
         return
       } catch (error) {
         lastError = error

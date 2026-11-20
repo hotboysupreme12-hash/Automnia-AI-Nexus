@@ -1,7 +1,19 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { indexResponseActivity, responseMatchesQuery } from '../src/store/responseHistoryIndex'
+import { indexResponseActivity, responseMatchesQuery, selectTargetAgentRuns } from '../src/store/responseHistoryIndex'
 import type { AgentResponse } from '../src/types/nexus'
+
+test('targeted chat only includes runtime runs owned by its addressed agents', () => {
+  const runs = [
+    { id: 'run-a', agentId: 'agent-a' },
+    { id: 'run-b', agentId: 'agent-b' },
+    { id: 'run-system' },
+  ]
+
+  assert.deepEqual(selectTargetAgentRuns(runs, ['agent-a']), [runs[0]])
+  assert.deepEqual(selectTargetAgentRuns(runs, ['agent-a', 'agent-b']), runs.slice(0, 2))
+  assert.deepEqual(selectTargetAgentRuns(runs, []), [])
+})
 
 test('large history indexing retains the newest live response and counts each agent queue once', () => {
   const entries: AgentResponse[] = Array.from({ length: 800 }, (_, index) => ({ id: String(index), agentId: `agent-${index % 4}`, prompt: `Task ${index}`, response: `Answer ${index}`, ok: true, streaming: index < 400, transport: index % 3 === 0 ? 'command-console-queue' : 'gateway', timestamp: '2026-09-07T12:00:00Z', durationMs: 0 }))

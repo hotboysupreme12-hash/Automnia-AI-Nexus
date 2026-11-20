@@ -52,7 +52,10 @@ const telegramCommandPatch = patchBundleWithWarnings(telegramCommandBundle)
 const patchedTelegramCommandBundle = telegramCommandPatch.source
 
 test('Telegram runtime repair targets OpenClaw split message and ingress bundles', () => {
-  assert.match(controlPlane, /startsWith\('bot-message-'\)/)
+  assert.match(controlPlane, /telegramRuntimeRepairFiles\(root \|\| ''\)/)
+  const rootSelector = controlPlane.slice(controlPlane.indexOf('function openClawPackageRootCandidates()'), controlPlane.indexOf('\nasync function telegramBotRuntimeFileCandidates()'))
+  assert.match(rootSelector, /openClawPackageRootForBin\(openclawBin\)/)
+  assert.doesNotMatch(rootSelector, /electronResourcesPath|process\.cwd\(\)|WORKSPACE_ROOT/)
   assert.match(controlPlane, /hasMessageRoutingShape/)
   assert.match(controlPlane, /hasNativeCommandShape/)
   assert.match(controlPlane, /TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 21/)

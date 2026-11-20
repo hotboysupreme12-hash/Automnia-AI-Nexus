@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.29 - 2026-11-20
+
+### OpenClaw runtime and live agent chat
+
+- Pins Automnia, OpenClaw, and the Codex plugin to 1.0.29, 2026.11.6, and 2026.11.6 respectively.
+- Defers Codex health repair until Gateway startup has settled and prevents automatic replacement of a newer installed Codex package.
+- Adds a full-screen direct agent chat with conversation-scoped running and stop actions.
+- Applies Automnia Cloud HTTP 424 failures to configured model fallback handling.
+
 ## 1.0.28 - 2026-11-20
 
 ### OpenClaw 2026.11.6 and runtime reliability

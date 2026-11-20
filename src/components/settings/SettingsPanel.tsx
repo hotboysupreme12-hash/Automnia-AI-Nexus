@@ -113,7 +113,7 @@ const SETTINGS_SECTIONS: Array<{
   { id: 'missions', label: 'Missions', description: 'Mission setup', keywords: 'mission objective duration risk complexity collaboration evidence build test' },
   { id: 'agents', label: 'Agent Behavior', description: 'Timing, reasoning and teamwork', keywords: 'agent runtime heartbeat timeout thinking fast parallel concurrency simultaneous chat commands sequential recovery continuous' },
   { id: 'jobs', label: 'Automated jobs', description: 'Live active cron schedules', keywords: 'automated jobs cron scheduled schedule scheduler openclaw active running next run' },
-  { id: 'telegram', label: 'Telegram', description: 'Chats, replies and permissions', keywords: 'telegram bot commands agents pairing dm group topics streaming reactions polls media history actions settings' },
+  { id: 'telegram', label: 'Channels & Telegram', description: 'Messaging channels, replies and permissions', keywords: 'telegram discord slack whatsapp signal sms imessage channels bot commands agents pairing dm group topics streaming reactions polls media history actions settings delivery reliability' },
   { id: 'updates', label: 'Updates', description: 'App version and updates', keywords: 'update upgrade version release download installer restart automatic security' },
   { id: 'logs', label: 'Activity', description: 'Recent activity and history', keywords: 'logs activity agent runs gateway events tail automnia runtime response history channel telegram sms incoming sent retain trim memory' },
   { id: 'data', label: 'Backup & Reset', description: 'Backup, cleanup and recovery', keywords: 'reset default backup export clear console responses simulation party data' },

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
-import { accessSync, closeSync, constants as fsConstants, existsSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { accessSync, closeSync, constants as fsConstants, existsSync, lstatSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import net from 'node:net'
@@ -322,6 +322,10 @@ try {
   assert.ok(existsSync(path.join(writableRuntimeRoot, 'openclaw.mjs')), 'staged OpenClaw runtime must include its executable entry point')
   const bundledRuntimeRoot = path.join(resourcesDir, 'openclaw')
   assert.notEqual(path.resolve(writableRuntimeRoot), path.resolve(bundledRuntimeRoot), 'mutable OpenClaw files must not point into the packaged resources directory')
+  if (process.platform === 'win32') {
+    const sharedRuntimeDir = path.join(writableRuntimeRoot, 'dist', 'agents')
+    assert.ok(lstatSync(sharedRuntimeDir).isSymbolicLink(), 'unchanged OpenClaw runtime directories should be junctions instead of full copies')
+  }
 
   const codexCliRelative = path.join('dist', 'extensions', 'codex', 'node_modules', '@openai', 'codex', 'bin', 'codex.js')
   const bundledCodexCli = path.join(bundledRuntimeRoot, codexCliRelative)

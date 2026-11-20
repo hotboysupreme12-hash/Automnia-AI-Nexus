@@ -12,6 +12,10 @@ export type PluginConfigField = {
   path?: string
   envVar?: string
   providerId?: string
+  valueType?: 'string' | 'number' | 'boolean' | 'enum'
+  integer?: boolean
+  options?: string[]
+  supportedByAutomnia?: boolean
   secret: boolean
   required: boolean
   present: boolean
@@ -27,7 +31,26 @@ export type PluginControlEntry = {
   systemImage?: string
   packageName?: string
   installSpec?: string
+  kind?: string
+  catalogSource?: string
+  installChoice?: 'npm' | 'clawhub'
+  minHostVersion?: string
+  hostVersion?: string
+  expectedIntegrity?: string
   installable?: boolean
+  installed?: boolean
+  distribution?: 'catalog' | 'installed' | 'bundled' | 'configured' | 'managed'
+  compatibility?: 'compatible' | 'incompatible' | 'unknown'
+  capabilities?: {
+    install: boolean
+    toggle: boolean
+    update: boolean
+    uninstall: boolean
+    inspect: boolean
+    configure: boolean
+    restart: boolean
+  }
+  unsupportedConfigFields?: string[]
   origin: string
   status: string
   enabled: boolean
@@ -273,6 +296,37 @@ export function displayPluginName(pluginId: string, rawName: unknown): string {
     .replace(/-provider$/, ' provider')
     .replace(/-plugin$/, ' plugin')
     .replace(/\b\w/g, (match) => match.toUpperCase())
+}
+
+function semanticVersionParts(value: string): { numbers: number[]; prerelease: string } | null {
+  const match = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(value.trim())
+  if (!match) return null
+  return { numbers: match.slice(1, 4).map(Number), prerelease: match[4] || '' }
+}
+
+function compareSemanticVersions(leftValue: string, rightValue: string): number | null {
+  const left = semanticVersionParts(leftValue)
+  const right = semanticVersionParts(rightValue)
+  if (!left || !right) return null
+  for (let index = 0; index < 3; index += 1) {
+    if (left.numbers[index] !== right.numbers[index]) return left.numbers[index] - right.numbers[index]
+  }
+  if (left.prerelease === right.prerelease) return 0
+  if (!left.prerelease) return 1
+  if (!right.prerelease) return -1
+  return left.prerelease.localeCompare(right.prerelease, undefined, { numeric: true })
+}
+
+function pluginCompatibility(raw: Record<string, unknown>): 'compatible' | 'incompatible' | 'unknown' {
+  const minimum = stringField(raw, ['minHostVersion'])
+  if (!minimum) return 'compatible'
+  const hostVersion = stringField(raw, ['hostVersion'])
+  if (!hostVersion) return 'unknown'
+  const range = /^(?:>=\s*)?(v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/.exec(minimum)
+  if (!range) return 'unknown'
+  const comparison = compareSemanticVersions(hostVersion, range[1])
+  if (comparison === null) return 'unknown'
+  return comparison >= 0 ? 'compatible' : 'incompatible'
 }
 
 function stringField(record: Record<string, unknown>, keys: string[]) {
@@ -522,13 +576,21 @@ function providerAuthChoicesFromCatalog(openclaw: Record<string, unknown>): Reco
   return choices
 }
 
-function pluginRawFromExternalCatalogEntry(entry: Record<string, unknown>): Record<string, unknown> | null {
+function pluginRawFromExternalCatalogEntry(entry: Record<string, unknown>, hostVersion = ''): Record<string, unknown> | null {
   const openclaw = isLooseRecord(entry.openclaw) ? entry.openclaw : {}
   const plugin = isLooseRecord(openclaw.plugin) ? openclaw.plugin : {}
   const channel = isLooseRecord(openclaw.channel) ? openclaw.channel : {}
   const install = isLooseRecord(openclaw.install) ? openclaw.install : {}
   const contracts = isLooseRecord(openclaw.contracts) ? openclaw.contracts : null
   const packageName = stringField(entry, ['name'])
+  const npmSpec = stringField(install, ['npmSpec'])
+  const clawhubSpec = stringField(install, ['clawhubSpec'])
+  const requestedChoice = stringField(install, ['defaultChoice']).toLowerCase()
+  const installChoice: 'npm' | 'clawhub' = requestedChoice === 'clawhub'
+    ? (clawhubSpec ? 'clawhub' : 'npm')
+    : requestedChoice === 'npm'
+      ? (npmSpec ? 'npm' : 'clawhub')
+      : npmSpec ? 'npm' : 'clawhub'
   const id = (stringField(plugin, ['id']) || stringField(channel, ['id']) || pluginIdFromPackageName(packageName)).trim().toLowerCase()
   if (!PLUGIN_ID_PATTERN.test(id)) return null
 
@@ -548,11 +610,14 @@ function pluginRawFromExternalCatalogEntry(entry: Record<string, unknown>): Reco
     description: stringField(entry, ['description']) || stringField(channel, ['blurb']) || PLUGIN_CATALOG[id]?.description,
     icon: stringField(plugin, ['icon']) || undefined,
     systemImage: stringField(channel, ['systemImage']) || undefined,
-    installSpec: stringField(install, ['npmSpec', 'clawhubSpec']) || undefined,
+    installSpec: (installChoice === 'npm' ? npmSpec : clawhubSpec) || (npmSpec || clawhubSpec) || undefined,
+    installChoice,
     minHostVersion: stringField(install, ['minHostVersion']) || undefined,
+    hostVersion: hostVersion || undefined,
+    expectedIntegrity: stringField(install, ['expectedIntegrity']) || undefined,
     origin: 'official-catalog',
     kind: stringField(entry, ['kind']) || 'plugin',
-    source: stringField(entry, ['source']) || 'official',
+    catalogSource: stringField(entry, ['source']) || 'official',
     enabled: false,
     status: 'available',
     setup: setupProviders.length ? { providers: setupProviders } : undefined,
@@ -663,6 +728,10 @@ function configFieldFromPluginConfig(params: {
   secret?: boolean
   required?: boolean
   help?: string
+  valueType?: PluginConfigField['valueType']
+  integer?: boolean
+  options?: string[]
+  supportedByAutomnia?: boolean
 }): PluginConfigField {
   return {
     key: params.key,
@@ -671,7 +740,11 @@ function configFieldFromPluginConfig(params: {
     secret: params.secret !== false,
     required: params.required !== false,
     present: hasUsableConfigValue(params.value),
-    acceptsDirectSave: true,
+    acceptsDirectSave: params.supportedByAutomnia !== false,
+    ...(params.valueType ? { valueType: params.valueType } : {}),
+    ...(params.integer !== undefined ? { integer: params.integer } : {}),
+    ...(params.options?.length ? { options: params.options } : {}),
+    ...(params.supportedByAutomnia !== undefined ? { supportedByAutomnia: params.supportedByAutomnia } : {}),
     ...(params.help ? { help: params.help } : {}),
   }
 }
@@ -737,13 +810,33 @@ function schemaConfigFieldsFromRaw(
   for (const [key, property] of Object.entries(properties)) {
     if (!PLUGIN_ID_PATTERN.test(key.replace(/\./g, '-'))) continue
     const hint = isLooseRecord(uiHints[key]) ? uiHints[key] : {}
+    if (hint.hidden === true) continue
     const lowerKey = key.toLowerCase()
     const sensitive =
       hint.sensitive === true ||
       /(?:api[-_]?key|token|secret|password|credential)/i.test(lowerKey)
     const requiredField = required.has(key)
-    if (!requiredField && !sensitive) continue
     const propRecord = isLooseRecord(property) ? property : {}
+    const rawType = typeof propRecord.type === 'string' ? propRecord.type : ''
+    const enumValues = Array.isArray(propRecord.enum)
+      ? propRecord.enum.filter((value): value is string => typeof value === 'string' && value.length <= 512).slice(0, 100)
+      : []
+    const valueType: PluginConfigField['valueType'] = sensitive
+      ? 'string'
+      : enumValues.length
+        ? 'enum'
+        : rawType === 'number' || rawType === 'integer'
+          ? 'number'
+          : rawType === 'boolean'
+            ? 'boolean'
+            : rawType === 'string' || !rawType
+              ? 'string'
+              : undefined
+    const hasComposedSchema = ['anyOf', 'oneOf', 'allOf'].some((key) => Object.hasOwn(propRecord, key))
+    const directSupported = Boolean(valueType) && (rawType !== 'object' && rawType !== 'array') &&
+      !hasComposedSchema && !isLooseRecord(propRecord.properties) && !Object.hasOwn(propRecord, 'items') &&
+      (!Array.isArray(propRecord.enum) || (enumValues.length > 0 && enumValues.length === propRecord.enum.length))
+    if (!directSupported && !requiredField && !sensitive && !hint.showInAutomnia) continue
     const label = typeof hint.label === 'string' && hint.label.trim()
       ? hint.label.trim()
       : key
@@ -756,14 +849,21 @@ function schemaConfigFieldsFromRaw(
         : typeof propRecord.description === 'string' && propRecord.description.trim()
           ? propRecord.description.trim()
           : undefined
+    const currentValue = readNestedRecordValue(entryConfig?.config, key)
     fields.push(configFieldFromPluginConfig({
       key,
       label,
       path: `plugins.entries.${String(raw.id)}.config.${key}`,
-      value: readNestedRecordValue(entryConfig?.config, key),
+      value: currentValue,
       secret: sensitive,
       required: requiredField || sensitive,
-      help,
+      valueType,
+      integer: rawType === 'integer',
+      options: enumValues,
+      supportedByAutomnia: directSupported,
+      help: directSupported
+        ? help
+        : `${help ? `${help} ` : ''}This nested or unsupported schema type must be configured in OpenClaw using \`openclaw configure --section plugins\`.`,
     }))
   }
 
@@ -832,6 +932,30 @@ function knownPluginConfigFields(
   })
 }
 
+function unsupportedPluginConfigFieldLabels(raw: Record<string, unknown>): string[] {
+  const schema = isLooseRecord(raw.configSchema) ? raw.configSchema : null
+  const properties = isLooseRecord(schema?.properties) ? schema.properties : {}
+  const required = new Set(pluginStringArray(schema?.required))
+  const uiHints = isLooseRecord(raw.uiHints) ? raw.uiHints : {}
+  return Object.entries(properties)
+    .filter(([key, property]) => {
+      const record = isLooseRecord(property) ? property : {}
+      const type = typeof record.type === 'string' ? record.type : ''
+      const values = Array.isArray(record.enum) ? record.enum : []
+      const composed = ['anyOf', 'oneOf', 'allOf'].some((key) => Object.hasOwn(record, key))
+      const primitive = !composed && !isLooseRecord(record.properties) && !Object.hasOwn(record, 'items') &&
+        (type === 'string' || type === 'number' || type === 'integer' || type === 'boolean' || !type)
+      const supported = primitive && (!Array.isArray(record.enum) || (values.length > 0 && values.every((value) => typeof value === 'string')))
+      const hint = isLooseRecord(uiHints[key]) ? uiHints[key] : {}
+      return !supported && (hint.hidden !== true || required.has(key))
+    })
+    .slice(0, 24)
+    .map(([key]) => {
+      const hint = isLooseRecord(uiHints[key]) ? uiHints[key] : {}
+      return typeof hint.label === 'string' && hint.label.trim() ? hint.label.trim() : key
+    })
+}
+
 function pluginGuidance(
   entry: Omit<PluginControlEntry, 'configFields' | 'guidance' | 'needsSetup'>,
   configFields: PluginConfigField[],
@@ -844,8 +968,12 @@ function pluginGuidance(
   if (entry.missingDependencies.length) {
     guidance.push(`Missing dependencies: ${entry.missingDependencies.slice(0, 4).join(', ')}.`)
   }
-  if (entry.origin === 'official-catalog' && entry.installSpec && !entry.enabled) {
-    guidance.push(`Install official plugin ${entry.installSpec}.`)
+  if (entry.distribution === 'catalog' && entry.compatibility === 'incompatible') {
+    guidance.push(`Requires OpenClaw ${entry.minHostVersion}; this runtime is ${entry.hostVersion || 'unknown'}.`)
+  } else if (entry.distribution === 'catalog' && entry.compatibility === 'unknown' && entry.minHostVersion) {
+    guidance.push(`Compatibility could not be verified for OpenClaw ${entry.minHostVersion}; use OpenClaw configuration after checking the runtime version.`)
+  } else if (entry.distribution === 'catalog' && entry.capabilities?.install && entry.installSpec) {
+    guidance.push(`Install ${entry.kind || 'plugin'} from ${entry.installChoice || 'the verified catalog'}: ${entry.installSpec}.`)
   }
   if (entry.enabled && missingFields.length) {
     guidance.push(`Paste ${missingFields.map((field) => field.label).join(', ')} and refresh.`)
@@ -897,19 +1025,47 @@ function buildPluginControlEntry(
   const excludedByAllow = Boolean(allow.length && !allow.includes(id))
   const denied = deny.includes(id)
   const rawEnabled = configuredEnabled === true ? true : typeof raw.enabled === 'boolean' ? raw.enabled : configuredEnabled !== false
-  const enabled = !globalDisabled && !excludedByAllow && !denied && configuredEnabled !== false && rawEnabled
+  const runtimeListed = raw._runtimeListed === true
+  const runtimeInstall = pluginState.installs?.[id]
+  const rawOrigin = typeof raw.origin === 'string' && raw.origin.trim()
+    ? raw.origin.trim()
+    : runtimeListed
+      ? 'runtime'
+      : configuredEnabled !== null
+        ? 'config'
+        : 'bundled'
+  const distribution: NonNullable<PluginControlEntry['distribution']> = runtimeInstall
+    ? 'installed'
+    : rawOrigin === 'bundled'
+        ? 'bundled'
+        : runtimeListed
+          ? 'installed'
+          : rawOrigin === 'official-catalog'
+            ? 'catalog'
+          : rawOrigin === 'config'
+            ? 'configured'
+            : rawOrigin === 'managed' || Boolean(pluginState.managed?.[id])
+              ? 'managed'
+              : 'catalog'
+  const runtimeAvailable = distribution === 'installed' || distribution === 'bundled'
+  const desiredEnabled = !globalDisabled && !excludedByAllow && !denied && configuredEnabled !== false && rawEnabled
+  const enabled = runtimeAvailable && desiredEnabled
+  const compatibility = pluginCompatibility(raw)
   const catalog = PLUGIN_CATALOG[id]
   const rawStatus = typeof raw.status === 'string' && raw.status.trim() ? raw.status.trim() : ''
-  const status =
-    globalDisabled || configuredEnabled === false || excludedByAllow || denied
+  const status = distribution === 'catalog' && compatibility === 'incompatible'
+    ? 'incompatible'
+    : globalDisabled || configuredEnabled === false || excludedByAllow || denied
       ? 'disabled'
+      : configuredEnabled === true && !runtimeAvailable && distribution !== 'catalog'
+        ? 'unavailable'
       : enabled
         ? (/^disabled$/i.test(rawStatus) ? 'enabled' : rawStatus || 'enabled')
         : rawStatus || 'disabled'
 
   const missingDependencies = uniqueStrings(...pluginMissingDependencies(raw))
   const loaderRecovery = pluginLoaderRecovery(raw, status, missingDependencies)
-  const base = {
+  const base: Omit<PluginControlEntry, 'configFields' | 'guidance' | 'needsSetup'> = {
     id,
     name: displayPluginName(id, raw.name),
     description:
@@ -921,7 +1077,16 @@ function buildPluginControlEntry(
     ...(typeof raw.systemImage === 'string' && raw.systemImage.trim() ? { systemImage: raw.systemImage.trim() } : {}),
     ...(typeof raw.packageName === 'string' && raw.packageName.trim() ? { packageName: raw.packageName.trim() } : {}),
     ...(typeof raw.installSpec === 'string' && raw.installSpec.trim() ? { installSpec: raw.installSpec.trim() } : {}),
-    origin: typeof raw.origin === 'string' && raw.origin.trim() ? raw.origin.trim() : configuredEnabled !== null ? 'config' : 'bundled',
+    ...(typeof raw.kind === 'string' && raw.kind.trim() ? { kind: raw.kind.trim() } : {}),
+    ...(typeof raw.catalogSource === 'string' && raw.catalogSource.trim() ? { catalogSource: raw.catalogSource.trim() } : {}),
+    ...(raw.installChoice === 'npm' || raw.installChoice === 'clawhub' ? { installChoice: raw.installChoice } : {}),
+    ...(typeof raw.minHostVersion === 'string' && raw.minHostVersion.trim() ? { minHostVersion: raw.minHostVersion.trim() } : {}),
+    ...(typeof raw.hostVersion === 'string' && raw.hostVersion.trim() ? { hostVersion: raw.hostVersion.trim() } : {}),
+    ...(typeof raw.expectedIntegrity === 'string' && raw.expectedIntegrity.trim() ? { expectedIntegrity: raw.expectedIntegrity.trim() } : {}),
+    origin: rawOrigin,
+    distribution,
+    compatibility,
+    installed: distribution === 'installed' || distribution === 'bundled',
     status,
     enabled,
     configuredEnabled,
@@ -945,12 +1110,32 @@ function buildPluginControlEntry(
     ...loaderRecovery,
     restartRequired: typeof raw.restartRequired === 'boolean' ? raw.restartRequired : false,
   }
-  const installable = base.origin === 'official-catalog' && Boolean(base.installSpec)
   const configFields = knownPluginConfigFields(id, raw, config, pluginState, providerAuthStatus)
+  const unsupportedConfigFields = uniqueStrings(
+    configFields.filter((field) => field.supportedByAutomnia === false).map((field) => field.label),
+    unsupportedPluginConfigFieldLabels(raw),
+  ).slice(0, 24)
+  const externalPackageManager = distribution === 'installed' && (
+    Boolean(runtimeInstall) ||
+    ['npm', 'clawhub', 'registry', 'marketplace'].includes(rawOrigin.toLowerCase()) ||
+    (Boolean(base.packageName || base.installSpec) && !['bundled', 'config', 'managed', 'runtime'].includes(rawOrigin.toLowerCase()))
+  )
+  const capabilities: NonNullable<PluginControlEntry['capabilities']> = {
+    install: distribution === 'catalog' && Boolean(base.installSpec) && compatibility === 'compatible',
+    toggle: runtimeAvailable,
+    update: externalPackageManager,
+    uninstall: externalPackageManager,
+    inspect: runtimeAvailable,
+    configure: runtimeAvailable && (configFields.length > 0 || unsupportedConfigFields.length > 0),
+    restart: runtimeAvailable,
+  }
+  base.capabilities = capabilities
+  const installable = capabilities.install
   const guidance = pluginGuidance(base, configFields)
   return {
     ...base,
     ...(installable ? { installable: true } : {}),
+    unsupportedConfigFields,
     configFields,
     guidance,
     needsSetup: Boolean(
@@ -1017,6 +1202,8 @@ export function createPluginInventoryService(options: PluginInventoryServiceOpti
 
   async function loadOfficialExternalCatalogPluginsFromRoot(openclawRoot: string, deadlineAt: number): Promise<PluginManifestScanResult> {
     const plugins: Record<string, unknown>[] = []
+    const runtimeManifest = await readJsonRecord(path.join(openclawRoot, 'package.json'), PLUGIN_INVENTORY_LIMITS.metadataFileBytes)
+    const hostVersion = stringField(runtimeManifest.value, ['version'])
     for (const fileName of OFFICIAL_EXTERNAL_CATALOG_FILES) {
       if (Date.now() >= deadlineAt) return { plugins: [], complete: false }
       const catalogResult = await readJsonRecord(
@@ -1029,7 +1216,7 @@ export function createPluginInventoryService(options: PluginInventoryServiceOpti
         ? catalog.entries.filter(isLooseRecord)
         : []
       if (entries.length > PLUGIN_INVENTORY_LIMITS.bundledPluginDirectories) return { plugins: [], complete: false }
-      plugins.push(...entries.map(pluginRawFromExternalCatalogEntry).filter((plugin): plugin is Record<string, unknown> => Boolean(plugin)))
+      plugins.push(...entries.map((entry) => pluginRawFromExternalCatalogEntry(entry, hostVersion)).filter((plugin): plugin is Record<string, unknown> => Boolean(plugin)))
       if (plugins.length > PLUGIN_INVENTORY_LIMITS.bundledPluginDirectories) return { plugins: [], complete: false }
     }
     return { plugins, complete: true }
@@ -1039,7 +1226,17 @@ export function createPluginInventoryService(options: PluginInventoryServiceOpti
     const byId = new Map<string, Record<string, unknown>>()
     for (const raw of groups.flat()) {
       const id = typeof raw.id === 'string' ? raw.id.trim().toLowerCase() : ''
-      if (!PLUGIN_ID_PATTERN.test(id) || byId.has(id)) continue
+      if (!PLUGIN_ID_PATTERN.test(id)) continue
+      const existing = byId.get(id)
+      if (existing) {
+        // Earlier groups are authoritative for runtime state; catalog metadata fills missing fields.
+        const merged = { ...raw, ...existing }
+        for (const [key, value] of Object.entries(raw)) {
+          if (merged[key] === undefined || merged[key] === null || merged[key] === '') merged[key] = value
+        }
+        byId.set(id, merged)
+        continue
+      }
       if (byId.size >= PLUGIN_INVENTORY_LIMITS.bundledPluginDirectories) return { plugins: [], complete: false }
       byId.set(id, raw)
     }
@@ -1188,12 +1385,27 @@ export function createPluginInventoryService(options: PluginInventoryServiceOpti
         cliError = sanitizePluginCliError(String(error), options.redactSensitiveText)
       }
 
-      if (!rawPlugins.length && !rejectPartialCliResult) {
+      if (!rejectPartialCliResult) {
         const bundledScan = await loadBundledPluginManifestList(deadlineAt)
-        source = 'bundled'
         if (bundledScan.complete) {
-          rawPlugins = bundledScan.plugins
-        } else {
+          if (rawPlugins.length) {
+            const runtimeRows = rawPlugins.map((plugin) => ({
+              ...plugin,
+              _runtimeListed: plugin.origin !== 'official-catalog',
+            }))
+            const merged = mergePluginRawEntries(runtimeRows, bundledScan.plugins)
+            if (merged.complete) rawPlugins = merged.plugins
+            else {
+              scanComplete = false
+              rawPlugins = []
+              cliError = uniqueStrings(cliError, 'Plugin registry merge exceeded the safe inventory size limit; no partial inventory was returned.').join(' ')
+            }
+          } else {
+            source = 'bundled'
+            rawPlugins = bundledScan.plugins
+          }
+        } else if (!rawPlugins.length) {
+          source = 'bundled'
           scanComplete = false
           cliError = uniqueStrings(cliError, 'Bundled plugin inventory scan exceeded a safe size or time limit; no partial inventory was returned.').join(' ')
         }

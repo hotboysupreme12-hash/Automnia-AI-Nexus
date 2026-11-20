@@ -110,6 +110,10 @@ export type PluginInstallServiceOptions = {
   pluginExtensionsDir: string
   stateRoot: string
   delayMs?: (ms: number) => Promise<void>
+  withGatewayStoppedForPluginMutation: <T>(
+    reason: string,
+    operation: () => Promise<T>,
+  ) => Promise<{ value: T; restarted: boolean; detail: string }>
   listPluginControls: (options?: { forceRefresh?: boolean }) => Promise<PluginControlsPayload>
   openClawConfigNeedsCodexPlugin: (config: PluginOpenClawConfig) => boolean
   pauseGatewayForPluginInstallRepair: (actions: string[]) => Promise<void>
@@ -144,6 +148,7 @@ export type PluginInstallService = {
 
 const ANSI_ESCAPE = String.fromCharCode(27)
 const ANSI_BEL = String.fromCharCode(7)
+const PLUGIN_UPDATE_TIMEOUT_MS = 10 * 60 * 1000
 const ANSI_CSI_PATTERN = new RegExp(`${ANSI_ESCAPE}\\[[0-9;?]*[ -/]*[@-~]`, 'g')
 const ANSI_OSC_PATTERN = new RegExp(`${ANSI_ESCAPE}\\][^${ANSI_BEL}]*(?:${ANSI_BEL}|${ANSI_ESCAPE}\\\\)`, 'g')
 
@@ -166,6 +171,16 @@ function isPathInsideOrSame(baseDir: string, targetPath: string) {
 
 function pluginCommandString(args: string[]) {
   return `openclaw ${args.map((arg) => /\s/.test(arg) ? JSON.stringify(arg) : arg).join(' ')}`
+}
+
+function isOfflinePluginMutationRefusal(result: PluginOpenClawResult) {
+  const output = stripAnsi(`${result.stdout}\n${result.stderr}`)
+  return /no local mutation was attempted/i.test(output)
+    && /exclusive offline state ownership/i.test(output)
+}
+
+function offlineMutationRestart(result: { restarted: boolean; detail: string }): PluginGatewayRestartRequest {
+  return { restarted: result.restarted, scheduled: false, detail: result.detail }
 }
 
 export function pluginCommandResult(
@@ -581,6 +596,21 @@ export function createPluginInstallService(options: PluginInstallServiceOptions)
     }
     let args = buildInstallArgs(false)
     let install = await options.runOpenClaw(args, 240_000)
+    let offlineRestart: PluginGatewayRestartRequest | undefined
+    if (isOfflinePluginMutationRefusal(install)) {
+      let offline: { value: PluginOpenClawResult; restarted: boolean; detail: string }
+      try {
+        offline = await options.withGatewayStoppedForPluginMutation(
+          `install plugin ${pluginIdFromInstallSpec(spec) || spec}`,
+          () => options.runOpenClaw(args, 240_000),
+        )
+      } catch (error) {
+        const cliDetail = options.redactSensitiveText(stripAnsi(`${install.stdout}\n${install.stderr}`).trim())
+        throw new Error(`${cliDetail}\n\nAutomnia could not safely acquire offline plugin ownership: ${String(error)}`)
+      }
+      install = offline.value
+      offlineRestart = offlineMutationRestart(offline)
+    }
     let repair: PluginInstallRepairSummary | undefined
     if (install.code !== 0) {
       const retryArgs = buildInstallArgs(true)
@@ -628,7 +658,7 @@ export function createPluginInstallService(options: PluginInstallServiceOptions)
       controls.plugins.find((plugin) => !beforeIds.has(plugin.id)) ||
       null
 
-    let restart: PluginGatewayRestartRequest = skippedRestart()
+    let restart: PluginGatewayRestartRequest = offlineRestart || skippedRestart()
     const activationId = installedPlugin?.id || (PLUGIN_ID_PATTERN.test(inferredId) ? inferredId : '')
     let activation: PluginOpenClawResult | null = null
     const missingRequiredFields = params.enable
@@ -650,6 +680,9 @@ export function createPluginInstallService(options: PluginInstallServiceOptions)
         throw error
       }
       await options.setOpenClawPluginEnabled(activationId, true)
+      // An offline package retry can restart the Gateway before activation.
+      // Keep the requested post-activation restart so startup-only plugin
+      // surfaces are registered after `plugins enable` completes.
       restart = params.restart ? options.schedulePluginGatewayRestart() : restart
       controls = await options.listPluginControls()
     }
@@ -689,6 +722,10 @@ export function createPluginInstallService(options: PluginInstallServiceOptions)
       controls = await options.listPluginControls()
     }
 
+    if (params.restart && offlineRestart && !offlineRestart.restarted && !restart.scheduled) {
+      restart = options.schedulePluginGatewayRestart()
+    }
+
     return {
       install: {
         code: install.code,
@@ -713,17 +750,25 @@ export function createPluginInstallService(options: PluginInstallServiceOptions)
     }
   }
 
-  async function updateOpenClawPlugin(pluginId: string, restartRequested: boolean): Promise<PluginMutationResult> {
+  async function updateOpenClawPlugin(pluginId: string, _restartRequested: boolean): Promise<PluginMutationResult> {
     const id = pluginId.trim().toLowerCase()
     if (!PLUGIN_ID_PATTERN.test(id)) throw new Error('Invalid plugin id.')
     const args = ['plugins', 'update', id]
-    const command = await options.runOpenClaw(args, 240_000)
+    const offline = await options.withGatewayStoppedForPluginMutation(
+      `update plugin ${id}`,
+      () => options.runOpenClaw(args, PLUGIN_UPDATE_TIMEOUT_MS),
+    )
+    const command = offline.value
     if (command.code !== 0) throwPluginCommandError(args, command, options.redactSensitiveText)
 
     const controls = await refreshPluginControlsAfterMutation()
     const plugin = controls.plugins.find((entry) => entry.id === id) || null
     await touchPluginManagedRuntimeState(id, plugin?.enabled)
-    const restart = restartRequested ? options.schedulePluginGatewayRestart() : skippedRestart()
+    const restart = offline.restarted
+      ? offlineMutationRestart(offline)
+      : _restartRequested
+        ? options.schedulePluginGatewayRestart()
+        : skippedRestart()
     const refreshedControls = await options.listPluginControls()
     return {
       command: commandResult(args, command),
@@ -733,14 +778,24 @@ export function createPluginInstallService(options: PluginInstallServiceOptions)
     }
   }
 
-  async function updateAllOpenClawPlugins(restartRequested: boolean): Promise<PluginMutationResult> {
+  async function updateAllOpenClawPlugins(_restartRequested: boolean): Promise<PluginMutationResult> {
     const args = ['plugins', 'update', '--all']
-    const command = await options.runOpenClaw(args, 300_000)
+    const offline = await options.withGatewayStoppedForPluginMutation(
+      'update all plugins',
+      () => options.runOpenClaw(args, PLUGIN_UPDATE_TIMEOUT_MS),
+    )
+    const command = offline.value
     if (command.code !== 0) throwPluginCommandError(args, command, options.redactSensitiveText)
 
     const controls = await refreshPluginControlsAfterMutation()
-    await Promise.all(controls.plugins.map((plugin) => touchPluginManagedRuntimeState(plugin.id, plugin.enabled).catch(() => undefined)))
-    const restart = restartRequested ? options.schedulePluginGatewayRestart() : skippedRestart()
+    await Promise.all(controls.plugins
+      .filter((plugin) => plugin.capabilities?.update === true)
+      .map((plugin) => touchPluginManagedRuntimeState(plugin.id, plugin.enabled).catch(() => undefined)))
+    const restart = offline.restarted
+      ? offlineMutationRestart(offline)
+      : _restartRequested
+        ? options.schedulePluginGatewayRestart()
+        : skippedRestart()
     return {
       command: commandResult(args, command),
       restart,
@@ -754,12 +809,31 @@ export function createPluginInstallService(options: PluginInstallServiceOptions)
     const args = ['plugins', 'uninstall', id]
     if (uninstallOptions.keepFiles) args.push('--keep-files')
     if (uninstallOptions.force) args.push('--force')
-    const command = await options.runOpenClaw(args, 240_000)
+    let command = await options.runOpenClaw(args, 240_000)
+    let offlineRestart: PluginGatewayRestartRequest | undefined
+    if (isOfflinePluginMutationRefusal(command)) {
+      let offline: { value: PluginOpenClawResult; restarted: boolean; detail: string }
+      try {
+        offline = await options.withGatewayStoppedForPluginMutation(
+          `uninstall plugin ${id}`,
+          () => options.runOpenClaw(args, 240_000),
+        )
+      } catch (error) {
+        const cliDetail = options.redactSensitiveText(stripAnsi(`${command.stdout}\n${command.stderr}`).trim())
+        throw new Error(`${cliDetail}\n\nAutomnia could not safely acquire offline plugin ownership: ${String(error)}`)
+      }
+      command = offline.value
+      offlineRestart = offlineMutationRestart(offline)
+    }
     if (command.code !== 0) throwPluginCommandError(args, command, options.redactSensitiveText)
 
     await forgetPluginRuntimeState(id)
     const controls = await refreshPluginControlsAfterMutation()
-    const restart = uninstallOptions.restart ? options.schedulePluginGatewayRestart() : skippedRestart()
+    const restart = offlineRestart?.restarted
+      ? offlineRestart
+      : uninstallOptions.restart
+        ? options.schedulePluginGatewayRestart()
+        : offlineRestart || skippedRestart()
     return {
       command: commandResult(args, command),
       restart,

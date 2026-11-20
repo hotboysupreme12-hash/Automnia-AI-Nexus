@@ -13,9 +13,9 @@ function load(name, context = {}) {
   return vm.runInNewContext(ts.transpile(source.slice(start, end)) + `\n${name}`, context)
 }
 test('projection removes retired per-agent limits on repeated saves without losing supported limits', () => {
-  const project = load('projectConfigForOpenClaw2026_11_5', {
-    RECOMMENDED_OPENCLAW_VERSION: '2026.11.5',
-    resolvedOpenClawRuntimeInfo: () => ({ version: '2026.11.5' }),
+  const project = load('projectConfigForOpenClaw2026_11_6', {
+    RECOMMENDED_OPENCLAW_VERSION: '2026.11.6',
+    resolvedOpenClawRuntimeInfo: () => ({ version: '2026.11.6' }),
     isLooseRecord: x => x !== null && typeof x === 'object' && !Array.isArray(x),
   })
   const config = { agents: { entries: { existing: { contextLimits: { memoryGetDefaultLines: 20, toolResultMaxChars: 1000, memoryGetMaxChars: 500 } } }, list: [{ id: 'new', contextLimits: { toolResultMaxChars: 1000, postCompactionMaxChars: 800 } }] } }
@@ -32,12 +32,12 @@ test('projection removes retired per-agent limits on repeated saves without losi
 })
 test('canonical agents hydrate for billing sync and round-trip selected tiers and deletions', () => {
   const context = {
-    RECOMMENDED_OPENCLAW_VERSION: '2026.11.5',
-    resolvedOpenClawRuntimeInfo: () => ({ version: '2026.11.5' }),
+    RECOMMENDED_OPENCLAW_VERSION: '2026.11.6',
+    resolvedOpenClawRuntimeInfo: () => ({ version: '2026.11.6' }),
     isLooseRecord: x => x !== null && typeof x === 'object' && !Array.isArray(x),
   }
   const hydrate = load('hydrateOpenClawAgentEntries', context)
-  const project = load('projectConfigForOpenClaw2026_11_5', context)
+  const project = load('projectConfigForOpenClaw2026_11_6', context)
   const config = { agents: { entries: { architect: { model: { primary: 'automnia-cloud/gemini-3.8-flash' } }, removed: {} } } }
   hydrate(config)
   assert.equal(config.agents.list[0].id, 'architect')
@@ -52,12 +52,12 @@ test('canonical agents hydrate for billing sync and round-trip selected tiers an
 })
 test('2026.11 ownership projection preserves the selected agent and materializes channel fallbacks without retired markers', () => {
   const context = {
-    RECOMMENDED_OPENCLAW_VERSION: '2026.11.5',
-    resolvedOpenClawRuntimeInfo: () => ({ version: '2026.11.5' }),
+    RECOMMENDED_OPENCLAW_VERSION: '2026.11.6',
+    resolvedOpenClawRuntimeInfo: () => ({ version: '2026.11.6' }),
     isLooseRecord: x => x !== null && typeof x === 'object' && !Array.isArray(x),
   }
   const hydrate = load('hydrateOpenClawAgentEntries', context)
-  const project = load('projectConfigForOpenClaw2026_11_5', context)
+  const project = load('projectConfigForOpenClaw2026_11_6', context)
   const config = {
     agents: {
       defaults: {},

@@ -96,7 +96,7 @@ type PluginRoutesOptions = {
   readPluginConfig: (pluginId: string) => Promise<unknown>
   pluginRepairPolicy?: Partial<PluginRepairPolicy>
   redactSensitiveText: (value: string) => string
-  savePluginDirectConfig: (pluginId: string, values: Record<string, string>, providerAuth: Record<string, string>) => Promise<void>
+  savePluginDirectConfig: (pluginId: string, values: Record<string, string | number | boolean>, providerAuth: Record<string, string>) => Promise<void>
   schedulePluginGatewayRestart: () => GatewayRestartRequest
   searchOpenClawPlugins: (query: string, limit: number) => Promise<unknown>
   setOpenClawPluginEnabledForControlCenter: (
@@ -227,6 +227,36 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
       apiFailure(res, 500, 'plugin_operation_failed', 'Failed to verify plugin', options.pluginErrorDetail(error))
       return null
     }
+  }
+
+  async function requirePluginCapability(
+    pluginId: string,
+    capability: 'toggle' | 'update' | 'uninstall' | 'inspect' | 'configure',
+    actionLabel: string,
+    res: Response,
+  ): Promise<PluginControlsPayload | null> {
+    const controls = await requirePluginControl(pluginId, res)
+    if (!controls) return null
+    const plugin = controls.plugins.find((entry) => entry.id === pluginId)
+    const capabilityRecord = plugin && typeof plugin.capabilities === 'object' && plugin.capabilities !== null
+      ? plugin.capabilities as Record<string, unknown>
+      : null
+    // Older API consumers and route harnesses may provide the legacy shape.
+    // The current inventory always includes explicit capabilities; keep the
+    // fallback only for payloads that carry no install-state metadata at all.
+    const hasInstallStateMetadata = Boolean(plugin && (
+      plugin.installed !== undefined || plugin.distribution !== undefined || capabilityRecord
+    ))
+    if (!hasInstallStateMetadata) return controls
+    if (capabilityRecord?.[capability] === true) return controls
+    apiFailure(
+      res,
+      409,
+      'plugin_capability_unavailable',
+      `Plugin cannot ${actionLabel} in its current install state.`,
+      { pluginId, capability },
+    )
+    return null
   }
 
   app.get('/api/plugins', async (req, res) => {
@@ -380,7 +410,7 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     try {
-      if (!await requirePluginControl(pluginId, res)) return
+      if (!await requirePluginCapability(pluginId, 'update', 'update', res)) return
       const result = await runAuditedPluginAction('update', pluginId, () => options.updateOpenClawPlugin(pluginId, parsed.data.restart))
       options.invalidateRuntimeStatusCache()
       return apiSuccess(res, {
@@ -517,7 +547,7 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
         })
       }
 
-      const controls = await requirePluginControl(pluginId, res)
+      const controls = await requirePluginCapability(pluginId, 'inspect', 'repair', res)
       if (!controls) return
       const plugin = controls.plugins.find((entry) => entry.id === pluginId)
       if (!plugin?.enabled || !plugin.loaderErrorSummary) {
@@ -642,7 +672,7 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     try {
-      if (!await requirePluginControl(pluginId, res)) return
+      if (!await requirePluginCapability(pluginId, 'uninstall', 'uninstall', res)) return
       const result = await runAuditedPluginAction('uninstall', pluginId, () => options.uninstallOpenClawPlugin(pluginId, parsed.data))
       options.invalidateRuntimeStatusCache()
       return apiSuccess(res, {
@@ -664,7 +694,7 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     }
 
     try {
-      if (!await requirePluginControl(pluginId, res)) return
+      if (!await requirePluginCapability(pluginId, 'inspect', 'inspect', res)) return
       const inspect = await options.pluginRuntime.inspectOpenClawPluginRuntime(pluginId)
       const controls = await options.listPluginControls()
       return apiSuccess(res, {
@@ -684,7 +714,7 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     }
 
     const schema = z.object({
-      values: z.record(z.string(), z.string().max(20_000)).optional().default({}),
+      values: z.record(z.string(), z.union([z.string().max(20_000), z.number().finite(), z.boolean()])).optional().default({}),
       providerAuth: z.record(z.string(), z.string().max(20_000)).optional().default({}),
       restart: z.boolean().optional().default(true),
     })
@@ -695,7 +725,7 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     }
 
     try {
-      if (!await requirePluginControl(pluginId, res)) return
+      if (!await requirePluginCapability(pluginId, 'configure', 'configure', res)) return
       await runAuditedPluginAction('configure', pluginId, async () => {
         await options.savePluginDirectConfig(pluginId, parsed.data.values, parsed.data.providerAuth)
         return true
@@ -729,7 +759,11 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     }
 
     try {
-      if (parsed.data.pluginId && !await requirePluginControl(parsed.data.pluginId, res)) return
+      if (parsed.data.pluginId) {
+        const capability = parsed.data.command === 'doctor' ? 'inspect' : 'configure'
+        const actionLabel = parsed.data.command === 'doctor' ? 'inspect' : 'configure'
+        if (!await requirePluginCapability(parsed.data.pluginId, capability, actionLabel, res)) return
+      }
       const session = await runAuditedPluginAction('setup-terminal', parsed.data.pluginId || '*', async () =>
         options.pluginRuntime.startPluginSetupTerminalSession(parsed.data),
       )
@@ -839,7 +873,7 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     try {
-      const controls = await requirePluginControl(pluginId, res)
+      const controls = await requirePluginCapability(pluginId, 'toggle', parsed.data.enabled ? 'enable' : 'disable', res)
       if (!controls) return
       if (parsed.data.enabled) {
         const plugin = controls.plugins.find((entry) => entry.id === pluginId)

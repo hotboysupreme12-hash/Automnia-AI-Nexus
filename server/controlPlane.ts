@@ -3,6 +3,7 @@
 // target service folder from docs/BETA_CODEBASE_SPLIT_PLAN.md.
 import { createIdempotentShiftService, type PreparedShift } from './services/runtime/idempotentShiftService'
 import { isEquivalentManagedRuntimeBundledPluginPath } from './services/plugins/managedRuntimePluginPath'
+import { telegramRuntimeRepairFiles } from './services/plugins/telegramRuntimeRepairFiles'
 import { ConfigEditConflict, configSnapshot, mergeConfigEdit, rememberConfigSnapshot } from './services/filesystem/configMerge'
 import { writeBoundedSseEvent } from './services/agents/downstreamSse'
 import { boundConversationMessages } from './services/agents/conversationBudgetService'
@@ -258,6 +259,8 @@ import {
 import {
   codexPluginAvailableForRuntime,
   codexPluginNeedsRepair,
+  newerInstalledCodexVersion,
+  requireGatewayForCodexPreflight,
   OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC,
 } from './services/plugins/codexPluginHealth'
 import { pluginToggleRequiresGatewayRestart } from './services/plugins/pluginRestartPolicy'
@@ -3909,7 +3912,7 @@ function isOpenClawNodeRuntimeUnavailableText(value: string) {
  * retired several older tuning knobs and renamed agents.list to entries;
  * persisting those knobs makes every later Gateway restart fail validation.
  */
-function projectConfigForOpenClaw2026_11_5(config: OpenClawConfigFile) {
+function projectConfigForOpenClaw2026_11_6(config: OpenClawConfigFile) {
   if (resolvedOpenClawRuntimeInfo().version !== RECOMMENDED_OPENCLAW_VERSION) return
   const gateway = config.gateway as Record<string, unknown> | undefined
   if (gateway) {
@@ -9819,7 +9822,7 @@ async function writeOpenclawConfig(config: unknown, options: { allowDuringAgentT
             }
           : parsed.agents,
       }
-      projectConfigForOpenClaw2026_11_5(next as unknown as OpenClawConfigFile)
+      projectConfigForOpenClaw2026_11_6(next as unknown as OpenClawConfigFile)
       // Create a version of the config for comparison that excludes dynamic metadata fields
       // (like lastTouchedAt, lastTouchedVersion, updatedAt) using a true deep clone to prevent unnecessary restarts.
       const stripDynamicConfigFieldsForComparison = (cfg: unknown) => {
@@ -10568,6 +10571,8 @@ pluginInstallService = createPluginInstallService({
   pluginExtensionsDir: OPENCLAW_PLUGIN_EXTENSIONS_DIR,
   stateRoot: OPENCLAW_STATE_ROOT,
   delayMs,
+  withGatewayStoppedForPluginMutation: (reason, operation) =>
+    gatewayLifecycle.withGatewayStoppedForPluginMutation(reason, operation),
   listPluginControls,
   openClawConfigNeedsCodexPlugin,
   pauseGatewayForPluginInstallRepair: (actions) => gatewayLifecycle.pauseForPluginInstallRepair(actions),
@@ -10941,6 +10946,9 @@ function isClawTalkPluginPath(value: unknown) {
 function bundledOpenClawPluginExtensionRootCandidates() {
   const electronResourcesPath = getElectronResourcesPath()
   const openclawDir = openclawBin && openclawBin !== 'openclaw' ? openClawPackageRootForBin(openclawBin) : ''
+  if (openclawDir && isManagedOpenClawRuntimePath(openclawBin)) {
+    return [path.join(openclawDir, 'dist', 'extensions')]
+  }
   return uniqueStrings(
     openclawDir ? path.join(openclawDir, 'dist', 'extensions') : '',
     path.resolve(WORKSPACE_ROOT, 'vendor', 'openclaw', 'dist', 'extensions'),
@@ -10988,6 +10996,13 @@ function sanitizeBundledPluginLoadPaths(config: OpenClawConfigFile) {
 function bundledClawTalkPluginRootCandidates() {
   const electronResourcesPath = getElectronResourcesPath()
   const openclawDir = openclawBin && openclawBin !== 'openclaw' ? openClawPackageRootForBin(openclawBin) : ''
+  if (openclawDir && isManagedOpenClawRuntimePath(openclawBin)) {
+    return uniqueStrings(
+      path.join(openclawDir, 'dist', 'extensions', CLAWTALK_PLUGIN_ID),
+      path.join(OPENCLAW_STATE_ROOT, 'extensions', CLAWTALK_PLUGIN_ID),
+      path.join(HOME_DIR, '.openclaw', 'extensions', CLAWTALK_PLUGIN_ID),
+    )
+  }
   return uniqueStrings(
     openclawDir ? path.join(openclawDir, 'dist', 'extensions', CLAWTALK_PLUGIN_ID) : '',
     path.resolve(WORKSPACE_ROOT, 'vendor', 'openclaw', 'dist', 'extensions', CLAWTALK_PLUGIN_ID),
@@ -11947,32 +11962,12 @@ function patchedTelegramBotRuntimeSource(source: string) {
 }
 
 function openClawPackageRootCandidates() {
-  const electronResourcesPath = getElectronResourcesPath()
-  return uniqueStrings(
-    openclawBin && openclawBin !== 'openclaw' ? openClawPackageRootForBin(openclawBin) : '',
-    path.resolve(process.cwd(), 'vendor', 'openclaw'),
-    path.resolve(process.cwd(), 'resources', 'openclaw'),
-    path.resolve(WORKSPACE_ROOT, 'vendor', 'openclaw'),
-    electronResourcesPath ? path.join(electronResourcesPath, 'openclaw') : '',
-  ).filter(Boolean)
+  return openclawBin && openclawBin !== 'openclaw' ? [openClawPackageRootForBin(openclawBin)] : []
 }
 
 async function telegramBotRuntimeFileCandidates() {
-  const files: string[] = []
-  for (const root of openClawPackageRootCandidates()) {
-    const distRoot = path.join(root, 'dist')
-    const entries = await fs.readdir(distRoot, { withFileTypes: true }).catch(() => [])
-    for (const entry of entries) {
-      if (!entry.isFile()) continue
-      // OpenClaw's Telegram implementation is split across the Telegram
-      // ingress bundle and the shared `bot-message-*.js` bundle. The latter
-      // owns routing/mention/body handling, so it must be repaired too.
-      const lowerName = entry.name.toLowerCase()
-      if (!lowerName.includes('telegram') && !lowerName.startsWith('bot-message-')) continue
-      files.push(path.join(distRoot, entry.name))
-    }
-  }
-  return uniqueStrings(files)
+  const [root] = openClawPackageRootCandidates()
+  return telegramRuntimeRepairFiles(root || '')
 }
 
 async function runtimeRepairFileWritable(filePath: string) {
@@ -12475,6 +12470,9 @@ function parseOpenClawCommandInput(input: string) {
 function bundledCodexPluginRootCandidates() {
   const electronResourcesPath = getElectronResourcesPath()
   const openclawDir = openclawBin && openclawBin !== 'openclaw' ? openClawPackageRootForBin(openclawBin) : ''
+  if (openclawDir && isManagedOpenClawRuntimePath(openclawBin)) {
+    return [path.join(openclawDir, 'dist', 'extensions', 'codex')]
+  }
   return uniqueStrings(
     openclawDir ? path.join(openclawDir, 'dist', 'extensions', 'codex') : '',
     path.resolve(process.cwd(), 'vendor', 'openclaw', 'dist', 'extensions', 'codex'),
@@ -12581,7 +12579,7 @@ function safeConfigPathSegments(key: string) {
   return segments
 }
 
-function setNestedConfigString(target: Record<string, unknown>, key: string, value: string) {
+function setNestedConfigValue(target: Record<string, unknown>, key: string, value: string | number | boolean) {
   const segments = safeConfigPathSegments(key)
   let cursor = target
   for (const segment of segments.slice(0, -1)) {
@@ -12594,7 +12592,7 @@ function setNestedConfigString(target: Record<string, unknown>, key: string, val
 
 async function searchOpenClawPlugins(query: string, limit: number): Promise<{ results: PluginSearchResult[]; cliError?: string }> {
   const controls = await listPluginControls().catch(() => null)
-  const installedIds = new Set((controls?.plugins || []).map((plugin) => plugin.id))
+  const installedIds = new Set((controls?.plugins || []).filter((plugin) => plugin.installed === true).map((plugin) => plugin.id))
   const result = await runOpenClaw(['plugins', 'search', query, '--limit', String(limit), '--json'], 120_000)
   if (result.code !== 0) {
     return {
@@ -12610,25 +12608,59 @@ async function searchOpenClawPlugins(query: string, limit: number): Promise<{ re
 
 async function savePluginDirectConfig(
   pluginId: string,
-  values: Record<string, string>,
+  values: Record<string, string | number | boolean>,
   providerAuth: Record<string, string>,
 ) {
   const id = pluginId.trim().toLowerCase()
   if (!PLUGIN_ID_PATTERN.test(id)) throw new Error('Invalid plugin id.')
+
+  const controls = await listPluginControls()
+  const plugin = controls.plugins.find((entry) => entry.id === id)
+  if (!plugin) throw new Error(`Plugin ${id} is not present in the OpenClaw runtime.`)
+  const configFields = new Map(plugin.configFields.filter((field) => !field.providerId).map((field) => [field.key, field]))
+  const cleanValues: Array<readonly [string, string | number | boolean]> = []
+  for (const [rawKey, rawValue] of Object.entries(values)) {
+    const key = rawKey.trim()
+    const field = configFields.get(key)
+    if (!field) throw new Error(`Automnia does not have a safe configuration control for "${key}". Use openclaw configure --section plugins.`)
+    if (!field.acceptsDirectSave || field.supportedByAutomnia === false) {
+      throw new Error(`${field.label} has an unsupported nested schema. Configure it with openclaw configure --section plugins.`)
+    }
+    if (typeof rawValue === 'string' && !rawValue.trim()) continue
+    const valueType = field.valueType || 'string'
+    let value: string | number | boolean
+    if (valueType === 'number') {
+      if (typeof rawValue !== 'number' || !Number.isFinite(rawValue)) throw new Error(`${field.label} must be a finite number.`)
+      if (field.integer && !Number.isInteger(rawValue)) throw new Error(`${field.label} must be a whole number.`)
+      value = rawValue
+    } else if (valueType === 'boolean') {
+      if (typeof rawValue !== 'boolean') throw new Error(`${field.label} must be true or false.`)
+      value = rawValue
+    } else {
+      if (typeof rawValue !== 'string') throw new Error(`${field.label} must be text.`)
+      value = rawValue.trim()
+      if (valueType === 'enum' && !field.options?.includes(value)) {
+        throw new Error(`${field.label} must match one of the advertised choices.`)
+      }
+    }
+    cleanValues.push([key, value])
+  }
+  if (!cleanValues.length && !Object.keys(providerAuth).length) return
 
   for (const [provider, apiKey] of Object.entries(providerAuth)) {
     if (!AUTH_ENV_MAP[provider]) throw new Error(`Unsupported provider auth: ${provider}`)
     if (apiKey.trim()) await persistProviderAuth(provider, apiKey.trim())
   }
 
-  const cleanValues = Object.entries(values)
-    .map(([key, value]) => [key.trim(), value.trim()] as const)
-    .filter(([, value]) => value.length > 0)
-  if (!cleanValues.length) return
-
   const config = await readOpenclawConfig()
   const mappedValues = id === 'telegram'
-    ? applyTelegramPluginConfigValues(config as unknown as Record<string, unknown>, cleanValues)
+    ? applyTelegramPluginConfigValues(
+        config as unknown as Record<string, unknown>,
+        cleanValues.map(([key, value]) => {
+          if (typeof value !== 'string') throw new Error('Telegram channel credentials must be text.')
+          return [key, value] as const
+        }),
+      )
     : { channelValues: [] as Array<readonly [string, string]>, pluginValues: cleanValues }
   if (!config.plugins) config.plugins = {}
   if (!config.plugins.entries) config.plugins.entries = {}
@@ -12639,10 +12671,13 @@ async function savePluginDirectConfig(
   if (!isLooseRecord(entry.config)) entry.config = {}
   for (const [key] of mappedValues.channelValues) delete entry.config[key]
   for (const [key, value] of mappedValues.pluginValues) {
-    setNestedConfigString(entry.config, key, value)
+    setNestedConfigValue(entry.config, key, value)
   }
   for (const [key, value] of [...mappedValues.channelValues, ...mappedValues.pluginValues]) {
-    await savePluginSecret(id, key, value)
+    const field = configFields.get(key)
+    if (field?.secret || (id === CLAWTALK_PLUGIN_ID && key === 'apiKey') || (id === 'telegram' && /token/i.test(key))) {
+      await savePluginSecret(id, key, value)
+    }
   }
   if (id === CLAWTALK_PLUGIN_ID) {
     entry.config = withoutLegacyClawTalkConfigFields(entry.config)
@@ -12826,6 +12861,13 @@ async function ensureCodexPluginInstalledForOpenAiRuntime(config: OpenClawConfig
 
   if (!openclawCodexPluginAutoInstallPending) {
     openclawCodexPluginAutoInstallPending = (async () => {
+      // A plugin cannot report runtime-loaded while the Gateway is still
+      // starting. Wait for the existing managed startup instead of treating
+      // that transient state as a damaged package and force-reinstalling it.
+      await requireGatewayForCodexPreflight({
+        isHealthy: () => isGatewayHealthy().catch(() => false),
+        waitForStartup: () => gatewayLifecycle.waitForGatewayStartupHealthIfStarting(),
+      })
       const controls = await listPluginControls({ forceRefresh: true }).catch((error) => {
         console.warn('[plugins/codex] failed to inspect plugin state before auto-install:', error)
         return null
@@ -12850,6 +12892,31 @@ async function ensureCodexPluginInstalledForOpenAiRuntime(config: OpenClawConfig
           : `[plugins/codex] Codex plugin is enabled; installing ${OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC} with --pin.`,
       )
       try {
+        // A damaged or temporarily unloaded newer installation must never be
+        // silently replaced by the older package bundled with this checkout.
+        // Include incomplete projects: a missing dependency is one reason a
+        // package can need repair in the first place.
+        const projectsRoot = path.join(OPENCLAW_STATE_ROOT, 'npm', 'projects')
+        const projects = await fs.readdir(projectsRoot, { withFileTypes: true }).catch(() => [])
+        const packageVersions: string[] = []
+        for (const project of projects) {
+          if (!project.isDirectory()) continue
+          try {
+            const packageJson = JSON.parse(await fs.readFile(path.join(projectsRoot, project.name, 'node_modules', '@openclaw', 'codex', 'package.json'), 'utf8')) as { name?: unknown; version?: unknown }
+            if (packageJson.name === '@openclaw/codex' && typeof packageJson.version === 'string') {
+              packageVersions.push(packageJson.version)
+            }
+          } catch { /* An incomplete or unrelated project has no readable Codex package. */ }
+        }
+        let repairVersion = OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC.slice(OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC.lastIndexOf('@') + 1)
+        if (bundledCodexSource) {
+          const bundledPackage = JSON.parse(await fs.readFile(path.join(bundledCodexSource, 'package.json'), 'utf8')) as { version?: unknown }
+          repairVersion = typeof bundledPackage.version === 'string' ? bundledPackage.version : ''
+        }
+        const newerVersion = newerInstalledCodexVersion(packageVersions, repairVersion)
+        if (newerVersion) {
+          throw new Error(`Codex ${newerVersion} is installed; automatic repair will not replace it with ${repairVersion || 'an unknown version'}. Repair or select the installed version in Plugins.`)
+        }
         const result = await installOpenClawPlugin({
           spec: bundledCodexSource || OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC,
           pluginId: 'codex',
@@ -12869,7 +12936,7 @@ async function ensureCodexPluginInstalledForOpenAiRuntime(config: OpenClawConfig
         openclawCodexPluginAutoInstallReady = true
       } catch (error) {
         throw new Error(
-          `Codex plugin is enabled, but the plugin is not installed and automatic installation failed. ` +
+          `Codex plugin is enabled, but automatic repair did not complete. ` +
             `Run "openclaw plugins install codex --pin" or use the Plugins panel to install Codex. ${String(error)}`,
         )
       }

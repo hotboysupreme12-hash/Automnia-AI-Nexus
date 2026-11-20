@@ -8,6 +8,7 @@ const { ensureRelayAiTransportCompatibility } = require('./lib/relay-thought-sig
 const { ensureRestartRecoveryClaimStartupRepair } = require('./lib/restart-recovery-stale-claim-patch.cjs')
 const { ensureMissingSessionStoreRecovery } = require('./lib/session-store-missing-path-patch.cjs')
 const { patchGoogleGeminiOnboardingDefault } = require('./lib/google-gemini-onboarding-default.cjs')
+const { patchAutomniaCloud424FailoverDist } = require('./lib/openclaw-automnia-cloud-failover-patch.cjs')
 const {
   prepareGoogleGeminiDiscoverySource,
   prepareGoogleGeminiDirectVideoBuilder,
@@ -1160,6 +1161,7 @@ async function main() {
   ensureAutomniaSettledTurnFinalizationSupport()
   ensureRestartRecoveryClaimStartupRepair(vendorRoot)
   ensureMissingSessionStoreRecovery(vendorRoot)
+  patchAutomniaCloud424FailoverDist(path.join(vendorRoot, 'dist'))
   ensureGoogleGemini4Models()
 
   if (!refresh && fs.existsSync(nodeModulesRoot)) {

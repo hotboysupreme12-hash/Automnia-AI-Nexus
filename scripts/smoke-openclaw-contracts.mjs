@@ -46,6 +46,7 @@ function assertOrderedIncludes(text, needles, label) {
 }
 
 const server = read('server/controlPlane.ts')
+const telegramRuntimeRepairFiles = read('server/services/plugins/telegramRuntimeRepairFiles.ts')
 const compactionPolicy = read('server/services/gateway/compactionPolicy.ts')
 const runtimeRoutes = read('server/routes/runtimeRoutes.ts')
 const routingHelpers = read('server/integrations/agentRoutingHelpers.ts')
@@ -259,7 +260,8 @@ assertIncludes(diagnosticRedaction, 'safeDiagnosticPayload', 'Shared diagnostic 
 assertIncludes(diagnosticRedaction, '[redacted-phone]', 'Shared diagnostic redaction redacts phone-like identifiers')
 assertIncludes(diagnosticRedaction, 'SAFE_DIAGNOSTIC_PAYLOAD_KEYS', 'Shared diagnostic payload allowlist key set')
 assertIncludes(commandConsole, 'className="dy-command-stop-run"', 'Command Console stop button')
-assertIncludes(commandConsole, 'Stop ${busyAgents.length} running Command Console', 'Command Console stop button accessible label')
+assertIncludes(commandConsole, 'Stop ${chatBusyAgents.length} running Command Console', 'Command Console stop button accessible label is scoped to the current conversation')
+assertIncludes(commandConsole, 'chatActiveRuntimeRuns.map((run) => run.id)', 'Command Console stop action only targets runs owned by the current conversation')
 assertIncludes(finalOverrides, '.dy-command-busy', 'Command Console running indicator styling')
 assertIncludes(finalOverrides, '.dy-command-stop-run', 'Command Console stop button styling')
 assertNotIncludes(finalOverrides, '.dy-command-evidence-preview', 'Command Console trace evidence preview styling is removed')
@@ -421,8 +423,8 @@ assertIncludes(routingHelpers, 'function buildTelegramAgentFreshSessionKey', 'Te
 assertIncludes(routingHelpers, "reason: parsed.mode === '/' ? 'sticky' : parsed.mode === 'auto' ? 'auto-fresh' : 'one-shot-fresh'", 'Telegram named one-shot routes should avoid stale sessions')
 assertIncludes(server, "CLAWTALK_REPAIR_SIGNATURE_VERSION = 'clawtalk-repair:v13'", 'ClawTalk repair signature version')
 assertIncludes(server, "TELEGRAM_REPAIR_SIGNATURE_VERSION = 'telegram-routing-repair:v15'", 'Telegram repair signature version')
-assertIncludes(server, "const lowerName = entry.name.toLowerCase()", 'Telegram runtime discovery normalizes bundle names')
-assertIncludes(server, "!lowerName.includes('telegram') && !lowerName.startsWith('bot-message-')", 'Telegram runtime discovery accepts current ingress and shared message bundles')
+assertIncludes(telegramRuntimeRepairFiles, "const lowerName = entry.name.toLowerCase()", 'Telegram runtime discovery normalizes bundle names')
+assertIncludes(telegramRuntimeRepairFiles, "lowerName.includes('telegram') || lowerName.startsWith('bot-message-')", 'Telegram runtime discovery accepts current ingress and shared message bundles')
 assertIncludes(server, "const routeApplicationMarker = 'const telegramAgentRoute = resolveTelegramAgentRouteForMessage({'", 'Telegram route application patch marker')
 assertIncludes(server, "const bodyResultMarker = 'if (!bodyResult) return null;'", 'Telegram route insertion body marker')
 assertIncludes(server, 'CoreBridge patch skipped: unsupported bridge shape', 'ClawTalk bridge shape guard')

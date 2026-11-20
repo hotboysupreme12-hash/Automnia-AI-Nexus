@@ -27,6 +27,7 @@ import { providerLogoSrc } from '../../utils/providerLogos'
 import {
   PLUGIN_FILTERS,
   pluginMatchesFilter,
+  pluginCapabilities,
   pluginPageState,
   readPluginFilter,
   savePluginFilter,
@@ -285,9 +286,27 @@ function commandNotice(payload: PluginApiPayload, fallback: string) {
 
 function setupFieldsForPlugin(plugin: PluginEntry) {
   return plugin.configFields
-    .filter((field) => field.acceptsDirectSave)
+    .filter((field) => field.acceptsDirectSave && field.supportedByAutomnia !== false)
     .sort((a, b) => Number(b.required && !b.present) - Number(a.required && !a.present))
-    .slice(0, 6)
+}
+
+function parseSetupValue(field: PluginEntry['configFields'][number], rawValue: string): string | number | boolean | undefined {
+  if (rawValue === '') return undefined
+  if (field.valueType === 'boolean') {
+    if (rawValue === 'true') return true
+    if (rawValue === 'false') return false
+    throw new Error(`${field.label} must be true or false.`)
+  }
+  if (field.valueType === 'number') {
+    const value = Number(rawValue)
+    if (!Number.isFinite(value)) throw new Error(`${field.label} must be a valid number.`)
+    if (field.integer && !Number.isInteger(value)) throw new Error(`${field.label} must be a whole number.`)
+    return value
+  }
+  if (field.valueType === 'enum' && !field.options?.includes(rawValue)) {
+    throw new Error(`Choose a supported value for ${field.label}.`)
+  }
+  return rawValue.trim()
 }
 
 function ClawTalkOperationsCard({ plugin }: { plugin: PluginEntry }) {
@@ -328,6 +347,7 @@ function ClawTalkOperationsCard({ plugin }: { plugin: PluginEntry }) {
 function PluginRow({
   plugin,
   busyAction,
+  mutationLocked,
   expanded,
   onToggle,
   onRefresh,
@@ -341,6 +361,7 @@ function PluginRow({
 }: {
   plugin: PluginEntry
   busyAction: PluginBusyAction | null
+  mutationLocked: boolean
   expanded: boolean
   onToggle: (plugin: PluginEntry) => void
   onRefresh: (plugin: PluginEntry) => void
@@ -353,8 +374,11 @@ function PluginRow({
   onUninstall: (plugin: PluginEntry) => void
 }) {
   const primaryGuidance = plugin.guidance[0] || (plugin.enabled ? 'Ready after gateway refresh.' : 'Disabled.')
-  const busy = Boolean(busyAction)
-  const installable = Boolean(plugin.installable && plugin.installSpec)
+  const busy = Boolean(busyAction || mutationLocked)
+  const capabilities = pluginCapabilities(plugin)
+  const installable = Boolean(capabilities.install && plugin.installSpec)
+  const canToggle = capabilities.toggle
+  const canConfigure = capabilities.configure
   const toggleLabel = installable ? 'Install' : plugin.enabled ? 'Stop' : 'Start'
   const toggleBusyLabel = installable ? 'Installing' : plugin.enabled ? 'Stopping' : 'Starting'
   const statusState = pluginPageState(plugin)
@@ -362,8 +386,8 @@ function PluginRow({
   const surfaceValues = [...plugin.commands, ...plugin.providers, ...plugin.channels]
   const runtimeLabel = plugin.runtimeLoaded ? 'Loaded' : plugin.enabled ? 'Awaiting sync' : 'Standby'
   const signalTone = plugin.needsSetup ? 'attention' : plugin.enabled ? 'healthy' : 'idle'
-  const canConfigureTelegram = plugin.id === 'telegram' && plugin.configFields.some((field) => field.acceptsDirectSave)
-  const showSetupAction = !installable && (plugin.needsSetup || canConfigureTelegram)
+  const canConfigureTelegram = plugin.id === 'telegram' && canConfigure
+  const showSetupAction = !installable && canConfigure
   return (
     <article
       className="dy-plugin-row"
@@ -390,8 +414,10 @@ function PluginRow({
             </Badge>
           </div>
           <div className="dy-plugin-card-meta">
+            {plugin.kind && <span>{plugin.kind}</span>}
             <span>{plugin.category}</span>
-            <span>{plugin.origin}</span>
+            <span>{plugin.distribution || plugin.origin}</span>
+            {plugin.catalogSource && <span>{plugin.catalogSource}</span>}
             <code>{plugin.id}</code>
           </div>
           <p className="dy-plugin-card-description">{plugin.description}</p>
@@ -426,9 +452,9 @@ function PluginRow({
             variant="secondary"
             size="compact"
             className="dy-plugin-row-action dy-plugin-row-setup"
-            title={`${canConfigureTelegram ? 'Configure' : 'Set up'} ${plugin.name}`}
+            title={`${canConfigureTelegram || !plugin.needsSetup ? 'Configure' : 'Set up'} ${plugin.name}`}
           >
-            {canConfigureTelegram ? 'Configure' : 'Setup'}
+            {canConfigureTelegram || !plugin.needsSetup ? 'Configure' : 'Setup'}
           </Button>
         )}
         <Button
@@ -442,17 +468,19 @@ function PluginRow({
         >
           {busyAction === 'refresh' ? 'Syncing' : 'Sync'}
         </Button>
-        <Button
-          onClick={() => installable ? onInstall(plugin) : onToggle(plugin)}
-          disabled={busy}
-          variant={plugin.enabled ? 'danger' : 'primary'}
-          size="compact"
-          leadingIcon={<span className="dy-plugin-power-icon" data-state={plugin.enabled ? 'stop' : 'start'} aria-hidden="true" />}
-          className={`dy-plugin-row-action dy-plugin-row-power ${plugin.enabled ? 'is-stop' : 'is-start'}`}
-          title={installable ? `Install ${plugin.installSpec}` : plugin.enabled ? `Stop and disable ${plugin.name}` : `Start ${plugin.name}`}
-        >
-          {busyAction === (installable ? 'install' : 'toggle') ? toggleBusyLabel : toggleLabel}
-        </Button>
+        {(installable || canToggle) && (
+          <Button
+            onClick={() => installable ? onInstall(plugin) : onToggle(plugin)}
+            disabled={busy}
+            variant={plugin.enabled ? 'danger' : 'primary'}
+            size="compact"
+            leadingIcon={<span className="dy-plugin-power-icon" data-state={plugin.enabled ? 'stop' : 'start'} aria-hidden="true" />}
+            className={`dy-plugin-row-action dy-plugin-row-power ${plugin.enabled ? 'is-stop' : 'is-start'}`}
+            title={installable ? `Install ${plugin.installSpec}` : plugin.enabled ? `Stop and disable ${plugin.name}` : `Start ${plugin.name}`}
+          >
+            {busyAction === (installable ? 'install' : 'toggle') ? toggleBusyLabel : toggleLabel}
+          </Button>
+        )}
         <Button
           onClick={() => onManage(plugin)}
           disabled={busy}
@@ -483,6 +511,7 @@ function PluginRow({
               </Button>
             ) : (
               <>
+                {capabilities.update && (
                 <Button
                   onClick={() => onUpdate(plugin)}
                   disabled={busy}
@@ -493,6 +522,8 @@ function PluginRow({
                 >
                   {busyAction === 'update' ? 'Updating' : 'Update'}
                 </Button>
+                )}
+                {capabilities.inspect && (
                 <Button
                   onClick={() => onInspect(plugin)}
                   disabled={busy}
@@ -503,6 +534,8 @@ function PluginRow({
                 >
                   {busyAction === 'inspect' ? 'Checking' : 'Inspect'}
                 </Button>
+                )}
+                {capabilities.restart && (
                 <Button
                   onClick={() => onRestart(plugin)}
                   disabled={busy}
@@ -513,6 +546,8 @@ function PluginRow({
                 >
                   {busyAction === 'restart' ? 'Restarting' : 'Restart'}
                 </Button>
+                )}
+                {capabilities.uninstall && (
                 <Button
                   onClick={() => onUninstall(plugin)}
                   disabled={busy}
@@ -523,9 +558,20 @@ function PluginRow({
                 >
                   {busyAction === 'uninstall' ? 'Removing' : 'Uninstall'}
                 </Button>
+                )}
               </>
             )}
           </div>
+          {plugin.installSpec && (
+            <p className="mt-2 break-all font-mono text-[10px] text-slate-500">
+              {plugin.installChoice ? `${plugin.installChoice}: ` : ''}{plugin.installSpec}
+              {plugin.minHostVersion ? ` · OpenClaw ${plugin.minHostVersion}` : ''}
+            </p>
+          )}
+          {plugin.expectedIntegrity && <p className="mt-1 break-all font-mono text-[9px] text-slate-600">Catalog integrity: {plugin.expectedIntegrity}</p>}
+          {!installable && !capabilities.update && !capabilities.inspect && !capabilities.restart && !capabilities.uninstall && (
+            <p className="mt-2 text-[10px] text-slate-500">This registry entry is not installed in the runtime, so package actions are unavailable.</p>
+          )}
         </div>
       )}
     </article>
@@ -534,12 +580,14 @@ function PluginRow({
 
 function PluginSetupModal({
   plugin,
+  configPath,
   onClose,
   onSaved,
   setNotice,
   setError,
 }: {
   plugin: PluginEntry
+  configPath?: string
   onClose: () => void
   onSaved: (payload: PluginApiPayload) => void
   setNotice: (notice: string) => void
@@ -557,15 +605,26 @@ function PluginSetupModal({
 
   const saveSetup = useCallback(async () => {
     const isClawTalk = plugin.id === 'clawtalk'
-    const configValues: Record<string, string> = {}
+    const configValues: Record<string, string | number | boolean> = {}
     const providerAuth: Record<string, string> = {}
+    setError('')
     for (const field of fields) {
-      const value = values[field.key]?.trim()
-      if (!value) continue
-      if (field.providerId) providerAuth[field.providerId] = value
-      else configValues[field.key] = value
+      try {
+        const value = parseSetupValue(field, values[field.key] ?? '')
+        if (value === undefined || value === '') continue
+        if (field.providerId) {
+          if (typeof value !== 'string') throw new Error(`${field.label} must be text.`)
+          providerAuth[field.providerId] = value
+        } else configValues[field.key] = value
+      } catch (err) {
+        const message = pluginRequestError(err)
+        setLocalError(message)
+        setError(message)
+        return
+      }
     }
-    if (isClawTalk && !configValues.apiKey) {
+    const clawTalkApiKey = typeof configValues.apiKey === 'string' ? configValues.apiKey : ''
+    if (isClawTalk && !clawTalkApiKey) {
       setLocalError('Paste the ClawTalk API key to connect.')
       return
     }
@@ -579,7 +638,7 @@ function PluginSetupModal({
     setError('')
     try {
       const payload = isClawTalk
-        ? await setupClawTalkPlugin(configValues.apiKey)
+        ? await setupClawTalkPlugin(clawTalkApiKey)
         : await savePluginSetup(plugin.id, configValues, providerAuth)
       onSaved(payload)
       setNotice(isClawTalk
@@ -587,7 +646,9 @@ function PluginSetupModal({
         : `${plugin.name} setup saved; ${restartNotice(payload.restart)}.`)
       onClose()
     } catch (err) {
-      setLocalError(pluginRequestError(err))
+      const message = pluginRequestError(err)
+      setLocalError(message)
+      setError(message)
     } finally {
       setSaving(false)
     }
@@ -598,7 +659,7 @@ function PluginSetupModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <section className="w-full max-w-md rounded-xl border border-white/[0.08] bg-[#07101f] p-4 shadow-2xl shadow-black/60">
+      <section className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-white/[0.08] bg-[#07101f] p-4 shadow-2xl shadow-black/60">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-[14px] font-bold text-slate-100">{plugin.name}</p>
@@ -629,13 +690,36 @@ function PluginSetupModal({
                   <span className="truncate">{field.label}</span>
                   {field.present && <span className="shrink-0 text-[9px] text-emerald-300/80">saved</span>}
                 </span>
-                <input
-                  value={values[field.key] || ''}
-                  onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))}
-                  type={field.secret ? 'password' : 'text'}
-                  placeholder={field.envVar || (field.present ? 'Leave blank to keep current value' : 'Required')}
-                  className="h-9 min-w-0 rounded-md border border-white/[0.07] bg-black/25 px-3 text-[12px] text-slate-200 outline-none transition placeholder:text-slate-600 focus:border-amber-300/30"
-                />
+                {field.valueType === 'enum' ? (
+                  <select
+                    value={values[field.key] || ''}
+                    onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))}
+                    className="h-9 min-w-0 rounded-md border border-white/[0.07] bg-[#0a1424] px-3 text-[12px] text-slate-200 outline-none transition focus:border-amber-300/30"
+                  >
+                    <option value="">{field.present ? 'Leave unchanged' : 'Choose a value'}</option>
+                    {(field.options || []).map((option) => <option key={option} value={option}>{option}</option>)}
+                  </select>
+                ) : field.valueType === 'boolean' ? (
+                  <select
+                    value={values[field.key] || ''}
+                    onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))}
+                    className="h-9 min-w-0 rounded-md border border-white/[0.07] bg-[#0a1424] px-3 text-[12px] text-slate-200 outline-none transition focus:border-amber-300/30"
+                  >
+                    <option value="">{field.present ? 'Leave unchanged' : 'Choose true or false'}</option>
+                    <option value="true">True</option>
+                    <option value="false">False</option>
+                  </select>
+                ) : (
+                  <input
+                    value={values[field.key] || ''}
+                    onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))}
+                    type={field.valueType === 'number' ? 'number' : field.secret ? 'password' : 'text'}
+                    step={field.valueType === 'number' ? (field.integer ? '1' : 'any') : undefined}
+                    placeholder={field.envVar || (field.present ? 'Leave blank to keep current value' : 'Required')}
+                    className="h-9 min-w-0 rounded-md border border-white/[0.07] bg-black/25 px-3 text-[12px] text-slate-200 outline-none transition placeholder:text-slate-600 focus:border-amber-300/30"
+                  />
+                )}
+                {field.help && <span className="text-[9px] leading-relaxed text-slate-500">{field.help}</span>}
               </label>
             ))}
           </div>
@@ -644,6 +728,13 @@ function PluginSetupModal({
             No direct fields were advertised for this plugin. Refresh after resolving the listed action.
           </p>
         )}
+
+        {plugin.unsupportedConfigFields?.length ? (
+          <div className="mt-3 rounded-md border border-amber-300/15 bg-amber-300/[0.05] px-3 py-2 text-[10px] leading-relaxed text-amber-100/85">
+            <p>Automnia cannot safely edit these nested or unsupported fields: {plugin.unsupportedConfigFields.join(', ')}.</p>
+            <p className="mt-1">Configure them with <code>openclaw configure --section plugins</code>{configPath ? <> or edit <code>{configPath}</code></> : ''}, then refresh this registry.</p>
+          </div>
+        ) : null}
 
         {localError && (
           <div className="mt-3 rounded-md border border-rose-400/20 bg-rose-400/[0.06] px-3 py-2 text-[11px] text-rose-200">
@@ -759,6 +850,8 @@ function PluginInspectModal({
 
 function PluginDiscoveryPanel({
   onInstalled,
+  onMutationBusyChange,
+  mutationsLocked,
   query,
   setQuery,
   filter,
@@ -768,6 +861,8 @@ function PluginDiscoveryPanel({
   setError,
 }: {
   onInstalled: (payload: PluginApiPayload) => void
+  onMutationBusyChange: (busy: boolean) => void
+  mutationsLocked: boolean
   query: string
   setQuery: (query: string) => void
   filter: PluginFilter
@@ -790,7 +885,7 @@ function PluginDiscoveryPanel({
     if (!clawHubMode) {
       setResults([])
       setLocalError('')
-      setNotice(`${visibleCount} installed plugin${visibleCount === 1 ? '' : 's'} shown.`)
+      setNotice(`${visibleCount} plugin registry entr${visibleCount === 1 ? 'y' : 'ies'} shown.`)
       return
     }
     if (!q) {
@@ -816,6 +911,7 @@ function PluginDiscoveryPanel({
     const installSpec = spec.trim()
     if (!installSpec) return
     setInstalling(installSpec)
+    onMutationBusyChange(true)
     setLocalError('')
     setError('')
     try {
@@ -827,27 +923,28 @@ function PluginDiscoveryPanel({
       setLocalError(pluginRequestError(err))
     } finally {
       setInstalling('')
+      onMutationBusyChange(false)
     }
-  }, [onInstalled, pin, setError, setNotice])
+  }, [onInstalled, onMutationBusyChange, pin, setError, setNotice])
 
   return (
     <section className="dy-plugin-discovery">
       <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="Plugin search scope">
-        <Button size="compact" variant="quiet" aria-pressed={!clawHubMode} onClick={() => { if (clawHubMode) setQuery(clawHubQuery) }}>Installed plugins</Button>
-        <Button size="compact" variant="quiet" aria-pressed={clawHubMode} onClick={() => { if (!clawHubMode) setQuery(`/clawhub ${query}`) }}>ClawHub catalog</Button>
+        <Button size="compact" variant="quiet" disabled={mutationsLocked} aria-pressed={!clawHubMode} onClick={() => { if (clawHubMode) setQuery(clawHubQuery) }}>Automnia registry</Button>
+        <Button size="compact" variant="quiet" disabled={mutationsLocked} aria-pressed={clawHubMode} onClick={() => { if (!clawHubMode) setQuery(`/clawhub ${query}`) }}>ClawHub catalog</Button>
       </div>
       <div className="dy-plugin-discovery-search">
         <div className="dy-plugin-search-field">
           <span className="dy-plugin-search-icon" aria-hidden="true">⌕</span>
           <input
             data-plugin-search="true"
-            aria-label={clawHubMode ? 'Search ClawHub catalog' : 'Filter installed plugins'}
+            aria-label={clawHubMode ? 'Search ClawHub catalog' : 'Filter plugin registry'}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') void searchPlugins()
             }}
-            placeholder={clawHubMode ? 'Search ClawHub catalog' : 'Filter installed plugins'}
+            placeholder={clawHubMode ? 'Search ClawHub catalog' : 'Filter plugins, providers, and channels'}
             className="dy-plugin-search-input"
           />
         </div>
@@ -912,7 +1009,7 @@ function PluginDiscoveryPanel({
               </div>
               <Button
                 onClick={() => void installPlugin(result.installSpec, result.id)}
-                disabled={Boolean(installing) || result.installed}
+                disabled={Boolean(installing) || result.installed || mutationsLocked}
                 variant="secondary"
                 size="compact"
                 loading={installing === result.installSpec}
@@ -944,6 +1041,9 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
   const [inspectState, setInspectState] = useState<PluginInspectState | null>(null)
   const [uninstallConfirmPlugin, setUninstallConfirmPlugin] = useState<PluginEntry | null>(null)
   const [updateAllConfirm, setUpdateAllConfirm] = useState(false)
+  const [discoveryInstallBusy, setDiscoveryInstallBusy] = useState(false)
+  const packageMutationBusy = discoveryInstallBusy || ['install', 'update', 'uninstall'].includes(busyPluginAction?.action || '')
+  const packageMutationsLocked = updatingAll || packageMutationBusy || updateAllConfirm || Boolean(uninstallConfirmPlugin)
 
   const updateFilter = useCallback((nextFilter: PluginFilter) => {
     setFilter(nextFilter)
@@ -1098,7 +1198,7 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
   }, [applyPayload])
 
   const updateAllPlugins = useCallback(async () => {
-    if (updatingAll) return
+    if (updatingAll || packageMutationBusy || uninstallConfirmPlugin) return
     setUpdateAllConfirm(false)
     setUpdatingAll(true)
     setError('')
@@ -1112,13 +1212,22 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
     } finally {
       setUpdatingAll(false)
     }
-  }, [applyPayload, updatingAll])
+  }, [applyPayload, packageMutationBusy, uninstallConfirmPlugin, updatingAll])
 
   const requestUpdateAllPlugins = useCallback(() => {
+    if (packageMutationBusy || uninstallConfirmPlugin) {
+      setNotice('Finish the current plugin package action before starting Update all.')
+      return
+    }
+    const updateable = plugins.filter((plugin) => pluginCapabilities(plugin).update).length
+    if (!updateable) {
+      setNotice('No package-managed installed plugins are available to update.')
+      return
+    }
     setError('')
-    setNotice('Review before updating all installed plugins.')
+    setNotice(`Review before updating ${updateable} package-managed plugin${updateable === 1 ? '' : 's'}.`)
     setUpdateAllConfirm(true)
-  }, [])
+  }, [packageMutationBusy, plugins, setError, setNotice, uninstallConfirmPlugin])
 
   const keepCurrentPluginVersions = useCallback(() => {
     setUpdateAllConfirm(false)
@@ -1213,7 +1322,13 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
 
   const stateSummary = summarizePluginPageStates(plugins)
   const browser = plugins.find((plugin) => plugin.id === 'browser')
-  const attentionCount = stateSummary.setup + stateSummary.missingAuth + stateSummary.failed + stateSummary.unavailable
+  const updateableCount = plugins.filter((plugin) => pluginCapabilities(plugin).update).length
+  const actionFailureCount = error && stateSummary.failed === 0 ? 1 : 0
+  const pluginAttentionCount = plugins.filter((plugin) => {
+    const state = pluginPageState(plugin)
+    return plugin.needsSetup || state.key === 'failed' || state.key === 'unavailable'
+  }).length
+  const attentionCount = pluginAttentionCount + actionFailureCount
   const cacheLabel = pluginsPanelCache?.cache?.source === 'openclaw' ? 'LIVE REGISTRY' : 'BUNDLED REGISTRY'
   const statusMessage = compactPluginNoticeText(error || notice)
 
@@ -1248,12 +1363,12 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
             )}
             <Button
               onClick={requestUpdateAllPlugins}
-              disabled={updatingAll || loading}
+              disabled={updatingAll || loading || packageMutationBusy || updateAllConfirm || Boolean(uninstallConfirmPlugin) || updateableCount === 0}
               variant="primary"
               size="compact"
               loading={updatingAll}
               className="dy-plugins-update-all"
-              title="Run openclaw plugins update-all and restart the embedded gateway"
+              title={updateableCount ? `Update ${updateableCount} package-managed plugins through OpenClaw` : 'No installed package-managed plugins are available to update'}
             >
               {updatingAll ? 'Updating' : 'Update all'}
             </Button>
@@ -1263,8 +1378,8 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
         <div className="dy-plugins-overview" aria-label="Plugin workspace summary">
           <div className="dy-plugins-overview-cell" data-tone="neutral">
             <span>Installed</span>
-            <strong>{plugins.length}</strong>
-            <small>registered surfaces</small>
+            <strong>{stateSummary.installed}</strong>
+            <small>runtime packages, including bundled</small>
           </div>
           <div className="dy-plugins-overview-cell" data-tone="healthy">
             <span>Active</span>
@@ -1274,18 +1389,20 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
           <div className="dy-plugins-overview-cell" data-tone={attentionCount ? 'attention' : 'healthy'}>
             <span>Attention</span>
             <strong>{attentionCount}</strong>
-            <small>{attentionCount ? 'setup or runtime action' : 'all systems clear'}</small>
+            <small>{actionFailureCount ? 'plugin action failed' : attentionCount ? 'setup or runtime action' : 'all systems clear'}</small>
           </div>
           <div className="dy-plugins-overview-cell" data-tone="muted">
-            <span>Disabled</span>
-            <strong>{stateSummary.disabled}</strong>
-            <small>available to activate</small>
+            <span>Available</span>
+            <strong>{stateSummary.available}</strong>
+            <small>compatible catalog packages</small>
           </div>
         </div>
 
         <div className="dy-plugins-discovery-wrap">
           <PluginDiscoveryPanel
             onInstalled={applyInstalledPayload}
+            onMutationBusyChange={setDiscoveryInstallBusy}
+            mutationsLocked={packageMutationsLocked}
             query={query}
             setQuery={setQuery}
             filter={filter}
@@ -1320,7 +1437,7 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
             rounded="md"
             detailClassName="text-[10px] text-amber-100/65"
             message="Update all installed plugins?"
-            detail="Downloads compatible plugin updates and restarts the embedded gateway. Finish active work before proceeding."
+            detail={`Updates ${updateableCount} package-managed plugin${updateableCount === 1 ? '' : 's'} through OpenClaw and restarts the embedded gateway. Finish active work before proceeding.`}
             confirmLabel="Update all"
             confirmBusyLabel="Updating all"
             confirmAriaLabel="Update all installed plugins"
@@ -1348,6 +1465,7 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
             {setupPlugin && (
               <PluginSetupModal
                 plugin={setupPlugin}
+                configPath={pluginsPanelCache?.configPath}
                 onClose={() => setSetupPlugin(null)}
                 onSaved={applyPayload}
                 setNotice={setNotice}
@@ -1374,6 +1492,7 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
                 <PluginRow
                   key={plugin.id}
                   plugin={plugin}
+                  mutationLocked={packageMutationsLocked}
                   busyAction={
                     refreshingId === plugin.id
                       ? 'refresh'

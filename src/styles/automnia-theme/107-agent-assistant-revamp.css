@@ -1205,3 +1205,68 @@ html[data-dui-motion="reduced"] .dy-command-console *::after {
   animation: none !important;
   transition-duration: .001ms !important;
 }
+
+html.dui-pro-overhaul .dy-command-console__meta {
+  flex-wrap: wrap !important;
+}
+
+html.dui-pro-overhaul .dy-chat-agent-picker__label {
+  color: #91a8ad !important;
+  font-size: 10px !important;
+  font-weight: 650 !important;
+  white-space: nowrap !important;
+}
+
+html.dui-pro-overhaul select.dy-chat-agent-picker {
+  width: clamp(132px, 17vw, 210px) !important;
+  min-width: 132px !important;
+  max-width: 210px !important;
+  min-height: 30px !important;
+  padding: 0 26px 0 9px !important;
+  border: 1px solid rgb(142 176 184 / .18) !important;
+  border-radius: 9px !important;
+  outline: none !important;
+  background: #0a151b !important;
+  color: #e1eded !important;
+  font-size: 11px !important;
+  font-weight: 620 !important;
+  text-overflow: ellipsis !important;
+}
+
+html.dui-pro-overhaul select.dy-chat-agent-picker:focus-visible {
+  border-color: rgb(94 211 207 / .7) !important;
+  box-shadow: 0 0 0 3px rgb(94 211 207 / .13) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console--fullscreen {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 49 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  min-height: 100dvh !important;
+  max-height: 100dvh !important;
+  margin: 0 !important;
+  padding-bottom: env(safe-area-inset-bottom) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #070d12 !important;
+  box-shadow: none !important;
+  isolation: isolate !important;
+}
+
+html.dui-pro-overhaul .dy-command-console--fullscreen .dy-command-console__header {
+  padding-top: env(safe-area-inset-top) !important;
+}
+
+@media (max-width: 760px) {
+  html.dui-pro-overhaul .dy-chat-agent-picker__label {
+    display: none !important;
+  }
+
+  html.dui-pro-overhaul select.dy-chat-agent-picker {
+    width: min(132px, 32vw) !important;
+    min-width: 112px !important;
+  }
+}

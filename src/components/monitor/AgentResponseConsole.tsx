@@ -2,7 +2,8 @@ import { useAgentVoiceStore } from '../../speech/agentVoiceStore'
 import { AvatarFallback } from '../ui/AvatarFallback'
 import { useRememberedState } from '../../hooks/useRememberedState'
 import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type WheelEvent } from 'react'
-import { indexResponseActivity, selectResponseHistory } from '../../store/responseHistoryIndex'
+import { createPortal } from 'react-dom'
+import { indexResponseActivity, selectResponseHistory, selectTargetAgentRuns } from '../../store/responseHistoryIndex'
 import { ResponseMarkdown } from './ResponseMarkdown'
 import { QueuedFollowupControls } from './QueuedFollowupControls'
 import { apiErrorMessage, apiRequest } from '../../api/client'
@@ -937,6 +938,7 @@ export function AgentResponseConsole() {
   useEffect(() => { window.dispatchEvent(new Event('automnia:console-ready')) }, [])
   const [responseQuery, setResponseQuery] = useState('')
   const [historySearchOpen, setHistorySearchOpen] = useState(false)
+  const [isFullScreen, setIsFullScreen] = useState(false)
   const [responseLimit, setResponseLimit] = useState(MESSAGE_RENDER_LIMIT)
   const [followingLatest, setFollowingLatest] = useState(true)
   const historySearchInputRef = useRef<HTMLInputElement | null>(null)
@@ -959,6 +961,10 @@ export function AgentResponseConsole() {
   const cancelQueuedCommandConsoleFollowup = useNexusStore((s) => s.cancelQueuedCommandConsoleFollowup)
   const ingestClawTalkConsoleEvent = useNexusStore((s) => s.ingestClawTalkConsoleEvent)
   const removeAgentFromSelection = useNexusStore((s) => s.removeAgentFromSelection)
+  const selectAgent = useNexusStore((s) => s.selectAgent)
+  const clearSelectedAgents = useNexusStore((s) => s.clearSelectedAgents)
+  const openAgentEditor = useNexusStore((s) => s.openEditor)
+  const isAgentEditorOpen = useNexusStore((s) => s.isEditorOpen)
   const clearAgentResponses = useNexusStore((s) => s.clearAgentResponses)
   const missionRunning = useNexusStore((s) => s.activeMission?.status === 'running')
   const hostedCreditsFirst = resolveLicenseEntitlement(license).isHosted
@@ -1000,6 +1006,7 @@ export function AgentResponseConsole() {
   }))
   const [failedPortraitKeys, setFailedPortraitKeys] = useState<Set<string>>(() => new Set())
   const listRef = useRef<HTMLDivElement | null>(null)
+  const consoleRootRef = useRef<HTMLElement | null>(null)
   const stickToBottomRef = useRef(true)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -1016,6 +1023,51 @@ export function AgentResponseConsole() {
   const recordingDiscardReasonRef = useRef('')
   const voiceStatusClearRef = useRef<number | null>(null)
   const voiceMountedRef = useRef(true)
+  useEffect(() => {
+    if (!isFullScreen) return
+    const previousBodyOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const focusFrame = window.requestAnimationFrame(() => textareaRef.current?.focus({ preventScroll: true }))
+    return () => {
+      document.body.style.overflow = previousBodyOverflow
+      window.cancelAnimationFrame(focusFrame)
+    }
+  }, [isFullScreen])
+  useEffect(() => {
+    if (!isFullScreen || isAgentEditorOpen) return
+    const root = consoleRootRef.current
+    const handleFullScreenKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setIsFullScreen(false)
+        return
+      }
+      if (event.key !== 'Tab' || !root) return
+      const focusable = Array.from(root.querySelectorAll<HTMLElement>(
+        'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',
+      )).filter((element) => element.getAttribute('aria-hidden') !== 'true'
+        && element.getClientRects().length > 0
+        && window.getComputedStyle(element).visibility !== 'hidden')
+      if (!focusable.length) {
+        event.preventDefault()
+        root.focus({ preventScroll: true })
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && (document.activeElement === first || !root.contains(document.activeElement))) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && (document.activeElement === last || !root.contains(document.activeElement))) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    window.addEventListener('keydown', handleFullScreenKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleFullScreenKeyDown)
+    }
+  }, [isFullScreen, isAgentEditorOpen])
   // Keep the authoritative server run projection hot even after the renderer
   // has reloaded or lost an SSE stream. Renderer-local busy state is not a
   // sufficient monitor for Gateway work.
@@ -1044,6 +1096,13 @@ export function AgentResponseConsole() {
     () => basePartyTargetIds.filter((id) => agentById.has(id) && !chatRemovedPartyIds.includes(id)),
     [agentById, basePartyTargetIds, chatRemovedPartyIds],
   )
+  const armedTargets = useMemo(
+    () => selectedTargets.length
+      ? selectedTargets
+      : partyTargetIds.map((id) => agentById.get(id)).filter((agent): agent is OpenClawAgent => Boolean(agent)),
+    [agentById, partyTargetIds, selectedTargets],
+  )
+  const conversationTargetIds = useMemo(() => new Set(armedTargets.map((agent) => agent.id)), [armedTargets])
 
   useEffect(() => {
     setChatRemovedPartyIds((current) => {
@@ -1154,11 +1213,19 @@ export function AgentResponseConsole() {
     ])].map((id) => agentById.get(id)).filter((a): a is OpenClawAgent => Boolean(a)),
     [agentById, busyAgentIds, responses, runtimeSummaryStatus],
   )
+  const chatBusyAgents = useMemo(
+    () => busyAgents.filter((agent) => conversationTargetIds.has(agent.id)),
+    [busyAgents, conversationTargetIds],
+  )
   const activeRuntimeRuns = useMemo(
     () => (runtimeSummaryStatus?.activeRuns || [])
       .filter((run) => run.status === 'running')
       .sort((left, right) => timestampMs(left.startedAt) - timestampMs(right.startedAt)),
     [runtimeSummaryStatus],
+  )
+  const chatActiveRuntimeRuns = useMemo(
+    () => selectTargetAgentRuns(activeRuntimeRuns, conversationTargetIds),
+    [activeRuntimeRuns, conversationTargetIds],
   )
   const busyTargetIds = useMemo(
     () => new Set([
@@ -1201,26 +1268,32 @@ export function AgentResponseConsole() {
     }
     return diagnostics
   }, [activeResponseByAgent, busyAgents, gatewayStabilityTitleText, laneDiagnosticNow, queuedResponsesByAgent])
-  const runningSurfaceCount = activeRuntimeRuns.length || busyAgents.length
-  const stopRunAriaLabel = activeRuntimeRuns.length
+  const runningSurfaceCount = chatActiveRuntimeRuns.length || chatBusyAgents.length
+  const stopRunAriaLabel = chatActiveRuntimeRuns.length
     ? `Stop ${runningSurfaceCount} monitored running Command Console ${runningSurfaceCount === 1 ? 'run' : 'runs'}`
-    : `Stop ${busyAgents.length} running Command Console ${busyAgents.length === 1 ? 'run' : 'runs'}`
+    : `Stop ${chatBusyAgents.length} running Command Console ${chatBusyAgents.length === 1 ? 'run' : 'runs'}`
   const deferredResponseQuery = useDeferredValue(responseQuery)
+  const chatHistoryResponses = useMemo(() => selectedTargets.length === 1
+    ? responses.filter((response) => response.agentId === selectedTargets[0].id)
+    : responses, [responses, selectedTargets])
   const responseHistory = useMemo(() => selectResponseHistory(
-    responses,
+    chatHistoryResponses,
     deferredResponseQuery,
     (agentId) => agentById.get(agentId)?.name || agentId,
     responseLimit,
-  ), [responses, deferredResponseQuery, responseLimit, agentById])
+  ), [chatHistoryResponses, deferredResponseQuery, responseLimit, agentById])
   const visibleDisplayedResponses = responseHistory.entries
   const hiddenResponseCount = responseHistory.total - visibleDisplayedResponses.length
-  const agentReplyInFlight = busyAgents.length > 0 || visibleDisplayedResponses.some((entry) => entry.streaming)
+  const agentReplyInFlight = chatBusyAgents.length > 0 || visibleDisplayedResponses.some((entry) => entry.streaming)
   const targetMode = selectedTargets.length
     ? selectedTargets.length === 1 ? 'Direct chat' : 'Multi-agent chat'
     : 'Party chat'
-  const armedTargets = selectedTargets.length
-    ? selectedTargets
-    : partyTargetIds.map((id) => agentById.get(id)).filter((a): a is OpenClawAgent => Boolean(a))
+  const chatAgentSelectionValue = selectedTargets.length === 1
+    ? selectedTargets[0].id
+    : selectedTargets.length > 1 ? '__multiple__' : '__party__'
+  const chatSettingsAgent = selectedTargets.length === 1
+    ? selectedTargets[0]
+    : armedTargets.length === 1 ? armedTargets[0] : null
   const targetCount = armedTargets.length
   const thinkingCount = armedTargets.filter((agent) => agent.runtimePolicy?.thinkingDefault && agent.runtimePolicy.thinkingDefault !== 'off').length
   const runnableArmedTargets = useMemo(
@@ -2009,8 +2082,8 @@ export function AgentResponseConsole() {
 
   const handleStopRunning = useCallback(() => {
     setMessageActionError('')
-    const localStopped = stopActiveAgentRuns(busyAgents.map((agent) => agent.id))
-    const remoteRunIds = activeRuntimeRuns.map((run) => run.id)
+    const localStopped = stopActiveAgentRuns(chatBusyAgents.map((agent) => agent.id))
+    const remoteRunIds = chatActiveRuntimeRuns.map((run) => run.id)
     if (remoteRunIds.length) {
       setActiveRunActionId('__all__')
       void Promise.allSettled(remoteRunIds.map((runId) => abortRuntimeRun(runId)))
@@ -2028,7 +2101,7 @@ export function AgentResponseConsole() {
     if (localStopped === 0 && remoteRunIds.length === 0) {
       setMessageActionError('No active runtime run is available to stop.')
     }
-  }, [activeRuntimeRuns, busyAgents, refreshRuntimeSummary, stopActiveAgentRuns])
+  }, [chatActiveRuntimeRuns, chatBusyAgents, refreshRuntimeSummary, stopActiveAgentRuns])
 
   const hidePartyTargetFromChat = (agentId: string) => {
     setChatRemovedPartyIds((current) => {
@@ -2074,12 +2147,21 @@ export function AgentResponseConsole() {
     void clearAgentResponses()
   }
 
-  return (
+  const fullScreenPortalRoot = isFullScreen && typeof document !== 'undefined'
+    ? document.querySelector<HTMLElement>('.app-bg') || document.body
+    : null
+  const consolePanel = (
     <section
+      ref={consoleRootRef}
       data-dui-panel="command-console"
       data-chat-panel="true"
       data-chat-design="modern"
-      className="dy-command-console flex min-h-0 flex-col overflow-hidden"
+      data-chat-fullscreen={isFullScreen ? 'true' : 'false'}
+      role={isFullScreen ? 'dialog' : undefined}
+      aria-modal={isFullScreen || undefined}
+      aria-label={isFullScreen ? 'Full-screen Agent Chat' : undefined}
+      tabIndex={-1}
+      className={`dy-command-console flex min-h-0 flex-col overflow-hidden${isFullScreen ? ' dy-command-console--fullscreen' : ''}`}
       onWheel={handleConsoleWheel}
     >
       {/* Header */}
@@ -2125,8 +2207,38 @@ export function AgentResponseConsole() {
               </div>
             </div>
           </div>
-          {responses.length > 0 && (
-            <div className="dy-command-console__meta" role="group" aria-label="Conversation actions">
+          <div className="dy-command-console__meta" role="group" aria-label="Conversation actions">
+              <label className="dy-chat-agent-picker__label" htmlFor="agent-chat-target-picker">Chat with</label>
+              <select
+                id="agent-chat-target-picker"
+                className="dy-chat-agent-picker"
+                aria-label="Select an agent or party for this chat"
+                value={chatAgentSelectionValue}
+                onChange={(event) => {
+                  if (event.currentTarget.value === '__party__') clearSelectedAgents()
+                  else if (event.currentTarget.value !== '__multiple__') selectAgent(event.currentTarget.value)
+                }}
+              >
+                {selectedTargets.length > 1 && <option value="__multiple__" disabled>Multiple agents selected</option>}
+                <option value="__party__">Active party ({partyTargetIds.length})</option>
+                {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+              </select>
+              <IconButton
+                onClick={() => { if (chatSettingsAgent) openAgentEditor(chatSettingsAgent.id) }}
+                className="dy-command-console__action dy-command-console__agent-settings"
+                title={chatSettingsAgent ? `Edit ${chatSettingsAgent.name} settings` : 'Select one agent to edit its settings'}
+                aria-label={chatSettingsAgent ? `Edit ${chatSettingsAgent.name} settings` : 'Select one agent to edit its settings'}
+                disabled={!chatSettingsAgent}
+                variant="quiet"
+                size="compact"
+                icon={(
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="m19.4 15 .1.1a1.7 1.7 0 0 1-2.4 2.4l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a1.7 1.7 0 0 1-3.4 0v-.2a1.7 1.7 0 0 0-2.9-1.2l-.1.1a1.7 1.7 0 0 1-2.4-2.4l.1-.1A1.7 1.7 0 0 0 4.2 12h-.2a1.7 1.7 0 0 1 0-3.4h.2a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a1.7 1.7 0 0 1 2.4-2.4l.1.1a1.7 1.7 0 0 0 2.9-1.2v-.2a1.7 1.7 0 0 1 3.4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a1.7 1.7 0 0 1 2.4 2.4l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.2a1.7 1.7 0 0 1 0 3.4h-.2a1.7 1.7 0 0 0-1.2 2.9Z" />
+                  </svg>
+                )}
+              />
+              {responses.length > 0 && <>
               <IconButton
                 onClick={toggleHistorySearch}
                 className="dy-command-console__action"
@@ -2169,13 +2281,31 @@ export function AgentResponseConsole() {
                 </svg>
                 )}
               />
+              </>}
+              <IconButton
+                onClick={() => setIsFullScreen((current) => !current)}
+                className="dy-command-console__action dy-command-console__fullscreen"
+                title={isFullScreen ? 'Exit full-screen chat (Escape)' : 'Open full-screen chat'}
+                aria-label={isFullScreen ? 'Exit full-screen chat' : 'Open full-screen chat'}
+                aria-pressed={isFullScreen}
+                variant="quiet"
+                size="compact"
+                icon={isFullScreen ? (
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M8 3v5H3M16 3v5h5M3 16h5v5M21 16h-5v5" />
+                  </svg>
+                ) : (
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5" />
+                  </svg>
+                )}
+              />
             </div>
-          )}
         </div>
       </div>
 
       {/* Target bar */}
-      {(selectedTargets.length > 0 || partyTargetIds.length > 0 || busyAgents.length > 0) && (
+      {(selectedTargets.length > 0 || partyTargetIds.length > 0 || chatBusyAgents.length > 0) && (
         <div className={`dy-command-target-bar shrink-0 ${selectedTargets.length ? 'is-selected-mode' : 'is-party-mode'}`}>
           <span className="dy-chat-recipient-label">To</span>
           <div className="dy-command-targets">
@@ -2267,7 +2397,7 @@ export function AgentResponseConsole() {
                 </span>
               )
             })}
-            {(busyAgents.length > 0 || activeRuntimeRuns.length > 0) && (
+            {(chatBusyAgents.length > 0 || chatActiveRuntimeRuns.length > 0) && (
               <span className="dy-command-busy ml-auto inline-flex items-center gap-1.5">
                 <span
                   className="dy-command-busy-status sr-only"
@@ -2614,7 +2744,7 @@ export function AgentResponseConsole() {
               }}
               placeholder={composerPlaceholder}
               rows={1}
-              data-run-status={hardBlockedSendReason ? 'blocked' : queuedSendReason ? 'queued' : busyAgents.length ? 'active' : 'idle'}
+              data-run-status={hardBlockedSendReason ? 'blocked' : queuedSendReason ? 'queued' : chatBusyAgents.length ? 'active' : 'idle'}
               className="dy-command-textarea w-full resize-none outline-none"
             />
           </div>
@@ -2724,4 +2854,5 @@ export function AgentResponseConsole() {
       </div>
     </section>
   )
+  return fullScreenPortalRoot ? createPortal(consolePanel, fullScreenPortalRoot) : consolePanel
 }

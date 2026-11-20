@@ -898,6 +898,77 @@ async function inspectWorkspaceNavigation(window) {
   return window.webContents.executeJavaScript(tabScript)
 }
 
+async function inspectAgentChatMode(window) {
+  const script = [
+    "(() => {",
+    "  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))",
+    "  const waitFor = async (predicate, timeout = 5000) => {",
+    "    const started = Date.now()",
+    "    while (Date.now() - started < timeout) {",
+    "      const value = predicate()",
+    "      if (value) return value",
+    "      await wait(50)",
+    "    }",
+    "    return null",
+    "  }",
+    "  return (async () => {",
+    "    const commandConsole = document.querySelector('[data-dui-panel=\"command-console\"]')",
+    "    const agentPicker = commandConsole?.querySelector('select[aria-label=\"Select an agent or party for this chat\"]')",
+    "    const firstTargetName = commandConsole?.querySelector('.dy-command-target-chip strong')?.textContent?.trim() || ''",
+    "    const agentOption = agentPicker ? Array.from(agentPicker.options).find((option) => option.textContent.trim() === firstTargetName) : null",
+    "    if (agentPicker && agentOption) {",
+    "      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set",
+    "      if (setter) setter.call(agentPicker, agentOption.value)",
+    "      else agentPicker.value = agentOption.value",
+    "      agentPicker.dispatchEvent(new Event('change', { bubbles: true }))",
+    "    }",
+    "    await waitFor(() => commandConsole?.querySelector('.dy-command-console__subtitle')?.textContent.includes('Direct chat'))",
+    "    const directTargetSelected = Boolean(agentOption && agentPicker?.value === agentOption.value && commandConsole?.querySelector('.dy-command-console__subtitle')?.textContent.includes('Direct chat'))",
+    "    const previousOverflow = document.body.style.overflow",
+    "    const openButton = commandConsole?.querySelector('button[aria-label=\"Open full-screen chat\"]')",
+    "    openButton?.click()",
+    "    const fullScreenPanel = await waitFor(() => document.querySelector('[data-chat-fullscreen=\"true\"]'))",
+    "    await wait(80)",
+    "    const textarea = fullScreenPanel?.querySelector('textarea[aria-label=\"Command console message\"]')",
+    "    const fullScreenRect = fullScreenPanel?.getBoundingClientRect()",
+    "    const fullScreenStyle = fullScreenPanel ? getComputedStyle(fullScreenPanel) : null",
+    "    const textareaFocused = Boolean(textarea && document.activeElement === textarea)",
+    "    const bodyScrollLocked = document.body.style.overflow === 'hidden'",
+    "    const editorButton = fullScreenPanel?.querySelector('button.dy-command-console__agent-settings')",
+    "    const agentSettingsEnabled = Boolean(editorButton && !editorButton.disabled)",
+    "    const expectedAgentName = agentOption?.textContent.trim() || ''",
+    "    editorButton?.click()",
+    "    const editorProfile = await waitFor(() => document.querySelector('[data-editor-panel=\"profile\"]'))",
+    "    const editorAgentName = document.querySelector('[data-editor-header] h2')?.textContent?.trim() || ''",
+    "    const settingsOpenedForSelectedAgent = Boolean(editorProfile && expectedAgentName && editorAgentName === expectedAgentName)",
+    "    document.querySelector('button[aria-label=\"Close agent settings\"]')?.click()",
+    "    await waitFor(() => !document.querySelector('[data-editor-panel=\"profile\"]'))",
+    "    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))",
+    "    await waitFor(() => document.querySelector('[data-chat-fullscreen=\"false\"]'))",
+    "    await wait(80)",
+    "    const focusRestoreButton = document.querySelector('button[aria-label=\"Open full-screen chat\"]')",
+    "    const result = {",
+    "      attempted: Boolean(commandConsole && agentPicker && openButton),",
+    "      directTargetSelected,",
+    "      fullScreenOpened: Boolean(fullScreenPanel),",
+    "      fullScreenViewport: Boolean(fullScreenRect && Math.abs(fullScreenRect.width - window.innerWidth) <= 1 && Math.abs(fullScreenRect.height - window.innerHeight) <= 1),",
+    "      fullScreenPosition: fullScreenStyle?.position || '',",
+    "      escapedMonitorContainment: Boolean(fullScreenPanel && !fullScreenPanel.closest('.dy-agent-console-pane')),",
+    "      textareaFocused,",
+    "      bodyScrollLocked,",
+    "      agentSettingsEnabled,",
+    "      settingsOpenedForSelectedAgent,",
+    "      fullScreenClosedWithEscape: Boolean(document.querySelector('[data-chat-fullscreen=\"false\"]')),",
+    "      bodyScrollRestored: document.body.style.overflow === previousOverflow,",
+    "      focusReturnedToLauncher: Boolean(focusRestoreButton && document.activeElement === focusRestoreButton),",
+    "    }",
+    "    return result",
+    "  })()",
+    "})()",
+  ].join('\n')
+  return window.webContents.executeJavaScript(script)
+}
+
 async function seedRunningCommandConsole(window) {
   const seedScript = [
     "(() => {",
@@ -1307,6 +1378,7 @@ async function inspectViewport(viewport) {
   ].join('\n')
   const dom = await window.webContents.executeJavaScript(inspectScript)
   const workspaceNavigation = await inspectWorkspaceNavigation(window)
+  const agentChatMode = await inspectAgentChatMode(window)
   const recruitMarkdown = await inspectRecruitMarkdownEditor(window)
   const helpAssistant = await inspectHelpAssistant(window)
 
@@ -1401,6 +1473,19 @@ async function inspectViewport(viewport) {
     && agentsNavItem.commandConsole.messagesAriaLabel === 'Command console responses'
     && agentsNavItem.commandConsole.messagesRect?.width > 0
     && agentsNavItem.commandConsole.messagesRect?.height > 0
+    && agentChatMode.attempted
+    && agentChatMode.directTargetSelected
+    && agentChatMode.fullScreenOpened
+    && agentChatMode.fullScreenViewport
+    && agentChatMode.fullScreenPosition === 'fixed'
+    && agentChatMode.escapedMonitorContainment
+    && agentChatMode.textareaFocused
+    && agentChatMode.bodyScrollLocked
+    && agentChatMode.agentSettingsEnabled
+    && agentChatMode.settingsOpenedForSelectedAgent
+    && agentChatMode.fullScreenClosedWithEscape
+    && agentChatMode.bodyScrollRestored
+    && agentChatMode.focusReturnedToLauncher
   const monitorNavItem = workspaceNavigation.find((workspaceNavItem) => workspaceNavItem.id === 'nexus-nav-monitor')
   const gatewayMonitorTab = Array.isArray(monitorNavItem?.monitorTabs)
     ? monitorNavItem.monitorTabs.find((innerTab) => innerTab.id === 'monitor-tab-gateway')
@@ -1544,6 +1629,7 @@ async function inspectViewport(viewport) {
     dom,
     recruitMarkdown,
     helpAssistant,
+    agentChatMode,
     commandConsoleStopSeed,
     commandConsoleStopClick,
     commandConsoleMissingProviderAuth,

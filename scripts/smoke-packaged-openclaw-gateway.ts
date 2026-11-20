@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
-import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import net from 'node:net'
@@ -305,7 +305,7 @@ try {
   assert.equal(healthPayload?.ok, true, 'packaged Gateway /healthz must report ok after route reconciliation')
   assert.doesNotMatch(output, /Another gateway \(pid \d+\) already owns this state directory/i, 'route reconciliation must not launch a second Gateway during first-start migrations')
   assert.doesNotMatch(output, /OpenClaw route changed but the Gateway did not become ready/i)
-  assert.doesNotMatch(output, /EPERM: operation not permitted, open .*resources\\openclaw\\dist\\extensions\\codex/i)
+  assert.doesNotMatch(output, /EPERM: operation not permitted, open .*resources[\\/]openclaw[\\/]dist[\\/]/i, 'packaged runtime repairs must never write into immutable OpenClaw resources')
 
   const runtimeParent = path.join(userDataDir, 'runtimes', 'openclaw')
   const runtimeName = readdirSync(runtimeParent).find((entry) =>
@@ -316,6 +316,9 @@ try {
   const expectedOpenClawVersion = String(JSON.parse(readFileSync(path.join(root, 'vendor', 'openclaw', 'package.json'), 'utf8')).version || '').trim()
   const writableRuntimePackage = JSON.parse(readFileSync(path.join(writableRuntimeRoot, 'package.json'), 'utf8'))
   assert.equal(writableRuntimePackage.version, expectedOpenClawVersion, 'packaged Gateway must run the OpenClaw version pinned by this release')
+  const writableOpenAiExtension = path.join(writableRuntimeRoot, 'dist', 'extensions', 'openai')
+  assert.ok(!lstatSync(writableOpenAiExtension).isSymbolicLink(), 'bundled plugin roots must remain inside the writable runtime package boundary')
+  assert.ok(existsSync(path.join(writableOpenAiExtension, 'provider-policy-api.js')), 'staged bundled plugins must include their public surface artifacts')
   const writableCodexCli = path.join(writableRuntimeRoot, codexCliRelative)
   assert.ok(existsSync(writableCodexCli), 'staged runtime must include the Codex plugin entry that failed with EPERM')
   const descriptor = openSync(writableCodexCli, 'r+')
@@ -334,7 +337,7 @@ try {
   assert.ok(Number.isInteger(gatewayPid) && gatewayPid > 0, 'Gateway startup log must identify the managed process')
   const gatewayCommandLine = packagedProcessCommandLine(gatewayPid)
   assert.ok(gatewayCommandLine.toLowerCase().includes(path.join(runtimeParent, runtimeName).toLowerCase()), 'Gateway must run from the staged per-user OpenClaw runtime')
-  assert.ok(!gatewayCommandLine.toLowerCase().includes(path.join(resourcesDir, 'openclaw').toLowerCase()), 'Gateway must not run its writable Codex plugin from immutable packaged resources')
+  assert.ok(!gatewayCommandLine.toLowerCase().includes(path.join(resourcesDir, 'openclaw').toLowerCase()), 'Gateway must not run from immutable packaged OpenClaw resources')
 } catch (error) {
   const safeOutput = output
     .replaceAll(smokeLicenseKey, '[redacted test license]')

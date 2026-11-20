@@ -58,19 +58,19 @@ writeFileSync(path.join(codexRuntimeDir, '.automnia-runtime-bundle.json'), `${JS
   generatedAt: '2026-06-24T00:00:00.000Z',
   codex: {
     package: '@openclaw/codex',
-    spec: '@openclaw/codex@2026.11.5',
-    version: '2026.11.5',
-    integrity: 'sha512-RmMrIH+drET1QyWDRG8FLLbgHX3YKGxfqawu3HIHsuwOFRm1/MuaO3hIb+8GjICM3Y/1eff5kl2aaNEnHk4GTA==',
-    tarball: 'https://registry.npmjs.org/@openclaw/codex/-/codex-2026.11.5.tgz',
+    spec: '@openclaw/codex@2026.11.6',
+    version: '2026.11.6',
+    integrity: 'sha512-c9CRbWNN4R6MBvJBlrgiYJsUM7DI5aVxbLyTgf5NRKfwm9pMPd1B49bv8ttXnmgaZd5uaGzjatC2oRUGmqL53g==',
+    tarball: 'https://registry.npmjs.org/@openclaw/codex/-/codex-2026.11.6.tgz',
     lockfile: '.automnia-runtime-package-lock.json',
     dependencies: {
       '@openai/codex': {
-        version: '0.164.0',
-        integrity: 'sha512-TWj7UGyPRe3Pj/A3ddNAxs1te3a/W/xAd+J0LHrrFTmsSfahGMOLF/vn88D3QCIgAT3B1rm1y/Z3NYE0rx6cZQ==',
+        version: '0.169.0',
+        integrity: 'sha512-KhzYlkKPxoNssR8CEm45IjqnFWn7UtlF4CiD3tOJPea51xBs7MaHy0UQG9GSbCqk6Lrjn5QdJDV0QD1/FgWlGw==',
       },
       '@openai/codex-win32-x64': {
-        version: '0.164.0-win32-x64',
-        integrity: 'sha512-urWPhwh9YavuoAPIkmVYKBTtd5OtGVL4Ki0Fb28dhK/Mz6Pt4LSy+gbRrZFz5+RXrw9ubvXuXDCcd8beYcWhDg==',
+        version: '0.169.0-win32-x64',
+        integrity: 'sha512-nC+McFU8xRNL9tk3IhxcKdhcyOElwF/HhPO+gzSQCY7yjh3XdzSajX+MYWcHUVHWRHajfwn3/WgJYJK2wS+XWg==',
       },
     },
   },
@@ -114,7 +114,7 @@ assert.equal(sbom.bomFormat, 'CycloneDX')
 assert.equal(sbom.specVersion, '1.5')
 assert.ok(sbom.components.some((component) => component.name === 'react'), 'SBOM must include lockfile dependencies')
 assert.ok(sbom.components.some((component) => component.name === 'node' && component.hashes?.some((hash) => hash.alg === 'SHA-256')), 'SBOM must include hashed Node runtime metadata')
-assert.ok(sbom.components.some((component) => component.name === '@openclaw/codex' && component.version === '2026.11.5'), 'SBOM must include bundled Codex runtime metadata')
+assert.ok(sbom.components.some((component) => component.name === '@openclaw/codex' && component.version === '2026.11.6'), 'SBOM must include bundled Codex runtime metadata')
 assert.ok(sbom.components.some((component) => component.name === '@openai/codex-win32-x64'), 'SBOM must include native Codex runtime dependency metadata')
 assert.match(checksums, /Automnia-test-artifact\.txt/, 'checksum manifest must include release artifacts')
 assert.match(checksums, /automnia-sbom\.cdx\.json/, 'checksum manifest must include the generated SBOM')

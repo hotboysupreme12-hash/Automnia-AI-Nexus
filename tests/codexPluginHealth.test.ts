@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs'
 import {
   codexPluginAvailableForRuntime,
   codexPluginNeedsRepair,
+  newerInstalledCodexVersion,
+  requireGatewayForCodexPreflight,
   OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC,
 } from '../server/services/plugins/codexPluginHealth'
 import type { PluginControlEntry } from '../server/services/plugins/pluginInventoryService'
@@ -35,6 +37,36 @@ test('marks degraded Codex entries for automatic repair', () => {
   assert.equal(codexPluginNeedsRepair(plugin({ status: 'degraded', runtimeLoaded: false })), true)
   assert.equal(codexPluginNeedsRepair(plugin({ missingDependencies: ['ws'] })), true)
   assert.equal(codexPluginNeedsRepair(plugin()), false)
+})
+
+test('waits for Gateway startup before inspecting or repairing Codex', async () => {
+  let waits = 0
+  await requireGatewayForCodexPreflight({
+    isHealthy: async () => false,
+    waitForStartup: async () => { waits += 1; return { waited: true, healthy: true } },
+  })
+  assert.equal(waits, 1)
+})
+
+test('defers Codex repair when Gateway startup has not succeeded', async () => {
+  await assert.rejects(requireGatewayForCodexPreflight({
+    isHealthy: async () => false,
+    waitForStartup: async () => ({ waited: true, healthy: false }),
+  }), /repair was deferred/)
+})
+
+test('does not wait when the Gateway is already healthy', async () => {
+  await requireGatewayForCodexPreflight({
+    isHealthy: async () => true,
+    waitForStartup: async () => { throw new Error('must not wait') },
+  })
+})
+
+test('protects a newer or unrecognized installed version from automatic downgrade', () => {
+  assert.equal(newerInstalledCodexVersion(['2026.11.7'], '2026.11.6'), '2026.11.7')
+  assert.equal(newerInstalledCodexVersion(['2026.11.6', '2026.9.2'], '2026.11.6'), undefined)
+  assert.equal(newerInstalledCodexVersion(['2026.11.7-rc.1'], '2026.11.6'), '2026.11.7-rc.1')
+  assert.equal(newerInstalledCodexVersion(['2026.11.6'], ''), '2026.11.6')
 })
 
 test('does not treat a degraded installed entry as runtime-ready', () => {

@@ -1,5 +1,14 @@
 import type { AgentResponse } from '../types/nexus'
 
+export function selectTargetAgentRuns<T extends { agentId?: string | null }>(
+  runs: T[],
+  targetAgentIds: Iterable<string>,
+): T[] {
+  const targets = new Set(targetAgentIds)
+  if (!targets.size) return []
+  return runs.filter((run) => typeof run.agentId === 'string' && targets.has(run.agentId))
+}
+
 const searchText = new WeakMap<AgentResponse, string>()
 export function responseMatchesQuery(entry: AgentResponse, query: string, agentName: string) {
   if (agentName.toLocaleLowerCase().includes(query) || entry.agentId.toLocaleLowerCase().includes(query)) return true

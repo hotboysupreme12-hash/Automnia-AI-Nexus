@@ -75,6 +75,7 @@ export type ApiErrorCode =
   | 'party_operation_failed'
   | 'party_coordination_failed'
   | 'plugin_command_failed'
+  | 'plugin_capability_unavailable'
   | 'plugin_configuration_required'
   | 'plugin_not_found'
   | 'plugin_operation_failed'
