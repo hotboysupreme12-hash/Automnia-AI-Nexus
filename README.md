@@ -168,7 +168,7 @@ npm run release:sign
 npm run release:validate
 ```
 
-Manual public-release workflow runs build unsigned candidates for install testing and do not publish customer downloads. Tagged customer releases require Windows Authenticode and macOS Developer ID plus Apple notarization credentials; the workflow fails closed when they are missing. The signed updater channel still requires `AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM`. See [Installer Support](docs/INSTALLER_SUPPORT.md) for the target architectures, operating-system floors, and per-platform validation.
+Manual public-release workflow runs build unsigned candidates for install testing and do not publish customer downloads. Tagged customer releases ordinarily require Windows Authenticode and macOS Developer ID plus Apple notarization credentials; the workflow fails closed when they are missing. The v1.0.28 release has a one-time unsigned-installer exception enabled only for the exact tag when repository variable `AUTOMNIA_ALLOW_UNSIGNED_V1_0_28=true` is set. Its updater manifest remains signed, and the exception does not apply to later tags. See [Installer Support](docs/INSTALLER_SUPPORT.md) for the target architectures, operating-system floors, and per-platform validation.
 
 Set `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE` or `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM` for optional checksum-evidence signing. Tagged releases also produce `distribution-signing.json` with consumer signature, update-channel signature, and install, upgrade, rollback, and uninstall evidence.
 

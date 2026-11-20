@@ -23,11 +23,11 @@ Local tests are useful developer evidence, but they do not replace hosted packag
 
 ## Early Platform Distribution
 
-Manual `workflow_dispatch` runs produce unsigned candidates for CI installation checks and never publish customer downloads. Version-tagged releases fail before packaging unless Windows Authenticode credentials and macOS Developer ID plus Apple notarization credentials are present. Required signatures are enforced during packaging, then checked again on the finished installers/apps. The updater channel also requires `AUTOMNIA_UPDATE_REQUIRE_SIGNING=1`. See [Installer Support](INSTALLER_SUPPORT.md) for the tested architectures and OS requirements.
+Manual `workflow_dispatch` runs produce unsigned candidates for CI installation checks and never publish customer downloads. Version-tagged releases ordinarily fail before packaging unless Windows Authenticode credentials and macOS Developer ID plus Apple notarization credentials are present. For v1.0.28 only, setting repository variable `AUTOMNIA_ALLOW_UNSIGNED_V1_0_28=true` enables a guarded exception for the exact `refs/tags/v1.0.28` tag; the exception skips platform signing and platform-signature evidence checks for its installers. The updater manifest remains signed with `AUTOMNIA_UPDATE_REQUIRE_SIGNING=1`, and later tags continue to require platform signatures. See [Installer Support](INSTALLER_SUPPORT.md) for the tested architectures and OS requirements.
 
 ## Release Signing
 
-Tagged releases set `AUTOMNIA_RELEASE_REQUIRE_SIGNING=1` so `distribution-signing.json` is required by release validation. Use `npm run release:sign` with `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE` or `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM` when checksum evidence signing is enabled. The separate update-channel signing key remains required for every published update channel.
+Tagged releases set `AUTOMNIA_RELEASE_REQUIRE_SIGNING=1` so `distribution-signing.json` is required by release validation. The guarded v1.0.28 exception sets it to `0` only for that exact tag when the repository variable is enabled. Use `npm run release:sign` with `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE` or `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM` when checksum evidence signing is enabled. The separate update-channel signing key remains required for every published update channel, including v1.0.28.
 
 Configure these repository Actions secrets before tagging a customer release:
 
