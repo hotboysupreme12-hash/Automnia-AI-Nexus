@@ -763,7 +763,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         : parsed.data.forceOpenClawRuntime
           ? 'gateway-chat'
           : 'control-center-sse'
-      const clawTalkFallbackPending = Boolean(clawTalkMirror && closed && abortController.signal.aborted && failureKind === 'aborted')
+      const clawTalkFallbackPending = Boolean(parsed.data.source === 'clawtalk' && clawTalkMirror && closed && abortController.signal.aborted && failureKind === 'aborted')
       if (clawTalkFallbackPending) {
         emit('status', {
           transport: 'clawtalk-control-center',

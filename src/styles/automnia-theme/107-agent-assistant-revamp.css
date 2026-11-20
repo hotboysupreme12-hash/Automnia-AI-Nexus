@@ -958,6 +958,53 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-upload-preview {
   padding: 1px 2px 7px !important;
 }
 
+html.dui-pro-overhaul .dy-command-attachment-card,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-attachment-card {
+  box-sizing: border-box;
+  width: 260px;
+  max-width: 100%;
+}
+
+html.dui-pro-overhaul .dy-command-upload-preview,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-upload-preview {
+  min-width: 0;
+  max-width: 100%;
+}
+
+html.dui-pro-overhaul .dy-command-attachment-copy,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-attachment-copy {
+  display: block;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+html.dui-pro-overhaul .dy-command-attachment-name,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-attachment-name {
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.2;
+  max-height: 2.4em;
+  color: rgb(226 232 240 / .96);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+html.dui-pro-overhaul .dy-command-upload-size,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-upload-size {
+  display: block;
+  max-width: min(260px, 100%);
+  overflow: hidden;
+  padding: 2px 4px 0;
+  color: rgb(148 163 184 / .82);
+  font-size: 10px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (min-width: 1201px) {
   html.dui-pro-overhaul .dy-agents-workspace.is-console-visible,
   html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace.is-console-visible {
@@ -1239,6 +1286,8 @@ html.dui-pro-overhaul select.dy-chat-agent-picker:focus-visible {
 }
 
 html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console.dy-command-console--fullscreen {
+  display: grid !important;
+  grid-template-columns: 258px minmax(0, 1fr) !important;
   position: fixed !important;
   inset: 0 !important;
   z-index: 49 !important;
@@ -1251,13 +1300,382 @@ html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console.dy-c
   padding-bottom: env(safe-area-inset-bottom) !important;
   border: 0 !important;
   border-radius: 0 !important;
-  background: #070d12 !important;
+  background: #090a0b !important;
   box-shadow: none !important;
   isolation: isolate !important;
 }
 
-html.dui-pro-overhaul .dy-command-console--fullscreen .dy-command-console__header {
+[data-chat-fullscreen="true"] .dy-command-console__sidebar {
+  display: flex !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  padding: 18px 12px 12px !important;
+  overflow: hidden auto !important;
+  border-right: 1px solid rgb(255 255 255 / .09) !important;
+  background: linear-gradient(180deg, #111214, #0c0d0f 72%) !important;
+  color: #d9dadd !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__sidebar-heading {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0 !important;
+  min-height: 46px !important;
+  margin: 0 3px 18px !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__sidebar-title-wrap,
+[data-chat-fullscreen="true"] .dy-command-console__conversation-copy {
+  display: flex !important;
+  min-width: 0 !important;
+  flex-direction: column !important;
+  gap: 3px !important;
+  text-align: left !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__sidebar-title-wrap strong {
+  color: #eef7f7 !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__sidebar-title-wrap span,
+[data-chat-fullscreen="true"] .dy-command-console__conversation-copy small,
+[data-chat-fullscreen="true"] .dy-command-console__sidebar-section-label,
+[data-chat-fullscreen="true"] .dy-command-console__sidebar-footer {
+  color: #819398 !important;
+  font-size: 10px !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__sidebar-section-label {
+  margin: 14px 9px 2px !important;
+  font-size: 9px !important;
+  font-weight: 750 !important;
+  letter-spacing: .12em !important;
+  text-transform: uppercase !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__agent-list {
+  display: flex !important;
+  min-height: 0 !important;
+  flex-direction: column !important;
+  gap: 5px !important;
+  overflow: auto !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__conversation-target {
+  display: flex !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 44px !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 6px 9px !important;
+  border: 1px solid transparent !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  color: #d2dfe1 !important;
+  text-align: left !important;
+  cursor: pointer !important;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__conversation-target:hover {
+  background: rgb(255 255 255 / .045) !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__conversation-target.is-active {
+  border-color: rgb(112 213 200 / .18) !important;
+  background: linear-gradient(90deg, rgb(112 213 200 / .13), rgb(112 213 200 / .045)) !important;
+  color: #f1fbfa !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__conversation-copy {
+  flex: 1 1 auto !important;
+  overflow: hidden !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__conversation-copy strong {
+  overflow: hidden !important;
+  color: inherit !important;
+  font-size: 11px !important;
+  font-weight: 620 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__conversation-copy small {
+  overflow: hidden !important;
+  font-size: 9px !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__conversation-icon {
+  display: grid !important;
+  width: 27px !important;
+  height: 27px !important;
+  flex: 0 0 27px !important;
+  place-items: center !important;
+  border: 1px solid rgb(255 255 255 / .09) !important;
+  border-radius: 8px !important;
+  color: #9beadd !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__agent-row {
+  position: relative !important;
+  display: flex !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  align-items: center !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__agent-target {
+  position: relative !important;
+  flex: 1 1 auto !important;
+  min-height: 48px !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+  padding-right: 9px !important;
+  border-radius: 12px !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__agent-target:hover {
+  border-color: rgb(193 215 219 / .12) !important;
+  background: rgb(255 255 255 / .045) !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__agent-target[aria-current="page"] {
+  border-color: rgb(112 213 200 / .2) !important;
+  background: linear-gradient(105deg, rgb(112 213 200 / .13), rgb(112 213 200 / .035)) !important;
+  box-shadow: inset 2px 0 0 rgb(112 213 200 / .92), inset 0 1px 0 rgb(255 255 255 / .035) !important;
+  color: #f1fbfa !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__agent-target[aria-current="page"]::before {
+  position: absolute !important;
+  top: 50% !important;
+  left: 0 !important;
+  width: 2px !important;
+  height: 20px !important;
+  border-radius: 0 2px 2px 0 !important;
+  background: #78ded0 !important;
+  content: "" !important;
+  transform: translateY(-50%) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-fullscreen="true"] .dy-command-console__agent-target:focus-visible {
+  outline-color: var(--focus-ring) !important;
+  outline-offset: -3px !important;
+  box-shadow: inset 0 0 0 2px var(--focus-ring) !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__agent-avatar {
+  display: grid !important;
+  width: 31px !important;
+  height: 31px !important;
+  flex: 0 0 31px !important;
+  overflow: hidden !important;
+  place-items: center !important;
+  border: 1px solid rgb(255 255 255 / .12) !important;
+  border-radius: 9px !important;
+  background: #191a1c !important;
+  color: #d0d1d3 !important;
+  font-size: 10px !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__agent-avatar img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__conversation-status {
+  width: 6px !important;
+  height: 6px !important;
+  flex: 0 0 6px !important;
+  border-radius: 50% !important;
+  background: #627278 !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__conversation-status.is-busy {
+  background: #70d5c8 !important;
+  box-shadow: 0 0 9px rgb(112 213 200 / .55) !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__sidebar-agent-settings {
+  display: grid !important;
+  width: 30px !important;
+  height: 30px !important;
+  flex: 0 0 30px !important;
+  place-items: center !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: #829398 !important;
+  cursor: pointer !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: scale(.94) !important;
+  transition: background-color 140ms ease, color 140ms ease, opacity 140ms ease, transform 140ms ease !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__agent-row:hover .dy-command-console__sidebar-agent-settings,
+[data-chat-fullscreen="true"] .dy-command-console__agent-row:focus-within .dy-command-console__sidebar-agent-settings {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  transform: scale(1) !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__sidebar-agent-settings:hover,
+[data-chat-fullscreen="true"] .dy-command-console__sidebar-agent-settings:focus-visible {
+  border-color: rgb(176 211 215 / .14) !important;
+  background: rgb(255 255 255 / .07) !important;
+  color: #d9e4e6 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-fullscreen="true"] .dy-command-console__sidebar-agent-settings:focus-visible {
+  outline-color: var(--focus-ring) !important;
+  outline-offset: -3px !important;
+  box-shadow: inset 0 0 0 2px var(--focus-ring) !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__sidebar-agent-settings svg {
+  width: 15px !important;
+  height: 15px !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__sidebar-footer {
+  display: flex !important;
+  min-height: 34px !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin-top: auto !important;
+  padding: 8px 9px 0 !important;
+  border-top: 1px solid rgb(176 211 215 / .08) !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__fullscreen-main {
+  display: flex !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__header {
   padding-top: env(safe-area-inset-top) !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__header-inner {
+  display: flex !important;
+  min-height: 70px !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 14px !important;
+  padding: 10px 20px !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__title-row {
+  flex: 1 1 auto !important;
+  grid-column: auto !important;
+  justify-self: auto !important;
+  justify-content: flex-start !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__title-row > div {
+  text-align: left !important;
+}
+
+[data-chat-fullscreen="true"] .dy-command-console__meta {
+  position: static !important;
+  width: auto !important;
+  flex: 0 0 auto !important;
+  justify-content: flex-end !important;
+  padding-left: 0 !important;
+}
+
+@media (max-width: 760px) {
+  [data-chat-fullscreen="true"].dy-command-console--fullscreen {
+    grid-template-columns: 208px minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 560px) {
+  [data-chat-fullscreen="true"].dy-command-console--fullscreen {
+    grid-template-columns: 66px minmax(0, 1fr) !important;
+  }
+
+  [data-chat-fullscreen="true"] .dy-command-console__sidebar {
+    align-items: center !important;
+    padding: 12px 5px !important;
+  }
+
+  [data-chat-fullscreen="true"] .dy-command-console__sidebar-heading {
+    display: none !important;
+  }
+
+  [data-chat-fullscreen="true"] .dy-command-console__sidebar-title-wrap,
+  [data-chat-fullscreen="true"] .dy-command-console__sidebar-section-label,
+  [data-chat-fullscreen="true"] .dy-command-console__conversation-copy,
+  [data-chat-fullscreen="true"] .dy-command-console__conversation-status,
+  [data-chat-fullscreen="true"] .dy-command-console__sidebar-footer {
+    display: none !important;
+  }
+
+  [data-chat-fullscreen="true"] .dy-command-console__agent-row {
+    min-height: 40px !important;
+  }
+
+  [data-chat-fullscreen="true"] .dy-command-console__conversation-target {
+    width: 32px !important;
+    min-width: 32px !important;
+    min-height: 38px !important;
+    justify-content: center !important;
+    padding: 3px !important;
+  }
+
+  [data-chat-fullscreen="true"] .dy-command-console__agent-target {
+    flex: 0 0 32px !important;
+    width: 32px !important;
+    min-width: 32px !important;
+    min-height: 38px !important;
+    padding: 3px !important;
+  }
+
+  [data-chat-fullscreen="true"] .dy-command-console__agent-avatar {
+    width: 22px !important;
+    height: 22px !important;
+    flex-basis: 22px !important;
+    border-radius: 7px !important;
+  }
+
+  [data-chat-fullscreen="true"] .dy-command-console__sidebar-agent-settings {
+    display: grid !important;
+    width: 24px !important;
+    height: 24px !important;
+    flex-basis: 24px !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    transform: none !important;
+    color: #a2a3a6 !important;
+  }
+
+  [data-chat-fullscreen="true"] .dy-command-console__sidebar-agent-settings svg {
+    width: 13px !important;
+    height: 13px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-chat-fullscreen="true"] .dy-command-console__conversation-target,
+  [data-chat-fullscreen="true"] .dy-command-console__sidebar-agent-settings {
+    transition: none !important;
+  }
 }
 
 @media (max-width: 760px) {
@@ -1268,5 +1686,54 @@ html.dui-pro-overhaul .dy-command-console--fullscreen .dy-command-console__heade
   html.dui-pro-overhaul select.dy-chat-agent-picker {
     width: min(132px, 32vw) !important;
     min-width: 112px !important;
+  }
+}
+
+/* Keep Agent Chat stop action distinct without the retired capsule wrapper. */
+html.dui-pro-overhaul .dy-command-console .dy-command-busy {
+  align-items: center !important;
+  gap: 8px !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-stop-run {
+  min-width: 64px !important;
+  min-height: 32px !important;
+  padding: 0 11px !important;
+  border: 1px solid rgb(243 155 155 / .36) !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  color: #e8b9b9 !important;
+  box-shadow: none !important;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-stop-run::before {
+  width: 6px !important;
+  height: 6px !important;
+  background: currentColor !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-stop-run:hover {
+  border-color: rgb(255 170 170 / .62) !important;
+  background: rgb(151 42 48 / .15) !important;
+  color: #fff0f0 !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-stop-run:focus-visible {
+  outline: 2px solid rgb(255 196 196 / .8) !important;
+  outline-offset: 2px !important;
+  box-shadow: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.dui-pro-overhaul .dy-command-console .dy-command-stop-run {
+    transition: none !important;
   }
 }

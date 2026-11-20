@@ -22,6 +22,21 @@ function doctorRunDismissKey(run: DoctorRun | null): string {
   return [run.id, run.endedAt, run.startedAt].filter(Boolean).join(':')
 }
 
+function isMissionEventMirroredByResponse(event: MissionEvent, responses: AgentResponse[]): boolean {
+  if (event.type !== 'agent' || !event.agentId) return false
+  const eventTime = Date.parse(event.timestamp)
+  if (!Number.isFinite(eventTime)) return false
+  return responses.some((response) => {
+    if (response.agentId !== event.agentId) return false
+    const completedAt = Date.parse(response.completedAt || response.timestamp)
+    return Number.isFinite(completedAt) && Math.abs(completedAt - eventTime) <= 1_500
+  })
+}
+
+function unmirroredMissionEvents(events: MissionEvent[], responses: AgentResponse[]): MissionEvent[] {
+  return events.filter((event) => !isMissionEventMirroredByResponse(event, responses))
+}
+
 function doctorSnapshotIsStale(run: DoctorRun | null): boolean {
   const timestamp = run?.endedAt || run?.startedAt
   if (!timestamp) return false
@@ -1625,7 +1640,10 @@ const GatewayActivityPanel = memo(function GatewayActivityPanel({ agentById, gat
   const [failedPortraitKeys, setFailedPortraitKeys] = useState<Set<string>>(() => new Set())
   const activity = useMemo(() => {
     const visibleAgentResponses = agentResponses.filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp, clearCutoffMs))
-    const visibleMissionFeed = missionFeed.filter((event) => isRuntimeMonitorEntryVisible(event.timestamp, clearCutoffMs))
+    const visibleMissionFeed = unmirroredMissionEvents(
+      missionFeed.filter((event) => isRuntimeMonitorEntryVisible(event.timestamp, clearCutoffMs)),
+      agentResponses,
+    )
     const visibleGatewayLogs = gatewayLogs.filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp, clearCutoffMs))
     const activeAgentStartedAt = visibleAgentResponses
       .filter((entry) => entry.streaming && entry.agentId)
@@ -1750,7 +1768,10 @@ const GatewayActivityWorkspace = memo(function GatewayActivityWorkspace({
   const clearCutoffMs = useRuntimeMonitorClearCutoffMs()
   const [showInternalDiagnostics, setShowInternalDiagnostics] = useState(false)
   const visibleAgentResponseCount = agentResponses.filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp, clearCutoffMs)).length
-  const visibleMissionEventCount = missionFeed.filter((event) => isRuntimeMonitorEntryVisible(event.timestamp, clearCutoffMs)).length
+  const visibleMissionEventCount = unmirroredMissionEvents(
+    missionFeed.filter((event) => isRuntimeMonitorEntryVisible(event.timestamp, clearCutoffMs)),
+    agentResponses,
+  ).length
   const visibleGatewayLogCount = showInternalDiagnostics
     ? gatewayLogs.filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp, clearCutoffMs)).length
     : 0

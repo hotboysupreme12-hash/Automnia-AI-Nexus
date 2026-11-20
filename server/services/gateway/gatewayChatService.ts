@@ -803,6 +803,9 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       return 'tool.progress'
     }
     if (eventName === 'agent') {
+      // run_status is Gateway protocol telemetry, not a tool action or useful
+      // progress. Projecting it as agent.working created phantom chat activity.
+      if (['run_status', 'assistant', 'item', 'lifecycle', 'heartbeat'].includes(stream)) return ''
       if (/command|exec|shell/.test(stream)) {
         if (/\b(error|failed|failure)\b/.test(state)) return 'command.failed'
         if (/\b(done|complete|completed|finished|success|ok)\b/.test(state)) return 'command.finished'
@@ -844,7 +847,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     if (eventName === 'agent') {
       const stream = pick('stream', 'phase', 'type')
       const normalizedStream = stream.toLowerCase()
-      if (['assistant', 'item'].includes(normalizedStream)) return ''
+      if (['run_status', 'assistant', 'item', 'lifecycle', 'heartbeat'].includes(normalizedStream)) return ''
       const message = pick('message', 'summary', 'title', 'text', 'output', 'command')
       const toolName = pick('toolName', 'tool', 'name', 'displayName')
       const isCommandStream = /command|exec|shell/.test(normalizedStream)
@@ -875,9 +878,12 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
   function emitGatewayProgress(waiter: GatewayChatRunWaiter, eventName: string, payload: Record<string, unknown>) {
     const observer = streamObserver(waiter.streamObserverId)
     if (!observer) return
-    const text = gatewayEventProgressText(eventName, payload, waiter.agentName)
+    // OpenClaw can put agent stream metadata under `data`; flatten that payload
+    // for classification while retaining outer run/session identifiers.
+    const eventPayload = isLooseRecord(payload.data) ? { ...payload.data, ...payload } : payload
+    const text = gatewayEventProgressText(eventName, eventPayload, waiter.agentName)
     if (!text) return
-    const streamPayload = gatewayStreamPayload(waiter, eventName, payload)
+    const streamPayload = gatewayStreamPayload(waiter, eventName, eventPayload)
     observer.emit('progress', {
       ...streamPayload,
       text,

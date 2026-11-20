@@ -60,7 +60,11 @@ export function useDialogFocus({ open, rootRef, panelRef, onClose, preventClose 
     syncBackground()
     const isTop = () => layers.at(-1) === layer
     const isInside = (target: Node) => panel.contains(target) || ownedPopovers(layer).some((node) => node.contains(target))
-    const focusables = () => Array.from(panel.querySelectorAll<HTMLElement>(focusableSelector)).filter((node) => node.tabIndex >= 0 && node.getClientRects().length > 0 && !node.closest('[inert]'))
+    const focusables = () => Array.from(panel.querySelectorAll<HTMLElement>(focusableSelector)).filter((node) => node.tabIndex >= 0
+      && node.getClientRects().length > 0
+      && node.getAttribute('aria-hidden') !== 'true'
+      && window.getComputedStyle(node).visibility !== 'hidden'
+      && !node.closest('[inert]'))
     const focusFirst = () => (focusables()[0] || panel).focus({ preventScroll: true })
     const frame = window.requestAnimationFrame(() => { if (isTop() && !isInside(document.activeElement || document.body)) focusFirst() })
     const onKeyDown = (event: KeyboardEvent) => {

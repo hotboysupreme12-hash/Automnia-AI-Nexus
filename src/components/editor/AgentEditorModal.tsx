@@ -2,6 +2,7 @@ import { AvatarFallback } from '../ui/AvatarFallback'
 import { AgentToolPicker } from './AgentToolPicker'
 import { createSerialSaveQueue } from '../monitor/serialSaveQueue'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import { useDialogFocus } from '../ui/Dialog'
 import { navigateTabList } from '../ui/tabNavigation'
@@ -410,6 +411,7 @@ export function AgentEditorModal() {
   const [defaultAgentStatus,setDefaultAgentStatus] = useState('')
   const [autosavePhase,setAutosavePhase] = useState<EditorAutosavePhase>('saved')
   const [autosaveMessage,setAutosaveMessage] = useState('')
+  const closeInFlightRef = useRef(false)
   const portraitRef = useRef<HTMLInputElement|null>(null)
   const portraitSaveTimerRef = useRef<number|null>(null)
 
@@ -622,6 +624,8 @@ export function AgentEditorModal() {
     updateHeartbeat(agent.id,heartbeat)
   }
   const closeWithHeartbeatFlush = async ()=>{
+    if(closeInFlightRef.current)return
+    closeInFlightRef.current=true
     try{
       if(portraitSaveTimerRef.current){window.clearTimeout(portraitSaveTimerRef.current);portraitSaveTimerRef.current=null;await CommitPortraitDraft()}
       if(modelSaveTimerRef.current){window.clearTimeout(modelSaveTimerRef.current);modelSaveTimerRef.current=null;await SvM(primary,fallbacks)}
@@ -638,6 +642,8 @@ export function AgentEditorModal() {
       setMsStatus(message)
       setAutosavePhase('error')
       setAutosaveMessage(message)
+    }finally{
+      closeInFlightRef.current=false
     }
   }
   const PR = (p:Partial<NonNullable<OpenClawAgent['runtimePolicy']>>)=>{
@@ -1593,7 +1599,7 @@ export function AgentEditorModal() {
   const usesHostedCredits = entitlement.isHosted
   const providerFirst = routePresentation.providerFirst
 
-  return (
+  return createPortal(
     <>
       {isOpen&&(
         <div ref={dialogRootRef} data-dui-overlay="agent-editor" data-windows={IS_WINDOWS_CLIENT?'true':'false'} className={`fixed inset-0 z-50 grid place-items-center p-3 ${IS_WINDOWS_CLIENT?'bg-[#030712]/96':'bg-[#030712]/90 backdrop-blur-xl'}`}>
@@ -2143,6 +2149,7 @@ export function AgentEditorModal() {
           </div>
         </div>
       )}
-    </>
+    </>,
+    document.body,
   )
 }

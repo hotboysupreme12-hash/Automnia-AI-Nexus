@@ -7,6 +7,7 @@ const path = require('node:path')
 const { ensureRelayAiTransportCompatibility } = require('./lib/relay-thought-signature-patch.cjs')
 const { ensureRestartRecoveryClaimStartupRepair } = require('./lib/restart-recovery-stale-claim-patch.cjs')
 const { ensureMissingSessionStoreRecovery } = require('./lib/session-store-missing-path-patch.cjs')
+const { ensureRestartResumeCustodyRetry } = require('./lib/restart-resume-custody-retry-patch.cjs')
 const { patchGoogleGeminiOnboardingDefault } = require('./lib/google-gemini-onboarding-default.cjs')
 const { patchAutomniaCloud424FailoverDist } = require('./lib/openclaw-automnia-cloud-failover-patch.cjs')
 const {
@@ -1161,6 +1162,7 @@ async function main() {
   ensureAutomniaSettledTurnFinalizationSupport()
   ensureRestartRecoveryClaimStartupRepair(vendorRoot)
   ensureMissingSessionStoreRecovery(vendorRoot)
+  ensureRestartResumeCustodyRetry(vendorRoot)
   patchAutomniaCloud424FailoverDist(path.join(vendorRoot, 'dist'))
   ensureGoogleGemini4Models()
 
