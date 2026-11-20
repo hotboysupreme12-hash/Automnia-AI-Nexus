@@ -757,7 +757,11 @@ jobs:
       - name: Preflight both update buckets
         env:
           AUTOMNIA_RELEASE_VERSION: ${{ github.ref_name }}
-        run: node scripts/publish-update-channel.cjs preflight
+        run: |
+          # Immutable publication intentionally avoids composite uploads because
+          # the publisher identity does not need storage.objects.delete.
+          gcloud config set storage/parallel_composite_upload_enabled False
+          node scripts/publish-update-channel.cjs preflight
 
       - name: Publish x64 update channel to both buckets
         env:
