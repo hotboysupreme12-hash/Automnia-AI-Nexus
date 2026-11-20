@@ -193,6 +193,33 @@ test('a stalled Telegram status API cannot hold the agent dispatch or finalizati
   assert.ok(Date.now() - startTime < 250)
 })
 
+test('Telegram dispatch does not wait for a status preview, including previously patched bundles', () => {
+  const oldBundle = `${botMessageBundle}\nawait turn.telegramProgressStatus?.start();`
+  const patched = patchTelegramBundle(oldBundle)
+  assert.match(patched, /turn\.telegramProgressStatus\?\.start\(\);/)
+  assert.doesNotMatch(patched, /await turn\.telegramProgressStatus\?\.start\(\);/)
+  assert.doesNotMatch(patchTelegramBundle(patched), /await turn\.telegramProgressStatus\?\.start\(\);/)
+})
+
+test('repeated runtime repair does not duplicate the inbound agent routing context', () => {
+  const twice = patchTelegramBundle(botMessageBundle)
+  const countRouteContexts = (source: string) => (source.match(/\.bodyText = withTelegramAgentRouteContext\(\{ config:/g) || []).length
+  assert.equal(countRouteContexts(botMessageBundle), 1)
+  assert.equal(countRouteContexts(twice), 1)
+  const block = /if \(automniaTelegramAgentRoute\.changed\) \{\n\t[\w$]+\.rawBody = automniaTelegramAgentRoute\.rawBody;\n\t[\w$]+\.bodyText = automniaTelegramAgentRoute\.bodyText;\n\t\}\n\t[\w$]+\.bodyText = withTelegramAgentRouteContext\(\{ config: [^\n]+/.exec(botMessageBundle)?.[0]
+  assert.ok(block)
+  const duplicated = botMessageBundle.replace(block, `${block}\n\t${block}`)
+  assert.equal(countRouteContexts(duplicated), 2)
+  assert.equal(countRouteContexts(patchTelegramBundle(duplicated)), 1)
+})
+
+test('repaired status messages do not imply that replaying completed tool work is safe', () => {
+  const oldBundle = `${botMessageBundle}\n"The Telegram turn ended without a final answer; retrying is safe."`
+  const patched = patchTelegramBundle(oldBundle)
+  assert.doesNotMatch(patched, /retrying is safe/)
+  assert.match(patched, /Check completed work before retrying/)
+})
+
 test('Telegram runtime repair collapses duplicate hooks left by earlier restarts', () => {
   const toolHook = 'turn.telegramProgressStatus?.toolStart(toolName);'
   const deferredHook = [

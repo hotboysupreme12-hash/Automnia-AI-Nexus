@@ -26,9 +26,9 @@ function isJavaScriptBundle(name) {
   return name.endsWith('.js') || name.endsWith('.mjs')
 }
 
-const DEFAULT_OPENCLAW_PACKAGE_VERSION = '2026.11.5'
-const DEFAULT_OPENCLAW_PACKAGE_TARBALL = 'https://registry.npmjs.org/openclaw/-/openclaw-2026.11.5.tgz'
-const DEFAULT_OPENCLAW_PACKAGE_INTEGRITY = 'sha512-mqPlsGLOe8NS85BfP1vWW9YVwFXchsV75QTkEbyR4csylORxts+fmfZp9+qbD7aPbXQIctyjRk+CPL91fDvxBA=='
+const DEFAULT_OPENCLAW_PACKAGE_VERSION = '2026.11.6'
+const DEFAULT_OPENCLAW_PACKAGE_TARBALL = 'https://registry.npmjs.org/openclaw/-/openclaw-2026.11.6.tgz'
+const DEFAULT_OPENCLAW_PACKAGE_INTEGRITY = 'sha512-4MGjAMv8QlVrul3ZbCu8KjM7GhXfLdLzf0IrsO5QZ8LC3oYkduqs2rZiZpPDmTRpT6kXYke/OVaWrB+YmhBHLw=='
 
 const installArgs = [
   'ci',

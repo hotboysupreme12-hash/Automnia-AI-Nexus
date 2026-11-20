@@ -13,10 +13,11 @@ const installWorkRoot = path.join(bundleRoot, '.work')
 
 const RUNTIME_BUNDLE_METADATA_FILE = '.automnia-runtime-bundle.json'
 const DEFAULT_BUNDLED_NODE_VERSION = 'v24.22.1'
-const DEFAULT_BUNDLED_CODEX_VERSION = '2026.11.5'
+const DEFAULT_BUNDLED_CODEX_VERSION = '2026.11.6'
 const DEFAULT_BUNDLED_CODEX_SPEC = `@openclaw/codex@${DEFAULT_BUNDLED_CODEX_VERSION}`
-const DEFAULT_BUNDLED_CODEX_INTEGRITY = 'sha512-RmMrIH+drET1QyWDRG8FLLbgHX3YKGxfqawu3HIHsuwOFRm1/MuaO3hIb+8GjICM3Y/1eff5kl2aaNEnHk4GTA=='
-const DEFAULT_BUNDLED_CODEX_TARBALL = 'https://registry.npmjs.org/@openclaw/codex/-/codex-2026.11.5.tgz'
+const DEFAULT_BUNDLED_CODEX_INTEGRITY = 'sha512-c9CRbWNN4R6MBvJBlrgiYJsUM7DI5aVxbLyTgf5NRKfwm9pMPd1B49bv8ttXnmgaZd5uaGzjatC2oRUGmqL53g=='
+const DEFAULT_BUNDLED_CODEX_TARBALL = 'https://registry.npmjs.org/@openclaw/codex/-/codex-2026.11.6.tgz'
+const DEFAULT_BUNDLED_CODEX_LOCK = path.join(root, 'scripts', 'runtime-locks', `openclaw-codex-${DEFAULT_BUNDLED_CODEX_VERSION}-lock.json`)
 const targetArch = String(process.env.AUTOMNIA_TARGET_ARCH || process.arch).trim().toLowerCase()
 
 if (!['x64', 'arm64'].includes(targetArch)) {
@@ -340,12 +341,16 @@ function packageLockPathFor(rootDir) {
 
 function hasExpectedCodexMetadata(rootDir) {
   const metadata = readRuntimeMetadata(rootDir)
+  const lockPath = path.join(rootDir, '.automnia-runtime-package-lock.json')
+  const requiresDefaultLock = bundledCodex.spec === DEFAULT_BUNDLED_CODEX_SPEC && bundledCodexIntegrity === DEFAULT_BUNDLED_CODEX_INTEGRITY
   return Boolean(
     metadata?.codex &&
     metadata.codex.spec === bundledCodex.spec &&
     metadata.codex.version === bundledCodex.version &&
     metadata.codex.integrity === bundledCodexIntegrity &&
-    (!bundledCodexTarball || metadata.codex.tarball === bundledCodexTarball)
+    (!bundledCodexTarball || metadata.codex.tarball === bundledCodexTarball) &&
+    (!requiresDefaultLock || (fs.existsSync(DEFAULT_BUNDLED_CODEX_LOCK) && fs.existsSync(lockPath) &&
+      sha256File(lockPath) === sha256File(DEFAULT_BUNDLED_CODEX_LOCK)))
   )
 }
 
@@ -369,15 +374,24 @@ async function prepareCodexBundle() {
   const workDir = path.join(installWorkRoot, 'codex')
   fs.rmSync(workDir, { recursive: true, force: true })
   fs.mkdirSync(workDir, { recursive: true })
-  fs.writeFileSync(path.join(workDir, 'package.json'), `${JSON.stringify({ private: true }, null, 2)}\n`)
+  const useDefaultLock = bundledCodex.spec === DEFAULT_BUNDLED_CODEX_SPEC && bundledCodexIntegrity === DEFAULT_BUNDLED_CODEX_INTEGRITY
+  const manifest = useDefaultLock ? { private: true, dependencies: { '@openclaw/codex': bundledCodex.version } } : { private: true }
+  fs.writeFileSync(path.join(workDir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+  if (useDefaultLock) {
+    verifyPackageLockPackage(DEFAULT_BUNDLED_CODEX_LOCK, '@openclaw/codex', {
+      version: bundledCodex.version,
+      integrity: bundledCodexIntegrity,
+      ...(bundledCodexTarball ? { tarball: bundledCodexTarball } : {}),
+    })
+    fs.copyFileSync(DEFAULT_BUNDLED_CODEX_LOCK, path.join(workDir, 'package-lock.json'))
+  }
 
   console.log(`[runtime-bundles] installing ${bundledCodex.spec} for bundled Codex runtime`)
-  runNpm(['install', '--prefix', workDir, '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', '--package-lock=true', '--save-exact', bundledCodex.spec], {
+  const installArgs = useDefaultLock
+    ? ['ci', '--prefix', workDir, '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund']
+    : ['install', '--prefix', workDir, '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', '--package-lock=true', '--save-exact', bundledCodex.spec]
+  runNpm([...installArgs, `--cpu=${targetArch}`, `--os=${process.platform}`], {
     stdio: 'inherit',
-    env: {
-      npm_config_arch: targetArch,
-      npm_config_platform: process.platform,
-    },
   })
 
   const source = path.join(workDir, 'node_modules', '@openclaw', 'codex')

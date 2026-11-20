@@ -6,7 +6,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts
 
-COPY server.js geminiThinking.js relayModelPolicy.js tokenOptimization.js vertexToolTurns.js welcomeEmail.js licenseEmailMime.js ./
+COPY server.js geminiThinking.js relayModelPolicy.js tokenOptimization.js vertexErrorPolicy.js vertexToolTurns.js welcomeEmail.js licenseEmailMime.js ./
 
 USER node
 EXPOSE 8080
