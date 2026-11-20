@@ -107,11 +107,42 @@ function collectSourceFiles(sourceRoot, options = {}) {
   return files.sort((left, right) => left.relative.localeCompare(right.relative))
 }
 
-function copyFileVerified(sourcePath, targetPath, expectedSha256) {
+function copyFileAndHash(sourcePath, targetPath) {
   ensureDirectory(path.dirname(targetPath))
-  fs.copyFileSync(sourcePath, targetPath, fs.constants.COPYFILE_EXCL)
-  const actual = sha256File(targetPath)
-  if (actual !== expectedSha256) throw new Error(`Backup copy verification failed for ${targetPath}`)
+  const sourceDescriptor = fs.openSync(sourcePath, 'r')
+  let targetDescriptor
+  const hash = crypto.createHash('sha256')
+  const buffer = Buffer.allocUnsafe(1024 * 1024)
+  let copiedBytes = 0
+  try {
+    const before = fs.fstatSync(sourceDescriptor)
+    targetDescriptor = fs.openSync(targetPath, 'wx')
+    while (true) {
+      const bytesRead = fs.readSync(sourceDescriptor, buffer, 0, buffer.length, null)
+      if (!bytesRead) break
+      hash.update(buffer.subarray(0, bytesRead))
+      let written = 0
+      while (written < bytesRead) {
+        written += fs.writeSync(targetDescriptor, buffer, written, bytesRead - written)
+      }
+      copiedBytes += bytesRead
+    }
+    const after = fs.fstatSync(sourceDescriptor)
+    if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs) {
+      throw new Error(`Runtime state changed while its backup was being copied: ${sourcePath}`)
+    }
+    const target = fs.fstatSync(targetDescriptor)
+    if (target.size !== copiedBytes) throw new Error(`Backup copy size verification failed for ${targetPath}`)
+    return { size: copiedBytes, sha256: hash.digest('hex') }
+  } finally {
+    if (targetDescriptor !== undefined) fs.closeSync(targetDescriptor)
+    fs.closeSync(sourceDescriptor)
+  }
+}
+
+function copyFileVerified(sourcePath, targetPath, expectedSha256) {
+  const copied = copyFileAndHash(sourcePath, targetPath)
+  if (copied.sha256 !== expectedSha256) throw new Error(`Backup copy verification failed for ${targetPath}`)
 }
 
 function createStateBackup(options) {
@@ -168,11 +199,9 @@ function createStateBackup(options) {
         sha256 = sha256File(targetPath)
         strategy = 'sqlite-vacuum-into'
       } else {
-        const stat = fs.statSync(file.fullPath)
-        const expectedSha256 = sha256File(file.fullPath)
-        copyFileVerified(file.fullPath, targetPath, expectedSha256)
-        size = stat.size
-        sha256 = expectedSha256
+        const copied = copyFileAndHash(file.fullPath, targetPath)
+        size = copied.size
+        sha256 = copied.sha256
       }
       manifestFiles.push({ path: file.relative, size, sha256, ...(strategy ? { strategy } : {}) })
       options.onProgress?.({ phase: 'copying', completed: index + 1, total: files.length })

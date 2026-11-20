@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import type { Worker } from 'node:worker_threads'
-import { createRuntimeStateBackupService, RuntimeStateBackupBusyError } from '../server/services/runtime/runtimeStateBackupService'
+import { createRuntimeStateBackupService } from '../server/services/runtime/runtimeStateBackupService'
 
 function temporaryRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'automnia-runtime-backup-service-'))
@@ -34,6 +34,9 @@ test('manual runtime backup runs off-thread, reports verified completion, and pe
       schedulePath,
       helperPath: path.join(root, 'helper.cjs'),
       getActiveRunCount: () => 0,
+      isGatewayReady: () => true,
+      getLastActivityAt: () => null,
+      minimumIdleMs: 0,
       now: () => new Date('2026-10-23T12:00:00.000Z'),
       workerFactory: (workerData) => {
         assert.equal(workerData.sourceRoot, path.join(root, 'state'))
@@ -51,7 +54,7 @@ test('manual runtime backup runs off-thread, reports verified completion, and pe
     })
 
     const accepted = service.createBackup()
-    assert.equal(accepted.state, 'running')
+    assert.ok(['deferred', 'running'].includes(accepted.state))
     const deadline = Date.now() + 500
     while (!service.status().lastBackupAt && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5))
     const result = service.status()
@@ -74,19 +77,43 @@ test('manual runtime backup runs off-thread, reports verified completion, and pe
   }
 })
 
-test('manual runtime backup refuses to compete with active agent turns', () => {
+test('manual runtime backup queues until active agent turns are idle', async () => {
   const root = temporaryRoot()
+  let activeRuns = 2
+  let workerStarts = 0
+  let service: ReturnType<typeof createRuntimeStateBackupService> | undefined
   try {
-    const service = createRuntimeStateBackupService({
+    service = createRuntimeStateBackupService({
       sourceRoot: root,
       backupParent: path.join(root, 'backups'),
       schedulePath: path.join(root, 'backups', '.schedule.json'),
       helperPath: path.join(root, 'helper.cjs'),
-      getActiveRunCount: () => 2,
-      workerFactory: () => { throw new Error('worker must not start while agents are active') },
+      getActiveRunCount: () => activeRuns,
+      isGatewayReady: () => true,
+      getLastActivityAt: () => null,
+      minimumIdleMs: 0,
+      startupDelayMs: 5,
+      intervalMs: 5,
+      workerFactory: () => {
+        workerStarts += 1
+        const worker = new EventEmitter()
+        queueMicrotask(() => worker.emit('message', {
+          type: 'complete',
+          result: { backupRoot: path.join(root, 'backups', 'automnia-runtime-test'), fileCount: 1, totalBytes: 32 },
+        }))
+        return worker as unknown as Pick<Worker, 'on' | 'terminate'>
+      },
     })
-    assert.throws(() => service.createBackup(), RuntimeStateBackupBusyError)
+    assert.equal(service.createBackup().state, 'deferred')
+    assert.equal(workerStarts, 0)
+    service.startScheduler()
+    activeRuns = 0
+    const deadline = Date.now() + 500
+    while (!service.status().lastBackupAt && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5))
+    assert.equal(workerStarts, 1)
+    assert.equal(service.status().state, 'idle')
   } finally {
+    service?.stopScheduler()
     fs.rmSync(root, { recursive: true, force: true })
   }
 })
@@ -103,6 +130,9 @@ test('weekly automatic backup waits for idle agent runs, then completes without 
       schedulePath: path.join(root, 'backups', '.schedule.json'),
       helperPath: path.join(root, 'helper.cjs'),
       getActiveRunCount: () => activeRuns,
+      isGatewayReady: () => true,
+      getLastActivityAt: () => null,
+      minimumIdleMs: 0,
       startupDelayMs: 5,
       intervalMs: 5,
       now: () => new Date('2026-10-23T12:00:00.000Z'),
@@ -133,6 +163,113 @@ test('weekly automatic backup waits for idle agent runs, then completes without 
   }
 })
 
+test('automatic backup stays deferred until the Gateway is ready and the idle window passes', async () => {
+  const root = temporaryRoot()
+  let nowMs = Date.parse('2026-10-23T12:00:00.000Z')
+  let gatewayReady = false
+  let lastActivityAt = nowMs
+  let workerStarts = 0
+  let service: ReturnType<typeof createRuntimeStateBackupService> | undefined
+  try {
+    service = createRuntimeStateBackupService({
+      sourceRoot: path.join(root, 'state'),
+      backupParent: path.join(root, 'backups'),
+      schedulePath: path.join(root, 'backups', '.schedule.json'),
+      helperPath: path.join(root, 'helper.cjs'),
+      getActiveRunCount: () => 0,
+      isGatewayReady: () => gatewayReady,
+      getLastActivityAt: () => lastActivityAt,
+      minimumIdleMs: 60_000,
+      startupDelayMs: 5,
+      intervalMs: 5,
+      now: () => new Date(nowMs),
+      workerFactory: () => {
+        workerStarts += 1
+        const worker = new EventEmitter()
+        queueMicrotask(() => worker.emit('message', {
+          type: 'complete',
+          result: { backupRoot: path.join(root, 'backups', 'automnia-runtime-idle'), fileCount: 1, totalBytes: 32 },
+        }))
+        return worker as unknown as Pick<Worker, 'on' | 'terminate'>
+      },
+    })
+    service.startScheduler()
+    const readyDeadline = Date.now() + 500
+    while (!service.status().message.includes('fully ready') && Date.now() < readyDeadline) await new Promise((resolve) => setTimeout(resolve, 5))
+    assert.equal(workerStarts, 0)
+    assert.equal(service.status().state, 'deferred')
+
+    gatewayReady = true
+    nowMs += 10_000
+    const idleDeadline = Date.now() + 500
+    while (!service.status().message.includes('quiet for') && Date.now() < idleDeadline) await new Promise((resolve) => setTimeout(resolve, 5))
+    assert.equal(workerStarts, 0)
+    assert.equal(service.status().state, 'deferred')
+
+    lastActivityAt = nowMs - 60_000
+    nowMs += 60_000
+    const backupDeadline = Date.now() + 500
+    while (!service.status().lastBackupAt && Date.now() < backupDeadline) await new Promise((resolve) => setTimeout(resolve, 5))
+    assert.equal(workerStarts, 1)
+    assert.equal(service.status().state, 'idle')
+  } finally {
+    service?.stopScheduler()
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('a new Gateway run interrupts an in-progress backup and leaves it queued for the next idle window', async () => {
+  const root = temporaryRoot()
+  let activeRuns = 0
+  const lastActivityAt = 1_000
+  let workerStarts = 0
+  let workerTerminated = false
+  let service: ReturnType<typeof createRuntimeStateBackupService> | undefined
+  try {
+    service = createRuntimeStateBackupService({
+      sourceRoot: path.join(root, 'state'),
+      backupParent: path.join(root, 'backups'),
+      schedulePath: path.join(root, 'backups', '.schedule.json'),
+      helperPath: path.join(root, 'helper.cjs'),
+      getActiveRunCount: () => activeRuns,
+      isGatewayReady: () => true,
+      getLastActivityAt: () => lastActivityAt,
+      minimumIdleMs: 0,
+      activityCheckIntervalMs: 250,
+      workerFactory: (workerData) => {
+        workerStarts += 1
+        const worker = new EventEmitter() as EventEmitter & Pick<Worker, 'terminate'>
+        const partialPath = path.join(String(workerData.backupParent), String(workerData.backupName))
+        fs.mkdirSync(partialPath, { recursive: true })
+        fs.writeFileSync(path.join(partialPath, 'partial.bin'), 'partial snapshot')
+        worker.terminate = async () => {
+          workerTerminated = true
+          queueMicrotask(() => worker.emit('exit', 1))
+          return 1
+        }
+        return worker as unknown as Pick<Worker, 'on' | 'terminate'>
+      },
+    })
+
+    service.createBackup()
+    const startDeadline = Date.now() + 1_000
+    while (workerStarts === 0 && Date.now() < startDeadline) await new Promise((resolve) => setTimeout(resolve, 5))
+    assert.equal(workerStarts, 1)
+    activeRuns = 1
+
+    const pauseDeadline = Date.now() + 2_000
+    while (service.status().state !== 'deferred' && Date.now() < pauseDeadline) await new Promise((resolve) => setTimeout(resolve, 10))
+    assert.equal(workerTerminated, true)
+    assert.equal(service.status().state, 'deferred')
+    assert.match(service.status().message, /paused.*Gateway activity resumed/)
+    assert.equal(service.status().lastBackupAt, null)
+    assert.equal(fs.readdirSync(path.join(root, 'backups')).some((name) => name.startsWith('automnia-runtime-')), false)
+  } finally {
+    service?.stopScheduler()
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('default background worker creates a verifiable backup without blocking the caller', async () => {
   const root = temporaryRoot()
   try {
@@ -146,9 +283,12 @@ test('default background worker creates a verifiable backup without blocking the
       schedulePath: path.join(backupParent, '.schedule.json'),
       helperPath: path.resolve('scripts/lib/runtime-state-backup.cjs'),
       getActiveRunCount: () => 0,
+      isGatewayReady: () => true,
+      getLastActivityAt: () => null,
+      minimumIdleMs: 0,
     })
 
-    assert.equal(service.createBackup().state, 'running')
+    assert.ok(['deferred', 'running'].includes(service.createBackup().state))
     const deadline = Date.now() + 5_000
     while (!service.status().lastBackupAt && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10))
     const result = service.status()
@@ -158,6 +298,7 @@ test('default background worker creates a verifiable backup without blocking the
     const manifest = JSON.parse(fs.readFileSync(path.join(result.lastBackupPath as string, 'backup-manifest.json'), 'utf8'))
     assert.equal(manifest.product, 'Automnia')
     assert.equal(manifest.fileCount, 1)
+    assert.equal(manifest.files[0].sha256.length, 64)
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }

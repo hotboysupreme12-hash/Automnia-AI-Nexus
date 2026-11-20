@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.28 - 2026-11-20
+
+### OpenClaw 2026.11.6 and runtime reliability
+
+- Updates the bundled OpenClaw runtime and Codex integration to 2026.11.6.
+- Keeps Telegram progress reporting off the agent-dispatch critical path and deduplicates repeated runtime repair hooks.
+- Classifies Vertex AI billing-eligibility failures as actionable, non-retryable errors instead of retrying them through long agent runs.
+- Skips missing legacy session databases before applying session-path custody checks during restart recovery.
+- Queues automatic and requested runtime backups until the Gateway is ready and has been quiet for 15 minutes, keeping backup I/O away from Gateway startup and active use. An arriving run interrupts and requeues a backup, and snapshot creation avoids redundant full-file hashing passes while still verifying the finished snapshot.
+
 ## 1.0.27 - 2026-11-19
 
 ### Cross-architecture macOS updates
