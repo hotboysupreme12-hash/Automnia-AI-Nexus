@@ -7,9 +7,11 @@ import {
   commandConsoleQueueCancellationForFollowup,
   commandConsoleQueueAgeMs,
   expireCommandConsoleFollowup,
+  failQueuedCommandConsoleFollowups,
   interruptQueuedCommandConsoleFollowups,
   isCommandConsoleQueueStale,
   makeCommandConsoleResponseState,
+  refreshQueuedCommandConsolePositions,
   readCommandConsoleQueueReceipts,
   STALE_COMMAND_CONSOLE_QUEUE_AGE_MS,
   writeCommandConsoleQueueReceipt,
@@ -102,6 +104,45 @@ test('queue expiration writes a reason receipt and stops the visible queued row'
   }])
   assert.equal(updates[0]?.patch.failureKind, 'timeout')
   assert.equal(updates[0]?.patch.streaming, false)
+})
+
+test('failed queued follow-ups write a safe receipt and stop their visible rows', () => {
+  const storage = makeReceiptStorage()
+  const queuedAt = new Date(1_800_000_000_000).toISOString()
+  const completedAt = new Date(1_800_000_000_100).toISOString()
+  const updates: Array<{ id: string; patch: Record<string, unknown> }> = []
+  failQueuedCommandConsoleFollowups(
+    [{ id: 'failed-1', queuedAt, prompt: 'private', visiblePrompt: 'private', options: {}, createdAt: 1 }],
+    'agent-a',
+    'The agent is no longer available.',
+    'aborted',
+    (id, patch) => updates.push({ id, patch }),
+    completedAt,
+    storage,
+  )
+
+  assert.deepEqual(readCommandConsoleQueueReceipts(storage), [{
+    id: 'failed-1', agentId: 'agent-a', queuedAt, status: 'failed',
+    reason: 'The agent is no longer available.', completedAt,
+  }])
+  assert.equal(updates[0]?.patch.failureKind, 'aborted')
+  assert.equal(updates[0]?.patch.streaming, false)
+  assert.equal(JSON.stringify(readCommandConsoleQueueReceipts(storage)).includes('private'), false)
+})
+
+test('queue projection refresh updates position, depth, wait time, and progress text', () => {
+  const queuedAt = new Date(1_800_000_000_000).toISOString()
+  const nowMs = Date.parse(queuedAt) + 5_000
+  const response = {
+    id: 'queued-1', agentId: 'agent-a', prompt: 'prompt', response: 'queued', ok: true,
+    timestamp: queuedAt, queuedAt, durationMs: 0, streaming: true,
+    transport: 'command-console-queue',
+  }
+  const next = refreshQueuedCommandConsolePositions([response], 'agent-a', [{ id: 'older' }, { id: 'queued-1' }], nowMs)
+  assert.equal(next[0]?.queuePosition, 2)
+  assert.equal(next[0]?.queueDepth, 2)
+  assert.equal(next[0]?.durationMs, 5_000)
+  assert.match(next[0]?.progressLines?.[0] || '', /position 2 of 2/)
 })
 
 test('clearing queued work records interrupted receipts without storing executable payloads', () => {

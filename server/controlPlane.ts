@@ -18756,18 +18756,6 @@ const runtimeStateBackupService = createRuntimeStateBackupService({
   schedulePath: path.join(runtimeStateBackupParent, '.runtime-backup-schedule.json'),
   helperPath: runtimeBackupHelperPath,
   getActiveRunCount: () => activeOpenClawRuns.size,
-  isGatewayReady: async () => {
-    const readiness = await fetchGatewayReadinessPayload()
-    return readiness.ready && !readiness.degraded
-  },
-  getLastActivityAt: async () => {
-    const activity = await getGatewayActivityFeed(100)
-    const timestamps = activity.entries
-      .filter((entry) => entry.direction === 'inbound' || entry.direction === 'outbound')
-      .map((entry) => Date.parse(entry.timestamp))
-      .filter(Number.isFinite)
-    return timestamps.length ? Math.max(...timestamps) : null
-  },
 })
 
 registerRuntimeRoutes(app, {

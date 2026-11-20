@@ -82,15 +82,17 @@ import {
 } from './runtimeProjectionState'
 import {
   MAX_COMMAND_CONSOLE_RESPONSES,
-  applyQueuedCommandConsoleResponsePatch,
   commandConsoleQueueCancellationPatch,
   commandConsoleQueueCancellationForFollowup,
   commandConsoleSessionKey,
   createQueuedCommandConsoleResponse,
+  clearCommandConsoleQueueTimer as clearCommandConsoleQueueTimerRegistry,
   expireCommandConsoleFollowup,
+  failQueuedCommandConsoleFollowups as markQueuedCommandConsoleFollowupsFailed,
   interruptQueuedCommandConsoleFollowups,
   makeCommandConsoleResponseState,
-  queueProgressLines,
+  patchQueuedCommandConsoleResponse as patchQueuedConsoleResponse,
+  refreshQueuedCommandConsolePositions as projectQueuedCommandConsolePositions,
   removeCommandConsoleQueueReceipt,
   removeCommandConsoleDraftsForAgent,
   clearAllCommandConsoleDrafts,
@@ -106,7 +108,8 @@ import {
   type NexusPersistedPayload,
 } from './nexusPersistence'
 import { redactDiagnosticText, safeDiagnosticPayload } from '../utils/diagnosticRedaction'
-import { activityTypeForOperationalText, compactLine, redactActivityText, safeActivityPayload, severityForActivity, surfaceForActivity } from './runtimeActivity'
+import { isGatewayRunStatusTelemetry } from '../utils/gatewayEventTelemetry'
+import { activityTypeForOperationalText, activityTypeFromGatewayFrame, compactLine, redactActivityText, safeActivityPayload, severityForActivity, surfaceForActivity } from './runtimeActivity'
 import type {
   AgentMessage,
   AgentMessageKind,
@@ -1156,7 +1159,8 @@ export const useNexusStore = create<NexusState>()(
         messages: { saving: string; saved: string; failed: string },
       ) => persistAgentConfigPatch(agentId, scope, body, messages, reportAgentConfigSave)
       const queuedCommandConsoleFollowups = new Map<string, QueuedCommandConsoleFollowup[]>()
-      const queuedCommandConsoleTimers = new Map<string, ReturnType<typeof setInterval>>()
+        const queuedCommandConsoleTimers = new Map<string, ReturnType<typeof setTimeout>>()
+        let wakeQueuedCommandConsoleLane: (agentId: string) => void = () => undefined
 
       /* ---- text helpers ---- */
       const ansiPattern = new RegExp(`[${String.fromCharCode(27)}@]\\x5b[0-9;]*m|${String.fromCharCode(27)}\\x5b[0-9;]*m`, 'g')
@@ -1502,11 +1506,14 @@ export const useNexusStore = create<NexusState>()(
         }
       }
 
-      const setAgentBusy = (aid: string, busy: boolean) => set((s) => ({
-        busyAgentIds: busy
-          ? [...new Set([...s.busyAgentIds, aid])]
-          : s.busyAgentIds.filter((id) => id !== aid),
-      }))
+      const setAgentBusy = (aid: string, busy: boolean) => {
+        set((s) => ({
+          busyAgentIds: busy
+            ? [...new Set([...s.busyAgentIds, aid])]
+            : s.busyAgentIds.filter((id) => id !== aid),
+        }))
+        if (!busy && queuedCommandConsoleFollowups.get(aid)?.length) wakeQueuedCommandConsoleLane(aid)
+      }
 
       const stopWorkingStatus = (aid: string) => {
         const timer = agentWorkingTimers.get(aid)
@@ -1733,38 +1740,65 @@ export const useNexusStore = create<NexusState>()(
         const trimmed = prompt.trim(); if (!trimmed) return
         const runSessionGeneration = commandConsoleSessionGeneration
         if (get().busyAgentIds.includes(aid)) return
+        const liveResponseId = crypto.randomUUID()
         setAgentBusy(aid, true)
+        let turnSucceeded = false
+        try {
         const start = Date.now()
         const queuedAt = new Date(start).toISOString()
         lastAgentTurnStartedAt.set(aid, start)
-        const normalized = normalizeOperatorPrompt(trimmed)
-        const visiblePrompt = promptWithAttachmentNames(options.displayPrompt || normalized, options.attachments)
-        startWorkingStatus(aid, visiblePrompt)
-        const runPolicy = resolveRunPolicy(aid, options, `${visiblePrompt}\n${normalized}`)
-        const agent = get().agents.find((entry) => entry.id === aid)
-        const recentContextBlock = (() => {
-          if (options.includeRecentContext === false) return ''
-          const s = get()
-          return buildRecentTeammateMemoryBlock({
-            currentAgentId: aid,
-            agents: s.agents,
-            agentResponses: s.agentResponses,
-            contextAgentIds: options.contextAgentIds,
-            activeMission: s.activeMission,
-            confirmedPartyIds: s.confirmedPartyIds,
-            activePartyIds: s.activePartyIds,
-            selectedAgentIds: s.selectedAgentIds,
+        let prepared: {
+          normalized: string
+          visiblePrompt: string
+          runPolicy: ReturnType<typeof resolveRunPolicy>
+          agent: OpenClawAgent | undefined
+          trackedCoordination: ReturnType<typeof beginCoordinationTurn>
+          composed: string
+          gatewayChatMessage: string
+        }
+        try {
+          const normalized = normalizeOperatorPrompt(trimmed)
+          const visiblePrompt = promptWithAttachmentNames(options.displayPrompt || normalized, options.attachments)
+          startWorkingStatus(aid, visiblePrompt)
+          const runPolicy = resolveRunPolicy(aid, options, `${visiblePrompt}\n${normalized}`)
+          const agent = get().agents.find((entry) => entry.id === aid)
+          const recentContextBlock = (() => {
+            if (options.includeRecentContext === false) return ''
+            const s = get()
+            return buildRecentTeammateMemoryBlock({
+              currentAgentId: aid,
+              agents: s.agents,
+              agentResponses: s.agentResponses,
+              contextAgentIds: options.contextAgentIds,
+              activeMission: s.activeMission,
+              confirmedPartyIds: s.confirmedPartyIds,
+              activePartyIds: s.activePartyIds,
+              selectedAgentIds: s.selectedAgentIds,
+            })
+          })()
+          const teamContextBlock = teamContextForPrompt(aid)
+          const skillHintBlock = buildRelevantSkillHints(agent, normalized)
+          claimPromptWorkspace(aid, normalized, options.displayPrompt || normalized)
+          const trackedCoordination = beginCoordinationTurn(aid)
+          const composedBase = [teamContextBlock, skillHintBlock, recentContextBlock, normalized].filter(Boolean).join('\n\n')
+          const composed = options.freshSession ? `/new ${composedBase.replace(/^\s*\/new\b\s*/i, '')}` : composedBase
+          const gatewayChatMessage = options.freshSession ? `/new ${normalized.replace(/^\s*\/new\b\s*/i, '')}` : normalized
+          prepared = { normalized, visiblePrompt, runPolicy, agent, trackedCoordination, composed, gatewayChatMessage }
+        } catch {
+          stopWorkingStatus(aid)
+          setAgentBusy(aid, false)
+          const output = 'Agent turn could not start because local runtime setup failed. Review runtime status, then retry.'
+          recordResponse(aid, trimmed, output, false, Date.now() - start, get().agents.find((entry) => entry.id === aid)?.model?.primary, {
+            failureKind: 'unknown',
+            transport: 'control-center-client',
+            queuedAt,
+            startedAt: queuedAt,
+            completedAt: new Date().toISOString(),
           })
-        })()
-        const teamContextBlock = teamContextForPrompt(aid)
-        const skillHintBlock = buildRelevantSkillHints(agent, normalized)
-        claimPromptWorkspace(aid, normalized, options.displayPrompt || normalized)
-        const trackedCoordination = beginCoordinationTurn(aid)
-        const composedBase = [teamContextBlock, skillHintBlock, recentContextBlock, normalized].filter(Boolean).join('\n\n')
-        const composed = options.freshSession ? `/new ${composedBase.replace(/^\s*\/new\b\s*/i, '')}` : composedBase
-        const gatewayChatMessage = options.freshSession ? `/new ${normalized.replace(/^\s*\/new\b\s*/i, '')}` : normalized
+          return { ok: false, output }
+        }
+        const { normalized, visiblePrompt, runPolicy, agent, trackedCoordination, composed, gatewayChatMessage } = prepared
 
-        const liveResponseId = crypto.randomUUID()
         let liveResponseCreated = false
         let liveResponseModelId = agent?.model?.primary?.trim() || ''
         let liveSessionKey = options.sessionKey?.trim() || ''
@@ -1924,17 +1958,11 @@ export const useNexusStore = create<NexusState>()(
             upsertLiveResponse('', true, Date.now() - start, true)
           }
         }
-        addLiveProgressLine('Agent accepted task.', {
-          label: 'Starting',
-          activityType: 'run.accepted',
+        addLiveProgressLine('Sending request to Automnia Control Center.', {
+          label: 'Sending',
+          activityType: 'run.queued',
           rawSource: 'control-center.client',
-          refresh: true,
-        })
-        addLiveProgressLine('Building context.', {
-          label: 'Starting',
-          activityType: 'run.context_building',
-          rawSource: 'control-center.client',
-          refresh: true,
+          refresh: false,
         })
         const finalizeLiveResponse = (response: string, ok: boolean, dur = Date.now() - start, failureKindOverride?: string) => {
           if (runSessionGeneration !== commandConsoleSessionGeneration) return
@@ -2044,19 +2072,6 @@ export const useNexusStore = create<NexusState>()(
             if (data.mode === 'partial' || data.mode === 'block' || data.mode === 'progress') liveProgressMode = data.mode
           }
           const streamPayload = (data: Record<string, unknown>) => safeActivityPayload(data) || undefined
-          const activityTypeFromFrame = (data: Record<string, unknown>, fallbackText: string, fallbackEvent: string) => {
-            if (typeof data.activityType === 'string' && data.activityType.trim()) return data.activityType.trim()
-            if (typeof data.toolName === 'string' && data.toolName.trim()) {
-              const state = [data.state, data.status, data.phase]
-                .find((value): value is string => typeof value === 'string' && value.trim().length > 0)
-                ?.toLowerCase() || ''
-              if (/\b(error|failed|failure|blocked|denied)\b/.test(state)) return 'tool.error'
-              if (/\b(done|complete|completed|finished|success|ok)\b/.test(state)) return 'tool.finished'
-              if (/\b(start|started|begin|running|pending|call)\b/.test(state)) return 'tool.started'
-              return 'tool.progress'
-            }
-            return activityTypeForOperationalText(fallbackText, fallbackEvent)
-          }
           const consumeFrame = (event: string, rawData: string) => {
             let data: Record<string, unknown> = {}
             try {
@@ -2092,11 +2107,12 @@ export const useNexusStore = create<NexusState>()(
               return
             }
             if (event === 'status') {
+              if (isGatewayRunStatusTelemetry(data)) return
               captureStreamMeta(data)
               ensureLiveStarted('')
               const message = progressTextFromFrame(data)
               if (message) {
-                const activityType = activityTypeFromFrame(data, message, 'status')
+                const activityType = activityTypeFromGatewayFrame(data, message, 'status')
                 addLiveProgressLine(message, {
                   label: liveProgressLabel,
                   activityType,
@@ -2108,11 +2124,12 @@ export const useNexusStore = create<NexusState>()(
               return
             }
             if (event === 'progress') {
+              if (isGatewayRunStatusTelemetry(data)) return
               captureStreamMeta(data)
               ensureLiveStarted('')
               const text = progressTextFromFrame(data)
               if (text) {
-                const activityType = activityTypeFromFrame(data, text, 'progress')
+                const activityType = activityTypeFromGatewayFrame(data, text, 'progress')
                 addLiveProgressLine(text, {
                   label: liveProgressLabel,
                   activityType,
@@ -2240,12 +2257,12 @@ export const useNexusStore = create<NexusState>()(
             const networkFailure = result.error.code === 'network_error'
             const message = networkFailure
               ? [
-                  'Automnia lost the local backend connection before the provider returned.',
-                  'The Gateway may have restarted while this turn was opening. Reset Gateway, then retry.',
+                  'Automnia lost its Control Center connection before it received a result.',
+                  'The request may still be running. Check Agent Activity and this conversation before retrying to avoid duplicate work.',
                   `Detail: ${result.error.message}`,
                 ].join('\n')
               : apiErrorMessage(result.error)
-            const failureKind = networkFailure ? 'gateway_disconnect' : result.error.code
+            const failureKind = networkFailure ? 'interrupted' : result.error.code
             return {
               payload: {
                 ok: false,
@@ -2454,6 +2471,7 @@ export const useNexusStore = create<NexusState>()(
               setTimeout(() => dispatchNextWorkerCycleFn?.(), 500)
             }
           }
+          turnSucceeded = ok
           return { ok, output, payload, streamed: turn.streamed }
         } catch (e) {
           if (runSessionGeneration !== commandConsoleSessionGeneration) return { ok: false, output: 'Session closed.' }
@@ -2461,14 +2479,14 @@ export const useNexusStore = create<NexusState>()(
           const cancelledByOperator = operatorCancelledAgentTurns.has(aid)
           const timedOut = !cancelledByOperator && /aborterror|operation was aborted|signal is aborted/i.test(message)
           const offline = /failed to fetch|fetch failed|network\s*error|networkerror|load failed|econnrefused|econnreset|etimedout|socket hang up|err_connection/i.test(message)
-          const output = cancelledByOperator
+            const output = cancelledByOperator
             ? 'Agent turn was cancelled from Command Console. OpenClaw was asked to abort the active run.'
             : timedOut
             ? 'Agent turn request timed out after 6h waiting for backend response.'
             : offline
             ? [
-                  'Automnia lost the local backend connection before the provider returned.',
-                'The Gateway may have restarted while this turn was opening. Reset Gateway, then retry.',
+                'Automnia lost its Control Center connection before it received a result.',
+                'The request may still be running. Check Agent Activity and this conversation before retrying to avoid duplicate work.',
                 `Detail: ${compactLine(message, 700)}`,
               ].join('\n')
             : 'Try request again.'
@@ -2483,7 +2501,7 @@ export const useNexusStore = create<NexusState>()(
               Date.now() - start,
               agent?.model?.primary,
               {
-                failureKind: cancelledByOperator ? 'aborted' : inferFailureKind(output, timedOut),
+                failureKind: cancelledByOperator ? 'aborted' : timedOut ? 'timeout' : offline ? 'interrupted' : inferFailureKind(output, timedOut),
                 transport: offline ? 'control-center-api' : 'unknown',
                 queuedAt,
                 startedAt: queuedAt,
@@ -2495,10 +2513,6 @@ export const useNexusStore = create<NexusState>()(
           return { ok: false, output, cancelled: cancelledByOperator }
         }
         finally {
-          operatorCancelledAgentTurns.delete(aid)
-          stopWorkingStatus(aid)
-          setAgentBusy(aid, false)
-
           // Cycle-back trigger: when a non-commander worker finishes
           // a heartbeat turn in a continuous/indefinite mission, track
           // that this worker has completed. Once ALL workers are done,
@@ -2508,6 +2522,8 @@ export const useNexusStore = create<NexusState>()(
           if (
             mission &&
             mission.status === 'running' &&
+            runSessionGeneration === commandConsoleSessionGeneration &&
+            turnSucceeded &&
             options.trackMissionCycle === true &&
             shouldUseCommanderCycle(mission) &&
             aid !== mission.selectedAgents[0]
@@ -2538,12 +2554,32 @@ export const useNexusStore = create<NexusState>()(
             }
           }
         }
+        } catch (error) {
+          if (runSessionGeneration === commandConsoleSessionGeneration) {
+            const output = 'Agent turn could not start because local setup failed. Review runtime status, then retry.'
+            const hasLiveResponse = get().agentResponses.some((entry) => entry.id === liveResponseId)
+            if (hasLiveResponse) {
+              const completedAt = new Date().toISOString()
+              set((state) => ({ agentResponses: state.agentResponses.map((entry) => entry.id === liveResponseId
+                ? { ...entry, response: output, ok: false, streaming: false, failureKind: 'unknown', completedAt }
+                : entry) }))
+            } else {
+              recordResponse(aid, trimmed, output, false, 0, '', { failureKind: 'unknown', transport: 'control-center-client' })
+            }
+          }
+          console.error('Agent turn setup failed', error)
+          return { ok: false, output: 'Agent turn could not start because local setup failed.' }
+        } finally {
+          if (runSessionGeneration === commandConsoleSessionGeneration) {
+            operatorCancelledAgentTurns.delete(aid)
+            stopWorkingStatus(aid)
+            setAgentBusy(aid, false)
+          }
+        }
       }
 
       const clearQueuedCommandConsoleTimer = (agentId: string) => {
-        const timer = queuedCommandConsoleTimers.get(agentId)
-        if (timer) clearInterval(timer)
-        queuedCommandConsoleTimers.delete(agentId)
+        clearCommandConsoleQueueTimerRegistry(queuedCommandConsoleTimers, agentId)
       }
 
       const updateQueuedCommandConsoleResponse = (
@@ -2551,36 +2587,15 @@ export const useNexusStore = create<NexusState>()(
         patch: Partial<AgentResponse>,
       ) => {
         set((s) => ({
-          agentResponses: s.agentResponses.map((entry) => {
-            if (entry.id !== queuedId) return entry
-            return applyQueuedCommandConsoleResponsePatch(entry, patch)
-          }),
+          agentResponses: patchQueuedConsoleResponse(s.agentResponses, queuedId, patch),
         }))
       }
 
       const refreshQueuedCommandConsolePositions = (agentId: string) => {
         const queue = queuedCommandConsoleFollowups.get(agentId) || []
         if (!queue.length) return
-        const depth = queue.length
-        const positionById = new Map(queue.map((entry, index) => [entry.id, index + 1]))
-        const updatedAt = new Date().toISOString()
         set((s) => ({
-          agentResponses: s.agentResponses.map((entry) => {
-            if (entry.agentId !== agentId || entry.transport !== 'command-console-queue' || !entry.streaming) return entry
-            const position = positionById.get(entry.id)
-            if (!position) return entry
-            const queuedAtMs = new Date(entry.queuedAt || entry.timestamp).getTime()
-            const durationMs = Number.isFinite(queuedAtMs) ? Math.max(0, Date.now() - queuedAtMs) : entry.durationMs
-            return {
-              ...entry,
-              durationMs,
-              queuePosition: position,
-              queueDepth: depth,
-              progressLabel: position === 1 ? 'Queued next' : `Queued ${position}/${depth}`,
-              progressLines: queueProgressLines(position, depth),
-              progressUpdatedAt: updatedAt,
-            }
-          }),
+          agentResponses: projectQueuedCommandConsolePositions(s.agentResponses, agentId, queue),
         }))
       }
 
@@ -2588,31 +2603,19 @@ export const useNexusStore = create<NexusState>()(
         const queue = queuedCommandConsoleFollowups.get(agentId) || []
         queuedCommandConsoleFollowups.delete(agentId)
         clearQueuedCommandConsoleTimer(agentId)
-        const completedAt = new Date().toISOString()
-        for (const queued of queue) {
-          writeCommandConsoleQueueReceipt({ id: queued.id, agentId, queuedAt: queued.queuedAt, status: 'failed', reason: message, completedAt })
-          updateQueuedCommandConsoleResponse(queued.id, {
-            response: message,
-            ok: false,
-            streaming: false,
-            failureKind,
-            completedAt,
-            queuePosition: undefined,
-            queueDepth: undefined,
-            progressLabel: 'Queue stopped',
-            progressLines: [message],
-            progressUpdatedAt: completedAt,
-          })
-        }
+        markQueuedCommandConsoleFollowupsFailed(queue, agentId, message, failureKind, updateQueuedCommandConsoleResponse)
       }
 
-      const drainQueuedCommandConsoleFollowups = (agentId: string) => {
-        if (queuedCommandConsoleTimers.has(agentId)) return
-        const timer = setInterval(() => {
+      const drainQueuedCommandConsoleFollowups = (agentId: string, immediate = false) => {
+        if (queuedCommandConsoleTimers.has(agentId)) {
+          if (!immediate) return
+          clearQueuedCommandConsoleTimer(agentId)
+        }
+        const timer = setTimeout(() => {
+          queuedCommandConsoleTimers.delete(agentId)
           const queue = queuedCommandConsoleFollowups.get(agentId)
           if (!queue?.length) {
             queuedCommandConsoleFollowups.delete(agentId)
-            clearQueuedCommandConsoleTimer(agentId)
             return
           }
 
@@ -2626,14 +2629,19 @@ export const useNexusStore = create<NexusState>()(
             if (queued) expireCommandConsoleFollowup(queued, agentId, updateQueuedCommandConsoleResponse)
             if (!queue.length) queuedCommandConsoleFollowups.delete(agentId)
             else refreshQueuedCommandConsolePositions(agentId)
+            if (queue.length) drainQueuedCommandConsoleFollowups(agentId)
             return
           }
-          if (current.busyAgentIds.includes(agentId)) return
+          if (current.busyAgentIds.includes(agentId)) {
+            // A low-frequency safety poll covers missed state notifications;
+            // the normal lane-free path wakes the queue immediately.
+            drainQueuedCommandConsoleFollowups(agentId)
+            return
+          }
 
           const queued = queue.shift()
           if (!queued) {
             queuedCommandConsoleFollowups.delete(agentId)
-            clearQueuedCommandConsoleTimer(agentId)
             return
           }
           if (!queue.length) queuedCommandConsoleFollowups.delete(agentId)
@@ -2653,14 +2661,36 @@ export const useNexusStore = create<NexusState>()(
             progressUpdatedAt: releasedAt,
           })
           void runAgentPrompt(agentId, queued.prompt, queued.options)
+            .catch(() => {
+              setAgentBusy(agentId, false)
+              const completedAt = new Date().toISOString()
+              const message = 'Queued turn could not start. The agent lane was released so later work can continue.'
+              updateQueuedCommandConsoleResponse(queued.id, {
+                response: message,
+                ok: false,
+                streaming: false,
+                failureKind: 'unknown',
+                completedAt,
+                queuePosition: undefined,
+                queueDepth: undefined,
+                progressLabel: 'Queue stopped',
+                progressLines: [message],
+                progressUpdatedAt: completedAt,
+              })
+            })
             .finally(() => {
               removeCommandConsoleQueueReceipt(queued.id)
               if ((queuedCommandConsoleFollowups.get(agentId)?.length || 0) > 0) {
                 drainQueuedCommandConsoleFollowups(agentId)
               }
             })
-        }, 1000)
+        }, immediate ? 0 : 1000)
         queuedCommandConsoleTimers.set(agentId, timer)
+      }
+
+      wakeQueuedCommandConsoleLane = (agentId) => {
+        clearQueuedCommandConsoleTimer(agentId)
+        drainQueuedCommandConsoleFollowups(agentId, true)
       }
 
       const queueCommandConsoleFollowups = (
@@ -2779,7 +2809,7 @@ export const useNexusStore = create<NexusState>()(
           set((s) => {
             const existing = s.agentResponses.find((entry) => entry.id === responseId)
             const isTerminal = eventName === 'final' || eventName === 'error'
-            if (existing?.streaming === false && !isTerminal && existing.ok) return s
+            if (existing?.streaming === false && !isTerminal) return s
             const startedAt = existing?.startedAt || frame.startedAt || ts
             const startedMs = new Date(startedAt).getTime()
             const elapsedMs = Number.isFinite(startedMs) ? Math.max(0, Date.now() - startedMs) : existing?.durationMs || 0
@@ -3995,6 +4025,7 @@ export const useNexusStore = create<NexusState>()(
         resetForNewSession: () => {
           commandConsoleSessionGeneration += 1
           clearAllContinuousTimers()
+          for (const agentId of agentWorkingTimers.keys()) stopWorkingStatus(agentId)
           clearMissionBackendPollTimer()
           clearAllCommandConsoleDrafts()
           clearQueuedCommandConsoleFollowups()

@@ -13,6 +13,8 @@ export class ConsoleRunSnapshots {
     if (!key) return frame
     const previous = this.runs.get(key)
     const terminal = frame.event === 'final' || frame.event === 'error'
+    // Late progress cannot reactivate a completed or cancelled snapshot.
+    if (previous && (previous.event === 'final' || previous.event === 'error') && !terminal) return previous
     const text = typeof frame.text === 'string' ? frame.text : ''
     let reply = String(previous?.text || '')
     if (frame.event === 'delta') reply = frame.replace ? text : reply + text

@@ -40,9 +40,8 @@ const FAILURE_RECOVERY: Record<string, FailureRecovery> = {
     action: 'restart-gateway',
   },
   network_error: {
-    label: 'Restart gateway',
-    detail: 'The local backend connection dropped. Restart the Gateway, confirm it is ready, then start a new turn.',
-    action: 'restart-gateway',
+    label: 'Check backend connection',
+    detail: 'The Control Center connection failed before it confirmed the result. Check the conversation and Agent Activity before retrying; the run may still be active.',
   },
   runtime_unavailable: {
     label: 'Check OpenClaw runtime',
@@ -107,7 +106,7 @@ const FAILURE_RECOVERY: Record<string, FailureRecovery> = {
   },
   interrupted: {
     label: 'Run interrupted',
-    detail: 'The runtime stopped observing this turn. Check its activity before starting another turn.',
+    detail: 'Automnia lost the connection before it confirmed this turn. Check Agent Activity and the conversation before retrying; the run may still be active.',
   },
 }
 

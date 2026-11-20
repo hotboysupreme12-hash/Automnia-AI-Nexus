@@ -32,6 +32,18 @@ test('absolute snapshots make repeated reconnects idempotent and preserve compac
   assert.equal(cache.values()[0].event, 'final')
 })
 
+test('late progress cannot revive completed or stopped runs on reconnect', () => {
+  for (const event of ['final', 'error']) {
+    const cache = new ConsoleRunSnapshots()
+    cache.record(frame('start'))
+    cache.record(frame(event, { message: 'Stopped', ok: false }))
+    const late = cache.record(frame('status', { message: 'Working' }))
+    assert.equal(late.event, event)
+    assert.equal(cache.values()[0].event, event)
+    assert.equal(cache.values()[0].text, 'Stopped')
+  }
+})
+
 test('retention evicts completed turns while preserving active runs and clear respects agent scope', () => {
   const cache = new ConsoleRunSnapshots(2)
   cache.record(frame('start'))

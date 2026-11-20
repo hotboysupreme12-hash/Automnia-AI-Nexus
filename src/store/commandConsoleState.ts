@@ -394,7 +394,8 @@ export function upsertCommandConsoleResponse(
   const agentResponses = alreadyTracked
     ? current.agentResponses.map((entry) => (entry.id === next.id ? next : entry))
     : [next, ...current.agentResponses].slice(0, MAX_COMMAND_CONSOLE_RESPONSES)
-  const agentStillStreaming = agentResponses.some((entry) => entry.agentId === next.agentId && entry.streaming)
+  // Waiting rows are displayed as streaming, but have not started a run.
+  const agentStillStreaming = agentResponses.some((entry) => entry.agentId === next.agentId && entry.streaming && entry.transport !== 'command-console-queue')
   return {
     agentResponses,
     busyAgentIds: agentStillStreaming
@@ -418,6 +419,77 @@ export function queueProgressLines(position: number, depth: number): string[] {
     `Queue position ${position} of ${depth}.`,
     `${position - 1} queued turn${position === 2 ? '' : 's'} ahead.`,
   ]
+}
+
+export function refreshQueuedCommandConsolePositions(
+  responses: AgentResponse[],
+  agentId: string,
+  queue: readonly { id: string }[],
+  nowMs = Date.now(),
+  updatedAt = new Date(nowMs).toISOString(),
+): AgentResponse[] {
+  if (!queue.length) return responses
+  const depth = queue.length
+  const positionById = new Map(queue.map((entry, index) => [entry.id, index + 1]))
+  return responses.map((entry) => {
+    if (entry.agentId !== agentId || entry.transport !== 'command-console-queue' || !entry.streaming) return entry
+    const position = positionById.get(entry.id)
+    if (!position) return entry
+    const queuedAtMs = new Date(entry.queuedAt || entry.timestamp).getTime()
+    const durationMs = Number.isFinite(queuedAtMs) ? Math.max(0, nowMs - queuedAtMs) : entry.durationMs
+    return {
+      ...entry,
+      durationMs,
+      queuePosition: position,
+      queueDepth: depth,
+      progressLabel: position === 1 ? 'Queued next' : `Queued ${position}/${depth}`,
+      progressLines: queueProgressLines(position, depth),
+      progressUpdatedAt: updatedAt,
+    }
+  })
+}
+
+export function failQueuedCommandConsoleFollowups<TOptions>(
+  queuedEntries: readonly Pick<CommandConsoleQueuedFollowup<TOptions>, 'id' | 'queuedAt'>[],
+  agentId: string,
+  message: string,
+  failureKind: string,
+  updateResponse: (id: string, patch: Partial<AgentResponse>) => void,
+  completedAt = new Date().toISOString(),
+  storage: CommandConsoleQueueReceiptStorage | null = browserDraftStorage(),
+): void {
+  for (const queued of queuedEntries) {
+    writeCommandConsoleQueueReceipt({ id: queued.id, agentId, queuedAt: queued.queuedAt, status: 'failed', reason: message, completedAt }, storage)
+    updateResponse(queued.id, {
+      response: message,
+      ok: false,
+      streaming: false,
+      failureKind,
+      completedAt,
+      queuePosition: undefined,
+      queueDepth: undefined,
+      progressLabel: 'Queue stopped',
+      progressLines: [message],
+      progressUpdatedAt: completedAt,
+    })
+  }
+}
+
+export function patchQueuedCommandConsoleResponse(
+  responses: AgentResponse[],
+  queuedId: string,
+  patch: Partial<AgentResponse>,
+): AgentResponse[] {
+  return responses.map((entry) => entry.id === queuedId ? applyQueuedCommandConsoleResponsePatch(entry, patch) : entry)
+}
+
+export function clearCommandConsoleQueueTimer(
+  timers: Map<string, ReturnType<typeof setTimeout>>,
+  agentId: string,
+): void {
+  const timer = timers.get(agentId)
+  if (timer) clearTimeout(timer)
+  timers.delete(agentId)
 }
 
 export function createQueuedCommandConsoleResponse(input: QueuedCommandConsoleResponseInput): AgentResponse {

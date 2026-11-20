@@ -81,7 +81,20 @@ const AgentResponseConsole = memo(lazy(() => recoverableLazyImport('agent-respon
 const LiveOperationMonitor = memo(lazy(() => recoverableLazyImport('live-operation-monitor', () => import('../monitor/LiveOperationMonitor').then((module) => ({ default: module.LiveOperationMonitor })))))
 const PluginsPanel = memo(lazy(() => recoverableLazyImport('plugins-panel', () => import('../plugins/PluginsPanel').then((module) => ({ default: module.PluginsPanel })))))
 const SettingsPanel = memo(lazy(() => recoverableLazyImport('settings-panel', () => import('../settings/SettingsPanel').then((module) => ({ default: module.SettingsPanel })))))
-const AgentEditorModal = lazy(() => recoverableLazyImport('agent-editor-modal', () => import('../editor/AgentEditorModal').then((module) => ({ default: module.AgentEditorModal }))))
+function loadAgentEditorModal() {
+  return recoverableLazyImport('agent-editor-modal', () => import('../editor/AgentEditorModal').then((module) => ({ default: module.AgentEditorModal })))
+}
+let agentEditorModalPromise: ReturnType<typeof loadAgentEditorModal> | null = null
+function getAgentEditorModal() {
+  if (!agentEditorModalPromise) {
+    agentEditorModalPromise = loadAgentEditorModal().catch((error: unknown) => {
+      agentEditorModalPromise = null
+      throw error
+    })
+  }
+  return agentEditorModalPromise
+}
+const AgentEditorModal = lazy(getAgentEditorModal)
 const RecruitAgentModal = lazy(() => recoverableLazyImport('recruit-agent-modal', () => import('../recruit/RecruitAgentModal').then((module) => ({ default: module.RecruitAgentModal }))))
 const HelpAssistantPanel = lazy(() => recoverableLazyImport('help-assistant', () => import('../help/HelpAssistantPanel').then((module) => ({ default: module.HelpAssistantPanel }))))
 const CommandPalette = lazy(() => recoverableLazyImport('command-palette', () => import('./CommandPalette').then((module) => ({ default: module.CommandPalette }))))
@@ -95,6 +108,24 @@ function prefetchWorkspace(tab: AppTab) {
     settings: () => import('../settings/SettingsPanel'),
   }[tab]
   void load().catch(() => undefined)
+}
+
+function AgentEditorLoadingFallback() {
+  return (
+    <div
+      data-editor-loading="true"
+      role="status"
+      aria-live="polite"
+      aria-label="Loading agent settings"
+      className="fixed inset-0 grid place-items-center bg-[#030712]/96 p-4"
+      style={{ zIndex: 60 }}
+    >
+      <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#080d16] px-5 py-4 text-sm font-semibold text-slate-200 shadow-2xl shadow-black/60">
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-cyan-300/30 border-t-cyan-200" aria-hidden="true" />
+        <span>Opening agent settings…</span>
+      </div>
+    </div>
+  )
 }
 
 
@@ -188,6 +219,36 @@ export function NexusShell() {
   const activeMission = useNexusStore((s) => s.activeMission)
   const isEditorOpen = useNexusStore((s) => s.isEditorOpen)
   const missionRunning = activeMission?.status === 'running'
+
+  // Warm the settings chunk only after the first paint or when someone reaches
+  // a settings trigger. A speculative import failure must never initiate the
+  // lazy-import recovery reload; the actual click still uses that recovery.
+  useEffect(() => {
+    let cancelled = false
+    let idleHandle: number | null = null
+    let timeoutHandle: number | null = null
+    const idleWindow = window as unknown as {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+      cancelIdleCallback?: (handle: number) => void
+    }
+    const preload = () => {
+      if (!cancelled) void import('../editor/AgentEditorModal').catch(() => undefined)
+    }
+    const onIntent = (event: Event) => {
+      if (event.target instanceof Element && event.target.closest('[data-agent-editor-trigger]')) preload()
+    }
+    if (idleWindow.requestIdleCallback) idleHandle = idleWindow.requestIdleCallback(preload, { timeout: 2500 })
+    else timeoutHandle = window.setTimeout(preload, 1200)
+    window.addEventListener('pointerover', onIntent, { passive: true })
+    window.addEventListener('focusin', onIntent)
+    return () => {
+      cancelled = true
+      if (idleHandle !== null) idleWindow.cancelIdleCallback?.(idleHandle)
+      if (timeoutHandle !== null) window.clearTimeout(timeoutHandle)
+      window.removeEventListener('pointerover', onIntent)
+      window.removeEventListener('focusin', onIntent)
+    }
+  }, [])
   const activeTab = WORKSPACE_META[tab] || WORKSPACE_META.agents
   // Runtime status is useful context, not a frame-by-frame feed. Keep the
   // Monitor responsive without repeatedly waking the Gateway and renderer on
@@ -1059,10 +1120,8 @@ export function NexusShell() {
         </div>
       </main>
 
-      <Suspense fallback={null}>
-        {isEditorOpen && <AgentEditorModal />}
-        {isRecruitOpen && <RecruitAgentModal isOpen={isRecruitOpen} onClose={() => setRecruitOpen(false)} />}
-      </Suspense>
+      {isEditorOpen && <Suspense fallback={<AgentEditorLoadingFallback />}><AgentEditorModal /></Suspense>}
+      {isRecruitOpen && <Suspense fallback={null}><RecruitAgentModal isOpen={isRecruitOpen} onClose={() => setRecruitOpen(false)} /></Suspense>}
       {isHelpOpen && <Suspense fallback={<PanelLoader />}><HelpAssistantPanel isOpen onClose={closeHelp} onNavigate={navigateFromHelp} /></Suspense>}
       {isCommandPaletteOpen && <Suspense fallback={null}><CommandPalette onClose={() => setCommandPaletteOpen(false)} onNavigate={navigateFromHelp} /></Suspense>}
     </div>

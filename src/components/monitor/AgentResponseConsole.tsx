@@ -3,6 +3,7 @@ import { AvatarFallback } from '../ui/AvatarFallback'
 import { useRememberedState } from '../../hooks/useRememberedState'
 import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type WheelEvent } from 'react'
 import { createPortal } from 'react-dom'
+import { useDialogFocus } from '../ui/Dialog'
 import { indexResponseActivity, selectResponseHistory, selectTargetAgentRuns } from '../../store/responseHistoryIndex'
 import { ResponseMarkdown } from './ResponseMarkdown'
 import { QueuedFollowupControls } from './QueuedFollowupControls'
@@ -31,6 +32,7 @@ import { failureRecoveryForKind, type FailureRecovery, type FailureRecoveryActio
 import { createSseFrameParser } from '../../utils/sseStream'
 import { automniaRelayModelLabel, resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
 import { formatAutomniaCredits } from '../../utils/creditDisplay'
+import { compressImageForUpload } from '../../utils/imageCompression'
 import {
   decodeAudioToMono16Khz,
   friendlyMicrophoneError,
@@ -477,10 +479,14 @@ function latestRunStatus(entry?: AgentResponse) {
   if (!entry) return ''
   const latestActivity = [...(entry.activity || [])].reverse().find((event) => {
     const label = event.label.trim()
-    return label && event.type !== 'message.final' && event.type !== 'run.finished' && !/final response received/i.test(label)
+    return label && !isInternalRunStatusText(label) && event.type !== 'message.final' && event.type !== 'run.finished' && !/final response received/i.test(label)
   })
-  const latestProgress = [...(entry.progressLines || [])].reverse().find((line) => line.trim())
+  const latestProgress = [...(entry.progressLines || [])].reverse().find((line) => line.trim() && !isInternalRunStatusText(line))
   return latestActivity?.label.trim() || latestProgress?.trim() || entry.progressLabel?.trim() || 'Agent started working.'
+}
+
+function isInternalRunStatusText(value: string) {
+  return /\b(?:working in )?run_status\b/i.test(value.trim())
 }
 
 function responseActivityItems(entry: AgentResponse) {
@@ -495,6 +501,7 @@ function responseActivityItems(entry: AgentResponse) {
   const labels = new Set<string>()
   return (entry.activity || [])
     .filter((event) => !ignoredTypes.has(event.type) && Boolean(event.label.trim()))
+    .filter((event) => !isInternalRunStatusText(event.label))
     .filter((event) => {
       const label = event.label.trim()
       if (labels.has(label)) return false
@@ -939,10 +946,10 @@ export function AgentResponseConsole() {
   const [responseQuery, setResponseQuery] = useState('')
   const [historySearchOpen, setHistorySearchOpen] = useState(false)
   const [isFullScreen, setIsFullScreen] = useState(false)
-  const wasFullScreenRef = useRef(false)
   const [responseLimit, setResponseLimit] = useState(MESSAGE_RENDER_LIMIT)
   const [followingLatest, setFollowingLatest] = useState(true)
   const historySearchInputRef = useRef<HTMLInputElement | null>(null)
+  const fullScreenReturnFocusRef = useRef<HTMLElement | null>(null)
   const lastReadResponseId = useRef<string | undefined>(undefined)
   const olderResponseAnchor = useRef<{ height: number; top: number } | null>(null)
   useLayoutEffect(() => {
@@ -965,7 +972,6 @@ export function AgentResponseConsole() {
   const selectAgent = useNexusStore((s) => s.selectAgent)
   const clearSelectedAgents = useNexusStore((s) => s.clearSelectedAgents)
   const openAgentEditor = useNexusStore((s) => s.openEditor)
-  const isAgentEditorOpen = useNexusStore((s) => s.isEditorOpen)
   const clearAgentResponses = useNexusStore((s) => s.clearAgentResponses)
   const missionRunning = useNexusStore((s) => s.activeMission?.status === 'running')
   const hostedCreditsFirst = resolveLicenseEntitlement(license).isHosted
@@ -1024,61 +1030,41 @@ export function AgentResponseConsole() {
   const recordingDiscardReasonRef = useRef('')
   const voiceStatusClearRef = useRef<number | null>(null)
   const voiceMountedRef = useRef(true)
-  useEffect(() => {
-    if (!isFullScreen) return
-    const previousBodyOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    textareaRef.current?.focus({ preventScroll: true })
-    return () => {
-      document.body.style.overflow = previousBodyOverflow
-    }
-  }, [isFullScreen])
+  useDialogFocus({
+    open: isFullScreen,
+    rootRef: consoleRootRef,
+    panelRef: consoleRootRef,
+    onClose: () => setIsFullScreen(false),
+  })
   useLayoutEffect(() => {
-    if (isFullScreen) {
-      wasFullScreenRef.current = true
-      return
-    }
-    if (!wasFullScreenRef.current) return
-    wasFullScreenRef.current = false
-    window.requestAnimationFrame(() => {
-      document.querySelector<HTMLButtonElement>('button[aria-label="Open full-screen chat"]')?.focus({ preventScroll: true })
-    })
-  }, [isFullScreen])
-  useEffect(() => {
-    if (!isFullScreen || isAgentEditorOpen) return
+    if (!isFullScreen) return
     const root = consoleRootRef.current
-    const handleFullScreenKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        setIsFullScreen(false)
-        return
-      }
-      if (event.key !== 'Tab' || !root) return
-      const focusable = Array.from(root.querySelectorAll<HTMLElement>(
-        'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',
-      )).filter((element) => element.getAttribute('aria-hidden') !== 'true'
-        && element.getClientRects().length > 0
-        && window.getComputedStyle(element).visibility !== 'hidden')
-      if (!focusable.length) {
-        event.preventDefault()
-        root.focus({ preventScroll: true })
-        return
-      }
-      const first = focusable[0]
-      const last = focusable[focusable.length - 1]
-      if (event.shiftKey && (document.activeElement === first || !root.contains(document.activeElement))) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && (document.activeElement === last || !root.contains(document.activeElement))) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-    window.addEventListener('keydown', handleFullScreenKeyDown)
+    root?.style.setProperty('position', 'fixed', 'important')
+    root?.style.setProperty('inset', '0', 'important')
+    root?.style.setProperty('z-index', '49', 'important')
+    root?.style.setProperty('display', 'grid', 'important')
+    root?.style.setProperty('width', '100vw', 'important')
+    root?.style.setProperty('height', '100dvh', 'important')
+    textareaRef.current?.focus({ preventScroll: true })
+    const focusFrame = window.requestAnimationFrame(() => textareaRef.current?.focus({ preventScroll: true }))
     return () => {
-      window.removeEventListener('keydown', handleFullScreenKeyDown)
+      window.cancelAnimationFrame(focusFrame)
+      root?.style.removeProperty('position')
+      root?.style.removeProperty('inset')
+      root?.style.removeProperty('z-index')
+      root?.style.removeProperty('display')
+      root?.style.removeProperty('width')
+      root?.style.removeProperty('height')
+      window.requestAnimationFrame(() => {
+        const previousFocus = fullScreenReturnFocusRef.current
+        const focusTarget = previousFocus?.isConnected
+          ? previousFocus
+          : document.querySelector<HTMLElement>('.app-bg button[aria-label="Open full-screen chat"]')
+        focusTarget?.focus({ preventScroll: true })
+        fullScreenReturnFocusRef.current = null
+      })
     }
-  }, [isFullScreen, isAgentEditorOpen])
+  }, [isFullScreen])
   // Keep the authoritative server run projection hot even after the renderer
   // has reloaded or lost an SSE stream. Renderer-local busy state is not a
   // sufficient monitor for Gateway work.
@@ -1888,38 +1874,11 @@ export function AgentResponseConsole() {
     setUploadError('')
   }
 
-  const compressImageForUpload = async (file: File): Promise<File> => {
-    if (!file.type.startsWith('image/') || file.type === 'image/gif' || file.size < 1_200_000) return file
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(String(reader.result || ''))
-      reader.onerror = () => reject(reader.error)
-      reader.readAsDataURL(file)
-    })
-    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image()
-      img.onload = () => resolve(img)
-      img.onerror = reject
-      img.src = dataUrl
-    })
-    const maxSide = 1600
-    const scale = Math.min(1, maxSide / Math.max(image.width, image.height))
-    const canvas = document.createElement('canvas')
-    canvas.width = Math.max(1, Math.round(image.width * scale))
-    canvas.height = Math.max(1, Math.round(image.height * scale))
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return file
-    ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.86))
-    if (!blob || blob.size >= file.size) return file
-    return new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' })
-  }
-
   const uploadAttachment = async (file: File): Promise<AgentTurnAttachment> => {
     const controller = new AbortController()
     uploadControllers.current.add(controller)
     try {
-    const uploadFile = await compressImageForUpload(file)
+    const uploadFile = await compressImageForUpload(file, controller.signal)
     controller.signal.throwIfAborted()
     const result = await apiRequest<CommandConsoleUploadPayload>(`/api/files/upload?name=${encodeURIComponent(uploadFile.name)}&mimeType=${encodeURIComponent(uploadFile.type || 'application/octet-stream')}`, {
       validate: isUploadResponse,
@@ -2158,9 +2117,9 @@ export function AgentResponseConsole() {
     void clearAgentResponses()
   }
 
-  // Keep the fixed fullscreen surface at the document root so transformed app
-  // containers cannot constrain its viewport or keyboard focus.
-  const fullScreenPortalRoot = isFullScreen && typeof document !== 'undefined' ? document.body : null
+  const fullScreenPortalRoot = isFullScreen && typeof document !== 'undefined'
+    ? document.body
+    : null
   const consolePanel = (
     <section
       ref={consoleRootRef}
@@ -2172,9 +2131,91 @@ export function AgentResponseConsole() {
       aria-modal={isFullScreen || undefined}
       aria-label={isFullScreen ? 'Full-screen Agent Chat' : undefined}
       tabIndex={-1}
+      style={isFullScreen ? {
+        position: 'fixed',
+        inset: 0,
+        zIndex: 49,
+        display: 'grid',
+        gridTemplateColumns: '258px minmax(0, 1fr)',
+        width: '100vw',
+        height: '100dvh',
+      } : undefined}
       className={`dy-command-console flex min-h-0 flex-col overflow-hidden${isFullScreen ? ' dy-command-console--fullscreen' : ''}`}
       onWheel={handleConsoleWheel}
     >
+      {isFullScreen && (
+        <aside className="dy-command-console__sidebar" aria-label="Agent conversations">
+          <div className="dy-command-console__sidebar-heading">
+            <div className="dy-command-console__sidebar-title-wrap">
+              <strong>Automnia</strong>
+              <span>Agent Chat</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            className={`dy-command-console__conversation-target${selectedTargets.length === 0 ? ' is-active' : ''}`}
+            aria-current={selectedTargets.length === 0 ? 'page' : undefined}
+            onClick={() => { clearSelectedAgents(); setChatRemovedPartyIds([]) }}
+          >
+            <span className="dy-command-console__conversation-icon" aria-hidden="true">◈</span>
+            <span className="dy-command-console__conversation-copy">
+              <strong>Active party</strong>
+              <small>{partyTargetIds.length} agent{partyTargetIds.length === 1 ? '' : 's'}</small>
+            </span>
+            <span className="dy-command-console__conversation-status" aria-hidden="true" />
+          </button>
+          <div className="dy-command-console__sidebar-section-label">Agents</div>
+          <nav className="dy-command-console__agent-list" aria-label="Choose an agent">
+            {agents.map((agent) => {
+              const isSelected = selectedTargets.length === 1 && selectedTargets[0].id === agent.id
+              const isBusy = busyAgentIds.includes(agent.id)
+              const portraitSrc = portraitSrcForAgent(agent)
+              const portraitFailed = portraitSrc ? failedPortraitKeys.has(portraitFailureKey(agent.id, portraitSrc)) : false
+              return (
+                <div className="dy-command-console__agent-row" key={agent.id}>
+                  <button
+                    type="button"
+                    className="dy-command-console__conversation-target dy-command-console__agent-target"
+                    aria-current={isSelected ? 'page' : undefined}
+                    aria-label={`Chat with ${agent.name}${isBusy ? ', running' : ''}`}
+                    title={`Chat with ${agent.name}`}
+                    onClick={() => selectAgent(agent.id)}
+                  >
+                    <span className="dy-command-console__agent-avatar" aria-hidden="true">
+                      {portraitSrc && !portraitFailed
+                        ? <img src={portraitSrc} alt="" onError={() => markPortraitFailed(agent.id, portraitSrc)} />
+                        : <AvatarFallback name={agent.name} />}
+                    </span>
+                    <span className="dy-command-console__conversation-copy">
+                      <strong>{agent.name}</strong>
+                      <small>{isBusy ? 'Working' : 'Ready'}</small>
+                    </span>
+                    <span className={`dy-command-console__conversation-status${isBusy ? ' is-busy' : ''}`} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className="dy-command-console__sidebar-agent-settings"
+                    data-agent-editor-trigger="true"
+                    aria-label={`Edit ${agent.name} settings`}
+                    title={`Edit ${agent.name} settings`}
+                    onClick={() => openAgentEditor(agent.id)}
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="3" />
+                      <path d="m19.4 15 .1.1a1.7 1.7 0 0 1-2.4 2.4l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a1.7 1.7 0 0 1-3.4 0v-.2a1.7 1.7 0 0 0-2.9-1.2l-.1.1a1.7 1.7 0 0 1-2.4-2.4l.1-.1A1.7 1.7 0 0 0 4.2 12h-.2a1.7 1.7 0 0 1 0-3.4h.2a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a1.7 1.7 0 0 1 2.4-2.4l.1.1a1.7 1.7 0 0 0 2.9-1.2v-.2a1.7 1.7 0 0 1 3.4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a1.7 1.7 0 0 1 2.4 2.4l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.2a1.7 1.7 0 0 1 0 3.4h-.2a1.7 1.7 0 0 0-1.2 2.9Z" />
+                    </svg>
+                  </button>
+                </div>
+              )
+            })}
+          </nav>
+          <div className="dy-command-console__sidebar-footer">
+            <span className={`dy-command-console__conversation-status${clawTalkStreamHealth.state === 'live' ? ' is-busy' : ''}`} aria-hidden="true" />
+            <span>{streamLabel[clawTalkStreamHealth.state]}</span>
+          </div>
+        </aside>
+      )}
+      <div className="dy-command-console__fullscreen-main flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       {/* Header */}
       <div className="dy-command-console__header relative shrink-0 overflow-hidden">
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px" />
@@ -2236,6 +2277,7 @@ export function AgentResponseConsole() {
               </select>
               <IconButton
                 onClick={() => { if (chatSettingsAgent) openAgentEditor(chatSettingsAgent.id) }}
+                data-agent-editor-trigger="true"
                 className="dy-command-console__action dy-command-console__agent-settings"
                 title={chatSettingsAgent ? `Edit ${chatSettingsAgent.name} settings` : 'Select one agent to edit its settings'}
                 aria-label={chatSettingsAgent ? `Edit ${chatSettingsAgent.name} settings` : 'Select one agent to edit its settings'}
@@ -2294,7 +2336,12 @@ export function AgentResponseConsole() {
               />
               </>}
               <IconButton
-                onClick={() => setIsFullScreen((current) => !current)}
+                onClick={() => {
+                  if (!isFullScreen) {
+                    fullScreenReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+                  }
+                  setIsFullScreen((current) => !current)
+                }}
                 className="dy-command-console__action dy-command-console__fullscreen"
                 title={isFullScreen ? 'Exit full-screen chat (Escape)' : 'Open full-screen chat'}
                 aria-label={isFullScreen ? 'Exit full-screen chat' : 'Open full-screen chat'}
@@ -2683,12 +2730,16 @@ export function AgentResponseConsole() {
                   <img
                     src={uploadedAttachment.preview}
                     alt={`Preview of ${uploadedAttachment.file.name}`}
+                    loading="lazy"
+                    decoding="async"
                     className="h-16 max-w-[200px] rounded-xl border border-white/[0.08] object-cover shadow-lg"
                   />
                 ) : (
                   <div
-                    className="dy-command-attachment-card flex h-16 min-w-0 max-w-[260px] items-center gap-3 rounded-xl border border-white/[0.06] bg-slate-950/60 px-3 text-slate-300"
+                    className="dy-command-attachment-card flex h-16 w-[260px] min-w-0 max-w-full items-center gap-3 rounded-xl border border-white/[0.06] bg-slate-950/60 px-3 text-slate-300"
                     data-kind={uploadedAttachment.kind}
+                    title={uploadedAttachment.file.name}
+                    aria-label={`${uploadedAttachment.file.name}, ${attachmentKindLabel(uploadedAttachment.kind, uploadedAttachment.file)}, ${formatFileSize(uploadedAttachment.file.size)}`}
                   >
                     <span className="dy-command-attachment-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" aria-hidden="true">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]">
@@ -2696,8 +2747,8 @@ export function AgentResponseConsole() {
                         <path d="M14 2v5h5" />
                       </svg>
                     </span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-[11px] font-semibold text-slate-200">{uploadedAttachment.file.name}</span>
+                    <span className="dy-command-attachment-copy min-w-0">
+                      <span className="dy-command-attachment-name">{uploadedAttachment.file.name}</span>
                       <span className="block text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
                         {attachmentKindLabel(uploadedAttachment.kind, uploadedAttachment.file)}
                       </span>
@@ -2720,8 +2771,8 @@ export function AgentResponseConsole() {
                   )}
                 />
               </div>
-              <span className="dy-command-upload-size">
-                {uploadedAttachment.file.name} · {formatFileSize(uploadedAttachment.file.size)}{uploadedAttachment.uploaded ? ' · Uploaded' : ''}
+              <span className="dy-command-upload-size" title={`${uploadedAttachment.file.name} · ${formatFileSize(uploadedAttachment.file.size)}`}>
+                {formatFileSize(uploadedAttachment.file.size)}{uploadedAttachment.uploaded ? ' · Uploaded' : ''}
               </span>
               {(uploadedAttachment.uploaded?.delivery === 'workspace' || uploadedAttachment.file.size > (uploadedAttachment.kind === 'image' ? 6 : 8) * 1024 * 1024) && <span className="max-w-56 text-xs text-amber-200">Exceeds the inline limit. The agent will need file-reading tools to open the saved file.</span>}
               {uploadedAttachment.error && <div className="max-w-56 text-xs text-rose-200" role="alert">Upload failed. <button type="button" disabled={isUploading} onClick={() => void retryAttachment(uploadedAttachment)} className="underline">Retry upload</button></div>}
@@ -2732,6 +2783,7 @@ export function AgentResponseConsole() {
           <div className="dy-command-composer__field relative flex-1">
             <textarea
               ref={textareaRef}
+              autoFocus={isFullScreen}
               value={prompt}
               disabled={isUploading}
               aria-label="Command console message"
@@ -2862,6 +2914,7 @@ export function AgentResponseConsole() {
           </div>
         </div>
         <p className="dy-chat-composer-hint">Enter to send <span aria-hidden="true">·</span> Shift + Enter for a new line</p>
+      </div>
       </div>
     </section>
   )

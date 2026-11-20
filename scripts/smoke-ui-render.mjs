@@ -926,6 +926,7 @@ async function inspectAgentChatMode(window) {
     "    const directTargetSelected = Boolean(agentOption && agentPicker?.value === agentOption.value && commandConsole?.querySelector('.dy-command-console__subtitle')?.textContent.includes('Direct chat'))",
     "    const previousOverflow = document.body.style.overflow",
     "    const openButton = commandConsole?.querySelector('button[aria-label=\"Open full-screen chat\"]')",
+    "    openButton?.focus()",
     "    openButton?.click()",
     "    const fullScreenPanel = await waitFor(() => document.querySelector('[data-chat-fullscreen=\"true\"]'))",
     "    await wait(80)",
@@ -933,9 +934,15 @@ async function inspectAgentChatMode(window) {
     "    const fullScreenRect = fullScreenPanel?.getBoundingClientRect()",
     "    const fullScreenStyle = fullScreenPanel ? getComputedStyle(fullScreenPanel) : null",
     "    const fullScreenPosition = fullScreenStyle ? (fullScreenStyle.getPropertyValue('position') || fullScreenStyle.position || '') : ''",
+    "    const fullScreenComputedDisplay = fullScreenStyle?.display || ''",
+    "    const fullScreenInlineStyle = fullScreenPanel?.getAttribute('style') || ''",
     "    const fullscreenRuleMatches = fullScreenPanel?.matches('html.dui-pro-overhaul .dy-command-console--fullscreen') || false",
     "    const fullscreenRuleText = Array.from(document.styleSheets).flatMap((sheet) => { try { return Array.from(sheet.cssRules || []).filter((rule) => rule.selectorText?.includes('.dy-command-console--fullscreen')).map((rule) => rule.cssText) } catch { return [] } }).slice(0, 3)",
+    "    const sidebar = fullScreenPanel?.querySelector('.dy-command-console__sidebar')",
+    "    const sidebarRect = sidebar?.getBoundingClientRect()",
+    "    const chatMainRect = fullScreenPanel?.querySelector('.dy-command-console__fullscreen-main')?.getBoundingClientRect()",
     "    const textareaFocused = Boolean(textarea && document.activeElement === textarea)",
+    "    const activeElementAfterOpen = document.activeElement ? { tag: document.activeElement.tagName, ariaLabel: document.activeElement.getAttribute('aria-label'), className: document.activeElement.className } : null",
     "    const bodyScrollLocked = document.body.style.overflow === 'hidden'",
     "    const editorButton = fullScreenPanel?.querySelector('button.dy-command-console__agent-settings')",
     "    const agentSettingsEnabled = Boolean(editorButton && !editorButton.disabled)",
@@ -954,14 +961,24 @@ async function inspectAgentChatMode(window) {
     "      attempted: Boolean(commandConsole && agentPicker && openButton),",
     "      directTargetSelected,",
     "      fullScreenOpened: Boolean(fullScreenPanel),",
+    "      fullScreenRect: fullScreenRect ? { left: fullScreenRect.left, top: fullScreenRect.top, width: fullScreenRect.width, height: fullScreenRect.height } : null,",
+    "      viewportRect: { width: window.innerWidth, height: window.innerHeight },",
+    "      fullScreenClassName: fullScreenPanel?.className || '',",
+    "      fullScreenInlineStyle,",
+    "      fullScreenConnected: Boolean(fullScreenPanel?.isConnected),",
+    "      fullScreenParent: fullScreenPanel?.parentElement?.tagName || '',",
+    "      documentClassName: document.documentElement.className,",
     "      fullScreenViewport: Boolean(fullScreenRect && Math.abs(fullScreenRect.width - window.innerWidth) <= 1 && Math.abs(fullScreenRect.height - window.innerHeight) <= 1),",
     "      fullScreenPosition,",
-    "      fullScreenRect: fullScreenRect ? { x: fullScreenRect.x, y: fullScreenRect.y, width: fullScreenRect.width, height: fullScreenRect.height } : null,",
-    "      fullScreenClassName: fullScreenPanel?.className || '',",
-    "      documentRootClassName: document.documentElement.className,",
+    "      fullScreenComputedDisplay,",
     "      fullscreenRuleMatches,",
     "      fullscreenRuleText,",
     "      fullScreenComputed: fullScreenStyle ? { position: fullScreenStyle.getPropertyValue('position'), width: fullScreenStyle.getPropertyValue('width'), height: fullScreenStyle.getPropertyValue('height'), display: fullScreenStyle.getPropertyValue('display'), visibility: fullScreenStyle.getPropertyValue('visibility') } : null,",
+    "      leftAgentPanelVisible: Boolean(sidebar && sidebarRect && sidebarRect.width >= (window.innerWidth <= 560 ? 60 : 200) && chatMainRect && chatMainRect.left >= sidebarRect.right - 1),",
+    "      sidebarRect: sidebarRect ? { left: sidebarRect.left, right: sidebarRect.right, width: sidebarRect.width } : null,",
+    "      chatMainRect: chatMainRect ? { left: chatMainRect.left, right: chatMainRect.right, width: chatMainRect.width } : null,",
+    "      activeElementAfterOpen,",
+    "      leftAgentCount: sidebar?.querySelectorAll('.dy-command-console__agent-row').length || 0,",
     "      escapedMonitorContainment: Boolean(fullScreenPanel && !fullScreenPanel.closest('.dy-agent-console-pane')),",
     "      textareaFocused,",
     "      bodyScrollLocked,",
@@ -1388,6 +1405,34 @@ async function inspectViewport(viewport) {
   const dom = await window.webContents.executeJavaScript(inspectScript)
   const workspaceNavigation = await inspectWorkspaceNavigation(window)
   const agentChatMode = await inspectAgentChatMode(window)
+  const agentChatFullscreenPreview = await window.webContents.executeJavaScript([
+    "(() => (async () => {",
+    "  const openButton = document.querySelector('button[aria-label=\"Open full-screen chat\"]')",
+    "  openButton?.click()",
+    "  const started = Date.now()",
+    "  while (Date.now() - started < 3000) {",
+    "    const panel = document.querySelector('[data-chat-fullscreen=\"true\"]')",
+    "    if (panel) {",
+    "      const rect = panel.getBoundingClientRect()",
+    "      const sidebar = panel.querySelector('.dy-command-console__sidebar')?.getBoundingClientRect()",
+    "      const style = getComputedStyle(panel)",
+    "      const foreground = document.elementFromPoint(window.innerWidth / 2, 100)",
+    "      return { opened: true, rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height }, sidebar: sidebar ? { left: sidebar.left, right: sidebar.right, width: sidebar.width } : null, visibility: style.visibility, opacity: style.opacity, zIndex: style.zIndex, foreground: foreground ? { tag: foreground.tagName, className: String(foreground.className || ''), text: foreground.textContent?.trim().slice(0, 80) || '' } : null }",
+    "    }",
+    "    await new Promise((resolve) => setTimeout(resolve, 50))",
+    "  }",
+    "  return { opened: false }",
+    "})())()",
+  ].join('\n'))
+  await new Promise((resolve) => setTimeout(resolve, 120))
+  window.showInactive()
+  await new Promise((resolve) => setTimeout(resolve, 240))
+  const agentChatFullscreenImage = await window.webContents.capturePage()
+  const agentChatFullscreenScreenshotPath = path.join(outputDir, 'ui-agent-chat-fullscreen-' + viewport.label + '.png')
+  fs.writeFileSync(agentChatFullscreenScreenshotPath, agentChatFullscreenImage.toPNG())
+  await window.webContents.executeJavaScript("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))")
+  await new Promise((resolve) => setTimeout(resolve, 80))
+  window.hide()
   const recruitMarkdown = await inspectRecruitMarkdownEditor(window)
   const helpAssistant = await inspectHelpAssistant(window)
 
@@ -1487,6 +1532,8 @@ async function inspectViewport(viewport) {
     && agentChatMode.fullScreenOpened
     && agentChatMode.fullScreenViewport
     && agentChatMode.fullScreenPosition === 'fixed'
+    && agentChatMode.leftAgentPanelVisible
+    && agentChatMode.leftAgentCount > 0
     && agentChatMode.escapedMonitorContainment
     && agentChatMode.textareaFocused
     && agentChatMode.bodyScrollLocked
@@ -1639,6 +1686,8 @@ async function inspectViewport(viewport) {
     recruitMarkdown,
     helpAssistant,
     agentChatMode,
+    agentChatFullscreenPreview,
+    agentChatFullscreenScreenshotPath,
     commandConsoleStopSeed,
     commandConsoleStopClick,
     commandConsoleMissingProviderAuth,
@@ -1695,11 +1744,12 @@ function runElectronSmoke(url) {
       stdout += chunk.toString()
     })
     child.stderr.on('data', (chunk) => {
-      stderr += chunk.toString()
+      const text = chunk.toString()
+      stderr += text
+      process.stderr.write(text)
     })
     child.on('error', reject)
     child.on('close', (code) => {
-      if (stderr.trim()) console.error(stderr.trim())
       const output = stdout.trim()
       const jsonStart = output.indexOf('{')
       const jsonEnd = output.lastIndexOf('}')

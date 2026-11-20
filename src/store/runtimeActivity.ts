@@ -41,6 +41,24 @@ export function activityTypeForOperationalText(rawText: string, eventName = 'pro
   return 'agent.working'
 }
 
+export function activityTypeFromGatewayFrame(
+  data: Record<string, unknown>,
+  fallbackText: string,
+  fallbackEvent: string,
+): AgentActivityType {
+  if (typeof data.activityType === 'string' && data.activityType.trim()) return data.activityType.trim() as AgentActivityType
+  if (typeof data.toolName === 'string' && data.toolName.trim()) {
+    const state = [data.state, data.status, data.phase]
+      .find((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      ?.toLowerCase() || ''
+    if (/\b(error|failed|failure|blocked|denied)\b/.test(state)) return 'tool.error'
+    if (/\b(done|complete|completed|finished|success|ok)\b/.test(state)) return 'tool.finished'
+    if (/\b(start|started|begin|running|pending|call)\b/.test(state)) return 'tool.started'
+    return 'tool.progress'
+  }
+  return activityTypeForOperationalText(fallbackText, fallbackEvent)
+}
+
 export function severityForActivity(type: string, payload?: Record<string, unknown>): AgentActivitySeverity {
   if (type.endsWith('.error') || type.endsWith('.failed') || payload?.ok === false) return 'error'
   if (type.endsWith('.warning') || type.endsWith('.blocked') || type === 'approval.pending') return 'warning'

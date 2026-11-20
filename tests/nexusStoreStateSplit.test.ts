@@ -288,6 +288,14 @@ test('command-console response updates retain an agent busy while another lane s
   assert.deepEqual(afterStreamingCompletes.busyAgentIds, [])
 })
 
+test('a waiting follow-up cannot keep an agent busy after the active turn ends', () => {
+  const queued = { ...makeAgentResponse('queued-alpha'), streaming: true, transport: 'command-console-queue' }
+  const active = { ...makeAgentResponse('active-alpha'), streaming: true }
+  const finished = upsertCommandConsoleResponse({ agentResponses: [queued, active], busyAgentIds: ['alpha'] }, { ...active, streaming: false })
+  assert.deepEqual(finished.busyAgentIds, [])
+  assert.equal(finished.agentResponses.find((entry) => entry.id === queued.id)?.streaming, true)
+})
+
 test('command-console draft helpers own draft storage and retired-agent cleanup', () => {
   const storage = new MemoryDraftStorage()
   const alphaKey = makeCommandConsoleDraftStorageKey('direct:alpha')
