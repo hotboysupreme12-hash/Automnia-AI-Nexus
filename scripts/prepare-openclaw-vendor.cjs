@@ -6,6 +6,7 @@ const { tmpdir } = require('node:os')
 const path = require('node:path')
 const { ensureRelayAiTransportCompatibility } = require('./lib/relay-thought-signature-patch.cjs')
 const { ensureRestartRecoveryClaimStartupRepair } = require('./lib/restart-recovery-stale-claim-patch.cjs')
+const { ensureMissingSessionStoreRecovery } = require('./lib/session-store-missing-path-patch.cjs')
 const { patchGoogleGeminiOnboardingDefault } = require('./lib/google-gemini-onboarding-default.cjs')
 const {
   prepareGoogleGeminiDiscoverySource,
@@ -1158,6 +1159,7 @@ async function main() {
   ensureAutomniaRelayPayloadCompactionSupport()
   ensureAutomniaSettledTurnFinalizationSupport()
   ensureRestartRecoveryClaimStartupRepair(vendorRoot)
+  ensureMissingSessionStoreRecovery(vendorRoot)
   ensureGoogleGemini4Models()
 
   if (!refresh && fs.existsSync(nodeModulesRoot)) {
