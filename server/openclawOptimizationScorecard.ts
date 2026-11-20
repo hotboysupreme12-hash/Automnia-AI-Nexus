@@ -64,8 +64,8 @@ export type OpenClawOptimizationScorecard = {
   items: OpenClawOptimizationScorecardItem[]
 }
 
-const OPENCLAW_OPTIMIZATION_GUIDE = 'docs/OPENCLAW_BETA_OPTIMIZATION_GUIDE.md'
-const OPENCLAW_TARGET_VERSION = '2026.11.5'
+const OPENCLAW_OPTIMIZATION_GUIDE = 'docs/OPENCLAW_2026_11_6_ADOPTION.md'
+const OPENCLAW_TARGET_VERSION = '2026.11.6'
 
 export const OPENCLAW_OPTIMIZATION_CATEGORIES: OpenClawOptimizationSourceCategory[] = [
   {
@@ -943,7 +943,7 @@ export function buildOpenClawOptimizationScorecard(): OpenClawOptimizationScorec
     source: {
       guide: OPENCLAW_OPTIMIZATION_GUIDE,
       targetOpenClawVersion: OPENCLAW_TARGET_VERSION,
-      note: 'OpenClaw 2026.11.5 source audit; see the guide for 44 app-adoption items, evidence, and actions.',
+      note: 'OpenClaw 2026.11.6 release audit; the existing scorecard carries forward the 2026.11.5 adoption baseline.',
     },
     itemCount: items.length,
     implemented,

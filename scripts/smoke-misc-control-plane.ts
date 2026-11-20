@@ -92,11 +92,11 @@ assert(
   'OpenClaw optimization scorecard item count should match the exported registry count',
 )
 assert(
-  openClawScorecard.source.guide === 'docs/OPENCLAW_BETA_OPTIMIZATION_GUIDE.md',
-  'OpenClaw optimization scorecard should cite the beta optimization guide',
+  openClawScorecard.source.guide === 'docs/OPENCLAW_2026_11_6_ADOPTION.md',
+  'OpenClaw optimization scorecard should cite the current adoption guide',
 )
 assert(
-  openClawScorecard.source.targetOpenClawVersion === '2026.11.5',
+  openClawScorecard.source.targetOpenClawVersion === '2026.11.6',
   'OpenClaw optimization scorecard should target the documented stable OpenClaw version',
 )
 assert(openClawScorecard.categories.length >= 10, 'OpenClaw optimization scorecard should cover the major guide themes')

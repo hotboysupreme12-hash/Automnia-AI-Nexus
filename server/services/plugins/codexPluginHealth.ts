@@ -1,6 +1,6 @@
 import type { PluginControlEntry } from './pluginInventoryService'
 
-export const OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC = 'npm:@openclaw/codex@2026.11.5'
+export const OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC = 'npm:@openclaw/codex@2026.11.6'
 
 const CODEX_PLUGIN_FAILURE_STATUS = /\b(?:degraded|failed|failure|error|invalid|missing|not\s+loaded|unavailable)\b/i
 

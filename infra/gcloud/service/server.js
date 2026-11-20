@@ -4,6 +4,7 @@ import { Firestore } from '@google-cloud/firestore';
 import { Storage } from '@google-cloud/storage';
 import { GoogleAuth, OAuth2Client } from 'google-auth-library';
 import { geminiThinkingConfigFromOpenAiRequest } from './geminiThinking.js';
+import { classifyVertexError } from './vertexErrorPolicy.js';
 import { groupVertexToolResponses } from './vertexToolTurns.js';
 import {
   automniaRelayFallbackModels,
@@ -2448,8 +2449,12 @@ async function generateVertexContent(input, targetModel = automniaRelayModel) {
   if (!apiResponse?.ok) {
     const upstreamStatus = apiResponse?.status || 503;
     const error = new Error(errText || 'Vertex AI request failed.');
-    error.status = upstreamStatus === 429 ? 429 : 502;
-    error.retryable = retryableVertexStatus(upstreamStatus);
+    const classification = classifyVertexError(upstreamStatus);
+    error.status = classification.status;
+    error.retryable = classification.retryable;
+    error.publicType = classification.type;
+    error.publicMessage = classification.message;
+    error.upstreamStatus = upstreamStatus;
     throw error;
   }
   return apiResponse.json();
@@ -2797,7 +2802,7 @@ app.post('/v1/chat/completions', requireWritesEnabled, async (req, res) => {
     const status = Number(error?.status) || 502;
     if (status === 429) res.set('Retry-After', '5');
     console.error('OpenAI-compatible relay error:', error);
-    return openAiError(res, status, status === 429 ? 'Automnia Cloud hosted models are temporarily busy. Retry shortly.' : 'Automnia Cloud provider request failed.', status === 429 ? 'rate_limit_error' : 'api_error');
+    return openAiError(res, status, error?.publicMessage || (status === 429 ? 'Automnia Cloud hosted models are temporarily busy. Retry shortly.' : 'Automnia Cloud provider request failed.'), error?.publicType || (status === 429 ? 'rate_limit_error' : 'api_error'));
   }
 });
 

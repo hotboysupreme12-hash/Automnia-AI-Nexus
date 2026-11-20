@@ -25,6 +25,7 @@ const requiredFiles = [
   'service/Dockerfile',
   'service/geminiThinking.js',
   'service/relayModelPolicy.js',
+  'service/vertexErrorPolicy.js',
   'service/tokenOptimization.js',
   'service/package-lock.json',
   'service/package.json',
@@ -166,7 +167,7 @@ assert.match(rollback, /-ExpectedWriteMode read_only/)
 assert.match(rollback, /MIGRATION_WRITE_MODE=active[\s\S]*?--no-traffic[\s\S]*?--tag=candidate/, 'rollback must check an active candidate before routing it')
 assert.match(rollback, /MIGRATION_WRITE_MODE=read_only/)
 
-for (const relative of ['service/server.js', 'service/geminiThinking.js', 'service/relayModelPolicy.js', 'service/tokenOptimization.js', 'tools/firestore-snapshot.mjs', 'tools/live-billing-test.mjs', 'tools/plan-hash.mjs', 'tools/smoke-service.mjs']) {
+for (const relative of ['service/server.js', 'service/geminiThinking.js', 'service/relayModelPolicy.js', 'service/vertexErrorPolicy.js', 'service/tokenOptimization.js', 'tools/firestore-snapshot.mjs', 'tools/live-billing-test.mjs', 'tools/plan-hash.mjs', 'tools/smoke-service.mjs']) {
   const checked = spawnSync(process.execPath, ['--check', path.join(infra, relative)], { encoding: 'utf8' })
   assert.equal(checked.status, 0, `${relative} syntax error: ${checked.stderr}`)
 }

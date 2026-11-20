@@ -259,7 +259,9 @@ try {
   launcher.on('error', (error) => appendOutput(`[packaged-launcher-error] ${String(error)}\n`))
   launcher.on('exit', (code, signal) => appendOutput(`[packaged-launcher-exit] code=${code} signal=${signal}\n`))
 
-  const readyDeadline = Date.now() + 45_000
+  // First launch stages a complete writable runtime, which can take longer on
+  // cold disks. This deadline is separate from Gateway startup below.
+  const readyDeadline = Date.now() + 90_000
   while (Date.now() < readyDeadline) {
     refreshOutputFromDesktopLog()
     // The Windows customer launcher is a small .NET wrapper that starts
@@ -284,7 +286,7 @@ try {
   assert.ok(existsSync(userDataDir), 'packaged startup must create a missing Automnia user-data directory')
   assert.ok(existsSync(openclawDir), 'packaged startup must create a missing OpenClaw state directory')
 
-  const initialHealthPayload = await waitForGatewayHealth(120_000) as { ok?: boolean; status?: string }
+  const initialHealthPayload = await waitForGatewayHealth(300_000) as { ok?: boolean; status?: string }
   assert.equal(initialHealthPayload?.ok, true, 'packaged Gateway must finish first startup before route-change validation')
   refreshOutputFromDesktopLog()
   assert.match(output, /\[automnia-e2e\] renderer-presentation-suppressed/, 'packaged Gateway smoke must keep its test window hidden on interactive desktops')

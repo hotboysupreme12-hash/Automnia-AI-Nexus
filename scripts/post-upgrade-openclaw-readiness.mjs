@@ -1,16 +1,16 @@
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-export const OPENCLAW_VERSION = '2026.11.5'
-export const OPENCLAW_INTEGRITY = 'sha512-mqPlsGLOe8NS85BfP1vWW9YVwFXchsV75QTkEbyR4csylORxts+fmfZp9+qbD7aPbXQIctyjRk+CPL91fDvxBA=='
-export const CODEX_PLUGIN_VERSION = '2026.11.5'
-export const CODEX_PLUGIN_INTEGRITY = 'sha512-RmMrIH+drET1QyWDRG8FLLbgHX3YKGxfqawu3HIHsuwOFRm1/MuaO3hIb+8GjICM3Y/1eff5kl2aaNEnHk4GTA=='
-export const CODEX_HARNESS_VERSION = '0.164.0'
+export const OPENCLAW_VERSION = '2026.11.6'
+export const OPENCLAW_INTEGRITY = 'sha512-4MGjAMv8QlVrul3ZbCu8KjM7GhXfLdLzf0IrsO5QZ8LC3oYkduqs2rZiZpPDmTRpT6kXYke/OVaWrB+YmhBHLw=='
+export const CODEX_PLUGIN_VERSION = '2026.11.6'
+export const CODEX_PLUGIN_INTEGRITY = 'sha512-c9CRbWNN4R6MBvJBlrgiYJsUM7DI5aVxbLyTgf5NRKfwm9pMPd1B49bv8ttXnmgaZd5uaGzjatC2oRUGmqL53g=='
+export const CODEX_HARNESS_VERSION = '0.169.0'
 const SMOKE_BUDGET_MS = 180_000
 const PER_SMOKE_TIMEOUT_MS = 60_000
 
@@ -38,6 +38,21 @@ function packageJsonAt(root, packageName) {
   return { packagePath, packageJson: existsSync(packagePath) ? readJson(packagePath) : null }
 }
 
+export function verifyOfficialExtensions(extensionRoot, expectedVersion) {
+  let officialExtensions = 0
+  for (const entry of readdirSync(extensionRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const manifest = path.join(extensionRoot, entry.name, 'package.json')
+    if (!existsSync(manifest)) continue
+    const extension = readJson(manifest)
+    if (!String(extension.name || '').startsWith('@openclaw/')) continue
+    officialExtensions += 1
+    assert(extension.version === expectedVersion, `${extension.name} version ${extension.version || 'missing'} does not match the host`)
+  }
+  assert(officialExtensions > 0, 'bundled official OpenClaw extensions are missing')
+  return officialExtensions
+}
+
 export function verifyLocalRuntimeBundles(root = ROOT) {
   const checks = []
   const pass = (label, detail) => checks.push({ ok: true, label, detail })
@@ -61,7 +76,7 @@ export function verifyLocalRuntimeBundles(root = ROOT) {
     assert(packageJson.version === OPENCLAW_VERSION, `package version ${packageJson.version || 'missing'}; expected ${OPENCLAW_VERSION}`)
     assert(shrinkwrap.version === OPENCLAW_VERSION && shrinkwrap.packages?.['']?.version === OPENCLAW_VERSION, 'shrinkwrap root version does not match target')
     assert(metadata.openclaw?.version === OPENCLAW_VERSION, 'prepared dependency metadata version does not match target')
-    assert(metadata.openclaw?.packageArtifacts?.integrity === OPENCLAW_INTEGRITY, 'prepared npm tarball integrity does not match the verified OpenClaw 2026.11.5 tarball')
+    assert(metadata.openclaw?.packageArtifacts?.integrity === OPENCLAW_INTEGRITY, `prepared npm tarball integrity does not match the verified OpenClaw ${OPENCLAW_VERSION} tarball`)
     assert(metadata.openclaw?.shrinkwrapSha256 === lockDigest, 'prepared dependency metadata does not match the current shrinkwrap')
     const required = metadata.requiredRuntimePackages
     assert(Array.isArray(required) && required.length > 0, 'required runtime package inventory is missing')
@@ -69,7 +84,8 @@ export function verifyLocalRuntimeBundles(root = ROOT) {
       const { packageJson: dependency } = packageJsonAt(vendorRoot, name)
       assert(dependency?.name === name, `required dependency ${name} is not installed`)
     }
-    return `${OPENCLAW_VERSION}; npm integrity, shrinkwrap digest, and ${required.length} runtime packages verified`
+    const officialExtensions = verifyOfficialExtensions(path.join(vendorRoot, 'dist', 'extensions'), OPENCLAW_VERSION)
+    return `${OPENCLAW_VERSION}; npm integrity, lock digest, ${required.length} runtime packages, and ${officialExtensions} official extensions verified`
   })
 
   check('Codex plugin bundle', () => {

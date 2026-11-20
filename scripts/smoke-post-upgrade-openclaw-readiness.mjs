@@ -10,9 +10,9 @@ import {
   verifyLocalRuntimeBundles,
 } from './post-upgrade-openclaw-readiness.mjs'
 
-assert.equal(OPENCLAW_VERSION, '2026.11.5')
-assert.equal(CODEX_PLUGIN_VERSION, '2026.11.5')
-assert.equal(CODEX_HARNESS_VERSION, '0.164.0')
+assert.equal(OPENCLAW_VERSION, '2026.11.6')
+assert.equal(CODEX_PLUGIN_VERSION, '2026.11.6')
+assert.equal(CODEX_HARNESS_VERSION, '0.169.0')
 
 const localChecks = verifyLocalRuntimeBundles()
 assert.equal(localChecks.length, 2, 'readiness must validate both OpenClaw and Codex runtime bundles')

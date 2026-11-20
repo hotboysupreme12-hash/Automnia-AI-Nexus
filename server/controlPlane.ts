@@ -398,7 +398,7 @@ const CODEX_LEGACY_AGENT_PROFILE_ROOT = path.join(HOME_DIR, '.codex', 'agent-pro
 const LOCAL_AUTH_PATH = path.join(OPENCLAW_STATE_ROOT, 'local-auth.json')
 const CONTROL_CENTER_LEDGER_PATHS = runtimeLedgerPathsForStateRoot(OPENCLAW_STATE_ROOT)
 const RUNTIME_MONITOR_CLEAR_MARKER_PATH = runtimeMonitorClearMarkerPath(CONTROL_CENTER_LEDGER_PATHS)
-const RECOMMENDED_OPENCLAW_VERSION = '2026.11.5'
+const RECOMMENDED_OPENCLAW_VERSION = '2026.11.6'
 const DEFAULT_OPENCLAW_FAST_MODE = 'auto'
 const DEFAULT_OPENCLAW_FAST_AUTO_ON_SECONDS = 60
 const FAST_MODE_MODEL_PARAM_PROVIDERS = new Set(['openai', 'openai-codex', 'anthropic', 'xai', 'minimax'])
@@ -11488,7 +11488,13 @@ function patchedTelegramBotRuntimeSource(source: string) {
             `${currentBodyAlias}.bodyText = withTelegramAgentRouteContext({ config: ${applyConfigAlias}, agentId: ${currentRouteAlias}.agentId, sessionKey: ${currentRouteAlias}.sessionKey, prompt: ${currentBodyAlias}.bodyText });`,
           ].join('\n\t')
           const currentInboundBodyGuard = inboundBodyMatch[0].slice(inboundBodyMatch[0].lastIndexOf('if (!'))
-          next = next.replace(currentInboundBodyGuard, `${currentInboundBodyGuard}\n\t${currentInboundRouteBlock}`)
+          if (!next.includes(currentInboundRouteBlock)) {
+            next = next.replace(currentInboundBodyGuard, `${currentInboundBodyGuard}\n\t${currentInboundRouteBlock}`)
+          }
+          const duplicateInboundRouteBlock = `${currentInboundRouteBlock}\n\t${currentInboundRouteBlock}`
+          while (next.includes(duplicateInboundRouteBlock)) {
+            next = next.replace(duplicateInboundRouteBlock, currentInboundRouteBlock)
+          }
         }
       } else {
         console.warn('[plugins/telegram] agent route patch skipped: inbound body marker not found')
@@ -11598,9 +11604,11 @@ function patchedTelegramBotRuntimeSource(source: string) {
     next = next.replace(currentDispatchTurnStart[0], [
       currentDispatchTurnStart[0],
       `if (!${dispatchTurnAlias}.telegramProgressStatus && typeof createAutomniaTelegramProgressStatus === "function") ${dispatchTurnAlias}.telegramProgressStatus = createAutomniaTelegramProgressStatus({ context: ${dispatchContextAlias}, bot: ${dispatchTurnAlias}.bot, replyToMode: ${dispatchTurnAlias}.replyToMode, runtime: ${dispatchTurnAlias}.runtime });`,
-      `await ${dispatchTurnAlias}.telegramProgressStatus?.start();`,
+      `${dispatchTurnAlias}.telegramProgressStatus?.start();`,
     ].join('\n\t'))
   }
+  // Status delivery is best-effort and must never delay model dispatch.
+  next = next.replace(/await ([\w$]+\.telegramProgressStatus\?\.start\(\));/gu, '$1;')
   if (!next.includes('telegramProgressStatus?.toolStart(')) {
     next = next.replace(/async function handleToolStart\(([\w$]+),\s*([\w$]+)\) \{/u, (match, turnAlias: string, payloadAlias: string) => `${match}\n\t${turnAlias}.telegramProgressStatus?.toolStart(${payloadAlias}.name?.trim());`)
   }
@@ -11622,7 +11630,7 @@ function patchedTelegramBotRuntimeSource(source: string) {
     const [, , dispatchTurnAlias, failedFinalAlias] = finalTelegramStatusMatch
     const statusFinalizeBlock = [
       `const telegramStatusOutcome = ${dispatchTurnAlias}.previewLifecycle.finalDelivered && ${dispatchTurnAlias}.previewLifecycle.finalSucceeded && !${dispatchTurnAlias}.agentRunFailed && !${dispatchTurnAlias}.dispatchError && !${dispatchTurnAlias}.previewLifecycle.finalFailed && !${failedFinalAlias} ? "done" : "error";`,
-      `await ${dispatchTurnAlias}.telegramProgressStatus?.finalize(telegramStatusOutcome, telegramStatusOutcome === "done" ? "Final answer delivered below." : "The Telegram turn ended without a final answer; retrying is safe.");`,
+      `await ${dispatchTurnAlias}.telegramProgressStatus?.finalize(telegramStatusOutcome, telegramStatusOutcome === "done" ? "Final answer delivered below." : "The Telegram turn ended without a final answer. Check completed work before retrying.");`,
       finalTelegramStatusMatch[0],
     ].join('\n\t')
     next = next.replace(finalTelegramStatusMatch[0], statusFinalizeBlock)
@@ -11655,11 +11663,13 @@ function patchedTelegramBotRuntimeSource(source: string) {
       '\tconst telegramStatusOutcome = turn.deferredToActiveRun ? "queued" : turn.finalAnswerDelivered ? "done" : "error";',
       '\tconst telegramStatusDetail = turn.deferredToActiveRun',
       '? "Waiting behind an active Telegram turn. The active run owns the final reply."',
-      ': turn.finalAnswerDelivered ? "Final answer delivered below." : turn.dispatchError ? "The Telegram turn failed before a final answer was delivered; retrying is safe." : "The Telegram turn ended without a final answer; retrying is safe.";',
+      ': turn.finalAnswerDelivered ? "Final answer delivered below." : turn.dispatchError ? "The Telegram turn failed before a final answer was delivered. Check completed work before retrying." : "The Telegram turn ended without a final answer. Check completed work before retrying.";',
       '\tawait turn.telegramProgressStatus?.finalize(telegramStatusOutcome, telegramStatusDetail);',
       statusFinalizeMarker,
     ].join('\n'))
   }
+  next = next.replaceAll('The Telegram turn ended without a final answer; retrying is safe.', 'The Telegram turn ended without a final answer. Check completed work before retrying.')
+  next = next.replaceAll('The Telegram turn failed before a final answer was delivered; retrying is safe.', 'The Telegram turn failed before a final answer was delivered. Check completed work before retrying.')
   if (!next.includes('turn.telegramProgressStatus?.toolStart(toolName);')) {
     next = next.replace(
       'async function handleToolStart(turn, payload) {\n\tconst toolName = payload.name?.trim();',

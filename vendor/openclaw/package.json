@@ -1,8 +1,9 @@
 {
   "name": "openclaw",
-  "version": "2026.11.5",
+  "version": "2026.11.6",
   "openclaw": {
     "updateAdmissionProtocol": 1,
+    "updatePreflightProtocol": 1,
     "databaseEngines": [
       "sqlite",
       "postgres"
@@ -1772,7 +1773,7 @@
     "@modelcontextprotocol/sdk": "1.32.1",
     "@modelcontextprotocol/server": "2.3.1",
     "@mozilla/readability": "0.6.0",
-    "@openclaw/ai": "2026.11.5",
+    "@openclaw/ai": "2026.11.6",
     "@openclaw/fs-safe": "0.26.13",
     "@openclaw/proc-safe": "0.4.2",
     "@openclaw/proxyline": "0.4.0",
