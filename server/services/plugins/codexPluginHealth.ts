@@ -2,21 +2,35 @@ import type { PluginControlEntry } from './pluginInventoryService'
 
 export const OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC = 'npm:@openclaw/codex@2026.11.6'
 
-export function newerInstalledCodexVersion(versions: string[], targetVersion: string): string | undefined {
+function compareCodexVersions(leftVersion: string, rightVersion: string): number | null {
   const parse = (version: string) => {
     const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version)
     return match ? match.slice(1).map(Number) : null
   }
-  const target = parse(targetVersion)
-  // An unknown target cannot safely justify replacing an installed package.
-  if (!target) return versions.find(Boolean)
+  const left = parse(leftVersion)
+  const right = parse(rightVersion)
+  if (!left || !right) return null
+  for (let index = 0; index < 3; index += 1) {
+    if (left[index] !== right[index]) return left[index] > right[index] ? 1 : -1
+  }
+  return 0
+}
+
+export function codexPluginVersionNeedsUpdate(version: string | undefined, targetVersion: string) {
+  if (!version) return false
+  return compareCodexVersions(version, targetVersion) === -1
+}
+
+/** If all known managed Codex projects predate the target, the loaded entry is stale. */
+export function codexProjectsNeedUpdate(versions: string[], targetVersion: string) {
+  return versions.length > 0 && versions.every((version) => compareCodexVersions(version, targetVersion) === -1)
+}
+
+export function newerInstalledCodexVersion(versions: string[], targetVersion: string): string | undefined {
   return versions.find((version) => {
-    const current = parse(version)
-    if (!current) return Boolean(version)
-    for (let index = 0; index < 3; index += 1) {
-      if (current[index] !== target[index]) return current[index] > target[index]
-    }
-    return false
+    const comparison = compareCodexVersions(version, targetVersion)
+    // Unknown versions cannot safely justify replacing an installed package.
+    return comparison === null ? Boolean(version) : comparison > 0
   })
 }
 
@@ -41,7 +55,9 @@ const CODEX_PLUGIN_FAILURE_STATUS = /\b(?:degraded|failed|failure|error|invalid|
  */
 export function codexPluginNeedsRepair(plugin: PluginControlEntry | undefined) {
   if (!plugin) return false
-  return plugin.missingDependencies.length > 0 ||
+  const targetVersion = OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC.slice(OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC.lastIndexOf('@') + 1)
+  return codexPluginVersionNeedsUpdate(plugin.version, targetVersion) ||
+    plugin.missingDependencies.length > 0 ||
     plugin.runtimeLoaded === false ||
     CODEX_PLUGIN_FAILURE_STATUS.test(plugin.status.trim())
 }

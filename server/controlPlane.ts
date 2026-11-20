@@ -259,6 +259,8 @@ import {
 import {
   codexPluginAvailableForRuntime,
   codexPluginNeedsRepair,
+  codexPluginVersionNeedsUpdate,
+  codexProjectsNeedUpdate,
   newerInstalledCodexVersion,
   requireGatewayForCodexPreflight,
   OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC,
@@ -12855,6 +12857,22 @@ function isCodexPluginAvailableForRuntime(plugin: PluginControlEntry | undefined
   return codexPluginAvailableForRuntime(plugin, bundledCodexSource)
 }
 
+async function installedCodexPackageVersions() {
+  const projectsRoot = path.join(OPENCLAW_STATE_ROOT, 'npm', 'projects')
+  const projects = await fs.readdir(projectsRoot, { withFileTypes: true }).catch(() => [])
+  const versions: string[] = []
+  for (const project of projects) {
+    if (!project.isDirectory()) continue
+    try {
+      const packageJson = JSON.parse(await fs.readFile(path.join(projectsRoot, project.name, 'node_modules', '@openclaw', 'codex', 'package.json'), 'utf8')) as { name?: unknown; version?: unknown }
+      if (packageJson.name === '@openclaw/codex' && typeof packageJson.version === 'string') {
+        versions.push(packageJson.version)
+      }
+    } catch { /* An incomplete or unrelated project has no readable Codex package. */ }
+  }
+  return versions
+}
+
 async function ensureCodexPluginInstalledForOpenAiRuntime(config: OpenClawConfigFile) {
   if (!shouldPrepareCodexPluginForRuntime(config)) return
   if (openclawCodexPluginAutoInstallReady) return
@@ -12874,7 +12892,16 @@ async function ensureCodexPluginInstalledForOpenAiRuntime(config: OpenClawConfig
       })
       const existing = controls?.plugins.find((plugin) => plugin.id === 'codex')
       const bundledCodexSource = resolveBundledCodexPluginRoot()
-      if (isCodexPluginAvailableForRuntime(existing, bundledCodexSource)) {
+      const packageVersions = await installedCodexPackageVersions()
+      let repairVersion = OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC.slice(OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC.lastIndexOf('@') + 1)
+      if (bundledCodexSource) {
+        const bundledPackage = JSON.parse(await fs.readFile(path.join(bundledCodexSource, 'package.json'), 'utf8')) as { version?: unknown }
+        const bundledVersion = typeof bundledPackage.version === 'string' ? bundledPackage.version : ''
+        if (bundledVersion && codexPluginVersionNeedsUpdate(repairVersion, bundledVersion)) repairVersion = bundledVersion
+      }
+      const needsVersionUpgrade = codexProjectsNeedUpdate(packageVersions, repairVersion)
+      const needsRepair = codexPluginNeedsRepair(existing) || needsVersionUpgrade
+      if (isCodexPluginAvailableForRuntime(existing, bundledCodexSource) && !needsVersionUpgrade) {
         await repairCodexPluginPostInstallState({
           runCliEnable: Boolean(existing && existing.enabled !== true),
           verifyRoutes: openClawConfigNeedsCodexPlugin(config),
@@ -12885,7 +12912,7 @@ async function ensureCodexPluginInstalledForOpenAiRuntime(config: OpenClawConfig
       }
 
       console.log(
-        codexPluginNeedsRepair(existing)
+        needsRepair
           ? `[plugins/codex] Codex plugin is degraded; repairing from ${bundledCodexSource || 'the pinned official package'}.`
           : bundledCodexSource
             ? `[plugins/codex] Codex plugin is enabled; installing bundled codex plugin from ${bundledCodexSource}.`
@@ -12896,23 +12923,6 @@ async function ensureCodexPluginInstalledForOpenAiRuntime(config: OpenClawConfig
         // silently replaced by the older package bundled with this checkout.
         // Include incomplete projects: a missing dependency is one reason a
         // package can need repair in the first place.
-        const projectsRoot = path.join(OPENCLAW_STATE_ROOT, 'npm', 'projects')
-        const projects = await fs.readdir(projectsRoot, { withFileTypes: true }).catch(() => [])
-        const packageVersions: string[] = []
-        for (const project of projects) {
-          if (!project.isDirectory()) continue
-          try {
-            const packageJson = JSON.parse(await fs.readFile(path.join(projectsRoot, project.name, 'node_modules', '@openclaw', 'codex', 'package.json'), 'utf8')) as { name?: unknown; version?: unknown }
-            if (packageJson.name === '@openclaw/codex' && typeof packageJson.version === 'string') {
-              packageVersions.push(packageJson.version)
-            }
-          } catch { /* An incomplete or unrelated project has no readable Codex package. */ }
-        }
-        let repairVersion = OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC.slice(OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC.lastIndexOf('@') + 1)
-        if (bundledCodexSource) {
-          const bundledPackage = JSON.parse(await fs.readFile(path.join(bundledCodexSource, 'package.json'), 'utf8')) as { version?: unknown }
-          repairVersion = typeof bundledPackage.version === 'string' ? bundledPackage.version : ''
-        }
         const newerVersion = newerInstalledCodexVersion(packageVersions, repairVersion)
         if (newerVersion) {
           throw new Error(`Codex ${newerVersion} is installed; automatic repair will not replace it with ${repairVersion || 'an unknown version'}. Repair or select the installed version in Plugins.`)
@@ -12926,12 +12936,16 @@ async function ensureCodexPluginInstalledForOpenAiRuntime(config: OpenClawConfig
           // manifest/dependency tree is still present. Force the replacement
           // so startup cannot report a repaired plugin while leaving the stale
           // 2026.7.x Codex package selected.
-          force: Boolean(existing && codexPluginNeedsRepair(existing)),
+          force: Boolean(existing && needsRepair),
           restart: false,
         })
         const installed = result.controls.plugins.find((plugin) => plugin.id === 'codex')
         if (!isCodexPluginAvailableForRuntime(installed, bundledCodexSource)) {
           throw new Error('Codex plugin install completed, but the plugin is still not available in OpenClaw.')
+        }
+        const installedVersions = await installedCodexPackageVersions()
+        if (!installedVersions.includes(repairVersion)) {
+          throw new Error(`Codex plugin install completed, but the managed npm projects do not contain the pinned ${repairVersion} package.`)
         }
         openclawCodexPluginAutoInstallReady = true
       } catch (error) {

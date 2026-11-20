@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs'
 import {
   codexPluginAvailableForRuntime,
   codexPluginNeedsRepair,
+  codexPluginVersionNeedsUpdate,
+  codexProjectsNeedUpdate,
   newerInstalledCodexVersion,
   requireGatewayForCodexPreflight,
   OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC,
@@ -37,6 +39,16 @@ test('marks degraded Codex entries for automatic repair', () => {
   assert.equal(codexPluginNeedsRepair(plugin({ status: 'degraded', runtimeLoaded: false })), true)
   assert.equal(codexPluginNeedsRepair(plugin({ missingDependencies: ['ws'] })), true)
   assert.equal(codexPluginNeedsRepair(plugin()), false)
+})
+
+test('repairs a loaded Codex plugin when the installed release is older than the pin', () => {
+  assert.equal(codexPluginNeedsRepair(plugin({ version: '2026.11.5' })), true)
+  assert.equal(codexPluginNeedsRepair(plugin({ version: '2026.11.6' })), false)
+  assert.equal(codexPluginNeedsRepair(plugin({ version: '2026.11.7' })), false)
+  assert.equal(codexPluginVersionNeedsUpdate('unrecognized', '2026.11.6'), false)
+  assert.equal(codexProjectsNeedUpdate(['2026.11.5'], '2026.11.6'), true)
+  assert.equal(codexProjectsNeedUpdate(['2026.11.5', '2026.11.6'], '2026.11.6'), false)
+  assert.equal(codexProjectsNeedUpdate(['unrecognized'], '2026.11.6'), false)
 })
 
 test('waits for Gateway startup before inspecting or repairing Codex', async () => {
@@ -88,5 +100,7 @@ test('automatic Codex installation uses the exact official package supported by 
   assert.ok(releaseVersion, 'post-upgrade readiness must pin the Codex plugin release')
   assert.equal(OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC, `npm:@openclaw/codex@${releaseVersion}`)
   assert.match(controlPlaneSource, /spec:\s*bundledCodexSource\s*\|\|\s*OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC/)
+  assert.match(controlPlaneSource, /codexProjectsNeedUpdate\(packageVersions, repairVersion\)/)
+  assert.match(controlPlaneSource, /installedVersions\.includes\(repairVersion\)/)
   assert.doesNotMatch(controlPlaneSource, /spec:\s*bundledCodexSource\s*\|\|\s*'codex'/)
 })

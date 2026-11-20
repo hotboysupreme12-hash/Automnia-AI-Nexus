@@ -30,6 +30,7 @@ export type PluginControlEntry = {
   icon?: string
   systemImage?: string
   packageName?: string
+  version?: string
   installSpec?: string
   kind?: string
   catalogSource?: string
@@ -1076,6 +1077,7 @@ function buildPluginControlEntry(
     ...(typeof raw.icon === 'string' && raw.icon.trim() ? { icon: raw.icon.trim() } : {}),
     ...(typeof raw.systemImage === 'string' && raw.systemImage.trim() ? { systemImage: raw.systemImage.trim() } : {}),
     ...(typeof raw.packageName === 'string' && raw.packageName.trim() ? { packageName: raw.packageName.trim() } : {}),
+    ...(typeof raw.version === 'string' && raw.version.trim() ? { version: raw.version.trim() } : {}),
     ...(typeof raw.installSpec === 'string' && raw.installSpec.trim() ? { installSpec: raw.installSpec.trim() } : {}),
     ...(typeof raw.kind === 'string' && raw.kind.trim() ? { kind: raw.kind.trim() } : {}),
     ...(typeof raw.catalogSource === 'string' && raw.catalogSource.trim() ? { catalogSource: raw.catalogSource.trim() } : {}),
