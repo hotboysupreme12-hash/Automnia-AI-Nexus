@@ -17,6 +17,9 @@ type RuntimeStateBackupOptions = {
   schedulePath: string
   helperPath: string
   getActiveRunCount: () => number
+  isGatewayReady?: () => boolean | Promise<boolean>
+  getLastActivityAt?: () => number | null | Promise<number | null>
+  minimumIdleMs?: number
   intervalMs?: number
   startupDelayMs?: number
   workerFactory?: (workerData: Record<string, unknown>) => Pick<Worker, 'on' | 'terminate'>
@@ -39,6 +42,7 @@ export class RuntimeStateBackupBusyError extends Error {
 
 const CADENCE_DAYS = 7
 const RETENTION_COUNT = 2
+const DEFAULT_MINIMUM_IDLE_MS = 15 * 60_000
 const BACKUP_PREFIX = 'automnia-runtime-'
 let backupSequence = 0
 const WORKER_SOURCE = `
@@ -140,15 +144,19 @@ async function cleanupStalePartialBackups(backupParent: string, nowMs: number) {
 
 export function createRuntimeStateBackupService(options: RuntimeStateBackupOptions) {
   const now = options.now || (() => new Date())
-  const intervalMs = Math.max(1, options.intervalMs || 30 * 60_000)
+  const intervalMs = Math.max(1, options.intervalMs || 5 * 60_000)
+  const minimumIdleMs = Math.max(0, options.minimumIdleMs ?? DEFAULT_MINIMUM_IDLE_MS)
   const schedule = readSchedule(options.schedulePath)
   let timer: ReturnType<typeof setInterval> | null = null
   let startupTimer: ReturnType<typeof setTimeout> | null = null
   let worker: Pick<Worker, 'on' | 'terminate'> | null = null
   let activeBackupPath = ''
   let running = false
+  let checkInFlight = false
+  let manualBackupRequested = false
+  let gatewayReadySinceMs = 0
   let state: RuntimeStateBackupStatus['state'] = 'idle'
-  let message = 'Automatic weekly backups run when no agent is working.'
+  let message = 'Automatic weekly backups wait for a ready, idle Gateway.'
   let progress: RuntimeStateBackupStatus['progress'] = null
   let nextAutomaticRetryAt = 0
 
@@ -169,10 +177,8 @@ export function createRuntimeStateBackupService(options: RuntimeStateBackupOptio
     if (running) return status()
     const activeRuns = Math.max(0, Math.floor(options.getActiveRunCount()))
     if (activeRuns > 0) {
-      state = automatic ? 'deferred' : 'idle'
-      message = automatic
-        ? `Automatic backup is waiting for ${activeRuns} active agent run${activeRuns === 1 ? '' : 's'} to finish.`
-        : `Backup paused to protect responsiveness while ${activeRuns} agent run${activeRuns === 1 ? ' is' : 's are'} active. Try again when work is idle.`
+      state = 'deferred'
+      message = `${automatic ? 'Automatic' : 'Requested'} backup is waiting for ${activeRuns} active agent run${activeRuns === 1 ? '' : 's'} to finish.`
       return status()
     }
 
@@ -249,9 +255,56 @@ export function createRuntimeStateBackupService(options: RuntimeStateBackupOptio
   }
 
   async function automaticCheck() {
-    if (!isDue() || running || now().getTime() < nextAutomaticRetryAt) return
-    const result = await runBackup(true)
-    if (result.state === 'failed') nextAutomaticRetryAt = now().getTime() + 6 * 60 * 60_000
+    if ((!manualBackupRequested && !isDue()) || running || checkInFlight || now().getTime() < nextAutomaticRetryAt) return
+    checkInFlight = true
+    try {
+      const activeRuns = Math.max(0, Math.floor(options.getActiveRunCount()))
+      if (activeRuns > 0) {
+        state = 'deferred'
+        message = `${manualBackupRequested ? 'Requested' : 'Automatic'} backup is waiting for ${activeRuns} active agent run${activeRuns === 1 ? '' : 's'} to finish.`
+        return
+      }
+
+      let gatewayReady = true
+      try {
+        gatewayReady = options.isGatewayReady ? await options.isGatewayReady() : true
+      } catch {
+        gatewayReady = false
+      }
+      if (!gatewayReady) {
+        gatewayReadySinceMs = 0
+        state = 'deferred'
+        message = `${manualBackupRequested ? 'Requested' : 'Automatic'} backup is queued until the Gateway is fully ready.`
+        return
+      }
+
+      const checkedAt = now().getTime()
+      if (!gatewayReadySinceMs) gatewayReadySinceMs = checkedAt
+      let lastActivityAt: number | null = null
+      try {
+        lastActivityAt = options.getLastActivityAt ? await options.getLastActivityAt() : null
+      } catch {
+        state = 'deferred'
+        message = `${manualBackupRequested ? 'Requested' : 'Automatic'} backup is queued until Gateway activity can be checked safely.`
+        return
+      }
+      const activityAt = Number.isFinite(lastActivityAt) ? Number(lastActivityAt) : 0
+      const idleSinceMs = Math.max(gatewayReadySinceMs, activityAt)
+      const idleForMs = Math.max(0, checkedAt - idleSinceMs)
+      if (idleForMs < minimumIdleMs) {
+        const remainingMinutes = Math.max(1, Math.ceil((minimumIdleMs - idleForMs) / 60_000))
+        state = 'deferred'
+        message = `${manualBackupRequested ? 'Requested' : 'Automatic'} backup is queued until the Gateway has been ready and quiet for ${Math.ceil(minimumIdleMs / 60_000)} minutes (about ${remainingMinutes} minutes remaining).`
+        return
+      }
+
+      const manual = manualBackupRequested
+      const result = await runBackup(!manual)
+      if (result.state !== 'deferred' && manual) manualBackupRequested = false
+      if (result.state === 'failed' && !manual) nextAutomaticRetryAt = now().getTime() + 6 * 60 * 60_000
+    } finally {
+      checkInFlight = false
+    }
   }
 
   function startScheduler() {
@@ -287,9 +340,11 @@ export function createRuntimeStateBackupService(options: RuntimeStateBackupOptio
   return {
     status,
     createBackup: () => {
-      const activeRuns = Math.max(0, Math.floor(options.getActiveRunCount()))
-      if (activeRuns > 0) throw new RuntimeStateBackupBusyError(activeRuns)
-      if (!running) void runBackup(false)
+      if (running) return status()
+      manualBackupRequested = true
+      state = 'deferred'
+      message = `Requested backup is queued until the Gateway is ready and has been quiet for ${Math.ceil(minimumIdleMs / 60_000)} minutes.`
+      void automaticCheck()
       return status()
     },
     startScheduler,
