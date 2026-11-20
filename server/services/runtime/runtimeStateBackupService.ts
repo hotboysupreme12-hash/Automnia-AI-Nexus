@@ -22,6 +22,7 @@ type RuntimeStateBackupOptions = {
   minimumIdleMs?: number
   intervalMs?: number
   startupDelayMs?: number
+  activityCheckIntervalMs?: number
   workerFactory?: (workerData: Record<string, unknown>) => Pick<Worker, 'on' | 'terminate'>
   now?: () => Date
 }
@@ -123,7 +124,7 @@ async function pruneOldBackups(backupParent: string) {
 async function cleanupStalePartialBackups(backupParent: string, nowMs: number) {
   let entries: string[]
   try {
-    entries = fs.readdirSync(backupParent)
+    entries = await fs.promises.readdir(backupParent)
   } catch {
     return
   }
@@ -132,10 +133,15 @@ async function cleanupStalePartialBackups(backupParent: string, nowMs: number) {
     const directory = path.resolve(backupParent, name)
     if (!isWithin(backupParent, directory) || directory === path.resolve(backupParent)) continue
     try {
-      const stat = fs.lstatSync(directory)
+      const stat = await fs.promises.lstat(directory)
       if (!stat.isDirectory() || stat.isSymbolicLink() || nowMs - stat.mtimeMs < 60 * 60_000) continue
-      if (fs.existsSync(path.join(directory, 'backup-manifest.json'))) continue
-      await fs.promises.rm(directory, { recursive: true, force: false })
+      try {
+        await fs.promises.stat(path.join(directory, 'backup-manifest.json'))
+        continue
+      } catch (error) {
+        if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'ENOENT') continue
+        await fs.promises.rm(directory, { recursive: true, force: false })
+      }
     } catch {
       // A locked partial snapshot is harmless; preserve it for a later cleanup pass.
     }
@@ -149,10 +155,13 @@ export function createRuntimeStateBackupService(options: RuntimeStateBackupOptio
   const schedule = readSchedule(options.schedulePath)
   let timer: ReturnType<typeof setInterval> | null = null
   let startupTimer: ReturnType<typeof setTimeout> | null = null
+  let backupWatchTimer: ReturnType<typeof setInterval> | null = null
   let worker: Pick<Worker, 'on' | 'terminate'> | null = null
   let activeBackupPath = ''
   let running = false
   let checkInFlight = false
+  let backupWatchInFlight = false
+  let interruptedReason: string | null = null
   let manualBackupRequested = false
   let gatewayReadySinceMs = 0
   let state: RuntimeStateBackupStatus['state'] = 'idle'
@@ -173,7 +182,40 @@ export function createRuntimeStateBackupService(options: RuntimeStateBackupOptio
     }
   }
 
-  async function runBackup(automatic: boolean) {
+  function interruptBackup(reason: string, expectedWorker: Pick<Worker, 'on' | 'terminate'>) {
+    if (!running || worker !== expectedWorker || interruptedReason) return
+    interruptedReason = reason
+    void expectedWorker.terminate().catch(() => undefined)
+  }
+
+  async function watchBackupActivity(activityCheckpointAt: number, expectedWorker: Pick<Worker, 'on' | 'terminate'>) {
+    if (!running || worker !== expectedWorker || backupWatchInFlight || interruptedReason) return
+    backupWatchInFlight = true
+    try {
+      const activeRuns = Math.max(0, Math.floor(options.getActiveRunCount()))
+      if (activeRuns > 0) {
+        interruptBackup(`Gateway activity resumed (${activeRuns} active agent run${activeRuns === 1 ? '' : 's'}).`, expectedWorker)
+        return
+      }
+
+      if (options.isGatewayReady && !(await options.isGatewayReady())) {
+        interruptBackup('Gateway readiness changed during backup.', expectedWorker)
+        return
+      }
+      if (options.getLastActivityAt) {
+        const lastActivityAt = await options.getLastActivityAt()
+        if (Number.isFinite(lastActivityAt) && Number(lastActivityAt) > activityCheckpointAt) {
+          interruptBackup('New Gateway activity arrived during backup.', expectedWorker)
+        }
+      }
+    } catch {
+      interruptBackup('Gateway activity could not be checked safely during backup.', expectedWorker)
+    } finally {
+      backupWatchInFlight = false
+    }
+  }
+
+  async function runBackup(automatic: boolean, activityCheckpointAt: number) {
     if (running) return status()
     const activeRuns = Math.max(0, Math.floor(options.getActiveRunCount()))
     if (activeRuns > 0) {
@@ -183,6 +225,7 @@ export function createRuntimeStateBackupService(options: RuntimeStateBackupOptio
     }
 
     running = true
+    interruptedReason = null
     state = 'running'
     progress = { completed: 0, total: 0 }
     message = automatic ? 'Creating the scheduled runtime backup…' : 'Creating a verified runtime backup…'
@@ -200,6 +243,8 @@ export function createRuntimeStateBackupService(options: RuntimeStateBackupOptio
           backupName,
         })
         worker = createdWorker
+        backupWatchTimer = setInterval(() => void watchBackupActivity(activityCheckpointAt, createdWorker), Math.max(250, options.activityCheckIntervalMs || 5_000))
+        backupWatchTimer.unref?.()
         createdWorker.on('message', (raw: unknown) => {
           if (!raw || typeof raw !== 'object' || !('type' in raw)) return
           const event = raw as WorkerMessage
@@ -238,13 +283,29 @@ export function createRuntimeStateBackupService(options: RuntimeStateBackupOptio
       state = 'idle'
       message = `Backup verified: ${result.fileCount} files (${result.totalBytes} bytes).${retentionWarning ? ' An older snapshot could not be removed; the new backup is safe.' : ''}`
     } catch (error) {
-      state = 'failed'
-      message = error instanceof Error ? error.message.slice(0, 500) : 'Runtime backup failed.'
+      if (interruptedReason) {
+        try {
+          if (activeBackupPath && path.dirname(path.resolve(activeBackupPath)) === path.resolve(options.backupParent)
+            && path.basename(activeBackupPath).startsWith(BACKUP_PREFIX)) {
+            await fs.promises.rm(activeBackupPath, { recursive: true, force: true })
+          }
+        } catch {
+          // Keep the next idle pass responsible for removing any interrupted partial snapshot.
+        }
+        state = 'deferred'
+        message = `${automatic ? 'Automatic' : 'Requested'} backup paused. ${interruptedReason} It will retry after the Gateway is quiet again.`
+      } else {
+        state = 'failed'
+        message = error instanceof Error ? error.message.slice(0, 500) : 'Runtime backup failed.'
+      }
     } finally {
+      if (backupWatchTimer) clearInterval(backupWatchTimer)
+      backupWatchTimer = null
       running = false
       worker = null
       activeBackupPath = ''
       progress = null
+      interruptedReason = null
     }
     return status()
   }
@@ -299,7 +360,7 @@ export function createRuntimeStateBackupService(options: RuntimeStateBackupOptio
       }
 
       const manual = manualBackupRequested
-      const result = await runBackup(!manual)
+      const result = await runBackup(!manual, activityAt)
       if (result.state !== 'deferred' && manual) manualBackupRequested = false
       if (result.state === 'failed' && !manual) nextAutomaticRetryAt = now().getTime() + 6 * 60 * 60_000
     } finally {
@@ -309,7 +370,7 @@ export function createRuntimeStateBackupService(options: RuntimeStateBackupOptio
 
   function startScheduler() {
     if (timer) return
-    void cleanupStalePartialBackups(options.backupParent, now().getTime())
+    setImmediate(() => void cleanupStalePartialBackups(options.backupParent, now().getTime()))
     startupTimer = setTimeout(() => {
       startupTimer = null
       void automaticCheck()

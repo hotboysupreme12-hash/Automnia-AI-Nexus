@@ -218,6 +218,58 @@ test('automatic backup stays deferred until the Gateway is ready and the idle wi
   }
 })
 
+test('a new Gateway run interrupts an in-progress backup and leaves it queued for the next idle window', async () => {
+  const root = temporaryRoot()
+  let activeRuns = 0
+  const lastActivityAt = 1_000
+  let workerStarts = 0
+  let workerTerminated = false
+  let service: ReturnType<typeof createRuntimeStateBackupService> | undefined
+  try {
+    service = createRuntimeStateBackupService({
+      sourceRoot: path.join(root, 'state'),
+      backupParent: path.join(root, 'backups'),
+      schedulePath: path.join(root, 'backups', '.schedule.json'),
+      helperPath: path.join(root, 'helper.cjs'),
+      getActiveRunCount: () => activeRuns,
+      isGatewayReady: () => true,
+      getLastActivityAt: () => lastActivityAt,
+      minimumIdleMs: 0,
+      activityCheckIntervalMs: 250,
+      workerFactory: (workerData) => {
+        workerStarts += 1
+        const worker = new EventEmitter() as EventEmitter & Pick<Worker, 'terminate'>
+        const partialPath = path.join(String(workerData.backupParent), String(workerData.backupName))
+        fs.mkdirSync(partialPath, { recursive: true })
+        fs.writeFileSync(path.join(partialPath, 'partial.bin'), 'partial snapshot')
+        worker.terminate = async () => {
+          workerTerminated = true
+          queueMicrotask(() => worker.emit('exit', 1))
+          return 1
+        }
+        return worker as unknown as Pick<Worker, 'on' | 'terminate'>
+      },
+    })
+
+    service.createBackup()
+    const startDeadline = Date.now() + 1_000
+    while (workerStarts === 0 && Date.now() < startDeadline) await new Promise((resolve) => setTimeout(resolve, 5))
+    assert.equal(workerStarts, 1)
+    activeRuns = 1
+
+    const pauseDeadline = Date.now() + 2_000
+    while (service.status().state !== 'deferred' && Date.now() < pauseDeadline) await new Promise((resolve) => setTimeout(resolve, 10))
+    assert.equal(workerTerminated, true)
+    assert.equal(service.status().state, 'deferred')
+    assert.match(service.status().message, /paused.*Gateway activity resumed/)
+    assert.equal(service.status().lastBackupAt, null)
+    assert.equal(fs.readdirSync(path.join(root, 'backups')).some((name) => name.startsWith('automnia-runtime-')), false)
+  } finally {
+    service?.stopScheduler()
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('default background worker creates a verifiable backup without blocking the caller', async () => {
   const root = temporaryRoot()
   try {
@@ -246,6 +298,7 @@ test('default background worker creates a verifiable backup without blocking the
     const manifest = JSON.parse(fs.readFileSync(path.join(result.lastBackupPath as string, 'backup-manifest.json'), 'utf8'))
     assert.equal(manifest.product, 'Automnia')
     assert.equal(manifest.fileCount, 1)
+    assert.equal(manifest.files[0].sha256.length, 64)
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }
