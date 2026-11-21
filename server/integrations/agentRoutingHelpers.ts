@@ -1228,6 +1228,7 @@ function telegramAutomniaModelLabel(value) {
     var normalized = String(value == null ? '' : value).trim().toLowerCase();
     if (/^automnia-cloud\/gemini-4-carbon(?:$|[-@])/i.test(normalized)) return 'Automnia Frontier';
     if (/^automnia-cloud\/gemini-4-neon(?:$|[-@])/i.test(normalized)) return 'Automnia Pro';
+    if (/^automnia-cloud\/gemini-4-argon(?:$|[-@])/i.test(normalized)) return 'Automnia Balanced';
     if (/^automnia-cloud\/gemini-4-hydrogen(?:$|[-@])/i.test(normalized)) return 'Automnia Balanced';
     if (/^automnia-cloud\/gemini-3\.8-flash(?:$|[-@])/i.test(normalized)) return 'Automnia Swift';
     return 'Automnia hosted class';

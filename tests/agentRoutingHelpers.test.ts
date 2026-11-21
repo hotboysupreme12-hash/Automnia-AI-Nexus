@@ -421,7 +421,8 @@ test('Telegram model menus expose Pro and Frontier for eligible hosted routes an
     { env: { vars: { AUTOMNIA_FRONTIER_ALLOWED: '1' } } },
     { byProvider: new Map([['automnia-cloud', new Set(['gemini-3.8-flash'])]]), providers: ['automnia-cloud'] },
   )
-  assert.equal(eligible.byProvider.get('automnia-cloud')?.has('gemini-4-argon'), true)
+  assert.equal(eligible.byProvider.get('automnia-cloud')?.has('gemini-4-argon'), false)
+  assert.equal(eligible.byProvider.get('automnia-cloud')?.has('gemini-4-neon'), true)
   assert.equal(eligible.byProvider.get('automnia-cloud')?.has('gemini-4-carbon'), true)
   assert.equal(eligible.byProvider.get('automnia-cloud')?.has('gemini-4-hydrogen'), true)
   assert.equal(eligible.byProvider.get('automnia-cloud')?.has('gemini-3.8-flash'), true)
@@ -431,6 +432,7 @@ test('Telegram model menus expose Pro and Frontier for eligible hosted routes an
     { byProvider: new Map([['google', new Set(['gemini-2.5-pro'])]]), providers: ['google'] },
   )
   assert.equal(starter.byProvider.get('automnia-cloud')?.has('gemini-4-argon'), false)
+  assert.equal(starter.byProvider.get('automnia-cloud')?.has('gemini-4-neon'), false)
   assert.equal(starter.byProvider.get('automnia-cloud')?.has('gemini-4-carbon'), false)
 })
 
@@ -472,7 +474,8 @@ test('Telegram saved Automnia routes use the new tier labels', () => {
 
   assert.equal(labelForModel('automnia-cloud/gemini-3.8-flash'), 'Automnia Swift')
   assert.equal(labelForModel('automnia-cloud/gemini-4-hydrogen'), 'Automnia Balanced')
-  assert.equal(labelForModel('automnia-cloud/gemini-4-argon'), 'Automnia Pro')
+  assert.equal(labelForModel('automnia-cloud/gemini-4-neon'), 'Automnia Pro')
+  assert.equal(labelForModel('automnia-cloud/gemini-4-argon'), 'Automnia Balanced')
   assert.equal(labelForModel('automnia-cloud/gemini-4-carbon'), 'Automnia Frontier')
 })
 

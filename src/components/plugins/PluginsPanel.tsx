@@ -387,7 +387,7 @@ function PluginRow({
   const runtimeLabel = plugin.runtimeLoaded ? 'Loaded' : plugin.enabled ? 'Awaiting sync' : 'Standby'
   const signalTone = plugin.needsSetup ? 'attention' : plugin.enabled ? 'healthy' : 'idle'
   const canConfigureTelegram = plugin.id === 'telegram'
-  const showSetupAction = !installable && (plugin.needsSetup || canConfigureTelegram)
+  const showSetupAction = !installable && (canConfigure || canConfigureTelegram)
   return (
     <article
       className="dy-plugin-row"
