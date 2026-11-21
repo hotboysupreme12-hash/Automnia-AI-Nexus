@@ -82,14 +82,13 @@ import {
 } from './runtimeProjectionState'
 import {
   MAX_COMMAND_CONSOLE_RESPONSES,
-  commandConsoleQueueCancellationPatch,
-  commandConsoleQueueCancellationForFollowup,
+  cancelCommandConsoleQueuedFollowup,
+  clearCommandConsoleQueuedFollowups,
   commandConsoleSessionKey,
   createQueuedCommandConsoleResponse,
   clearCommandConsoleQueueTimer as clearCommandConsoleQueueTimerRegistry,
   expireCommandConsoleFollowup,
-  failQueuedCommandConsoleFollowups as markQueuedCommandConsoleFollowupsFailed,
-  interruptQueuedCommandConsoleFollowups,
+  failCommandConsoleQueuedFollowups,
   makeCommandConsoleResponseState,
   patchQueuedCommandConsoleResponse as patchQueuedConsoleResponse,
   refreshQueuedCommandConsolePositions as projectQueuedCommandConsolePositions,
@@ -2601,12 +2600,8 @@ export const useNexusStore = create<NexusState>()(
         }))
       }
 
-      const failQueuedCommandConsoleFollowups = (agentId: string, message: string, failureKind: string) => {
-        const queue = queuedCommandConsoleFollowups.get(agentId) || []
-        queuedCommandConsoleFollowups.delete(agentId)
-        clearQueuedCommandConsoleTimer(agentId)
-        markQueuedCommandConsoleFollowupsFailed(queue, agentId, message, failureKind, updateQueuedCommandConsoleResponse)
-      }
+      const failQueuedCommandConsoleFollowups = (agentId: string, message: string, failureKind: string) =>
+        failCommandConsoleQueuedFollowups(queuedCommandConsoleFollowups, queuedCommandConsoleTimers, agentId, message, failureKind, updateQueuedCommandConsoleResponse)
 
       const drainQueuedCommandConsoleFollowups = (agentId: string, immediate = false) => {
         if (queuedCommandConsoleTimers.has(agentId)) {
@@ -2748,41 +2743,18 @@ export const useNexusStore = create<NexusState>()(
         )
       }
 
-      const clearQueuedCommandConsoleFollowups = () => {
-        interruptQueuedCommandConsoleFollowups(queuedCommandConsoleFollowups, updateQueuedCommandConsoleResponse)
-        for (const agentId of queuedCommandConsoleTimers.keys()) clearQueuedCommandConsoleTimer(agentId)
-        queuedCommandConsoleFollowups.clear()
-      }
+      const clearQueuedCommandConsoleFollowups = () => clearCommandConsoleQueuedFollowups(
+        queuedCommandConsoleFollowups, queuedCommandConsoleTimers, updateQueuedCommandConsoleResponse,
+      )
 
-      const cancelQueuedCommandConsoleFollowupById = (responseId: string) => {
-        const normalized = responseId.trim()
-        if (!normalized) return false
-        for (const [agentId, queue] of queuedCommandConsoleFollowups.entries()) {
-          const queued = queue.find((entry) => entry.id === normalized)
-          if (!queued) continue
-
-          const remaining = queue.filter((entry) => entry.id !== normalized)
-          if (remaining.length) queuedCommandConsoleFollowups.set(agentId, remaining)
-          else {
-            queuedCommandConsoleFollowups.delete(agentId)
-            clearQueuedCommandConsoleTimer(agentId)
-          }
-
-          const completedAt = new Date().toISOString()
-          const cancellation = commandConsoleQueueCancellationForFollowup(queued.queuedAt, queued.createdAt, agentId)
-          writeCommandConsoleQueueReceipt({ id: queued.id, agentId, queuedAt: queued.queuedAt, status: 'cancelled', reason: cancellation.message, completedAt })
-          updateQueuedCommandConsoleResponse(normalized, commandConsoleQueueCancellationPatch(cancellation, completedAt))
-          if (remaining.length) refreshQueuedCommandConsolePositions(agentId)
-          addMissionFeedEvent(
-            get().activeMission?.id || 'direct-query',
-            cancellation.feedMessage,
-            'coordination',
-            agentId,
-          )
-          return true
-        }
-        return false
-      }
+      const cancelQueuedCommandConsoleFollowupById = (responseId: string) => cancelCommandConsoleQueuedFollowup(
+        queuedCommandConsoleFollowups,
+        responseId,
+        clearQueuedCommandConsoleTimer,
+        updateQueuedCommandConsoleResponse,
+        refreshQueuedCommandConsolePositions,
+        (agentId, message) => addMissionFeedEvent(get().activeMission?.id || 'direct-query', message, 'coordination', agentId),
+      )
 
       const resetCommandConsoleRuntimeState = () => {
         const busyAgents = [...get().busyAgentIds]

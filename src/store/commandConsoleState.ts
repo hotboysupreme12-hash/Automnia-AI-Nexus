@@ -264,6 +264,61 @@ export function interruptQueuedCommandConsoleFollowups<TOptions>(
   }
 }
 
+export function clearCommandConsoleQueuedFollowups<TOptions>(
+  queues: Map<string, CommandConsoleQueuedFollowup<TOptions>[]>,
+  timers: Map<string, ReturnType<typeof setTimeout>>,
+  updateResponse: (id: string, patch: Partial<AgentResponse>) => void,
+): void {
+  interruptQueuedCommandConsoleFollowups(queues, updateResponse)
+  for (const agentId of timers.keys()) clearCommandConsoleQueueTimer(timers, agentId)
+  queues.clear()
+}
+
+export function failCommandConsoleQueuedFollowups<TOptions>(
+  queues: Map<string, CommandConsoleQueuedFollowup<TOptions>[]>,
+  timers: Map<string, ReturnType<typeof setTimeout>>,
+  agentId: string,
+  message: string,
+  failureKind: string,
+  updateResponse: (id: string, patch: Partial<AgentResponse>) => void,
+): void {
+  const queued = queues.get(agentId) || []
+  queues.delete(agentId)
+  clearCommandConsoleQueueTimer(timers, agentId)
+  failQueuedCommandConsoleFollowups(queued, agentId, message, failureKind, updateResponse)
+}
+
+export function cancelCommandConsoleQueuedFollowup<TOptions>(
+  queues: Map<string, CommandConsoleQueuedFollowup<TOptions>[]>,
+  responseId: string,
+  clearTimer: (agentId: string) => void,
+  updateResponse: (id: string, patch: Partial<AgentResponse>) => void,
+  refreshPositions: (agentId: string) => void,
+  addCancellationEvent: (agentId: string, message: string) => void,
+  storage: CommandConsoleQueueReceiptStorage | null = browserDraftStorage(),
+): boolean {
+  const normalized = responseId.trim()
+  if (!normalized) return false
+  for (const [agentId, queue] of queues) {
+    const queued = queue.find((entry) => entry.id === normalized)
+    if (!queued) continue
+    const remaining = queue.filter((entry) => entry.id !== normalized)
+    if (remaining.length) queues.set(agentId, remaining)
+    else {
+      queues.delete(agentId)
+      clearTimer(agentId)
+    }
+    const completedAt = new Date().toISOString()
+    const cancellation = commandConsoleQueueCancellationForFollowup(queued.queuedAt, queued.createdAt, agentId)
+    writeCommandConsoleQueueReceipt({ id: queued.id, agentId, queuedAt: queued.queuedAt, status: 'cancelled', reason: cancellation.message, completedAt }, storage)
+    updateResponse(normalized, commandConsoleQueueCancellationPatch(cancellation, completedAt))
+    if (remaining.length) refreshPositions(agentId)
+    addCancellationEvent(agentId, cancellation.feedMessage)
+    return true
+  }
+  return false
+}
+
 function estimateCommandConsoleTokenCount(text: string): number {
   return Math.max(1, Math.ceil((text || '').length / 4))
 }
