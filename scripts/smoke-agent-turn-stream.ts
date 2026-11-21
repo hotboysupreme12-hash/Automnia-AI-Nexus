@@ -15,6 +15,16 @@ import { createSseFrameParser } from '../src/utils/sseStream'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const smokeAuthToken = 'agent-turn-stream-smoke-token'
 
+type AgentTurnStreamAbortMarker = {
+  aborted?: unknown
+  agent?: unknown
+  closed?: unknown
+  reason?: unknown
+  runId?: unknown
+  sessionKey?: unknown
+  transport?: unknown
+}
+
 async function reservePort() {
   const { createServer } = await import('node:net')
   return new Promise<number>((resolve, reject) => {
@@ -148,13 +158,25 @@ function assertStreamHeaders(response: Response) {
   assert.equal(response.headers.get('x-accel-buffering'), 'no')
 }
 
-async function waitForFile(filePath: string, timeoutMs = 5000) {
+async function waitForJsonFile<T>(filePath: string, timeoutMs = 5000): Promise<T> {
   const deadline = Date.now() + timeoutMs
+  let lastParseError = ''
   while (Date.now() < deadline) {
-    if (existsSync(filePath)) return
+    if (existsSync(filePath)) {
+      const contents = readFileSync(filePath, 'utf-8').trim()
+      if (contents) {
+        try {
+          return JSON.parse(contents) as T
+        } catch (error) {
+          if (!(error instanceof SyntaxError)) throw error
+          lastParseError = error.message
+        }
+      }
+    }
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
-  throw new Error(`Timed out waiting for ${filePath}`)
+  const detail = lastParseError ? `; last JSON parse error: ${lastParseError}` : ''
+  throw new Error(`Timed out waiting for valid JSON in ${filePath}${detail}`)
 }
 
 async function main() {
@@ -271,16 +293,7 @@ async function main() {
     assert.match(String(abortStatus.runId), /^[0-9a-f-]{36}$/i)
 
     const abortMarkerPath = path.join(stateDir, 'agent-turn-stream-smoke-abort.json')
-    await waitForFile(abortMarkerPath)
-    const abortMarker = JSON.parse(readFileSync(abortMarkerPath, 'utf-8')) as {
-      aborted?: unknown
-      agent?: unknown
-      closed?: unknown
-      reason?: unknown
-      runId?: unknown
-      sessionKey?: unknown
-      transport?: unknown
-    }
+    const abortMarker = await waitForJsonFile<AgentTurnStreamAbortMarker>(abortMarkerPath)
     assert.equal(abortMarker.aborted, true)
     assert.equal(abortMarker.closed, true)
     assert.equal(abortMarker.reason, 'client-close')
@@ -297,8 +310,8 @@ async function main() {
       body: JSON.stringify({ agent: 'hn-architect', message: 'Continue across refresh', responseId }),
     })
     await readFirstSseFrame(detached)
-    await waitForFile(abortMarkerPath, 8000)
-    assert.equal(JSON.parse(readFileSync(abortMarkerPath, 'utf-8')).aborted, false)
+    const detachedMarker = await waitForJsonFile<AgentTurnStreamAbortMarker>(abortMarkerPath, 8000)
+    assert.equal(detachedMarker.aborted, false)
     const recovered = await fetch(`http://127.0.0.1:${port}/api/openclaw/clawtalk-console/stream`, {
       headers: { Authorization: `Bearer ${smokeAuthToken}` },
     })
@@ -332,8 +345,8 @@ async function main() {
       method: 'DELETE', headers: streamHeaders(),
     })
     assert.equal(stopped.ok, true)
-    await waitForFile(abortMarkerPath)
-    assert.equal(JSON.parse(readFileSync(abortMarkerPath, 'utf-8')).aborted, true)
+    const stoppedMarker = await waitForJsonFile<AgentTurnStreamAbortMarker>(abortMarkerPath)
+    assert.equal(stoppedMarker.aborted, true)
 
 
   } finally {
