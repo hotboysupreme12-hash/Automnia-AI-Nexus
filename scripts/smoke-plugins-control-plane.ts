@@ -180,7 +180,10 @@ for (const disabledUiFragment of [
   'PLUGIN_FILTERS',
   "pluginMatchesFilter(plugin, filter)",
   'summarizePluginPageStates(plugins)',
-  '<span>Disabled</span>\n            <strong>{stateSummary.disabled}</strong>',
+  '<span>Installed</span>\n            <strong>{stateSummary.installed}</strong>',
+  '<span>Active</span>\n            <strong>{stateSummary.enabled}</strong>',
+  '<span>Attention</span>\n            <strong>{attentionCount}</strong>',
+  '<span>Available</span>\n            <strong>{stateSummary.available}</strong>',
   "plugin.enabled ? 'Stop' : 'Start'",
   'plugin.icon',
   'plugin.packageName',
@@ -210,7 +213,7 @@ for (const unavailableRouteFragment of [
 for (const unavailableUiFragment of [
   'pluginPageState(plugin)',
   "status === 'unavailable'",
-  'stateSummary.unavailable',
+  'summary.unavailable += 1',
   'systemImage',
 ]) {
   assert(
@@ -259,9 +262,7 @@ for (const stateFragment of [
 for (const pageStateFragment of [
   "{ id: 'disabled', label: 'Disabled' }",
   'stateSummary.enabled',
-  'stateSummary.missingAuth',
-  'stateSummary.unavailable',
-  'stateSummary.failed',
+  'attentionCount',
   'pluginPageState(plugin).label',
 ]) {
   assert(

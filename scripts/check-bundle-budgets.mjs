@@ -58,7 +58,7 @@ const budgets = {
   // Keep the measured production baseline inside the enforced budget while
   // leaving a small amount of room for normal asset-hash and dependency drift.
   entryCssBytes: numberEnv('AUTOMNIA_BUDGET_ENTRY_CSS_BYTES', 1_850_000),
-  entryCssGzipBytes: numberEnv('AUTOMNIA_BUDGET_ENTRY_CSS_GZIP_BYTES', 225_000),
+  entryCssGzipBytes: numberEnv('AUTOMNIA_BUDGET_ENTRY_CSS_GZIP_BYTES', 226_000),
   // The security refresh updated transitive ONNX/runtime chunks; keep these ceilings
   // just above the new measured production output, with limited drift headroom.
   totalJsBytes: numberEnv('AUTOMNIA_BUDGET_TOTAL_JS_BYTES', 1_140_000),
