@@ -29,6 +29,11 @@ assert.match(
   /const DEFAULT_BUNDLED_CODEX_INTEGRITY = 'sha512-[A-Za-z0-9+/=]+'/,
   'bundled Codex plugin must record expected npm integrity',
 )
+assert.match(
+  prepareRuntimeBundles,
+  /codexPackage\.name !== '@openclaw\/codex' \|\| codexPackage\.version !== bundledCodex\.version/,
+  'runtime bundle preparation must reject stale Codex package contents even when the bundle metadata looks current',
+)
 assert.doesNotMatch(
   prepareRuntimeBundles,
   /@openclaw\/codex@latest/,
@@ -252,6 +257,16 @@ assert.match(
   serverControlPlane,
   /nodeRuntimeToolchainRoots\(\)\.flatMap\(nodeRuntimeCandidatesFromToolchainRoot\),[\s\S]*process\.env\.AUTOMNIA_NODE_BIN/,
   'the verified bundled Node runtime must be preferred ahead of environment and PATH fallbacks',
+)
+assert.match(
+  serverControlPlane,
+  /function resolveNpmRuntimeExecutable[\s\S]*nodeRuntimeToolchainRoots\(\)\.flatMap\(\(root\) => nodeRuntimeDirectoriesFromToolchainRoot\(root\)\.map\(npmBinInToolchainDir\)\)/,
+  'the verified bundled npm runtime must be preferred ahead of PATH for clean desktop installs',
+)
+assert.match(
+  serverControlPlane,
+  /commandCheck\(resolveNodeRuntimeExecutable\(\), \['--version'\], 'Node\.js'\)[\s\S]*commandCheck\(resolveNpmRuntimeExecutable\(\), \['--version'\], 'npm'\)/,
+  'agent preflight must validate Automnia bundled Node and npm rather than requiring a user-installed toolchain',
 )
 assert.match(
   serverControlPlane,

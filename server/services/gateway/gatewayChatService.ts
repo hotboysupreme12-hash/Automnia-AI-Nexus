@@ -145,7 +145,7 @@ export type GatewayChatServiceOptions<RunRecord> = {
   startGatewayHealthMonitor: () => void
   isGatewayHealthy: () => Promise<boolean>
   getOpenClawAgentRunDefaultsReady: () => boolean
-  ensureOpenclawAgentRunConfigDefaults: () => Promise<void>
+  ensureOpenclawAgentRunConfigDefaults: (agentId?: string) => Promise<void>
   gatewayChatAttachmentsFromTurnAttachments: (attachments: unknown[] | undefined) => Promise<Record<string, unknown>[]>
   normalizeFastMode: (value: GatewayChatFastModePreference | undefined) => GatewayChatOpenClawFastMode | null
   beginGatewayChatRun: (params: {
@@ -1497,6 +1497,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     // interactive before the background startup task finishes; the first
     // message must join that same promise instead of triggering lifecycle
     // work for the first time after the user has already sent a message.
+    await options.ensureOpenclawAgentRunConfigDefaults(params.agentId)
     await prewarm('first-message')
     const state = await ensureClient(params.signal)
     const runId = randomUUID()

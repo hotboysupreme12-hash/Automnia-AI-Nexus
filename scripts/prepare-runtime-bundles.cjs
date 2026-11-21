@@ -286,6 +286,13 @@ function codexTargetTriple() {
 function validateCodexBundle(rootDir) {
   const nativePackage = codexNativePackageName()
   const triple = codexTargetTriple()
+  let codexPackage
+  try {
+    codexPackage = readJson(path.join(rootDir, 'package.json'))
+  } catch {
+    return false
+  }
+  if (codexPackage.name !== '@openclaw/codex' || codexPackage.version !== bundledCodex.version) return false
   const nativeBin = path.join(
     rootDir,
     'node_modules',

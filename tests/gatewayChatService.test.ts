@@ -59,6 +59,7 @@ function createHarness(options: {
   let stopped = false
   let ensuredGateway = 0
   let healthChecks = 0
+  const ensuredAgentIds: string[] = []
 
   const service = createGatewayChatService({
     gatewayHttpPort: 18789,
@@ -79,7 +80,9 @@ function createHarness(options: {
       return true
     },
     getOpenClawAgentRunDefaultsReady: () => true,
-    ensureOpenclawAgentRunConfigDefaults: async () => undefined,
+    ensureOpenclawAgentRunConfigDefaults: async (agentId) => {
+      if (agentId) ensuredAgentIds.push(agentId)
+    },
     gatewayChatAttachmentsFromTurnAttachments: async () => options.attachments || [],
     normalizeFastMode: (value) => value === 'auto' ? 'auto' : value === 'on' ? true : null,
     beginGatewayChatRun: (params) => ({ ...params }),
@@ -167,6 +170,7 @@ function createHarness(options: {
     requests,
     finishes,
     logs,
+    ensuredAgentIds,
     get clientOptions() {
       return clientOptions
     },
@@ -259,6 +263,7 @@ test('runTurn sends Gateway chat payloads and uses a visible terminal reply with
 
   const send = harness.requests.find((request) => request.method === 'chat.send')
   assert.ok(send)
+  assert.deepEqual(harness.ensuredAgentIds, ['agent-alpha'], 'Gateway chat startup repair should be scoped to its selected agent')
   assert.ok(harness.ensuredGateway >= 1, 'first message should complete the Gateway prewarm barrier')
   assert.ok(harness.healthChecks >= 1)
   assert.equal(harness.clientOptions?.clientName, 'gateway-client')

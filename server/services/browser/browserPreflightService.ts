@@ -33,7 +33,7 @@ export type BrowserToolProbeResult = {
 }
 
 export type BrowserPreflightServiceOptions = {
-  ensureOpenclawAgentRunConfigDefaults: () => Promise<unknown>
+  ensureOpenclawAgentRunConfigDefaults: (agentId?: string) => Promise<unknown>
   getOpenClawPluginEnabled: (pluginId: string) => Promise<BrowserPluginStatus>
   repairGatewayTokenConfigSync: () => { repaired: boolean; detail?: string }
   ensureGatewayRunning: () => Promise<unknown>
@@ -125,7 +125,7 @@ export function createBrowserPreflightService(options: BrowserPreflightServiceOp
   const startBrowserRelay = async () => normalizeRelayStartResult(await options.tryStartBrowserRelayWithRepair(), redact)
 
   async function checkBrowserPreflight(agentId?: string): Promise<BrowserPreflightResult> {
-    await options.ensureOpenclawAgentRunConfigDefaults().catch(() => undefined)
+    await options.ensureOpenclawAgentRunConfigDefaults(agentId).catch(() => undefined)
     const browserPlugin = await options.getOpenClawPluginEnabled('browser')
     if (!browserPlugin.enabled) {
       return {

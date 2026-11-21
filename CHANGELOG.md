@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.30 - 2026-11-21
+
+### Reliable clean installs and first-run agent routing
+
+- Accepts a verified healthy Codex route report even when unrelated recovery-copy inventory is incomplete or a CLI wrapper reports a mismatched exit code.
+- Runs Codex repair only for agents whose selected model or fallback uses the Codex runtime, so a Codex issue cannot block hosted Gemini or other routes.
+- Uses Automnia's bundled Node.js and npm during agent preflight instead of requiring users to install those tools globally.
+- Rejects stale Codex package contents when preparing release runtime bundles, even if cache metadata claims the bundle is current.
+- Allows this version's Windows and macOS installers to publish unsigned under a guarded v1.0.30-only setting; the update manifest remains cryptographically signed.
+
 ## 1.0.29 - 2026-11-21
 
 ### OpenClaw runtime and live agent chat

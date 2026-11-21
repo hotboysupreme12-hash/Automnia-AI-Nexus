@@ -262,8 +262,10 @@ import {
   codexPluginNeedsRepair,
   codexPluginVersionNeedsUpdate,
   codexProjectsNeedUpdate,
+  evaluateCodexDoctorRouteCheck,
   newerInstalledCodexVersion,
   requireGatewayForCodexPreflight,
+  selectedModelsNeedCodexRuntime,
   OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC,
 } from './services/plugins/codexPluginHealth'
 import { pluginToggleRequiresGatewayRestart } from './services/plugins/pluginRestartPolicy'
@@ -890,16 +892,20 @@ function nodeBinInToolchainDir(nodeDir: string) {
   return process.platform === 'win32' ? path.join(nodeDir, 'node.exe') : path.join(nodeDir, 'bin', 'node')
 }
 
-function nodeRuntimeCandidatesFromToolchainRoot(root: string) {
+function nodeRuntimeDirectoriesFromToolchainRoot(root: string) {
   if (!root || !existsSync(root)) return []
   try {
     return readdirSync(root, { withFileTypes: true })
       .filter((entry) => entry.isDirectory() && nodeToolchainDirMatchesCurrentPlatform(entry.name) && nodeToolchainVersionSupportsOpenClaw(entry.name))
       .sort((a, b) => compareNodeToolchainVersions(b.name, a.name))
-      .map((entry) => nodeBinInToolchainDir(path.join(root, entry.name)))
+      .map((entry) => path.join(root, entry.name))
   } catch {
     return []
   }
+}
+
+function nodeRuntimeCandidatesFromToolchainRoot(root: string) {
+  return nodeRuntimeDirectoriesFromToolchainRoot(root).map(nodeBinInToolchainDir)
 }
 
 function nodeRuntimeToolchainRoots() {
@@ -935,6 +941,28 @@ function resolveNodeRuntimeExecutable() {
   ).filter(Boolean)
   resolvedNodeRuntimeExecutable = candidates.find(nodeRuntimeCommandExists) || pathNode
   return resolvedNodeRuntimeExecutable
+}
+
+function npmBinInToolchainDir(nodeDir: string) {
+  return process.platform === 'win32' ? path.join(nodeDir, 'npm.cmd') : path.join(nodeDir, 'bin', 'npm')
+}
+
+let resolvedNpmRuntimeExecutable: string | null = null
+
+function resolveNpmRuntimeExecutable() {
+  if (resolvedNpmRuntimeExecutable) return resolvedNpmRuntimeExecutable
+  const pathNpm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+  const candidates = uniqueStrings(
+    ...nodeRuntimeToolchainRoots().flatMap((root) => nodeRuntimeDirectoriesFromToolchainRoot(root).map(npmBinInToolchainDir)),
+    process.env.AUTOMNIA_NPM_BIN || '',
+    pathNpm,
+  ).filter(Boolean)
+  resolvedNpmRuntimeExecutable = candidates.find((candidate) => (
+    candidate === 'npm' || candidate === 'npm.cmd'
+      ? commandExistsOnPath(candidate)
+      : executableFileExists(candidate)
+  )) || pathNpm
+  return resolvedNpmRuntimeExecutable
 }
 
 function quoteCmdArgument(value: string) {
@@ -2039,6 +2067,19 @@ function openClawConfigNeedsCodexPlugin(config: OpenClawConfigFile) {
     if (modelRuntimeMapUsesCodexRuntime((agent as AgentConfigEntry & { models?: unknown }).models)) return true
   }
   return false
+}
+
+function agentUsesCodexRuntime(config: OpenClawConfigFile, agentId: string) {
+  const selectedModelIds = selectedModelIdsForAgent(config, agentId).map(canonicalAgentModelId)
+  if (!selectedModelIds.length) return false
+  const agent = (config.agents?.list || []).find((entry) => entry.id === agentId)
+  const openAiProvider = config.models?.providers?.openai
+  const agentModels = (agent as AgentConfigEntry & { models?: unknown } | undefined)?.models
+  return selectedModelsNeedCodexRuntime(selectedModelIds, {
+    openAiProviderRuntime: openAiProvider?.agentRuntime,
+    agentModelRuntimeMaps: [config.agents?.defaults?.models, agentModels],
+    openAiModels: Array.isArray(openAiProvider?.models) ? openAiProvider.models : [],
+  })
 }
 
 function codexPluginForceEnableRequested() {
@@ -5618,8 +5659,8 @@ async function pluginRuntimeCheck(pluginId: string, label: string): Promise<Agen
 
 async function buildAgentRuntimePreflightChecks(agentId: string, config: OpenClawConfigFile): Promise<AgentRuntimePreflightCheck[]> {
   const checks: AgentRuntimePreflightCheck[] = [
-    commandCheck(process.platform === 'win32' ? 'node.exe' : 'node', ['--version'], 'Node.js'),
-    commandCheck(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['--version'], 'npm'),
+    commandCheck(resolveNodeRuntimeExecutable(), ['--version'], 'Node.js'),
+    commandCheck(resolveNpmRuntimeExecutable(), ['--version'], 'npm'),
   ]
 
   if (selectedModelsUseProvider(config, agentId, 'deepseek')) {
@@ -5636,7 +5677,7 @@ async function buildAgentRuntimePreflightChecks(agentId: string, config: OpenCla
     })
   }
 
-  const codexRuntimeRequired = openClawConfigNeedsCodexPlugin(config)
+  const codexRuntimeRequired = agentUsesCodexRuntime(config, agentId)
   const codexPluginEnabled = isCodexPluginExplicitlyEnabled(config)
   if (codexRuntimeRequired && !codexPluginEnabled) {
     checks.push({
@@ -5647,7 +5688,7 @@ async function buildAgentRuntimePreflightChecks(agentId: string, config: OpenCla
       message: 'Codex runtime is selected, but the Codex plugin is disabled.',
       detail: 'Enable the Codex plugin explicitly or switch the OpenAI provider/model runtime to OpenClaw.',
     })
-  } else if (codexPluginEnabled) {
+  } else if (codexRuntimeRequired && codexPluginEnabled) {
     checks.push(await pluginRuntimeCheck('codex', 'Codex plugin'))
   }
 
@@ -5698,7 +5739,7 @@ async function runOpenClaw(
   }
 
   if (args[0] === 'agent') {
-    await ensureOpenclawAgentRunConfigDefaults()
+    await ensureOpenclawAgentRunConfigDefaults(argValue(args, '--agent') || undefined)
     await clearDisallowedAutoModelOverridesForAgentArgs(args)
     await cleanupStaleOpenClawSessionLocksForArgs(args)
   }
@@ -10379,26 +10420,26 @@ async function synchronizeOpenClawBillingRouteForAgentRun(config: OpenClawConfig
   })
 }
 
-async function ensureOpenclawAgentRunConfigDefaults() {
-  if (openclawAgentRunDefaultsReady) return
-  if (!openclawAgentRunDefaultsPending) {
+async function ensureOpenclawAgentRunConfigDefaults(agentId?: string) {
+  if (!openclawAgentRunDefaultsReady && !openclawAgentRunDefaultsPending) {
     openclawAgentRunDefaultsPending = (async () => {
       const config = await readOpenclawConfig()
       ensureConfiguredModelAllowlist(config, agentRuntimeModelIdsForConfig(config))
       await synchronizeOpenClawBillingRouteForAgentRun(config)
       const toolchainChecks = [
-        commandCheck(process.platform === 'win32' ? 'node.exe' : 'node', ['--version'], 'Node.js'),
-        commandCheck(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['--version'], 'npm'),
+        commandCheck(resolveNodeRuntimeExecutable(), ['--version'], 'Node.js'),
+        commandCheck(resolveNpmRuntimeExecutable(), ['--version'], 'npm'),
       ]
       const toolchainFailure = runtimePreflightFailureMessage('toolchain', toolchainChecks)
       if (toolchainFailure) throw new Error(toolchainFailure)
-      await ensureCodexPluginInstalledForOpenAiRuntime(config)
       openclawAgentRunDefaultsReady = true
     })().finally(() => {
       openclawAgentRunDefaultsPending = null
     })
   }
-  await openclawAgentRunDefaultsPending
+  if (openclawAgentRunDefaultsPending) await openclawAgentRunDefaultsPending
+  const config = await readOpenclawConfig()
+  await ensureCodexPluginInstalledForOpenAiRuntime(config, agentId)
 }
 
 async function ensureGatewayStartupPluginDefaults(repairSummary: GatewayStartupPluginRepairSummary = {}) {
@@ -12708,14 +12749,6 @@ async function savePluginDirectConfig(
   }
 }
 
-function codexDoctorFindingCount(result: OpenClawResult) {
-  const parsed = parseOpenClawJsonOutput(result.stdout)
-  if (!isLooseRecord(parsed)) return result.code === 0 ? 0 : 1
-  if (Array.isArray(parsed.findings)) return parsed.findings.length
-  if (parsed.ok === false) return 1
-  return 0
-}
-
 function replaceCodexWindowsHide(source: string) {
   let next = source
   const labels: string[] = []
@@ -12819,11 +12852,12 @@ async function repairCodexPluginPostInstallState(options: {
     const doctorArgs = ['doctor', '--lint', '--only', 'core/doctor/codex-session-routes', '--json']
     const doctor = await runOpenClaw(doctorArgs, 120_000)
     commands.push(pluginCommandResult(doctorArgs, doctor))
-    const findingCount = codexDoctorFindingCount(doctor)
-    if (doctor.code !== 0 || findingCount > 0) {
+    const routeCheck = evaluateCodexDoctorRouteCheck(doctor)
+    if (!routeCheck.ok) {
       const detail = redactSensitiveText(stripAnsi(`${doctor.stdout}\n${doctor.stderr}`).trim() || `openclaw doctor exited ${doctor.code}`)
       throw new Error(`Codex route repair did not clear the doctor check: ${detail}`)
     }
+    if (routeCheck.warning) warnings.push(routeCheck.warning)
     actions.push('verified Codex session routes with OpenClaw doctor')
   }
 
@@ -12879,8 +12913,11 @@ async function installedCodexPackageVersions() {
   return versions
 }
 
-async function ensureCodexPluginInstalledForOpenAiRuntime(config: OpenClawConfigFile) {
+async function ensureCodexPluginInstalledForOpenAiRuntime(config: OpenClawConfigFile, agentId?: string) {
   if (!shouldPrepareCodexPluginForRuntime(config)) return
+  // A damaged Codex install must not hold up agents routed through Gemini or
+  // another provider. Only repair Codex in the context of a selected agent.
+  if (!agentId || !agentUsesCodexRuntime(config, agentId)) return
   if (openclawCodexPluginAutoInstallReady) return
 
   if (!openclawCodexPluginAutoInstallPending) {
@@ -12910,7 +12947,7 @@ async function ensureCodexPluginInstalledForOpenAiRuntime(config: OpenClawConfig
       if (isCodexPluginAvailableForRuntime(existing, bundledCodexSource) && !needsVersionUpgrade) {
         await repairCodexPluginPostInstallState({
           runCliEnable: Boolean(existing && existing.enabled !== true),
-          verifyRoutes: openClawConfigNeedsCodexPlugin(config),
+          verifyRoutes: agentId ? agentUsesCodexRuntime(config, agentId) : openClawConfigNeedsCodexPlugin(config),
           ...(bundledCodexSource ? { bundledSource: bundledCodexSource } : {}),
         })
         openclawCodexPluginAutoInstallReady = true

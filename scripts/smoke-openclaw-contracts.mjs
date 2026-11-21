@@ -317,7 +317,7 @@ assertOrderedIncludes(agentTurnStreamRoute, [
   "emit('progress'",
   'Opening Gateway chat session with your configured provider.',
   "if (!hostedCreditRoute && !forcedGatewayConsoleTurn)",
-  'await ensureOpenclawAgentRunConfigDefaults()',
+  'await ensureOpenclawAgentRunConfigDefaults(streamAgent)',
   "emit('progress'",
   'Runtime ready; dispatching through your Gateway provider.',
   'const payload = await streamProviderAgentTurn',

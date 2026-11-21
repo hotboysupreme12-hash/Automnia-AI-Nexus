@@ -6,8 +6,10 @@ import {
   codexPluginNeedsRepair,
   codexPluginVersionNeedsUpdate,
   codexProjectsNeedUpdate,
+  evaluateCodexDoctorRouteCheck,
   newerInstalledCodexVersion,
   requireGatewayForCodexPreflight,
+  selectedModelsNeedCodexRuntime,
   OFFICIAL_CODEX_PLUGIN_INSTALL_SPEC,
 } from '../server/services/plugins/codexPluginHealth'
 import type { PluginControlEntry } from '../server/services/plugins/pluginInventoryService'
@@ -90,6 +92,86 @@ test('does not treat a degraded installed entry as runtime-ready', () => {
 test('requires enabled state before declaring Codex available', () => {
   assert.equal(codexPluginAvailableForRuntime(plugin({ enabled: false }), 'C:\\bundled\\codex'), false)
   assert.equal(codexPluginAvailableForRuntime(plugin({ configuredEnabled: false }), 'C:\\bundled\\codex'), false)
+})
+
+test('accepts a clean Codex doctor report when non-route recovery inventory is partial', () => {
+  const result = evaluateCodexDoctorRouteCheck({
+    code: 0,
+    stdout: JSON.stringify({
+      schemaVersion: 1,
+      ok: true,
+      checksRun: 1,
+      checksSkipped: 73,
+      findings: [],
+      recoveryCopies: { measurement: 'partial', incomplete: true },
+    }),
+    stderr: '',
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.verified, true)
+  assert.equal(result.findingCount, 0)
+})
+
+test('uses the healthy targeted report if the CLI wrapper reports an unrelated nonzero exit', () => {
+  const result = evaluateCodexDoctorRouteCheck({
+    code: 2,
+    stdout: JSON.stringify({ schemaVersion: 1, ok: true, checksRun: 1, checksSkipped: 73, findings: [] }),
+    stderr: JSON.stringify({ ok: false, error: { type: 'cli_error', message: 'exit 0' } }),
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.verified, true)
+  assert.match(result.warning || '', /healthy Codex route report but exited 2/)
+})
+
+test('keeps real Codex route findings and skipped checks blocking', () => {
+  const finding = evaluateCodexDoctorRouteCheck({
+    code: 1,
+    stdout: JSON.stringify({ schemaVersion: 1, ok: false, checksRun: 1, checksSkipped: 73, findings: [{ checkId: 'core/doctor/codex-session-routes' }] }),
+    stderr: '',
+  })
+  const skipped = evaluateCodexDoctorRouteCheck({
+    code: 0,
+    stdout: JSON.stringify({ schemaVersion: 1, ok: true, checksRun: 0, checksSkipped: 74, findings: [] }),
+    stderr: '',
+  })
+
+  assert.equal(finding.ok, false)
+  assert.equal(finding.findingCount, 1)
+  assert.equal(skipped.ok, false)
+  assert.equal(skipped.findingCount, 1)
+})
+
+test('does not require the Codex plugin for an agent routed only to hosted Gemini', () => {
+  assert.equal(selectedModelsNeedCodexRuntime(
+    ['automnia-cloud/gemini-4-hydrogen'],
+    { openAiProviderRuntime: 'codex' },
+  ), false)
+})
+
+test('requires the Codex plugin for selected OpenAI Codex routes and fallbacks', () => {
+  assert.equal(selectedModelsNeedCodexRuntime(
+    ['openai/gpt-5.1-codex'],
+    { openAiProviderRuntime: 'codex' },
+  ), true)
+  assert.equal(selectedModelsNeedCodexRuntime(
+    ['automnia-cloud/gemini-4-hydrogen', 'openai/gpt-5.1-codex'],
+    { openAiModels: [{ id: 'gpt-5.1-codex', agentRuntime: { id: 'codex' } }] },
+  ), true)
+})
+
+test('scopes Codex repair and health failures to agents routed through Codex', () => {
+  const controlPlaneSource = readFileSync(new URL('../server/controlPlane.ts', import.meta.url), 'utf8')
+  const agentTurnRoutesSource = readFileSync(new URL('../server/routes/agentTurnRoutes.ts', import.meta.url), 'utf8')
+
+  assert.match(controlPlaneSource, /const codexRuntimeRequired = agentUsesCodexRuntime\(config, agentId\)/)
+  assert.match(controlPlaneSource, /const routeCheck = evaluateCodexDoctorRouteCheck\(doctor\)/)
+  assert.match(controlPlaneSource, /await ensureCodexPluginInstalledForOpenAiRuntime\(config, agentId\)/)
+  assert.match(controlPlaneSource, /if \(!agentId \|\| !agentUsesCodexRuntime\(config, agentId\)\) return/)
+  assert.match(controlPlaneSource, /function ensureOpenclawAgentRunConfigDefaults\(agentId\?: string\)[\s\S]*ensureCodexPluginInstalledForOpenAiRuntime\(config, agentId\)/)
+  assert.match(agentTurnRoutesSource, /checkBrowserPreflight\(streamAgent\)/)
+  assert.match(agentTurnRoutesSource, /checkBrowserPreflight\(agent\)/)
 })
 
 test('automatic Codex installation uses the exact official package supported by this OpenClaw runtime', () => {

@@ -9,14 +9,18 @@ import {
 function createHarness(overrides: Partial<BrowserPreflightServiceOptions> = {}) {
   let currentTime = 0
   let gatewayHealthyChecks = 0
+  const ensuredAgentIds: string[] = []
   const state = {
     gatewayHealthyChecks: () => gatewayHealthyChecks,
+    ensuredAgentIds,
     runBrowserToolProbeCalls: 0,
     tryReleaseBrowserRelayPortCalls: 0,
   }
 
   const service = createBrowserPreflightService({
-    ensureOpenclawAgentRunConfigDefaults: async () => undefined,
+    ensureOpenclawAgentRunConfigDefaults: async (agentId) => {
+      if (agentId) ensuredAgentIds.push(agentId)
+    },
     getOpenClawPluginEnabled: async () => ({ enabled: true, detail: 'browser plugin enabled' }),
     repairGatewayTokenConfigSync: () => ({ repaired: false }),
     ensureGatewayRunning: async () => undefined,
@@ -126,4 +130,5 @@ test('browser preflight redacts probe warnings while allowing execution to conti
   assert.match(result.detail || '', /\[redacted\]/)
   assert.doesNotMatch(result.detail || '', /secret-probe-token/)
   assert.equal(state.runBrowserToolProbeCalls, 1)
+  assert.deepEqual(state.ensuredAgentIds, ['Ada'], 'browser preflight should scope startup repair to the requesting agent')
 })

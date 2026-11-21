@@ -196,7 +196,7 @@ type AgentTurnRoutesOptions = {
   emitClawTalkConsoleFrame(event: string, context: ClawTalkConsoleMirrorContext, payload: Record<string, unknown>): boolean
   ensureAgentRuntimeHealthPreflight(agent: string, config: unknown): Promise<AgentRuntimePreflightCheck[]>
   ensureAgentSandboxCompatibleWithHost(agent: string): Promise<{ changed: boolean; message: string; local: { sandbox: { mode?: string } } }>
-  ensureOpenclawAgentRunConfigDefaults(): Promise<unknown>
+  ensureOpenclawAgentRunConfigDefaults(agentId?: string): Promise<unknown>
   extractAgentReply(stdout: string, stderr: string): string
   fileExists(filePath: string): Promise<boolean>
   getAgentAuthEnv(agent: string): Promise<Record<string, string> | undefined>
@@ -382,7 +382,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
           billingBlocked: true,
         })
       }
-      await ensureOpenclawAgentRunConfigDefaults()
+      await ensureOpenclawAgentRunConfigDefaults(agent)
       const config = await readOpenclawConfig()
       const healthChecks = await ensureAgentRuntimeHealthPreflight(agent, config)
       const sandbox = await ensureAgentSandboxCompatibleWithHost(agent)
@@ -699,7 +699,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         // Hosted browser turns use the same local browser-service readiness
         // checks as BYOK, but skip the model-backed probe so readiness does
         // not consume a second Automnia request before the actual turn.
-        const preflight = await checkBrowserPreflight()
+        const preflight = await checkBrowserPreflight(streamAgent)
         if (!preflight.ok) throw new Error(`${preflight.message}${preflight.detail ? `\n${preflight.detail}` : ''}`)
       }
       emit('status', {
@@ -733,7 +733,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         ...(parsed.data.sessionKey ? { sessionKey: parsed.data.sessionKey.trim() } : {}),
       })
       if (!hostedCreditRoute && !forcedGatewayConsoleTurn) {
-        await ensureOpenclawAgentRunConfigDefaults()
+        await ensureOpenclawAgentRunConfigDefaults(streamAgent)
         const config = await readOpenclawConfig()
         await ensureAgentRuntimeHealthPreflight(streamAgent, config)
         await ensureAgentSandboxCompatibleWithHost(streamAgent)
@@ -866,7 +866,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       }
       const hostedBrowserIntent = await shouldRouteBrowserIntentThroughBrowserPlugin(message, null)
       if (hostedBrowserIntent) {
-        const preflight = await checkBrowserPreflight()
+        const preflight = await checkBrowserPreflight(agent)
         if (!preflight.ok) {
           return apiSuccess(res, compactHttpJsonPayload({
             ...routeMetadata(),
@@ -889,7 +889,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       return apiSuccess(res, compactHttpJsonPayload(hostedPayload))
     }
 
-    await ensureOpenclawAgentRunConfigDefaults()
+    await ensureOpenclawAgentRunConfigDefaults(agent)
     const runtimeConfig = await readOpenclawConfig()
     await ensureAgentRuntimeHealthPreflight(agent, runtimeConfig)
     await ensureAgentSandboxCompatibleWithHost(agent)
