@@ -110,7 +110,9 @@ flowchart TD
 
 ## Release validation
 
-Run `npm run release:validate` to check a packaged release candidate. When checksum-evidence signing is enabled, `npm run release:sign` can use `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE` for the signing key. Public release signing rules and the version-specific unsigned exceptions are documented in [Release Governance](docs/RELEASE_GOVERNANCE.md).
+Run `npm run release:validate` to check a packaged release candidate, including its `distribution-signing.json` evidence when platform signing is required. When checksum-evidence signing is enabled, `npm run release:sign` can use `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE` for the signing key. Public release signing rules and the version-specific unsigned exceptions are documented in [Release Governance](docs/RELEASE_GOVERNANCE.md).
+
+Tagged customer releases ordinarily require Windows Authenticode and macOS Developer ID plus Apple notarization credentials. The guarded unsigned installer exceptions for v1.0.28 and v1.0.29 require their matching repository variables, `AUTOMNIA_ALLOW_UNSIGNED_V1_0_28=true` and `AUTOMNIA_ALLOW_UNSIGNED_V1_0_29=true`, and apply only to those tags. Both updater manifests remain signed; later releases require platform signing.
 
 ## Documentation
 
