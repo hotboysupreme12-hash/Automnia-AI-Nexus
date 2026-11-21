@@ -94,6 +94,8 @@ import {
   patchQueuedCommandConsoleResponse as patchQueuedConsoleResponse,
   refreshQueuedCommandConsolePositions as projectQueuedCommandConsolePositions,
   removeCommandConsoleQueueReceipt,
+  removeCommandConsoleQueueReceipts,
+  clearCommandConsoleQueueReceipts,
   removeCommandConsoleDraftsForAgent,
   clearAllCommandConsoleDrafts,
   upsertCommandConsoleResponse,
@@ -2920,6 +2922,7 @@ export const useNexusStore = create<NexusState>()(
           try {
             const result = await clearAgentTurnSessions()
             if (!result.ok) throw new Error(apiErrorMessage(result.error))
+            removeCommandConsoleQueueReceipts(responseIds)
             set((state) => ({
               agentResponses: state.agentResponses.filter((entry) => !responseIds.has(entry.id)),
               ...(party && state.activePartyIds.join('|') === partyBefore
@@ -4011,6 +4014,7 @@ export const useNexusStore = create<NexusState>()(
         resetSimulation: () => {
           clearAllContinuousTimers()
           clearQueuedCommandConsoleFollowups()
+          clearCommandConsoleQueueReceipts()
           if (commanderCycleRetryTimer) clearTimeout(commanderCycleRetryTimer || undefined)
           commanderCycleRetryTimer = null
           pendingWorkerCycle.clear()
@@ -4029,6 +4033,7 @@ export const useNexusStore = create<NexusState>()(
           clearMissionBackendPollTimer()
           clearAllCommandConsoleDrafts()
           clearQueuedCommandConsoleFollowups()
+          clearCommandConsoleQueueReceipts()
           if (commanderCycleRetryTimer) clearTimeout(commanderCycleRetryTimer)
           commanderCycleRetryTimer = null
           pendingWorkerCycle.clear()

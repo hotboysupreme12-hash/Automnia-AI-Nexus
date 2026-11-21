@@ -64,9 +64,9 @@ Cloud CDN and `updates.automnia.app` can be placed in front later. Keep the path
 
 ## Early distribution without platform certificates
 
-For v1.0.28 only, the tag-triggered public workflow sets `AUTOMNIA_SKIP_PLATFORM_SIGNING=1` and `AUTOMNIA_RELEASE_REQUIRE_SIGNING=0` when repository variable `AUTOMNIA_ALLOW_UNSIGNED_V1_0_28=true` is enabled. This removes Windows Authenticode and Apple Developer ID/notarization prerequisites for that exact tag while preserving installer lifecycle checks and the signed update manifest. Windows and macOS users may see SmartScreen or Gatekeeper warnings and may need to approve the download manually. Future tags continue to require platform signing.
+For v1.0.28 and v1.0.29, the tag-triggered public workflow sets `AUTOMNIA_SKIP_PLATFORM_SIGNING=1` and `AUTOMNIA_RELEASE_REQUIRE_SIGNING=0` only when the corresponding version-specific repository variable (`AUTOMNIA_ALLOW_UNSIGNED_V1_0_28` or `AUTOMNIA_ALLOW_UNSIGNED_V1_0_29`) is enabled for that exact tag. This removes Windows Authenticode and Apple Developer ID/notarization prerequisites for those tags while preserving installer lifecycle checks and the signed update manifest. Windows and macOS users may see SmartScreen or Gatekeeper warnings and may need to approve the download manually. Later tags continue to require platform signing.
 
-When platform certificates become available, remove the v1.0.28-only exception, restore the platform-signing secrets, set `AUTOMNIA_RELEASE_REQUIRE_SIGNING=1`, and re-enable the platform signature evidence gate. Do not replace the update signing key or change the GCS origin as part of that switch.
+When platform certificates become available, remove the version-specific unsigned exceptions, restore the platform-signing secrets, set `AUTOMNIA_RELEASE_REQUIRE_SIGNING=1`, and re-enable the platform signature evidence gate. Do not replace the update signing key or change the GCS origin as part of that switch.
 
 ## Required GitHub configuration
 

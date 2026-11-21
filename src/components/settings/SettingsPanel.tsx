@@ -90,6 +90,44 @@ type RuntimeTargetScope = 'party' | 'selection'
 type PendingConfirmation = 'reset-all' | 'reset-runtime' | 'clear-workspace' | null
 type ChannelDeliveryStatus = {
   checkedAt: string
+  probe: { state: 'live' | 'partial' | 'starting' | 'unavailable'; partial: boolean; eventLoopDegraded: boolean | null }
+  totals: {
+    channels: number
+    configuredAccounts: number
+    connectedAccounts: number
+    attentionChannels: number
+    blockedChannels: number
+    activeRuns: number
+    observedInbound: number
+    observedOutbound: number
+    observedFailures: number
+  }
+  channels: Array<{
+    id: string
+    label: string
+    status: 'connected' | 'attention' | 'blocked' | 'starting' | 'not-configured' | 'unknown'
+    configuredAccounts: number
+    enabledAccounts: number
+    linkedAccounts: number
+    connectedAccounts: number
+    blockedAccounts: number
+    recoveringAccounts: number
+    activeRuns: number
+    issueCount: number
+    lastConnectedAt: string | null
+    lastTransportActivityAt: string | null
+    lastProbeAt: string | null
+    activity: {
+      lastInboundObservedAt: string | null
+      lastOutboundObservedAt: string | null
+      lastObservedAt: string | null
+      inboundObservedCount: number
+      outboundObservedCount: number
+      failureObservedCount: number
+      lastFailureObservedAt: string | null
+    }
+    deliveryEvidence: 'unavailable' | 'send-observed' | 'provider-confirmed' | 'failure-observed'
+  }>
   telegram: {
     status: 'connected' | 'attention' | 'not-configured' | 'unknown'
     configuredAccounts: number
@@ -98,7 +136,7 @@ type ChannelDeliveryStatus = {
   }
   clawTalk: { botConnected: 'pass' | 'warn' | 'fail' | 'unknown'; websocketServer: 'pass' | 'warn' | 'fail' | 'unknown' }
   activity: { lastInboundObservedAt: string | null; lastOutboundObservedAt: string | null; lastObservedAt: string | null }
-  deliveryReceiptStatus: 'unavailable'
+  deliveryReceiptStatus: 'provider-confirmed-when-reported'
 }
 const SETTINGS_SECTIONS: Array<{
   id: SettingsSectionId
@@ -875,9 +913,15 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
 
   const renderTelegram = () => (
     <div className="dui-settings-section" id="settings-section-telegram">
-      <SectionHeader section="telegram" eyebrow="Manage your Telegram experience" />
-      <SettingsCard title="Channel connection and activity" description="Check Telegram and ClawTalk health, plus the latest observed Telegram or ClawTalk traffic. Outbound activity does not confirm delivery.">
+      <SectionHeader section="telegram" eyebrow="Manage your messaging channels" />
+      <SettingsCard title="Channel reliability" description="Live OpenClaw probes cover every configured messaging channel. Connection, recovery, activity, and delivery evidence are shown separately so a successful send is never mistaken for a receipt.">
         <div className="dui-settings-metrics">
+          <div><span>Live probe</span><strong>{channelDeliveryStatus ? channelDeliveryStatus.probe.state.replace(/-/g, ' ') : 'Not checked'}</strong></div>
+          <div><span>Connected accounts</span><strong>{channelDeliveryStatus ? `${channelDeliveryStatus.totals.connectedAccounts}/${channelDeliveryStatus.totals.configuredAccounts}` : 'Not checked'}</strong></div>
+          <div><span>Channels needing attention</span><strong>{channelDeliveryStatus ? String(channelDeliveryStatus.totals.attentionChannels + channelDeliveryStatus.totals.blockedChannels) : 'Not checked'}</strong></div>
+          <div><span>Active channel runs</span><strong>{channelDeliveryStatus ? String(channelDeliveryStatus.totals.activeRuns) : 'Not checked'}</strong></div>
+          <div><span>Observed inbound / outbound</span><strong>{channelDeliveryStatus ? `${channelDeliveryStatus.totals.observedInbound} / ${channelDeliveryStatus.totals.observedOutbound}` : 'Not checked'}</strong></div>
+          <div><span>Observed delivery failures</span><strong>{channelDeliveryStatus ? String(channelDeliveryStatus.totals.observedFailures) : 'Not checked'}</strong></div>
           <div><span>Telegram connection</span><strong>{channelDeliveryStatus?.telegram.status || 'Not checked'}</strong></div>
           <div><span>Telegram accounts</span><strong>{channelDeliveryStatus ? `${channelDeliveryStatus.telegram.connectedAccounts}/${channelDeliveryStatus.telegram.configuredAccounts} connected` : 'Not checked'}</strong></div>
           <div><span>Telegram pairing policy</span><strong>{{ pairing: 'Approve new users', allowlist: 'Approved users only', open: 'Anyone', disabled: 'Disabled' }[telegramSettings.dmPolicy]}</strong></div>
@@ -886,9 +930,25 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
           <div><span>ClawTalk WebSocket</span><strong>{channelDeliveryStatus?.clawTalk.websocketServer || 'Not checked'}</strong></div>
           <div><span>Last inbound observed</span><strong>{channelDeliveryStatus?.activity.lastInboundObservedAt ? new Date(channelDeliveryStatus.activity.lastInboundObservedAt).toLocaleString() : 'None observed'}</strong></div>
           <div><span>Last outbound observed</span><strong>{channelDeliveryStatus?.activity.lastOutboundObservedAt ? new Date(channelDeliveryStatus.activity.lastOutboundObservedAt).toLocaleString() : 'None observed'}</strong></div>
-          <div><span>Delivery receipt</span><strong>{channelDeliveryStatus ? 'Unavailable from current adapter' : 'Not checked'}</strong></div>
+          <div><span>Delivery receipts</span><strong>{channelDeliveryStatus ? 'Shown only when confirmed' : 'Not checked'}</strong></div>
         </div>
-        <p className="text-sm text-slate-400">Pending pairing requests are not listed here because OpenClaw’s list command also prunes expired requests. Review them in OpenClaw’s channel access controls. Activity timestamps come from local logs and are not provider delivery receipts.</p>
+        {channelDeliveryStatus && <div className="dui-settings-metrics" aria-label="Configured channel reliability details" style={{ marginTop: '0.85rem' }}>
+          {channelDeliveryStatus.channels.length > 0
+            ? channelDeliveryStatus.channels.map((channel) => <div key={channel.id} data-channel-status={channel.status}>
+              <span>{channel.label}</span>
+              <strong>{channel.status.replace(/-/g, ' ')} · {channel.connectedAccounts}/{channel.configuredAccounts} connected</strong>
+              <small>{[
+                channel.recoveringAccounts ? `${channel.recoveringAccounts} recovering` : '',
+                channel.blockedAccounts ? `${channel.blockedAccounts} blocked` : '',
+                channel.activeRuns ? `${channel.activeRuns} active run${channel.activeRuns === 1 ? '' : 's'}` : '',
+                channel.issueCount ? `${channel.issueCount} reported issue${channel.issueCount === 1 ? '' : 's'}` : '',
+                `delivery: ${channel.deliveryEvidence.replace(/-/g, ' ')}`,
+                channel.lastProbeAt ? `checked ${new Date(channel.lastProbeAt).toLocaleString()}` : '',
+              ].filter(Boolean).join(' · ')}</small>
+            </div>)
+            : <div><span>Configured channels</span><strong>None found</strong><small>Connect a channel in Plugins, then check again.</small></div>}
+        </div>}
+        <p className="text-sm text-slate-400">Pending pairing requests are not listed because OpenClaw’s list command can prune expired requests. Account names, targets, message bodies, secrets, and diagnostic text never appear here. Activity is local observation; only an explicit provider confirmation is labeled as a receipt.</p>
         <div className="dui-settings-actions">
           <button type="button" className="is-primary" onClick={() => void refreshChannelDeliveryStatus()} disabled={channelDeliveryLoading}>{channelDeliveryLoading ? 'Checking channels…' : 'Check channel status'}</button>
           {channelDeliveryStatus?.checkedAt && <span className="text-xs text-slate-400">Checked {new Date(channelDeliveryStatus.checkedAt).toLocaleString()}</span>}
@@ -898,6 +958,11 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
       <SettingsCard title="Access and commands" description="Choose who can contact your bot and which commands are available.">
         <Field label="Command menu" hint="Show Automnia commands such as /agents in Telegram.">
           <select value={telegramSettings.nativeCommands} onChange={(event) => updateTelegramDraft('nativeCommands', event.target.value as TelegramSettings['nativeCommands'])}>
+            <option value="auto">Auto</option><option value="on">On</option><option value="off">Off</option>
+          </select>
+        </Field>
+        <Field label="Native skill commands" hint="Choose whether OpenClaw skills can register their Telegram commands alongside Automnia’s built-ins.">
+          <select value={telegramSettings.nativeSkills} onChange={(event) => updateTelegramDraft('nativeSkills', event.target.value as TelegramSettings['nativeSkills'])}>
             <option value="auto">Auto</option><option value="on">On</option><option value="off">Off</option>
           </select>
         </Field>
@@ -933,6 +998,18 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
           </select>
         </Field>
         <ToggleField label="Rich formatting" hint="Turn off if messages do not display correctly on an older Telegram app." checked={telegramSettings.richMessages} onChange={(value) => updateTelegramDraft('richMessages', value)} />
+        <ToggleField label="Message widgets" hint="Opt in to Telegram’s newer private-chat widgets. Keep off for older Telegram clients." checked={telegramSettings.widgets} onChange={(value) => updateTelegramDraft('widgets', value)} />
+        <Field label="Streaming chunking" hint="Choose whether long live updates split by length or at line boundaries.">
+          <select value={telegramSettings.streamChunkMode} onChange={(event) => updateTelegramDraft('streamChunkMode', event.target.value as TelegramSettings['streamChunkMode'])}>
+            <option value="length">By length</option><option value="newline">At line breaks</option>
+          </select>
+        </Field>
+        <Field label="Markdown tables" hint="Choose a compact table representation that works well in Telegram.">
+          <select value={telegramSettings.markdownTableMode} onChange={(event) => updateTelegramDraft('markdownTableMode', event.target.value as TelegramSettings['markdownTableMode'])}>
+            <option value="off">Plain text</option><option value="bullets">Bullets</option><option value="code">Code block</option><option value="block">Table block</option>
+          </select>
+        </Field>
+        <Field label="Response prefix" hint="Optional short label added before each Automnia response. Control characters are removed."><input maxLength={200} value={telegramSettings.responsePrefix} onChange={(event) => updateTelegramDraft('responsePrefix', event.target.value)} placeholder="Optional" /></Field>
       </SettingsCard>
 
       <SettingsCard title="Chat history and media" description="Choose how much chat history and media Automnia can use.">
@@ -945,14 +1022,31 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
             <option value="always">Every time</option><option value="once">Once, then pause</option><option value="silent">Do not send</option>
           </select>
         </Field>
+        <ToggleField label="Silent problem notifications" hint="Send Telegram’s error replies without a notification sound." checked={telegramSettings.silentErrorReplies} onChange={(value) => updateTelegramDraft('silentErrorReplies', value)} />
+      </SettingsCard>
+
+      <SettingsCard title="Network resilience" description="Tune safe Telegram network behavior without weakening private-network protections.">
+        <Field label="Address-family selection" hint="Let Node automatically select the best address family, or turn it off for a known network issue.">
+          <select value={telegramSettings.networkAutoSelectFamily} onChange={(event) => updateTelegramDraft('networkAutoSelectFamily', event.target.value as TelegramSettings['networkAutoSelectFamily'])}>
+            <option value="on">Automatic selection on</option><option value="off">Automatic selection off</option>
+          </select>
+        </Field>
+        <Field label="DNS address order" hint="IPv4-first avoids common IPv6 Telegram connectivity failures; verbatim preserves the resolver’s order.">
+          <select value={telegramSettings.networkDnsResultOrder} onChange={(event) => updateTelegramDraft('networkDnsResultOrder', event.target.value as TelegramSettings['networkDnsResultOrder'])}>
+            <option value="ipv4first">IPv4 first</option><option value="verbatim">Resolver order</option>
+          </select>
+        </Field>
       </SettingsCard>
 
       <SettingsCard title="Actions and reactions" description="Choose what Automnia can do in your Telegram chats.">
         <ToggleField label="Send separate messages" hint="Allow Automnia to start a new Telegram message." checked={telegramSettings.sendMessage} onChange={(value) => updateTelegramDraft('sendMessage', value)} />
+        <ToggleField label="Edit Automnia messages" hint="Allow Automnia to update a message it previously sent." checked={telegramSettings.editMessage} onChange={(value) => updateTelegramDraft('editMessage', value)} />
         <ToggleField label="Delete messages" hint="Allow Automnia to remove Telegram messages." checked={telegramSettings.deleteMessage} onChange={(value) => updateTelegramDraft('deleteMessage', value)} />
         <ToggleField label="Add or remove reactions" hint="Allow Automnia to manage emoji reactions." checked={telegramSettings.reactions} onChange={(value) => updateTelegramDraft('reactions', value)} />
         <ToggleField label="Send stickers" hint="Allow Automnia to find and send stickers." checked={telegramSettings.sticker} onChange={(value) => updateTelegramDraft('sticker', value)} />
         <ToggleField label="Create polls" hint="Sending messages must also be enabled." checked={telegramSettings.poll} onChange={(value) => updateTelegramDraft('poll', value)} />
+        <ToggleField label="Create forum topics" hint="Allow Automnia to create a topic in Telegram forum groups." checked={telegramSettings.createForumTopic} onChange={(value) => updateTelegramDraft('createForumTopic', value)} />
+        <ToggleField label="Edit forum topics" hint="Allow Automnia to rename a forum topic or change its icon." checked={telegramSettings.editForumTopic} onChange={(value) => updateTelegramDraft('editForumTopic', value)} />
         <Field label="Reaction notifications" hint="Choose which reactions Automnia should notice.">
           <select value={telegramSettings.reactionNotifications} onChange={(event) => updateTelegramDraft('reactionNotifications', event.target.value as TelegramSettings['reactionNotifications'])}>
             <option value="own">Own messages</option><option value="all">All messages</option><option value="off">Off</option>
@@ -968,6 +1062,14 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
             <option value="group-mentions">Group mentions</option><option value="direct">Direct messages</option><option value="group-all">All group messages</option><option value="all">All chats</option><option value="off">Off</option>
           </select>
         </Field>
+      </SettingsCard>
+
+      <SettingsCard title="Groups and forum topics" description="Control how Automnia behaves when it joins a group or receives a direct-message topic.">
+        <ToggleField label="Introduce Automnia on group join" hint="Post a brief room-specific introduction when the bot joins a Telegram group." checked={telegramSettings.joinIntro} onChange={(value) => updateTelegramDraft('joinIntro', value)} />
+        <ToggleField label="Automatic DM topic labels" hint="Let Automnia give a direct-message forum topic a useful name after its first message." checked={telegramSettings.autoTopicLabel} onChange={(value) => updateTelegramDraft('autoTopicLabel', value)} />
+      </SettingsCard>
+
+      <SettingsCard title="Save Telegram settings" description="Changes are validated by OpenClaw, then the managed Gateway reloads the Telegram channel.">
         <div className="dui-settings-actions">
           <button type="button" onClick={() => void loadTelegramFromGateway()} disabled={telegramLoading || telegramSaving}>{telegramLoading ? 'Refreshing…' : 'Refresh settings'}</button>
           <button type="button" onClick={() => { const next = normalizeTelegramSettings(DEFAULT_TELEGRAM_SETTINGS); setTelegramSettings(next); saveTelegramSettings(next); void applyTelegramSettings(next) }} disabled={telegramLoading || telegramSaving}>{telegramSaving ? 'Applying…' : 'Restore safe defaults'}</button>

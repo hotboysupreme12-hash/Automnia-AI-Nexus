@@ -110,6 +110,7 @@ import {
   isAutomniaFrontierModelId,
   isAutomniaProModelId,
   isAutomniaRelayModelId,
+  migrateRetiredAutomniaChannelModels,
 } from './services/license/creditsOnlyModelPolicy'
 import { createAccountAuthService } from './services/auth/accountAuthService'
 import { automniaCloudRouteBaseUrl } from './config/automniaCloud'
@@ -769,6 +770,7 @@ function classifyFailureKind(text: string, status?: OpenClawRunStatus | null): F
   if (status === 'aborted' || /\b(aborted|aborterror|signal is aborted|operation was aborted)\b/.test(clean)) return 'aborted'
   if (status === 'interrupted' || /\b(control center restarted|observer interrupted|runtime observer lost)\b/.test(clean)) return 'interrupted'
   if (/\b(rate limit|too many requests|quota exceeded|http 429|status 429|429)\b/.test(clean)) return 'rate_limit'
+  if (/hosted_model_access_denied|hosted_billing_eligibility|eligible paid billing account in a supported region|\b424\b.{0,240}\bautomnia cloud cannot access the upstream model\b|\bautomnia cloud cannot access the upstream model\b/.test(clean)) return 'provider_forbidden'
   if (/\b(openclaw runtime is unavailable|openclaw cli is unavailable|spawn openclaw enoent|openclaw.*enoent|openclaw.*not recognized|not recognized as an internal or external command|openclaw: command not found|command not found: openclaw)\b/.test(clean)) return 'runtime_unavailable'
   if (/\b(auth expired|token expired|expired credential|refresh token|oauth.*expired|invalid_grant)\b/.test(clean)) return 'auth_expired'
   if (/\b(missing auth|no usable|unauthorized|forbidden|401|403|api key missing|credential is missing|not authenticated)\b/.test(clean)) return 'auth_missing'
@@ -9878,6 +9880,7 @@ const AUTOMNIA_OPENCLAW_PROVIDER_ID = AUTOMNIA_CREDITS_PROVIDER_ID
 const AUTOMNIA_OPENCLAW_MODEL = AUTOMNIA_CREDITS_MODEL_ID
 const AUTOMNIA_HOSTED_MODEL_IDS = Array.from(new Set([
   ...AUTOMNIA_RELAY_MODEL_IDS,
+  'automnia-cloud/gemini-4-argon',
   ...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS,
 ]))
 const AUTOMNIA_OPENCLAW_CONTEXT_TOKENS = (() => {
@@ -9914,6 +9917,7 @@ function modelSelectionForActiveBillingRoute(selection: OpenClawModelSelection) 
   const creditsOnly = licenseService.isUsagePriorityLocked()
   const hasExplicitFallbacks = Array.isArray(selection?.fallbacks)
   const requestedPrimary = typeof selection?.primary === 'string' ? selection.primary : ''
+  const canonicalPrimary = canonicalAgentModelId(requestedPrimary)
   const primary = !frontierAllowed && (
     isAutomniaFrontierModelId(canonicalAgentModelId(requestedPrimary))
     || isAutomniaProModelId(canonicalAgentModelId(requestedPrimary))
@@ -9921,15 +9925,14 @@ function modelSelectionForActiveBillingRoute(selection: OpenClawModelSelection) 
     ? AUTOMNIA_OPENCLAW_MODEL
     : creditsOnly && !isAutomniaCreditsModelId(canonicalAgentModelId(requestedPrimary))
       ? AUTOMNIA_OPENCLAW_MODEL
-      : requestedPrimary
+      : canonicalPrimary
   const fallbacks = uniqueStrings(
     ...(Array.isArray(selection?.fallbacks) ? selection.fallbacks : []),
-  ).filter((modelId) => {
+  ).map((modelId) => canonicalAgentModelId(modelId)).filter((modelId) => {
     const canonical = canonicalAgentModelId(modelId)
     if (!frontierAllowed && (isAutomniaFrontierModelId(canonical) || isAutomniaProModelId(canonical))) return false
     return !creditsOnly || isAutomniaCreditsModelId(canonical)
   }).filter((modelId) => modelId !== primary)
-  if (!creditsOnly && frontierAllowed && primary === requestedPrimary) return selection
   return {
     primary: primary || AUTOMNIA_OPENCLAW_MODEL,
     ...(fallbacks.length || hasExplicitFallbacks ? { fallbacks } : {}),
@@ -10099,6 +10102,9 @@ function enforceActiveBillingRouteModelOrder(config: OpenClawConfigFile) {
     else delete agent.model
   }
   setTelegramBillingDefaultModel(config, telegramBillingModelForConfig(config, defaultSelection?.primary))
+  if (config.channels?.modelByChannel) {
+    config.channels.modelByChannel = migrateRetiredAutomniaChannelModels(config.channels.modelByChannel)
+  }
 
   // A BYOK policy must not leave an Automnia alias or provider definition in
   // the live config for a later generic config write to resurrect.
@@ -10249,10 +10255,10 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
         // The relay translates the request for the selected Vertex model and
         // never sends a direct-provider request.
         reasoning: true,
-        thinkingLevelMap: bareModelId === 'gemini-4-hydrogen'
+        thinkingLevelMap: bareModelId === 'gemini-4-hydrogen' || bareModelId === 'gemini-4-neon'
           ? AUTOMNIA_GEMINI_4_HYDROGEN_OPENCLAW_THINKING_LEVEL_MAP
           : AUTOMNIA_GEMINI_4_OPENCLAW_THINKING_LEVEL_MAP,
-        compat: bareModelId === 'gemini-4-hydrogen'
+        compat: bareModelId === 'gemini-4-hydrogen' || bareModelId === 'gemini-4-neon'
           ? AUTOMNIA_GEMINI_4_HYDROGEN_OPENAI_REASONING_COMPAT
           : AUTOMNIA_GEMINI_4_OPENAI_REASONING_COMPAT,
         input: ['text', 'image'],
@@ -11325,7 +11331,7 @@ async function sendClawTalkSmsWithRetry(client, logger, params) {
 
 function patchedTelegramBotRuntimeSource(source: string) {
   let next = source
-  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 21;'
+  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 22;'
   const routingHelperPattern = /var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = \d+;[\s\S]*?\/\/#endregion telegram-agent-routing-patch/
   if (routingHelperPattern.test(next)) {
     next = next.replace(routingHelperPattern, TELEGRAM_AGENT_ROUTING_HELPER)
@@ -13864,7 +13870,7 @@ async function runOpenClawWithManagedSkillsWorkspace(args: string[], timeoutMs =
   const model = defaults?.model || defaultAgentModelSelection()
   // Managed skill commands run against a standalone config. Keep that config
   // on OpenClaw's current schema even while Automnia retains compatibility
-  // fields in its in-memory config model. OpenClaw 2026.11.5 rejects
+  // fields in its in-memory config model. Some OpenClaw versions reject
   // skills.load.watchDebounceMs and agents.list before it can run an install.
   const skillsLoad = { ...(config.skills?.load || {}) }
   delete skillsLoad.watchDebounceMs

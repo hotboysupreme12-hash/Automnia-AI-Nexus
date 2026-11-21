@@ -290,6 +290,74 @@ test('gateway agent turn service refreshes hosted billing access and retries a r
   assert.equal(events.some((entry) => entry.data.retry === 'billing-access-recovery'), true)
 })
 
+test('gateway agent turn service does not replay a hosted turn for a 424 upstream model access error', async () => {
+  const events: Array<{ event: string; data: Record<string, unknown> }> = []
+  const sessions = new Map<string, string>()
+  let reconciliations = 0
+  let gatewayTurns = 0
+  const upstreamFailure = 'All models failed (2): automnia-cloud/gemini-4-hydrogen: 424 Automnia Cloud cannot access the upstream model. Check the service billing account, region, and model permissions. (server_error) | automnia-cloud/gemini-3.8-flash: 424 Automnia Cloud cannot access the upstream model. Check the service billing account, region, and model permissions. (server_error)'
+
+  const service = createGatewayAgentTurnService({
+    gatewayHttpPort: 18789,
+    openClawAgentTurnTimeoutFloorSeconds: 60,
+    trafficGate: () => ({ messageTrafficAllowed: true, blockMessage: null }),
+    reconcileBillingAccess: async () => {
+      reconciliations += 1
+      return true
+    },
+    isValidAgentId: (agentId) => agentId === 'agent-alpha',
+    isRetiredAgentId: () => false,
+    streamObserver: () => ({ emit: (event, data) => events.push({ event, data }) }),
+    ensureOpenclawAgentRunConfigDefaults: async () => undefined,
+    readOpenclawConfig: async () => ({}),
+    ensureAgentRuntimeHealthPreflight: async () => undefined,
+    ensureAgentSandboxCompatibleWithHost: async () => undefined,
+    startGatewayHealthMonitor: () => undefined,
+    ensureGatewayRunning: async () => undefined,
+    isGatewayHealthy: async () => true,
+    isClawTalkSetupIntentMessage: () => false,
+    isClawTalkIntentMessage: () => false,
+    buildClawTalkRuntimeInstruction: (message) => message,
+    readAgentPrimaryModelIdSync: () => 'automnia-cloud/gemini-4-hydrogen',
+    isGoogleGeminiModelId: () => false,
+    thinkingForOpenClawRuntimeModel: (_modelId, thinking) => thinking,
+    resolveEffectiveAgentFastMode: async () => 'auto',
+    resolveEffectiveAgentWorkTimeoutSeconds: async () => 60,
+    resolveAgentRunContext: async () => ({
+      executionWorkspace: 'C:/workspace',
+      doctrineWorkspace: 'C:/workspace/.openclaw/agents/agent-alpha',
+    }),
+    agentTurnSessionScope: (agentId, key) => `${agentId}:${key || 'default'}`,
+    agentTurnSessions: sessions,
+    deleteProviderConversationHistory: () => undefined,
+    resolveFilenameHintsForMessage: async (message) => ({ message }),
+    getPartyMembers: async () => [{ id: 'agent-alpha', name: 'Ada' }],
+    composeAgentDoctrinePrompt: (_agentId, message) => message,
+    runCwdForContext: (context) => context.executionWorkspace,
+    agentWorkTimeoutWrapperMs: (seconds) => seconds * 1000,
+    appendAgentPromptDump: async () => undefined,
+    runGatewayChatTurn: async () => {
+      gatewayTurns += 1
+      return { stdout: '', stderr: upstreamFailure, code: 1 }
+    },
+    extractAgentReply: (_stdout, stderr) => stderr,
+  })
+
+  const result = await service.runGatewayAgentTurnForStream({
+    agent: 'agent-alpha',
+    message: 'hello',
+    sessionKey: 'console',
+  }, 'observer-1', createAbortSignal(), {
+    route: '/api/openclaw/agent-turn/stream:command-console-direct',
+    note: 'upstream access regression',
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(gatewayTurns, 1)
+  assert.equal(reconciliations, 0)
+  assert.equal(events.some((entry) => entry.data.retry === 'billing-access-recovery'), false)
+})
+
 test('buffered agent turn service dispatches forced runtime turns directly to Gateway chat', async () => {
   const events: Array<{ event: string; data: Record<string, unknown> }> = []
   let disposed = false

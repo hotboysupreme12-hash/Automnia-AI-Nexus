@@ -111,6 +111,7 @@ assert.match(service, /record\?\.mode === 'byok'\s*&&\s*pooledCreditBalance\(rec
 assert.match(service, /tokenBalanceForSource\(record\) \+ grant/, 'upgrades must add new tokens without resetting the current wallet')
 assert.match(service, /for \(const candidate of \[record, \.\.\.candidates\]\)/, 'the canonical upgraded entitlement must remain first in wallet allocation')
 assert.match(service, /creditSourcesFor\(canonical\)/, 'relay deductions must use every non-revoked wallet source')
+assert.match(service, /targetModel === 'gemini-4-neon'\s*&&\s*!proModelAllowedForTier\(access\.record\.tier\)/, 'hosted Neon must retain the Pro entitlement gate')
 
 const servicePackage = JSON.parse(readFileSync(path.join(infra, 'service', 'package.json'), 'utf8'))
 for (const dependency of ['@google-cloud/firestore', 'express', 'google-auth-library']) assert.ok(servicePackage.dependencies[dependency])
@@ -127,7 +128,7 @@ const controlPlane = readFileSync(path.join(root, 'server', 'controlPlane.ts'), 
 assert.match(licenseService, /DEFAULT_LICENSE_API_URL = AUTOMNIA_PUBLIC_CLOUD_URL/)
 assert.doesNotMatch(controlPlane, /streamAutomniaCloudRelay|AUTOMNIA_CLOUD_RELAY_URL/)
 assert.match(controlPlane, /AUTOMNIA_OPENCLAW_PROVIDER_ID = AUTOMNIA_CREDITS_PROVIDER_ID/)
-assert.match(controlPlane, /reasoning: true,\s*thinkingLevelMap: bareModelId === 'gemini-4-hydrogen'\s*\? AUTOMNIA_GEMINI_4_HYDROGEN_OPENCLAW_THINKING_LEVEL_MAP\s*:/s, 'Automnia Gemini must expose the supported Gemini 4 thinking levels to OpenClaw')
+assert.match(controlPlane, /reasoning: true,\s*thinkingLevelMap: bareModelId === 'gemini-4-hydrogen'\s*\|\|\s*bareModelId === 'gemini-4-neon'\s*\? AUTOMNIA_GEMINI_4_HYDROGEN_OPENCLAW_THINKING_LEVEL_MAP\s*:/s, 'Hydrogen and Neon must expose their extended thinking levels to OpenClaw')
 assert.match(controlPlane, /synchronizeOpenClawBillingRouteForAgentRun/, 'agent turns must repair a stale hosted Gemini thinking profile before dispatch')
 assert.match(licenseService, /AUTOMNIA_PUBLIC_CLOUD_URL/)
 assert.match(serverCloudConfig, /api\.automnia\.app/)

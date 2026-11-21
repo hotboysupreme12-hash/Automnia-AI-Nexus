@@ -153,11 +153,11 @@ const ELECTRON_E2E = process.env.AUTOMNIA_ELECTRON_E2E === '1'
 const LINUX_E2E_DISABLE_HARDWARE_ACCELERATION = process.platform === 'linux' &&
   ELECTRON_E2E &&
   process.env.AUTOMNIA_ELECTRON_E2E_NO_SANDBOX === '1'
-// Start a fresh desktop profile about three zoom-out steps below the previous
-// 80% default. Once the user changes zoom, the saved preference still wins.
+// Use the design's intended scale for new profiles. A saved user preference
+// still takes precedence, including zoom chosen for accessibility.
 const DEFAULT_RENDERER_ZOOM_FACTOR = Math.min(
   1,
-  Math.max(0.5, Number(process.env.AUTOMNIA_DEFAULT_ZOOM_FACTOR || 0.6) || 0.6),
+  Math.max(0.5, Number(process.env.AUTOMNIA_DEFAULT_ZOOM_FACTOR || 1) || 1),
 )
 const ELECTRON_E2E_AUTO_QUIT_MS = Math.max(0, Number(process.env.AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS || 0) || 0)
 const ELECTRON_E2E_ALLOW_PARALLEL = ELECTRON_E2E && process.env.AUTOMNIA_ELECTRON_E2E_ALLOW_PARALLEL === '1'

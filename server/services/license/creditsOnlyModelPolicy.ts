@@ -1,8 +1,23 @@
 export const AUTOMNIA_CREDITS_PROVIDER_ID = 'automnia-cloud'
 export const AUTOMNIA_SWIFT_MODEL_ID = `${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-3.8-flash`
 export const AUTOMNIA_CREDITS_MODEL_ID = `${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-4-hydrogen`
-export const AUTOMNIA_PRO_MODEL_ID = `${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-4-argon`
+export const AUTOMNIA_PRO_MODEL_ID = `${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-4-neon`
 export const AUTOMNIA_FRONTIER_MODEL_ID = `${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-4-carbon`
+
+/** Migrate only the retired Automnia-hosted Argon ID, never direct providers. */
+export function migrateRetiredAutomniaModelId(modelId: string) {
+  return /^automnia-cloud\/gemini-4-argon$/i.test(modelId.trim()) ? AUTOMNIA_CREDITS_MODEL_ID : modelId
+}
+
+export function migrateRetiredAutomniaChannelModels(
+  channels: Record<string, Record<string, string>> | undefined,
+) {
+  if (!channels) return channels
+  return Object.fromEntries(Object.entries(channels).map(([channel, models]) => [
+    channel,
+    Object.fromEntries(Object.entries(models).map(([key, model]) => [key, migrateRetiredAutomniaModelId(model)])),
+  ]))
+}
 
 // The relay can serve these named Automnia tiers for accounts using hosted
 // credits. Credits users may choose any of the named Automnia tiers; the

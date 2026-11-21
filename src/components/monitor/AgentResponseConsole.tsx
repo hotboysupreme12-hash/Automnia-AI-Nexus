@@ -9,6 +9,7 @@ import { ResponseMarkdown } from './ResponseMarkdown'
 import { QueuedFollowupControls } from './QueuedFollowupControls'
 import { apiErrorMessage, apiRequest } from '../../api/client'
 import { isUploadResponse } from '../../api/responseValidation'
+import { compressAttachmentImage } from './attachmentImage'
 import { abortRuntimeRun, restartGatewayRuntime, useRuntimeSummaryStatus } from '../../hooks/useRuntimeStatus'
 import type { GatewayStabilityStatus, RuntimeRun, RuntimeStatus } from '../../hooks/useRuntimeStatus'
 import {
@@ -32,7 +33,6 @@ import { failureRecoveryForKind, type FailureRecovery, type FailureRecoveryActio
 import { createSseFrameParser } from '../../utils/sseStream'
 import { automniaRelayModelLabel, resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
 import { formatAutomniaCredits } from '../../utils/creditDisplay'
-import { compressImageForUpload } from '../../utils/imageCompression'
 import {
   decodeAudioToMono16Khz,
   friendlyMicrophoneError,
@@ -68,6 +68,7 @@ const AUTOMNIA_RUNTIME_MARK_SRC = '/brand/automnia-ai-nexus-logo-transparent-cro
 const MESSAGE_RENDER_LIMIT = 60
 const PROMPT_HISTORY_STORAGE_KEY = 'automnia:command-console-prompt-history'
 const MAX_PROMPT_HISTORY = 80
+const DRAFTS_DISPOSED = 'console-drafts-disposed'
 const LANE_DIAGNOSTIC_WARN_MS = 10 * 60 * 1000
 const LANE_DIAGNOSTIC_STALLED_MS = 30 * 60 * 1000
 const LANE_DIAGNOSTIC_TICK_MS = 30 * 1000
@@ -668,6 +669,9 @@ const ResponseMessage = memo(function ResponseMessage({
         <div className="dy-command-message-identity">
           <div className="dy-command-message-title-row">
             <span className="dy-command-agent-name" title={displayName}>{displayName}</span>
+            {entry.transport === 'command-console-queue' && !entry.streaming && (
+              <span className="dy-command-agent-role">System queue notice</span>
+            )}
             <Badge
               className="dy-command-message-status"
               data-state={status}
@@ -690,7 +694,7 @@ const ResponseMessage = memo(function ResponseMessage({
         <div className="dy-command-message-runtime">
           {!entry.streaming && durationLabel && (
             <span className="dy-command-message-runtime-chip" title={runtimeTitle || 'Total runtime'}>
-              <span>Runtime</span>
+              <span>{entry.transport === 'command-console-queue' ? 'Queue time' : 'Runtime'}</span>
               <strong>{durationLabel}</strong>
             </span>
           )}
@@ -979,12 +983,11 @@ export function AgentResponseConsole() {
     && license?.usagePriority !== 'byok_only'
 
   const [attachmentDrafts, setAttachmentDrafts] = useRememberedState<Record<string, PendingAttachment[]>>('console-attachment-drafts', {})
-  const uploadControllers = useRef(new Set<AbortController>())
+  const uploadController = useRef<AbortController | null>(null)
   useEffect(() => {
-    const controllers = uploadControllers.current
-    const clear = () => { controllers.forEach((controller) => controller.abort()); setAttachmentDrafts({}) }
+    const clear = () => { uploadController.current?.abort(DRAFTS_DISPOSED); setAttachmentDrafts({}) }
     window.addEventListener('automnia:console-drafts-cleared', clear)
-    return () => { controllers.forEach((controller) => controller.abort()); window.removeEventListener('automnia:console-drafts-cleared', clear) }
+    return () => { uploadController.current?.abort(DRAFTS_DISPOSED); window.removeEventListener('automnia:console-drafts-cleared', clear) }
   }, [setAttachmentDrafts])
   const [uploadError, setUploadError] = useState('')
   const [isUploading, setIsUploading] = useState(false)
@@ -1874,33 +1877,30 @@ export function AgentResponseConsole() {
     setUploadError('')
   }
 
-  const uploadAttachment = async (file: File): Promise<AgentTurnAttachment> => {
-    const controller = new AbortController()
-    uploadControllers.current.add(controller)
-    try {
-    const uploadFile = await compressImageForUpload(file, controller.signal)
-    controller.signal.throwIfAborted()
+  const uploadAttachment = async (file: File, signal: AbortSignal): Promise<AgentTurnAttachment> => {
+    const uploadFile = await compressAttachmentImage(file, signal)
+    signal.throwIfAborted()
     const result = await apiRequest<CommandConsoleUploadPayload>(`/api/files/upload?name=${encodeURIComponent(uploadFile.name)}&mimeType=${encodeURIComponent(uploadFile.type || 'application/octet-stream')}`, {
       validate: isUploadResponse,
       method: 'POST',
       timeoutMs: 90_000,
-      signal: controller.signal,
+      signal,
       headers: {
         'Content-Type': 'application/octet-stream',
         'X-File-Type': uploadFile.type || 'application/octet-stream',
       },
       body: uploadFile,
     })
+    signal.throwIfAborted()
     if (!result.ok) throw new Error(apiErrorMessage(result.error))
     if (!result.data.attachment) throw new Error('Upload finished without an attachment record.')
     return result.data.attachment
-    } finally { uploadControllers.current.delete(controller) }
   }
 
   const handleSend = async () => {
     const draftPrompt = prompt
     if (!draftPrompt.trim() && !uploadedAttachments.length) return
-    if (isUploading) return
+    if (uploadController.current) return
     setUploadError('')
     setMessageActionError('')
     if (voiceBusy) {
@@ -1921,32 +1921,41 @@ export function AgentResponseConsole() {
       if (lastSendAttemptRef.current === sendFingerprint) lastSendAttemptRef.current = ''
     }, 1_500)
 
+    const controller = new AbortController()
+    uploadController.current = controller
     setIsUploading(true)
     const attachments: AgentTurnAttachment[] = []
     try {
       for (const entry of uploadedAttachments) {
         try {
-          const uploaded = entry.uploaded || await uploadAttachment(entry.file)
+          controller.signal.throwIfAborted()
+          const uploaded = entry.uploaded || await uploadAttachment(entry.file, controller.signal)
           attachments.push(uploaded)
           setUploadedAttachments((current) => current.map((item) => item.id === entry.id ? { ...item, uploaded, error: undefined } : item))
         } catch (error) {
-          setUploadedAttachments((current) => current.map((item) => item.id === entry.id ? { ...item, error: String(error) } : item))
+          if (!controller.signal.aborted) setUploadedAttachments((current) => current.map((item) => item.id === entry.id ? { ...item, error: String(error) } : item))
           throw error
         }
       }
       if (activeDraftRoute.current !== draftRouteKey) {
         setUploadError('Recipients changed during upload. Your files are saved with the original draft; return to that conversation to send them.')
-        setIsUploading(false)
+        if (lastSendAttemptRef.current === sendFingerprint) lastSendAttemptRef.current = ''
+        return
+      }
+      if (promptRef.current !== draftPrompt) {
+        setUploadError('Your message changed during upload. Review it and send when ready.')
+        if (lastSendAttemptRef.current === sendFingerprint) lastSendAttemptRef.current = ''
         return
       }
     } catch (error) {
-      setUploadError(String(error))
-      setIsUploading(false)
+      if (controller.signal.reason !== DRAFTS_DISPOSED) setUploadError(controller.signal.aborted ? 'Upload canceled. Your draft is still available.' : String(error))
       if (lastSendAttemptRef.current === sendFingerprint) lastSendAttemptRef.current = ''
       return
+    } finally {
+      if (uploadController.current === controller) uploadController.current = null
+      setIsUploading(false)
     }
     const msg = buildMessage(draftPrompt, attachments)
-    setIsUploading(false)
     stickToBottomRef.current = true
     if (selectedTargets.length || partyTargetIds.length) rememberPrompt(draftPrompt)
     if (selectedTargets.length === 1) {
@@ -2005,7 +2014,7 @@ export function AgentResponseConsole() {
         continue
       }
       totalBytes += file.size
-      accepted.push({ id: crypto.randomUUID(), file, preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : '', kind: pendingAttachmentKind(file) })
+      accepted.push({ id: crypto.randomUUID(), file, preview: '', kind: pendingAttachmentKind(file) })
     }
     setUploadedAttachments(accepted)
   }
@@ -2023,15 +2032,22 @@ export function AgentResponseConsole() {
   }
 
   const retryAttachment = async (entry: PendingAttachment) => {
-    if (isUploading) return
+    if (uploadController.current) return
+    const controller = new AbortController()
+    uploadController.current = controller
     setIsUploading(true)
     try {
-      const uploaded = await uploadAttachment(entry.file)
+      const uploaded = await uploadAttachment(entry.file, controller.signal)
       setUploadedAttachments((current) => current.map((item) => item.id === entry.id ? { ...item, uploaded, error: undefined } : item))
       setUploadError('')
     } catch (error) {
-      setUploadedAttachments((current) => current.map((item) => item.id === entry.id ? { ...item, error: String(error) } : item))
-    } finally { setIsUploading(false) }
+      if (controller.signal.reason === DRAFTS_DISPOSED) return
+      if (controller.signal.aborted) setUploadError('Upload canceled. Your draft is still available.')
+      else setUploadedAttachments((current) => current.map((item) => item.id === entry.id ? { ...item, error: String(error) } : item))
+    } finally {
+      if (uploadController.current === controller) uploadController.current = null
+      setIsUploading(false)
+    }
   }
 
   const stopAuthoritativeRuntimeRun = useCallback(async (runId: string) => {
@@ -2785,7 +2801,6 @@ export function AgentResponseConsole() {
               ref={textareaRef}
               autoFocus={isFullScreen}
               value={prompt}
-              disabled={isUploading}
               aria-label="Command console message"
               onChange={(e) => {
                 resetPromptHistory()
@@ -2861,6 +2876,7 @@ export function AgentResponseConsole() {
             </div>
 
             <div className="dy-command-composer__actions">
+              {isUploading && <Button size="compact" variant="quiet" onClick={() => uploadController.current?.abort()}>Cancel upload</Button>}
               <IconButton
                 aria-label={voicePhase === 'recording' ? 'Stop recording and transcribe' : 'Start voice dictation'}
                 disabled={voicePhase === 'requesting' || voicePhase === 'processing' || isUploading}

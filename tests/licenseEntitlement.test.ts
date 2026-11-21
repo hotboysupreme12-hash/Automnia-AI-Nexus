@@ -51,7 +51,7 @@ test('exposes Frontier to Pro, Enterprise, and the dedicated Automnia Frontier t
   assert.equal(isAutomniaProModelId(AUTOMNIA_PRO_MODEL_ID), true)
   assert.equal(isAutomniaFrontierModelId(AUTOMNIA_FRONTIER_MODEL_ID), true)
   assert.equal(AUTOMNIA_CREDITS_MODEL_ID, 'automnia-cloud/gemini-4-hydrogen')
-  assert.equal(AUTOMNIA_PRO_MODEL_ID, 'automnia-cloud/gemini-4-argon')
+  assert.equal(AUTOMNIA_PRO_MODEL_ID, 'automnia-cloud/gemini-4-neon')
   assert.equal(AUTOMNIA_FRONTIER_MODEL_ID, 'automnia-cloud/gemini-4-carbon')
 
   const prime = resolveLicenseEntitlement(license({ tier: 'pro', permanentAccess: true, byokAllowed: true }))

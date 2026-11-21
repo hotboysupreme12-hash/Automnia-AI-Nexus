@@ -5,7 +5,7 @@ export const LICENSE_STATUS_UPDATED_EVENT = 'automnia-license-updated'
 
 export const AUTOMNIA_SWIFT_MODEL_ID = 'automnia-cloud/gemini-3.8-flash'
 export const AUTOMNIA_CREDITS_MODEL_ID = 'automnia-cloud/gemini-4-hydrogen'
-export const AUTOMNIA_PRO_MODEL_ID = 'automnia-cloud/gemini-4-argon'
+export const AUTOMNIA_PRO_MODEL_ID = 'automnia-cloud/gemini-4-neon'
 export const AUTOMNIA_FRONTIER_MODEL_ID = 'automnia-cloud/gemini-4-carbon'
 export const AUTOMNIA_RELAY_MODEL_IDS = [
   AUTOMNIA_FRONTIER_MODEL_ID,

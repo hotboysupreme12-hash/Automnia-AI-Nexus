@@ -219,7 +219,7 @@ function createService(overrides: Partial<MutableRuntimeStatusState> = {}) {
       const entryMs = Date.parse(timestamp || '')
       return !state.runtimeMonitorCutoffMs || (Number.isFinite(entryMs) && entryMs > state.runtimeMonitorCutoffMs)
     },
-    runtimeVersionCheckPayload: () => ({ ok: true, current: '2026.11.5' }),
+    runtimeVersionCheckPayload: () => ({ ok: true, current: '2026.11.4' }),
     runtimeLedgerStatus: () => ({ ok: true, source: 'jsonl-ledger' }),
     gatewayChatRuntimeSnapshot: () => ({ enabled: true, ready: state.healthy }),
     gatewayReadinessUnavailable: (error) => ({

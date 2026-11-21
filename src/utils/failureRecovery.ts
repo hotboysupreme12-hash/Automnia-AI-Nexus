@@ -26,8 +26,8 @@ const FAILURE_RECOVERY: Record<string, FailureRecovery> = {
     detail: 'Reconnect the selected provider and start a new turn after its status is ready.',
   },
   provider_forbidden: {
-    label: 'Choose an allowed route',
-    detail: 'The current plan blocks this provider. Choose an Automnia hosted model or update provider access.',
+    label: 'Check model access',
+    detail: 'This request route cannot access the model. Check the route’s Google Cloud project, runtime identity, model access, and region; your personal Cloud access may use a different identity.',
   },
   gateway_disconnect: {
     label: 'Restart gateway',

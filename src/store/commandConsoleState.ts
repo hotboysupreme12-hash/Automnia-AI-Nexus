@@ -189,6 +189,31 @@ export function removeCommandConsoleQueueReceipt(
   }
 }
 
+/** Remove only receipts represented by successfully cleared console rows. */
+export function removeCommandConsoleQueueReceipts(
+  receiptIds: ReadonlySet<string>,
+  storage: CommandConsoleQueueReceiptStorage | null = browserDraftStorage(),
+): void {
+  if (!storage || !receiptIds.size) return
+  try {
+    const receipts = readCommandConsoleQueueReceipts(storage).filter((entry) => !receiptIds.has(entry.id))
+    if (receipts.length) storage.setItem(COMMAND_CONSOLE_QUEUE_RECEIPTS_KEY, JSON.stringify(receipts))
+    else storage.removeItem(COMMAND_CONSOLE_QUEUE_RECEIPTS_KEY)
+  } catch {
+    // Clearing the live console remains possible if browser storage is unavailable.
+  }
+}
+
+export function clearCommandConsoleQueueReceipts(
+  storage: CommandConsoleQueueReceiptStorage | null = browserDraftStorage(),
+): void {
+  try {
+    storage?.removeItem(COMMAND_CONSOLE_QUEUE_RECEIPTS_KEY)
+  } catch {
+    // Session reset remains possible if browser storage is unavailable.
+  }
+}
+
 export function expireCommandConsoleFollowup<TOptions>(
   queued: Pick<CommandConsoleQueuedFollowup<TOptions>, 'id' | 'queuedAt'>,
   agentId: string,

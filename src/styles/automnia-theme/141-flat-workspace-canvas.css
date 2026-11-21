@@ -21,17 +21,25 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"
   background: transparent !important;
 }
 
-/* The chat is the primary working surface on narrow windows. Let it start
-   directly at the navigation rail instead of inheriting the shell's outer
-   gutter, so the two surfaces read as one connected frame. */
+/* The mobile navigation is a dock, not a side rail. Keep the workspace
+   inside the viewport even when the rail width token becomes 100%. */
 @media (max-width: 900px) {
   html.dui-pro-overhaul.dui-cohesive-ui .app-bg > .dy-app-main {
-    padding-left: var(--dui-rail) !important;
+    padding-left: var(--dui-shell-gutter, 8px) !important;
   }
 
   html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane {
     margin-left: calc(-1 * var(--dui-shell-gutter, 0px)) !important;
     width: calc(100% + var(--dui-shell-gutter, 0px)) !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-actions > * {
+    flex-shrink: 0;
+    max-width: 100%;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-party-action] {
+    white-space: nowrap;
   }
 }
 

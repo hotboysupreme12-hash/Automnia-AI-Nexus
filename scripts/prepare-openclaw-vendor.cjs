@@ -53,6 +53,7 @@ const fallbackInstallArgs = [
 ]
 
 const requiredRuntimePackages = [
+  '@openclaw/ai',
   '@modelcontextprotocol/sdk',
   'express',
   'json5',
@@ -969,9 +970,7 @@ function validateInstalledPackages(lock) {
     const expected = lockPackage(lock, packageName)
     const installed = readJson(installedPath)
     if (installed.version !== expected.version) {
-      throw new Error(
-        `[openclaw-vendor] ${packageName} version mismatch: expected ${expected.version}, got ${installed.version}`,
-      )
+      missing.push(`${packageName} (expected ${expected.version}, found ${installed.version})`)
     }
   }
   return missing

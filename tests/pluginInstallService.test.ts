@@ -58,6 +58,15 @@ function pluginEntry(id: string, enabled = true): PluginControlEntry {
     enabled,
     configuredEnabled: enabled,
     category: 'runtime',
+    capabilities: {
+      install: false,
+      toggle: true,
+      update: true,
+      uninstall: true,
+      inspect: true,
+      configure: false,
+      restart: true,
+    },
     commands: [],
     providers: [],
     channels: [],
@@ -161,6 +170,10 @@ function createHarness(options: HarnessOptions = {}) {
       state.enabledCalls.push({ pluginId, enabled })
     },
     warn: (message) => state.warnings.push(message),
+    withGatewayStoppedForPluginMutation: async (_reason, operation) => ({
+      value: await operation(),
+      restarted: false,
+    }),
     writePluginRuntimeState: async (runtimeState) => {
       state.runtimeState = clone(runtimeState)
     },

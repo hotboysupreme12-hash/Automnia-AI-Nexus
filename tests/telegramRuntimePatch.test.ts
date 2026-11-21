@@ -51,6 +51,23 @@ const botMessageBundle = botMessagePatch.source
 const telegramCommandPatch = patchBundleWithWarnings(telegramCommandBundle)
 const patchedTelegramCommandBundle = telegramCommandPatch.source
 
+test('Telegram hosted model menus retire Argon and offer Neon only to eligible accounts', () => {
+  const project = new Function(`${TELEGRAM_AGENT_ROUTING_HELPER}\nreturn telegramBillingModelData;`)() as (config: unknown, data: unknown) => { byProvider: Map<string, Set<string>> }
+  const input = () => ({ byProvider: new Map([
+    ['automnia-cloud', new Set(['gemini-4-argon', 'gemini-4-hydrogen'])],
+    ['google', new Set(['gemini-4-argon'])],
+  ]), providers: ['automnia-cloud', 'google'] })
+  const eligible = project({ env: { vars: { AUTOMNIA_FRONTIER_ALLOWED: '1' } } }, input())
+  assert.equal(eligible.byProvider.get('automnia-cloud')?.has('gemini-4-argon'), false)
+  assert.equal(eligible.byProvider.get('automnia-cloud')?.has('gemini-4-neon'), true)
+  assert.equal(eligible.byProvider.get('google')?.has('gemini-4-argon'), true)
+  const ordinary = project({ env: { vars: {} } }, input())
+  assert.equal(ordinary.byProvider.get('automnia-cloud')?.has('gemini-4-argon'), false)
+  assert.equal(ordinary.byProvider.get('automnia-cloud')?.has('gemini-4-neon'), false)
+  const starter = project({ env: { vars: { AUTOMNIA_CREDITS_ONLY: '1' } } }, input())
+  assert.deepEqual([...starter.byProvider.get('automnia-cloud') || []], ['gemini-3.8-flash', 'gemini-4-hydrogen'])
+})
+
 test('Telegram runtime repair targets OpenClaw split message and ingress bundles', () => {
   assert.match(controlPlane, /telegramRuntimeRepairFiles\(root \|\| ''\)/)
   const rootSelector = controlPlane.slice(controlPlane.indexOf('function openClawPackageRootCandidates()'), controlPlane.indexOf('\nasync function telegramBotRuntimeFileCandidates()'))
@@ -58,7 +75,7 @@ test('Telegram runtime repair targets OpenClaw split message and ingress bundles
   assert.doesNotMatch(rootSelector, /electronResourcesPath|process\.cwd\(\)|WORKSPACE_ROOT/)
   assert.match(controlPlane, /hasMessageRoutingShape/)
   assert.match(controlPlane, /hasNativeCommandShape/)
-  assert.match(controlPlane, /TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 21/)
+  assert.match(controlPlane, /TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 22/)
   assert.match(controlPlane, /TELEGRAM_PROGRESS_STATUS_HELPER/)
   assert.match(controlPlane, /bot-message-dispatch-turn\.ts/)
   assert.match(controlPlane, /resolveTelegramInboundBody/)

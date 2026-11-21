@@ -69,25 +69,25 @@ test('Automnia credits preserve a user-selected hosted model', () => {
   assert.equal(selection?.primary, 'automnia-cloud/gemini-3.8-flash')
 })
 
-test('Automnia Frontier preserves Argon as the selected hosted route', () => {
-  const argon = 'automnia-cloud/gemini-4-argon'
+test('Automnia preserves Neon as the selected hosted route', () => {
+  const neon = 'automnia-cloud/gemini-4-neon'
   const prime = 'automnia-cloud/gemini-3.8-flash'
   const selection = applyUsagePriorityModelOrder(
-    { primary: argon, fallbacks: [prime] },
+    { primary: neon, fallbacks: [prime] },
     'automnia_only',
     [],
     AUTOMNIA,
     { automniaCreditBalance: 250 },
   )
 
-  assert.deepEqual(selection, { primary: argon, fallbacks: [prime] })
+  assert.deepEqual(selection, { primary: neon, fallbacks: [prime] })
 })
 
 test('provider-first keeps selected Automnia Frontier fallbacks behind the provider model', () => {
-  const argon = 'automnia-cloud/gemini-4-argon'
+  const neon = 'automnia-cloud/gemini-4-neon'
   const prime = 'automnia-cloud/gemini-3.8-flash'
   const selection = applyUsagePriorityModelOrder(
-    { primary: 'openai/gpt-5.6-luna', fallbacks: [argon, prime] },
+    { primary: 'openai/gpt-5.6-luna', fallbacks: [neon, prime] },
     'provider_first',
     ['openai/gpt-5.6-luna'],
     AUTOMNIA,
@@ -95,7 +95,7 @@ test('provider-first keeps selected Automnia Frontier fallbacks behind the provi
 
   assert.deepEqual(selection, {
     primary: 'openai/gpt-5.6-luna',
-    fallbacks: [argon, prime],
+    fallbacks: [neon, prime],
   })
 })
 
@@ -154,13 +154,13 @@ test('provider-first keeps an explicitly empty fallback stack empty', () => {
 test('provider-first never injects a legacy provider preference into an Automnia-only agent stack', () => {
   assert.deepEqual(
     applyUsagePriorityModelOrder(
-      { primary: 'automnia-cloud/gemini-4-argon', fallbacks: ['automnia-cloud/gemini-3.8-flash'] },
+      { primary: 'automnia-cloud/gemini-4-neon', fallbacks: ['automnia-cloud/gemini-3.8-flash'] },
       'provider_first',
       ['openai/gpt-5.6-luna', 'openai/gpt-5.6-sol'],
       AUTOMNIA,
       { preferredProviderModel: 'openai/gpt-5.6-sol' },
     ),
-    { primary: 'automnia-cloud/gemini-4-argon', fallbacks: ['automnia-cloud/gemini-3.8-flash'] },
+    { primary: 'automnia-cloud/gemini-4-neon', fallbacks: ['automnia-cloud/gemini-3.8-flash'] },
   )
 })
 

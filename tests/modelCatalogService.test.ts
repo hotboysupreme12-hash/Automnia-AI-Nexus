@@ -67,13 +67,13 @@ test('managed Automnia model registration publishes per-tier thinking defaults',
     models: { providers: { 'automnia-cloud': { models: [] } } },
   }
   ensureConfiguredProviderModel(config, 'automnia-cloud/gemini-4-hydrogen')
-  ensureConfiguredProviderModel(config, 'automnia-cloud/gemini-4-argon')
+  ensureConfiguredProviderModel(config, 'automnia-cloud/gemini-4-neon')
   ensureConfiguredProviderModel(config, 'automnia-cloud/gemini-4-carbon')
 
   const models = config.models?.providers?.['automnia-cloud']?.models as Array<Record<string, unknown>>
   assert.deepEqual(models.map((model) => [model.id, (model.params as Record<string, unknown>)?.thinking]), [
     ['gemini-4-hydrogen', 'high'],
-    ['gemini-4-argon', 'medium'],
+    ['gemini-4-neon', 'high'],
     ['gemini-4-carbon', 'medium'],
   ])
 })
@@ -106,7 +106,7 @@ test('fallback catalog exposes current pinned models and suppresses unavailable 
   const kimiHighspeed = fallback.find((model) => model.id === 'moonshot/kimi-k3.1-pro-highspeed')
   const automniaBalanced = fallback.find((model) => model.id === 'automnia-cloud/gemini-4-hydrogen')
   const automniaSwift = fallback.find((model) => model.id === 'automnia-cloud/gemini-3.8-flash')
-  const automniaPro = fallback.find((model) => model.id === 'automnia-cloud/gemini-4-argon')
+  const automniaPro = fallback.find((model) => model.id === 'automnia-cloud/gemini-4-neon')
   const automniaFrontier = fallback.find((model) => model.id === 'automnia-cloud/gemini-4-carbon')
 
   assert.equal(canonicalAgentModelId('gpt-6.2-astra'), 'openai/gpt-6.2-astra')
@@ -161,6 +161,7 @@ test('fallback catalog exposes current pinned models and suppresses unavailable 
   assert.equal(fallback.some((model) => model.id === 'automnia-cloud/gemini-3.6-flash'), false)
   assert.equal(fallback.some((model) => model.id === 'automnia-cloud/gemini-2.5-flash'), false)
   assert.equal(canonicalAgentModelId('automnia-cloud/gemini-3.6-flash'), 'automnia-cloud/gemini-4-hydrogen')
+  assert.equal(canonicalAgentModelId('automnia-cloud/gemini-4-argon'), 'automnia-cloud/gemini-4-hydrogen')
   assert.equal(canonicalAgentModelId('automnia-cloud/unknown-model'), 'automnia-cloud/gemini-4-hydrogen')
   assert.ok(fallback.filter((model) => model.provider === 'anthropic').every((model) =>
     OPENCLAW_VERIFIED_ANTHROPIC_MODEL_IDS.has(model.id.split('/')[1] || ''),
@@ -209,7 +210,7 @@ test('refresh loads OpenClaw catalog and normalizes OpenRouter allowlist through
   assert.deepEqual(cache.models.filter((model) => model.provider === 'automnia-cloud').map((model) => ({ id: model.id, alias: model.alias, name: model.name })), [
     { id: 'automnia-cloud/gemini-3.8-flash', alias: 'Automnia Swift', name: 'Automnia Swift' },
     { id: 'automnia-cloud/gemini-4-hydrogen', alias: 'Automnia Balanced', name: 'Automnia Balanced' },
-    { id: 'automnia-cloud/gemini-4-argon', alias: 'Automnia Pro', name: 'Automnia Pro' },
+    { id: 'automnia-cloud/gemini-4-neon', alias: 'Automnia Pro', name: 'Automnia Pro' },
     { id: 'automnia-cloud/gemini-4-carbon', alias: 'Automnia Frontier', name: 'Automnia Frontier' },
   ])
   assert.equal(cache.models.some((model) => model.id === 'google-vertex/gemini-3.7-reasoning'), false)

@@ -386,8 +386,8 @@ function PluginRow({
   const surfaceValues = [...plugin.commands, ...plugin.providers, ...plugin.channels]
   const runtimeLabel = plugin.runtimeLoaded ? 'Loaded' : plugin.enabled ? 'Awaiting sync' : 'Standby'
   const signalTone = plugin.needsSetup ? 'attention' : plugin.enabled ? 'healthy' : 'idle'
-  const canConfigureTelegram = plugin.id === 'telegram' && canConfigure
-  const showSetupAction = !installable && canConfigure
+  const canConfigureTelegram = plugin.id === 'telegram'
+  const showSetupAction = !installable && (plugin.needsSetup || canConfigureTelegram)
   return (
     <article
       className="dy-plugin-row"
@@ -454,7 +454,7 @@ function PluginRow({
             className="dy-plugin-row-action dy-plugin-row-setup"
             title={`${canConfigureTelegram || !plugin.needsSetup ? 'Configure' : 'Set up'} ${plugin.name}`}
           >
-            {canConfigureTelegram || !plugin.needsSetup ? 'Configure' : 'Setup'}
+            {canConfigureTelegram ? 'Configure' : 'Setup'}
           </Button>
         )}
         <Button

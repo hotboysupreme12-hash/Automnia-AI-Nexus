@@ -21,6 +21,9 @@ test('Automnia Gemini runtime clamps app choices to supported thinking levels', 
   }
   assert.equal(thinkingForAutomniaGeminiRuntimeModel('automnia-cloud/gemini-4-hydrogen', 'xhigh'), 'xhigh')
   assert.equal(thinkingForAutomniaGeminiRuntimeModel('automnia-cloud/gemini-4-hydrogen', 'max'), 'xhigh')
+  assert.equal(thinkingForAutomniaGeminiRuntimeModel('automnia-cloud/gemini-4-neon', 'minimal'), 'low')
+  assert.equal(thinkingForAutomniaGeminiRuntimeModel('automnia-cloud/gemini-4-neon', 'xhigh'), 'xhigh')
+  assert.equal(thinkingForAutomniaGeminiRuntimeModel('automnia-cloud/gemini-4-neon', 'max'), 'xhigh')
   assert.equal(thinkingForAutomniaGeminiRuntimeModel('google/gemini-3.6-flash', 'max'), 'max')
   assert.equal(thinkingForAutomniaGeminiRuntimeModel('automnia-cloud/gemini-3.8-flash', 'off'), 'low')
   assert.equal(thinkingForAutomniaGeminiRuntimeModel('automnia-cloud/gemini-3.8-flash', 'max'), 'high')
@@ -47,6 +50,7 @@ test('Automnia Gemini config keeps every app thinking choice on a supported rela
   assert.deepEqual(AUTOMNIA_GEMINI_4_OPENAI_REASONING_COMPAT.supportedReasoningEfforts, ['low', 'medium', 'high'])
   assert.deepEqual(AUTOMNIA_GEMINI_4_HYDROGEN_OPENAI_REASONING_COMPAT.supportedReasoningEfforts, ['low', 'medium', 'high', 'xhigh'])
   assert.equal(automniaThinkingDefaultForModel('automnia-cloud/gemini-4-hydrogen'), 'high')
+  assert.equal(automniaThinkingDefaultForModel('automnia-cloud/gemini-4-neon'), 'high')
   assert.equal(automniaThinkingDefaultForModel('automnia-cloud/gemini-4-argon'), 'medium')
   assert.equal(automniaThinkingDefaultForModel('automnia-cloud/gemini-4-carbon'), 'medium')
   assert.equal(automniaThinkingDefaultForModel('automnia-cloud/gemini-3.8-flash'), 'medium')
@@ -69,6 +73,9 @@ test('Automnia relay maps thinking effort to the supported Gemini 4 and 3.8 leve
     assert.deepEqual(geminiThinkingConfigFromOpenAiRequest({ reasoning_effort: requested }, 'gemini-4-carbon'), { thinkingLevel: expected })
   }
   assert.deepEqual(geminiThinkingConfigFromOpenAiRequest({ reasoning_effort: 'xhigh' }, 'gemini-4-hydrogen'), { thinkingLevel: 'XHIGH' })
+  assert.deepEqual(geminiThinkingConfigFromOpenAiRequest({ reasoning_effort: 'xhigh' }, 'gemini-4-neon'), { thinkingLevel: 'XHIGH' })
+  assert.deepEqual(geminiThinkingConfigFromOpenAiRequest({ reasoning_effort: 'max' }, 'gemini-4-neon'), { thinkingLevel: 'XHIGH' })
+  assert.deepEqual(geminiThinkingConfigFromOpenAiRequest({ reasoning_effort: 'minimal' }, 'gemini-4-neon'), { thinkingLevel: 'LOW' })
   assert.deepEqual(geminiThinkingConfigFromOpenAiRequest({ reasoning_effort: 'max' }, 'gemini-4-hydrogen'), { thinkingLevel: 'XHIGH' })
   assert.deepEqual(geminiThinkingConfigFromOpenAiRequest({ reasoning_effort: 'minimal' }, 'gemini-4-hydrogen'), { thinkingLevel: 'LOW' })
   assert.equal(geminiThinkingConfigFromOpenAiRequest({}), undefined)

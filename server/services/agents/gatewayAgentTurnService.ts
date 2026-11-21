@@ -117,9 +117,13 @@ function isHostedBillingOrAuthFailure(result: GatewayAgentTurnResult, modelId: s
   const detail = `${result.stdout}\n${result.stderr}`.toLowerCase()
   const hostedModel = /^automnia-cloud\//i.test(modelId.trim()) || /automnia[- ]cloud/.test(detail)
   if (!hostedModel) return false
+  // Older relay 424 responses included Google's billing eligibility wording.
+  // Matching the bare word "billing" treated that upstream model denial as an
+  // Automnia account failure and replayed the whole turn. Retry only when the
+  // response identifies Automnia account/auth state.
   return result.code === 401
     || result.code === 402
-    || /billing|insufficient (?:balance|credits|quota)|credit balance|payment required|authentication_error|unauthorized|no active license|license key/.test(detail)
+    || /insufficient (?:balance|credits|quota)|credit balance|payment required|authentication_error|unauthorized|no active license|license key|invalid (?:api |license |refresh )?token|token expired|billing (?:access|authentication) (?:failed|denied|expired)/.test(detail)
 }
 
 function isGatewayNoReplyResult(result: GatewayAgentTurnResult) {

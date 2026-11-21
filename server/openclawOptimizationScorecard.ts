@@ -943,7 +943,7 @@ export function buildOpenClawOptimizationScorecard(): OpenClawOptimizationScorec
     source: {
       guide: OPENCLAW_OPTIMIZATION_GUIDE,
       targetOpenClawVersion: OPENCLAW_TARGET_VERSION,
-      note: 'OpenClaw 2026.11.6 release audit; the existing scorecard carries forward the 2026.11.5 adoption baseline.',
+      note: 'OpenClaw 2026.11.6 release audit; the existing scorecard carries forward the previous adoption baseline.',
     },
     itemCount: items.length,
     implemented,

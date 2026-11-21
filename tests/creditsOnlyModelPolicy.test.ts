@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  migrateRetiredAutomniaModelId,
+  migrateRetiredAutomniaChannelModels,
   AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS,
   AUTOMNIA_CREDITS_MODEL_ID,
   AUTOMNIA_CREDITS_MODEL_IDS,
@@ -19,6 +21,14 @@ import {
   isAutomniaRelayModelId,
 } from '../server/services/license/creditsOnlyModelPolicy'
 
+test('migrates old hosted Argon channel bindings without changing other providers', () => {
+  assert.equal(migrateRetiredAutomniaModelId('automnia-cloud/gemini-4-argon'), AUTOMNIA_CREDITS_MODEL_ID)
+  assert.equal(migrateRetiredAutomniaModelId('google/gemini-4-argon'), 'google/gemini-4-argon')
+  assert.deepEqual(migrateRetiredAutomniaChannelModels({ telegram: { '*': 'automnia-cloud/gemini-4-argon', private: 'google/gemini-4-argon' } }), {
+    telegram: { '*': AUTOMNIA_CREDITS_MODEL_ID, private: 'google/gemini-4-argon' },
+  })
+})
+
 test('credits-only policy exposes a bounded Automnia-hosted fallback chain', () => {
   assert.deepEqual(creditsOnlyModelSelection(), {
     primary: AUTOMNIA_CREDITS_MODEL_ID,
@@ -30,7 +40,7 @@ test('credits-only policy exposes a bounded Automnia-hosted fallback chain', () 
   assert.equal(isAutomniaCreditsModelId(AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS[0]), true)
   assert.equal(isAutomniaRelayModelId(AUTOMNIA_SWIFT_MODEL_ID), true)
   assert.equal(isAutomniaCreditsModelId(AUTOMNIA_SWIFT_MODEL_ID), true)
-  assert.equal(AUTOMNIA_PRO_MODEL_ID, 'automnia-cloud/gemini-4-argon')
+  assert.equal(AUTOMNIA_PRO_MODEL_ID, 'automnia-cloud/gemini-4-neon')
   assert.equal(isAutomniaProModelId(AUTOMNIA_PRO_MODEL_ID), true)
   assert.equal(AUTOMNIA_FRONTIER_MODEL_ID, 'automnia-cloud/gemini-4-carbon')
   assert.equal(isAutomniaFrontierModelId(AUTOMNIA_FRONTIER_MODEL_ID), true)

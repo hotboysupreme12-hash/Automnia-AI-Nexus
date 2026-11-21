@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.29 - 2026-11-20
+## 1.0.29 - 2026-11-21
 
 ### OpenClaw runtime and live agent chat
 
@@ -8,6 +8,11 @@
 - Defers Codex health repair until Gateway startup has settled and prevents automatic replacement of a newer installed Codex package.
 - Adds a full-screen direct agent chat with conversation-scoped running and stop actions.
 - Applies Automnia Cloud HTTP 424 failures to configured model fallback handling.
+- Streams hosted Gemini responses through the OpenAI-compatible Cloud endpoint and classifies Vertex access denials without replaying a turn through another model.
+- Refreshes the hosted Gemini model catalog and thinking support, and uses the global Vertex endpoint by default.
+- Keeps Telegram configuration controls and verified plugin catalog guidance accurate.
+- Improves attachment processing, queued chat cleanup, and responsive workspace behavior.
+- Allows this version's Windows and macOS installers to publish unsigned under a guarded v1.0.29-only setting; the update manifest remains cryptographically signed.
 
 ## 1.0.28 - 2026-11-20
 

@@ -428,7 +428,7 @@ export function ensureConfiguredProviderModel(config: ModelCatalogOpenClawConfig
         ? directApiProviders[provider].api
         : undefined
   const managedAutomniaThinking = provider === AUTOMNIA_CREDITS_PROVIDER_ID
-    ? model === 'gemini-4-hydrogen'
+    ? model === 'gemini-4-hydrogen' || model === 'gemini-4-neon'
       ? 'high'
       : model === 'gemini-4-argon' || model === 'gemini-4-carbon'
         ? 'medium'

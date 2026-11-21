@@ -90,8 +90,8 @@ function modelBrief(modelId: string): { title: string; description: string; tone
   if (normalized.includes('automnia-cloud/gemini-4-carbon')) {
     return { title: 'Automnia Frontier reasoning', description: 'Automnia’s highest hosted tier, powered by Google Gemini 4 Carbon for deep research, software engineering, and long-horizon agent work.', tone: 'cyan' }
   }
-  if (normalized.includes('automnia-cloud/gemini-4-argon')) {
-    return { title: 'Automnia Pro reasoning', description: 'Automnia Pro is powered by Google Gemini 4 Argon for demanding reasoning, coding, and agent work.', tone: 'cyan' }
+  if (normalized.includes('automnia-cloud/gemini-4-neon')) {
+    return { title: 'Automnia Pro reasoning', description: 'Automnia Pro is powered by Google Gemini 4 Neon for demanding reasoning, coding, and agent work.', tone: 'cyan' }
   }
   if (normalized.includes('automnia-cloud/gemini-4-hydrogen')) {
     return { title: 'Automnia Balanced reasoning', description: 'Automnia Balanced uses Google Gemini 4 Hydrogen as the default hosted model for strong everyday reasoning and agent work.', tone: 'emerald' }

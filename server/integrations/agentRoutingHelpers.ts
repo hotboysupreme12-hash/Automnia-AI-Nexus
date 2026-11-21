@@ -618,7 +618,7 @@ async function runClawTalkControlCenterOrEmbeddedAgentTurn(options) {
 `.trim()
 
 export const TELEGRAM_AGENT_ROUTING_HELPER = String.raw`
-var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 21;
+var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 22;
 var TELEGRAM_AGENT_ROUTE_MEMORY_KEY = '__openclawTelegramAgentRoutes';
 var TELEGRAM_AGENT_ROUTE_MEMORY_MAX_ENTRIES = 256;
 var TELEGRAM_AGENT_ROUTE_MEMORY_FILE_NAME = 'telegram-agent-routes.json';
@@ -727,19 +727,26 @@ function telegramCreditsOnlyModelData(config, data) {
     });
 }
 function telegramBillingModelData(config, data) {
-    var vars = config && config.env && config.env.vars;
-    if (!data || !vars) return data;
+    var vars = config && config.env && config.env.vars || {};
+    if (!data) return data;
     // Starter/refill access remains hard-locked to the two credits models
     // above. Eligible Pro, Enterprise, and Frontier routes may expose both
     // named Pro and Frontier models even when OpenClaw returned a sparse catalog.
     var restricted = telegramCreditsOnlyModelData(config, data);
     if (restricted !== data) return restricted;
-    if (String(vars.AUTOMNIA_FRONTIER_ALLOWED || '') !== '1') return data;
     var byProvider = new Map(data.byProvider || []);
+    if (String(vars.AUTOMNIA_FRONTIER_ALLOWED || '') !== '1') {
+        if (!byProvider.has('automnia-cloud')) return data;
+        var existingModels = new Set(byProvider.get('automnia-cloud') || []);
+        existingModels.delete('gemini-4-argon');
+        byProvider.set('automnia-cloud', existingModels);
+        return Object.assign({}, data, { byProvider: byProvider });
+    }
     var automniaModels = new Set(byProvider.get('automnia-cloud') || []);
+    automniaModels.delete('gemini-4-argon');
     automniaModels.add('gemini-4-hydrogen');
     automniaModels.add('gemini-3.8-flash');
-    automniaModels.add('gemini-4-argon');
+    automniaModels.add('gemini-4-neon');
     automniaModels.add('gemini-4-carbon');
     byProvider.set('automnia-cloud', automniaModels);
     var providers = Array.isArray(data.providers) ? data.providers.slice() : [];
@@ -1220,7 +1227,7 @@ function isTelegramAutomniaCreditsModel(value) {
 function telegramAutomniaModelLabel(value) {
     var normalized = String(value == null ? '' : value).trim().toLowerCase();
     if (/^automnia-cloud\/gemini-4-carbon(?:$|[-@])/i.test(normalized)) return 'Automnia Frontier';
-    if (/^automnia-cloud\/gemini-4-argon(?:$|[-@])/i.test(normalized)) return 'Automnia Pro';
+    if (/^automnia-cloud\/gemini-4-neon(?:$|[-@])/i.test(normalized)) return 'Automnia Pro';
     if (/^automnia-cloud\/gemini-4-hydrogen(?:$|[-@])/i.test(normalized)) return 'Automnia Balanced';
     if (/^automnia-cloud\/gemini-3\.8-flash(?:$|[-@])/i.test(normalized)) return 'Automnia Swift';
     return 'Automnia hosted class';

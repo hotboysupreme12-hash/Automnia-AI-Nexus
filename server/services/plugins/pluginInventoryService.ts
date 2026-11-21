@@ -974,7 +974,8 @@ function pluginGuidance(
   } else if (entry.distribution === 'catalog' && entry.compatibility === 'unknown' && entry.minHostVersion) {
     guidance.push(`Compatibility could not be verified for OpenClaw ${entry.minHostVersion}; use OpenClaw configuration after checking the runtime version.`)
   } else if (entry.distribution === 'catalog' && entry.capabilities?.install && entry.installSpec) {
-    guidance.push(`Install ${entry.kind || 'plugin'} from ${entry.installChoice || 'the verified catalog'}: ${entry.installSpec}.`)
+    const catalogType = entry.catalogSource === 'official' ? `official ${entry.kind || 'plugin'}` : entry.kind || 'plugin'
+    guidance.push(`Install ${catalogType} ${entry.installSpec}.`)
   }
   if (entry.enabled && missingFields.length) {
     guidance.push(`Paste ${missingFields.map((field) => field.label).join(', ')} and refresh.`)

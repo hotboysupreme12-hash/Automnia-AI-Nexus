@@ -150,7 +150,7 @@ test('plugin inventory lists configured, missing-auth, unavailable, failed, mana
 
   const configuredOnly = byId.get('configured-only')
   assert.equal(configuredOnly?.origin, 'config')
-  assert.equal(configuredOnly?.status, 'configured')
+  assert.equal(configuredOnly?.status, 'unavailable')
 
   const managedOff = byId.get('managed-off')
   assert.equal(managedOff?.origin, 'managed')
@@ -163,6 +163,11 @@ test('plugin inventory falls back to bundled manifests and redacts CLI warnings'
   try {
     const pluginRoot = path.join(workspaceRoot, 'vendor', 'openclaw', 'dist', 'extensions', 'browser')
     await mkdir(pluginRoot, { recursive: true })
+    await writeFile(
+      path.join(workspaceRoot, 'vendor', 'openclaw', 'package.json'),
+      `${JSON.stringify({ version: '2026.11.6' })}\n`,
+      'utf-8',
+    )
     await writeFile(
       path.join(pluginRoot, 'openclaw.plugin.json'),
       `${JSON.stringify({
@@ -391,7 +396,7 @@ test('plugin inventory surfaces safe loader failure summaries and recovery hints
     },
   })
   await service.refreshPluginListCache()
-  const plugin = (await service.listPluginControls()).plugins[0]
+  const plugin = (await service.listPluginControls()).plugins.find((entry) => entry.id === 'broken')
   assert.equal(plugin?.loaderErrorSummary, 'OpenClaw reports that this plugin failed to load.')
   assert.match(plugin?.recoveryHint || '', /targeted loader repair action/)
   assert.equal(plugin?.guidance[0], plugin?.loaderErrorSummary)
@@ -566,7 +571,7 @@ test('plugin inventory reports disabled missing-config guidance for setup fields
   })
 
   await service.refreshPluginListCache()
-  const plugin = (await service.listPluginControls()).plugins[0]
+  const plugin = (await service.listPluginControls()).plugins.find((entry) => entry.id === 'schemed')
 
   assert.equal(plugin?.enabled, false)
   assert.equal(plugin?.needsSetup, false)
@@ -597,7 +602,7 @@ test('plugin inventory treats the live Telegram channel credential as configured
   })
 
   await service.refreshPluginListCache()
-  const plugin = (await service.listPluginControls()).plugins[0]
+  const plugin = (await service.listPluginControls()).plugins.find((entry) => entry.id === 'telegram')
 
   assert.equal(plugin?.configFields.find((field) => field.key === 'botToken')?.present, true)
   assert.equal(plugin?.needsSetup, false)

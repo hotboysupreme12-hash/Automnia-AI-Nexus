@@ -6,6 +6,7 @@ import {
   commandConsoleQueueCancellationPatch,
   commandConsoleQueueCancellationForFollowup,
   commandConsoleQueueAgeMs,
+  clearCommandConsoleQueueReceipts,
   expireCommandConsoleFollowup,
   failQueuedCommandConsoleFollowups,
   interruptQueuedCommandConsoleFollowups,
@@ -13,6 +14,7 @@ import {
   makeCommandConsoleResponseState,
   refreshQueuedCommandConsolePositions,
   readCommandConsoleQueueReceipts,
+  removeCommandConsoleQueueReceipts,
   STALE_COMMAND_CONSOLE_QUEUE_AGE_MS,
   writeCommandConsoleQueueReceipt,
   type CommandConsoleQueueReceipt,
@@ -240,4 +242,31 @@ test('reload restores cancellation reasons and marks a started receipt interrupt
   assert.match(started?.response || '', /not restored or replayed/)
   assert.equal(restored.agentResponses.some((entry) => entry.id === 'malformed-1'), false)
   assert.equal(readCommandConsoleQueueReceipts(storage).find((entry) => entry.id === 'started-1')?.status, 'interrupted')
+})
+
+test('cleared console receipts do not reappear on reload while unrelated receipts remain', () => {
+  const storage = makeReceiptStorage()
+  const queuedAt = new Date(1_800_000_000_000).toISOString()
+  writeCommandConsoleQueueReceipt({ id: 'cleared', agentId: 'agent-a', queuedAt, status: 'queued' }, storage)
+  writeCommandConsoleQueueReceipt({ id: 'other', agentId: 'agent-b', queuedAt, status: 'queued' }, storage)
+
+  // Simulate opening the app, then successfully clearing the first visible row.
+  assert.equal(makeCommandConsoleResponseState(storage).agentResponses.length, 2)
+  removeCommandConsoleQueueReceipts(new Set(['cleared']), storage)
+  const reloaded = makeCommandConsoleResponseState(storage)
+  assert.deepEqual(reloaded.agentResponses.map((entry) => entry.id), ['other'])
+  assert.equal(reloaded.agentResponses[0]?.streaming, false)
+
+  removeCommandConsoleQueueReceipts(new Set(['other']), storage)
+  assert.equal(storage.getItem(COMMAND_CONSOLE_QUEUE_RECEIPTS_KEY), null)
+  assert.deepEqual(makeCommandConsoleResponseState(storage).agentResponses, [])
+})
+
+test('resetting a session removes saved receipts without restoring or replaying them', () => {
+  const storage = makeReceiptStorage()
+  const queuedAt = new Date(1_800_000_000_000).toISOString()
+  writeCommandConsoleQueueReceipt({ id: 'old', agentId: 'agent-a', queuedAt, status: 'started' }, storage)
+  clearCommandConsoleQueueReceipts(storage)
+  assert.equal(storage.getItem(COMMAND_CONSOLE_QUEUE_RECEIPTS_KEY), null)
+  assert.deepEqual(makeCommandConsoleResponseState(storage), { agentResponses: [], busyAgentIds: [] })
 })

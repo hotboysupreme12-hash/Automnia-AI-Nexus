@@ -1,10 +1,12 @@
 const DEFAULT_AUTOMNIA_RELAY_MODEL = 'gemini-4-hydrogen';
 const DEFAULT_AUTOMNIA_RELAY_FALLBACK_MODELS = ['gemini-3.8-flash'];
-const DEFAULT_AUTOMNIA_RELAY_SELECTABLE_MODELS = ['gemini-4-carbon', 'gemini-4-argon', 'gemini-4-hydrogen', 'gemini-3.8-flash'];
+const DEFAULT_AUTOMNIA_RELAY_SELECTABLE_MODELS = ['gemini-4-carbon', 'gemini-4-neon', 'gemini-4-hydrogen', 'gemini-3.8-flash'];
 const LEGACY_AUTOMNIA_RELAY_MODELS = new Set(['gemini-2.5-flash', 'gemini-3.6-flash', 'gemini-3.7-flash']);
 
 function normalizeRelayModel(value) {
-  return String(value || '').trim().toLowerCase().replace(/^automnia-cloud\//, '');
+  const normalized = String(value || '').trim().toLowerCase().replace(/^automnia-cloud\//, '');
+  // Migrate persisted selections and older clients without calling Argon.
+  return normalized === 'gemini-4-argon' ? 'gemini-4-hydrogen' : normalized;
 }
 
 function configuredRelayModels(primary, fallbackValue) {

@@ -73,7 +73,7 @@ const uiSmoke = read('scripts/smoke-ui-render.mjs')
 const agentTurnStreamSmoke = read('scripts/smoke-agent-turn-stream.ts')
 const sseStream = read('src/utils/sseStream.ts')
 const packageJson = read('package.json')
-// OpenClaw 2026.11.5 split the former protocol reference into focused pages.
+// The OpenClaw protocol reference is split into focused pages.
 // Keep the app contract smoke pointed at those authoritative sections rather
 // than relying on the now-link-only protocol index.
 const gatewayProtocolDocs = [
@@ -394,7 +394,7 @@ assertIncludes(server, "from './integrations/agentRoutingHelpers'", 'control pla
 assertIncludes(routingHelpers, 'export const CLAWTALK_CORE_BRIDGE_ROUTING_HELPER', 'ClawTalk routing patch asset')
 assertIncludes(routingHelpers, 'function clawTalkControlCenterHeaders()', 'ClawTalk Control Center authenticated stream handoff')
 assertIncludes(routingHelpers, 'export const TELEGRAM_AGENT_ROUTING_HELPER', 'Telegram routing patch asset')
-assertIncludes(routingHelpers, 'TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 21', 'Telegram routing patch version')
+assertIncludes(routingHelpers, 'TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 22', 'Telegram routing patch version')
 assertIncludes(routingHelpers, 'export const TELEGRAM_PROGRESS_STATUS_HELPER', 'Telegram progress status patch asset')
 assertIncludes(routingHelpers, 'function dedupeTelegramProgressHooks(source: string)', 'Telegram runtime repair cleans legacy duplicate activity hooks')
 assertIncludes(routingHelpers, 'function createAutomniaTelegramProgressStatus', 'Telegram progress status helper')

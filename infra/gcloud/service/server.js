@@ -5,6 +5,10 @@ import { Storage } from '@google-cloud/storage';
 import { GoogleAuth, OAuth2Client } from 'google-auth-library';
 import { geminiThinkingConfigFromOpenAiRequest } from './geminiThinking.js';
 import { classifyVertexError } from './vertexErrorPolicy.js';
+import { transientVertexEligibilityFailure } from './vertexRequestRouting.js';
+import { collectVertexGenerateContentStream } from './vertexStream.js';
+import { createOpenAiStreamEmitter } from './openAiStream.js';
+import { vertexApiHost } from './vertexEndpoint.js';
 import { groupVertexToolResponses } from './vertexToolTurns.js';
 import {
   automniaRelayFallbackModels,
@@ -59,7 +63,7 @@ const retryableBillingErrorCodes = new Set([
   'TRANSIENT_ERROR',
 ]);
 const gcpProjectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || 'local-development';
-const vertexLocation = process.env.VERTEX_LOCATION || 'us-central1';
+const vertexLocation = process.env.VERTEX_LOCATION || 'global';
 const vertexAuth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
 const knowledgeServingConfig = String(process.env.AUTOMNIA_KNOWLEDGE_SERVING_CONFIG || '').trim();
 const knowledgeModelVersion = String(process.env.AUTOMNIA_KNOWLEDGE_MODEL_VERSION || 'gemini-3.1-pro-preview/answer_gen/v1').trim();
@@ -483,8 +487,20 @@ function verifyAccountPassword(password, record) {
   }
 }
 
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function delay(ms, signal) {
+  if (signal?.aborted) return Promise.reject(signal.reason || new Error('Operation was cancelled.'));
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      reject(signal.reason || new Error('Operation was cancelled.'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 function retryableVertexStatus(status) {
@@ -2428,7 +2444,7 @@ async function generateVertexContent(input, targetModel = automniaRelayModel) {
   const client = await vertexAuth.getClient();
   const accessToken = await client.getAccessToken();
   if (!accessToken.token) throw new Error('Unable to obtain a Vertex AI service token.');
-  const vertexHost = vertexLocation === 'global' ? 'aiplatform.googleapis.com' : `${vertexLocation}-aiplatform.googleapis.com`;
+  const vertexHost = vertexApiHost(vertexLocation);
   const vertexUrl = `https://${vertexHost}/v1/projects/${gcpProjectId}/locations/${vertexLocation}/publishers/google/models/${targetModel}:generateContent`;
   let apiResponse = null;
   let errText = '';
@@ -2440,7 +2456,7 @@ async function generateVertexContent(input, targetModel = automniaRelayModel) {
     });
     if (apiResponse.ok) break;
     errText = await apiResponse.text().catch(() => '');
-    const canRetry = retryableVertexStatus(apiResponse.status) && attempt + 1 < vertexRetryAttempts;
+    const canRetry = (retryableVertexStatus(apiResponse.status) || transientVertexEligibilityFailure(apiResponse.status, errText)) && attempt + 1 < vertexRetryAttempts;
     if (!canRetry) break;
     const retryDelayMs = vertexRetryDelayMs(apiResponse, attempt);
     console.warn(JSON.stringify({ event: 'vertex_retry_scheduled', upstreamStatus: apiResponse.status, attempt: attempt + 1, maxAttempts: vertexRetryAttempts, retryDelayMs }));
@@ -2449,10 +2465,11 @@ async function generateVertexContent(input, targetModel = automniaRelayModel) {
   if (!apiResponse?.ok) {
     const upstreamStatus = apiResponse?.status || 503;
     const error = new Error(errText || 'Vertex AI request failed.');
-    const classification = classifyVertexError(upstreamStatus);
+    const classification = classifyVertexError(upstreamStatus, errText);
     error.status = classification.status;
     error.retryable = classification.retryable;
     error.publicType = classification.type;
+    error.publicCode = classification.code;
     error.publicMessage = classification.message;
     error.upstreamStatus = upstreamStatus;
     throw error;
@@ -2460,11 +2477,66 @@ async function generateVertexContent(input, targetModel = automniaRelayModel) {
   return apiResponse.json();
 }
 
-async function generateVertexContentWithHostedFallback(input, startingModel = automniaRelayModel, thinkingRequest) {
+async function generateVertexContentStream(input, targetModel = automniaRelayModel, { signal, onTextDelta = () => undefined } = {}) {
+  const client = await vertexAuth.getClient();
+  const accessToken = await client.getAccessToken();
+  if (!accessToken.token) throw new Error('Unable to obtain a Vertex AI service token.');
+  const vertexHost = vertexApiHost(vertexLocation);
+  const vertexUrl = `https://${vertexHost}/v1/projects/${gcpProjectId}/locations/${vertexLocation}/publishers/google/models/${targetModel}:streamGenerateContent?alt=sse`;
+  let apiResponse = null;
+  let errText = '';
+  for (let attempt = 0; attempt < vertexRetryAttempts; attempt += 1) {
+    if (signal?.aborted) throw signal.reason || new Error('Vertex AI stream was cancelled.');
+    apiResponse = await fetch(vertexUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken.token}` },
+      body: JSON.stringify(input),
+      signal,
+    });
+    if (apiResponse.ok) break;
+    errText = await apiResponse.text().catch(() => '');
+    const canRetry = retryableVertexStatus(apiResponse.status) && attempt + 1 < vertexRetryAttempts;
+    if (!canRetry) break;
+    const retryDelayMs = vertexRetryDelayMs(apiResponse, attempt);
+    console.warn(JSON.stringify({ event: 'vertex_stream_retry_scheduled', upstreamStatus: apiResponse.status, attempt: attempt + 1, maxAttempts: vertexRetryAttempts, retryDelayMs }));
+    await delay(retryDelayMs, signal);
+  }
+  if (!apiResponse?.ok) {
+    const upstreamStatus = apiResponse?.status || 503;
+    const error = new Error(errText || 'Vertex AI streaming request failed.');
+    const classification = classifyVertexError(upstreamStatus, errText);
+    error.status = classification.status;
+    error.retryable = classification.retryable;
+    error.publicType = classification.type;
+    error.publicCode = classification.code;
+    error.publicMessage = classification.message;
+    error.upstreamStatus = upstreamStatus;
+    throw error;
+  }
+  try {
+    return await collectVertexGenerateContentStream(apiResponse.body, onTextDelta);
+  } catch (error) {
+    // Vertex can send a structured error inside an otherwise-200 SSE stream.
+    // Apply the same public policy, preserving the original upstream status.
+    if (!error?.status) throw error;
+    const upstreamStatus = Number(error.status) || null;
+    const classification = classifyVertexError(upstreamStatus || 502, error.message);
+    error.status = classification.status;
+    error.retryable = false;
+    error.publicType = classification.type;
+    error.publicCode = classification.code;
+    error.publicMessage = classification.message;
+    error.upstreamStatus = upstreamStatus;
+    throw error;
+  }
+}
+
+async function generateVertexContentWithHostedFallback(input, startingModel = automniaRelayModel, thinkingRequest, options = {}) {
   const resolvedStartingModel = resolveAutomniaRelayModel(startingModel) || automniaRelayModel;
   const relayModels = automniaRelayModelsForRequest(resolvedStartingModel);
   if (!relayModels.length) throw new Error('Automnia hosted relay has no enabled model for this request.');
   let lastError = null;
+  let streamedOutput = false;
   for (const targetModel of relayModels) {
     try {
       const candidateInput = thinkingRequest
@@ -2481,11 +2553,19 @@ async function generateVertexContentWithHostedFallback(input, startingModel = au
       if (thinkingRequest && !geminiThinkingConfigFromOpenAiRequest(thinkingRequest, targetModel)) {
         delete candidateInput.generationConfig.thinkingConfig;
       }
-      const payload = await generateVertexContent(candidateInput, targetModel);
+      const payload = options.onTextDelta
+        ? await generateVertexContentStream(candidateInput, targetModel, {
+            signal: options.signal,
+            onTextDelta: async (delta) => {
+              streamedOutput = true;
+              await options.onTextDelta(delta, targetModel);
+            },
+          })
+        : await generateVertexContent(candidateInput, targetModel);
       return { payload, model: targetModel };
     } catch (error) {
       lastError = error;
-      if (!error?.retryable || targetModel === relayModels.at(-1)) throw error;
+      if (streamedOutput || !error?.retryable || targetModel === relayModels.at(-1)) throw error;
       console.warn(JSON.stringify({
         event: 'automnia_relay_model_fallback',
         failedModel: targetModel,
@@ -2731,6 +2811,9 @@ function sendOpenAiCompletionResponse(res, payload, streamRequested) {
  * function calls, so OpenClaw keeps ownership of tool execution and delivery.
  */
 app.post('/v1/chat/completions', requireWritesEnabled, async (req, res) => {
+  let streamEmitter = null;
+  let streamAbortController = null;
+  let removeCloseListener = null;
   try {
     const requestIdentity = relayRequestIdentity(req, req.body);
     const access = await resolveHostedRelayAccess(req, { allowZeroForReplay: requestIdentity.explicit });
@@ -2746,7 +2829,7 @@ app.post('/v1/chat/completions', requireWritesEnabled, async (req, res) => {
     if (!converted.contents.length) return openAiError(res, 400, 'At least one text, tool-call, or tool-response message is required.');
   const targetModel = resolveAutomniaRelayModel(req.body?.model);
     if (!targetModel) return openAiError(res, 400, 'The requested model is not an enabled Automnia hosted relay model.');
-    if (targetModel === 'gemini-4-argon' && !proModelAllowedForTier(access.record.tier)) {
+    if (targetModel === 'gemini-4-neon' && !proModelAllowedForTier(access.record.tier)) {
       return openAiError(res, 403, 'Automnia Pro requires a Pro, Enterprise, or Automnia Frontier entitlement.', 'model_not_allowed', 'automnia_pro_entitlement_required');
     }
     if (targetModel === 'gemini-4-carbon' && !frontierModelAllowedForTier(access.record.tier)) {
@@ -2772,6 +2855,18 @@ app.post('/v1/chat/completions', requireWritesEnabled, async (req, res) => {
     }
     if (access.credits <= 0) return openAiError(res, 402, 'Automnia credits are exhausted. Refill credits before sending another hosted request.', 'insufficient_quota');
     const thinkingConfig = geminiThinkingConfigFromOpenAiRequest(req.body, targetModel);
+    const responseId = `chatcmpl_${crypto.randomUUID().replace(/-/g, '')}`;
+    const created = Math.floor(Date.now() / 1000);
+    const streamRequested = req.body?.stream === true;
+    if (streamRequested) {
+      streamAbortController = new AbortController();
+      const onResponseClose = () => {
+        if (!res.writableEnded) streamAbortController?.abort(new Error('The client closed the response stream.'));
+      };
+      res.once('close', onResponseClose);
+      removeCloseListener = () => res.off('close', onResponseClose);
+      streamEmitter = createOpenAiStreamEmitter(res, { id: responseId, created, model: targetModel });
+    }
     const generated = await generateVertexContentWithHostedFallback({
       ...converted,
       ...(vertexToolsFromOpenAi(toolOptimization.tools) ? { tools: vertexToolsFromOpenAi(toolOptimization.tools) } : {}),
@@ -2780,13 +2875,14 @@ app.post('/v1/chat/completions', requireWritesEnabled, async (req, res) => {
         maxOutputTokens: outputBudget.maxOutputTokens,
         ...(thinkingConfig ? { thinkingConfig } : {}),
       },
-    }, targetModel, req.body);
+    }, targetModel, req.body, streamRequested ? {
+      signal: streamAbortController.signal,
+      onTextDelta: (delta, actualModel) => streamEmitter.textDelta(delta, actualModel),
+    } : {});
     const payload = generated.payload;
     const result = vertexCandidateResult(payload);
     const tokensUsed = result.totalTokens || estimateRelayTokens({ messages, tools: toolOptimization.tools, output: result.text });
     const debit = await deductCredits(access.record, tokensUsed, requestIdentity.requestId);
-    const responseId = `chatcmpl_${crypto.randomUUID().replace(/-/g, '')}`;
-    const created = Math.floor(Date.now() / 1000);
     const model = generated.model;
     const message = {
       role: 'assistant',
@@ -2797,12 +2893,17 @@ app.post('/v1/chat/completions', requireWritesEnabled, async (req, res) => {
     const completionPayload = { id: responseId, object: 'chat.completion', created, model, choices: [{ index: 0, message, finish_reason: result.toolCalls.length ? 'tool_calls' : 'stop' }], usage, automnia: { billingUnitVersion: 2, tokensPerCredit: TOKENS_PER_CREDIT, remainingCredits: debit.remainingCredits, deductedCredits: debit.deductedCredits, tier: access.record.tier, optimization } };
     await persistHostedResponse(access.record, requestIdentity.explicit ? requestIdentity.requestId : '', requestFingerprint, responseShape, completionPayload).catch((error) => console.warn(JSON.stringify({ event: 'hosted_response_cache_write_failed', message: String(error?.message || error).slice(0, 240) })));
     console.log(JSON.stringify({ event: 'openai_compatible_generation', orderId: access.record.orderId, tokensUsed, promptTokens: usage.prompt_tokens, completionTokens: usage.completion_tokens, deductedCredits: debit.deductedCredits, remainingCredits: debit.remainingCredits, toolCalls: result.toolCalls.length, duplicateUsageRequest: debit.duplicate, optimization }));
+    removeCloseListener?.();
+    if (streamRequested) return await streamEmitter.finish(completionPayload);
     return sendOpenAiCompletionResponse(res, completionPayload, req.body?.stream === true);
   } catch (error) {
+    removeCloseListener?.();
+    if (streamEmitter?.fail(error)) return;
+    if (res.destroyed || res.writableEnded) return;
     const status = Number(error?.status) || 502;
     if (status === 429) res.set('Retry-After', '5');
     console.error('OpenAI-compatible relay error:', error);
-    return openAiError(res, status, error?.publicMessage || (status === 429 ? 'Automnia Cloud hosted models are temporarily busy. Retry shortly.' : 'Automnia Cloud provider request failed.'), error?.publicType || (status === 429 ? 'rate_limit_error' : 'api_error'));
+    return openAiError(res, status, error?.publicMessage || (status === 429 ? 'Automnia Cloud hosted models are temporarily busy. Retry shortly.' : 'Automnia Cloud provider request failed.'), error?.publicType || (status === 429 ? 'rate_limit_error' : 'api_error'), error?.publicCode);
   }
 });
 

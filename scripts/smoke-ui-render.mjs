@@ -1435,6 +1435,7 @@ async function inspectViewport(viewport) {
   window.hide()
   const recruitMarkdown = await inspectRecruitMarkdownEditor(window)
   const helpAssistant = await inspectHelpAssistant(window)
+  const fullscreenAgentSettings = await inspectFullscreenAgentSettings(window)
 
   await new Promise((resolve) => setTimeout(resolve, 250))
   const image = await window.webContents.capturePage()
@@ -1611,6 +1612,7 @@ async function inspectViewport(viewport) {
     && helpAssistant.closed
     && /Automnia Assistant/.test(helpAssistant.panelText)
     && commandConsoleOk
+    && fullscreenAgentSettings.ok
     && commandConsoleStopClick.attempted
     && commandConsoleStopClick.clicked
     && commandConsoleStopClick.streamClosed

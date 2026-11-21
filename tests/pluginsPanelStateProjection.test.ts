@@ -35,6 +35,7 @@ function pluginEntry(id: string, overrides: Partial<PluginPageEntry> = {}): Plug
     status,
     enabled,
     configuredEnabled: enabled,
+    installed: true,
     category: 'runtime',
     commands: [],
     providers: [],
@@ -106,6 +107,7 @@ test('plugins page projection distinguishes beta plugin states', () => {
       configuredEnabled: null,
       origin: 'official-catalog',
       status: 'available',
+      installed: false,
       installSpec: '@openclaw/perplexity-plugin',
       installable: true,
       guidance: ['Install official plugin @openclaw/perplexity-plugin.'],
@@ -118,9 +120,9 @@ test('plugins page projection distinguishes beta plugin states', () => {
   assert.deepEqual(states.get('channel-unavailable'), { key: 'unavailable', label: 'unavailable', tone: 'unavailable' })
   assert.deepEqual(states.get('websearch-failed'), { key: 'failed', label: 'failed', tone: 'failed' })
   assert.deepEqual(states.get('disabled-one'), { key: 'disabled', label: 'disabled', tone: 'disabled' })
-  assert.deepEqual(states.get('perplexity'), { key: 'disabled', label: 'available', tone: 'disabled' })
+  assert.deepEqual(states.get('perplexity'), { key: 'available', label: 'available', tone: 'disabled' })
 
-  assert.deepEqual(PLUGIN_FILTERS.map((option) => option.label), ['Active', 'Needs attention', 'All', 'Enabled', 'Disabled'])
+  assert.deepEqual(PLUGIN_FILTERS.map((option) => option.label), ['Active', 'Needs attention', 'Available', 'All', 'Enabled', 'Disabled'])
   assert.equal(pluginMatchesFilter(plugins[0], 'all'), true)
   assert.equal(pluginMatchesFilter(plugins[0], 'active'), true)
   assert.equal(pluginMatchesFilter(plugins[1], 'attention'), true)
@@ -133,7 +135,8 @@ test('plugins page projection distinguishes beta plugin states', () => {
   assert.equal(pluginMatchesFilter(plugins[3], 'enabled'), true)
   assert.equal(pluginMatchesFilter(plugins[4], 'disabled'), true)
   assert.equal(pluginMatchesFilter(plugins[4], 'enabled'), false)
-  assert.equal(pluginMatchesFilter(plugins[5], 'disabled'), true)
+  assert.equal(pluginMatchesFilter(plugins[5], 'available'), true)
+  assert.equal(pluginMatchesFilter(plugins[5], 'disabled'), false)
   assert.equal(pluginMatchesFilter(plugins[5], 'enabled'), false)
   assert.equal(pluginMatchesFilter(plugins[0], 'disabled'), false)
 
@@ -146,7 +149,9 @@ test('plugins page projection distinguishes beta plugin states', () => {
 
   assert.deepEqual(summarizePluginPageStates(plugins), {
     configured: 1,
-    disabled: 2,
+    installed: 5,
+    available: 1,
+    disabled: 1,
     enabled: 4,
     failed: 1,
     missingAuth: 1,

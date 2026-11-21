@@ -4,6 +4,7 @@ const AUTOMNIA_CLOUD_PROVIDER = 'automnia-cloud'
 const AUTOMNIA_GEMINI_MODELS = new Set([
   'gemini-3.8-flash',
   'gemini-4-hydrogen',
+  'gemini-4-neon',
   'gemini-4-argon',
   'gemini-4-carbon',
 ])
@@ -11,6 +12,7 @@ const AUTOMNIA_GEMINI_MODELS = new Set([
 const AUTOMNIA_GEMINI_THINKING_DEFAULTS: Record<string, Exclude<AutomniaThinkingLevel, 'off' | 'minimal' | 'max'>> = {
   'gemini-3.8-flash': 'medium',
   'gemini-4-hydrogen': 'high',
+  'gemini-4-neon': 'high',
   'gemini-4-argon': 'medium',
   'gemini-4-carbon': 'medium',
 }
@@ -22,7 +24,7 @@ export function automniaThinkingDefaultForModel(modelId: string): Exclude<Automn
 
 /**
  * Gemini 3.8 Flash, Argon, and Carbon accept low, medium, and high thinking;
- * Hydrogen also accepts xhigh. Map the app's wider controls to each model's
+ * Hydrogen and Neon also accept xhigh. Map the app's wider controls to each model's
  * valid range before OpenClaw validates the turn. The hosted relay applies
  * the same translation at the Vertex boundary.
  */
@@ -36,8 +38,9 @@ export function thinkingForAutomniaGeminiRuntimeModel(
   if (provider !== AUTOMNIA_CLOUD_PROVIDER || !AUTOMNIA_GEMINI_MODELS.has(model)) return thinking
 
   if (thinking === 'off' || thinking === 'minimal') return 'low'
-  if (model === 'gemini-4-hydrogen' && thinking === 'max') return 'xhigh'
-  if (model !== 'gemini-4-hydrogen' && (thinking === 'xhigh' || thinking === 'max')) return 'high'
+  const supportsExtendedThinking = model === 'gemini-4-hydrogen' || model === 'gemini-4-neon'
+  if (supportsExtendedThinking && thinking === 'max') return 'xhigh'
+  if (!supportsExtendedThinking && (thinking === 'xhigh' || thinking === 'max')) return 'high'
   return thinking
 }
 

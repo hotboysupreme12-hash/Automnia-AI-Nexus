@@ -13,7 +13,7 @@ test('bundled official extensions must match the OpenClaw host version', () => {
     const write = (dir, value) => writeFileSync(path.join(root, dir, 'package.json'), JSON.stringify(value))
     assert.throws(() => verifyOfficialExtensions(root, '2026.11.6'), /extensions are missing/)
     write('third-party', { name: 'other-plugin', version: '1.0.0' })
-    write('telegram', { name: '@openclaw/telegram', version: '2026.11.5' })
+    write('telegram', { name: '@openclaw/telegram', version: '2026.11.4' })
     assert.throws(() => verifyOfficialExtensions(root, '2026.11.6'), /does not match the host/)
     write('telegram', { name: '@openclaw/telegram', version: '2026.11.6' })
     assert.equal(verifyOfficialExtensions(root, '2026.11.6'), 1)

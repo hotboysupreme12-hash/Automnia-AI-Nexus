@@ -116,7 +116,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-c
   html.dui-pro-overhaul [data-agent-grid-mode="grid10"],
   html.dui-pro-overhaul.dui-cohesive-ui [data-agent-grid-mode="grid8"],
   html.dui-pro-overhaul.dui-cohesive-ui [data-agent-grid-mode="grid10"] {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--agent-readable-width, 17rem)), 1fr)) !important;
     justify-content: stretch !important;
     gap: 12px !important;
   }
@@ -168,17 +168,6 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-c
   html.dui-pro-overhaul,
   html.dui-pro-overhaul.dui-cohesive-ui {
     --dy-compact-card-height: 370px;
-  }
-}
-
-/* At the narrowest desktop breakpoint retain two readable card columns. The
-   existing 901–1200px rail collapse leaves these windows enough room for it. */
-@media (min-width: 901px) and (max-width: 1100px) {
-  html.dui-pro-overhaul [data-agent-grid-mode="grid8"],
-  html.dui-pro-overhaul [data-agent-grid-mode="grid10"],
-  html.dui-pro-overhaul.dui-cohesive-ui [data-agent-grid-mode="grid8"],
-  html.dui-pro-overhaul.dui-cohesive-ui [data-agent-grid-mode="grid10"] {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
 

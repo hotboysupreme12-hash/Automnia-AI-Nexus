@@ -49,6 +49,8 @@ test('Automnia exposes only current hosted tier model IDs', () => {
   const groups = groupAvailableModels([
     { id: 'openai/gpt-5.6', provider: 'openai', name: 'gpt-5.6' },
     { id: 'automnia-cloud/gemini-4-hydrogen', provider: 'automnia-cloud', name: 'Gemini 4 Hydrogen' },
+    { id: 'automnia-cloud/gemini-4-neon', provider: 'automnia-cloud', name: 'Gemini 4 Neon' },
+    { id: 'automnia-cloud/gemini-4-argon', provider: 'automnia-cloud', name: 'Gemini 4 Argon' },
     { id: 'automnia-cloud/gemini-3.7-flash', provider: 'automnia-cloud', name: 'Gemini 3.7 Flash' },
   ])
 
@@ -56,6 +58,8 @@ test('Automnia exposes only current hosted tier model IDs', () => {
   assert.deepEqual(groups.map((group) => group.key), ['openai', 'automnia-cloud'])
   assert.deepEqual(groups.find((group) => group.key === 'automnia-cloud')?.models.map((model) => model.id), [
     'automnia-cloud/gemini-4-hydrogen',
+    'automnia-cloud/gemini-4-neon',
   ])
   assert.equal(isSelectableModelId('automnia-cloud/gemini-3.6-flash'), false)
+  assert.equal(isSelectableModelId('automnia-cloud/gemini-4-argon'), false)
 })

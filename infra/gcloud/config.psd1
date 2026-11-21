@@ -10,7 +10,7 @@
   AutomniaRelayFallbackModels = @('gemini-3.8-flash')
   # Models exposed to customer clients. The primary/fallback chain above is
   # still the only operational chain used after a request is accepted.
-  AutomniaRelaySelectableModels = @('gemini-4-carbon', 'gemini-4-argon', 'gemini-4-hydrogen', 'gemini-3.8-flash')
+  AutomniaRelaySelectableModels = @('gemini-4-carbon', 'gemini-4-neon', 'gemini-4-hydrogen', 'gemini-3.8-flash')
   # Customer-facing credits are a compact display unit. The Cloud Run ledger
   # remains authoritative in raw Vertex tokens.
   TokensPerCredit = 1000
