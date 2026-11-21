@@ -1,74 +1,62 @@
 <div align="center">
 
-<img src="public/brand/automnia-ai-nexus-logo-transparent-cropped.png" alt="Automnia AI Nexus transparent logo" width="680" />
+<img src="public/brand/automnia-ai-nexus-logo-transparent-cropped.png" alt="Automnia AI Nexus" width="560" />
 
-# Automnia AI
+# Automnia AI Nexus
 
-### A local AI operations nexus for configurable agents, missions, schedules, plugins, channels, and live runtime visibility
+### Your desktop command center for building, directing, and supervising AI agents.
 
-Automnia AI lets you run powerful agents like a local operations team. Use one flexible agent for broad help, build a specialist for every task, or combine both into focused workflows with clear roles, tools, workspaces, schedules, memory, plugins, channels, and approval rules.
+Create one capable general agent or assemble a team of specialists. Give each agent a role, model, workspace, tools, and rules. Launch missions, schedule recurring work, and follow activity from a live operations view.
 
-**AI Nexus** · **Custom agents** · **Missions** · **Schedules** · **Plugins** · **Runtime monitor** · **Approval-first automation** · **Local-first control**
-
-[Assistant Operations Manual](docs/AUTOMNIA_ASSISTANT_OPERATIONS_MANUAL.md) · [User Guide](docs/USER_GUIDE.md) · [UI Reference](docs/AUTOMNIA_UI_REFERENCE.md) · [Support Guide](docs/BETA_SUPPORT.md) · [Installer Support](docs/INSTALLER_SUPPORT.md) · [Release Notes](docs/BETA_RELEASE_NOTES.md) · [CI Evidence](docs/CI_EVIDENCE.md) · [Data Handling](DATA_HANDLING.md) · [Security](SECURITY.md) · [Release Governance](docs/RELEASE_GOVERNANCE.md)
+<p><a href="#run-automnia-from-source">Quick start</a> · <a href="#whats-new-in-1029">What’s new in 1.0.29</a> · <a href="docs/USER_GUIDE.md">User guide</a> · <a href="docs/BETA_SUPPORT.md">Support</a></p>
 
 </div>
 
-## What is Automnia AI?
+![Automnia AI Nexus agent workspace](docs/assets/readme/automnia-ui-agents.png)
 
-Automnia AI is a desktop command center for agent work. It connects the simple idea of asking an assistant for help with the deeper structure needed for repeatable, visible, recoverable automation.
+## AI work, with an operations layer
 
-You can keep it simple:
+Automnia turns a chat with an AI into work you can shape and supervise. Start with one agent for everyday tasks. Add specialists when a job benefits from distinct roles, permissions, tools, or model routes. Use missions and schedules to make repeat work consistent, then use Monitor to see what ran, what is running, and what needs attention.
 
-```text
-Launch App.
-Create an agent.
-Select Model.
-Send a task.
-Watch what happens.
-Approve important actions.
-Read the result.
-```
+The desktop app and control plane run locally. Agents can use local or hosted model routes and connected services; what leaves the machine depends on the providers and integrations you configure. See [Data Handling](DATA_HANDLING.md).
 
-Or you can build a small operating team:
+## What you can do
 
-```text
-Recruit specialists.
-Assign workspaces and tools.
-Connect model routes and plugins.
-Schedule recurring missions.
-Send updates through compatible channels.
-Use Monitor as the truth window.
-```
-
-The freedom is the point. One agent can handle many everyday tasks, while specialized agents can own precise lanes like code review, research, customer replies, store operations, content planning, or scheduled monitoring.
-
-The Command Console also supports one-tap dictation beside the Send button, with a microphone-level waveform while speaking. Voice input stops automatically after a short pause (or when the microphone is tapped again). Local mode prewarms a compact speech model, filters silent captures, and runs recognition on the device after a one-time model download; Settings → Voice transcription can switch between Local and Cloud (OpenAI) processing.
-
-## How it feels in plain English
-
-| Typical assistant app | Automnia AI |
+| Capability | How it works |
 | --- | --- |
-| One long chat thread | A visual AI operations nexus with extensive model support, identity, missions, schedules, skills, plugins, and runtime evidence |
-| One personality | One general operator, many specialists, or both |
-| Hidden background work | Monitor views for Gateway health, sessions, logs, cron jobs, failures, and recovery |
-| Manual repetition | Repeatable missions and scheduled workflows |
-| Loose prompts | Agents with roles, workspaces, tools, doctrine, model lanes, and rules |
-| Blind automation | Review gates for important actions |
+| **Build your team** | Create a general agent, purpose-built specialists, or both. Set each agent’s identity, instructions, workspace, model route, and tools. |
+| **Direct missions** | Break a larger objective into assigned work, acceptance criteria, schedules, and recovery steps. Run now, later, or on a recurring cadence. |
+| **Connect your stack** | Extend agents with configured providers, skills, plugins, browser and filesystem tools, and compatible messaging channels. |
+| **Stay in the loop** | Chat directly with an agent, watch activity in Monitor, and use review rules for actions that need your attention. |
+| **Recover with context** | Inspect Gateway health, sessions, logs, scheduled jobs, errors, and recovery status in one workspace. |
 
-## Interface showcase
+### Example workflows
 
-<div align="center">
-  <img src="docs/assets/readme/automnia-ui-agents.png" alt="Automnia AI Agents workspace" width="100%" />
-</div>
+- **Software work:** delegate research, implementation, review, and validation across agents with scoped repository access.
+- **Research:** compare sources, preserve useful context, and return a decision-ready brief.
+- **Support and operations:** prepare customer replies, review store or business data, and route follow-ups through configured tools.
+- **Content and monitoring:** plan campaigns or check selected signals on a schedule, with results returned for review.
 
-<br />
+What an agent can do depends on the selected model, connected tools, workspace access, and the rules you configure.
+
+## What’s new in 1.0.29
+
+**A more direct agent chat, smarter model recovery, and a steadier runtime.**
+
+- Open an agent conversation full screen, with run and stop actions scoped to that conversation.
+- Apply configured model fallback when Automnia Cloud returns HTTP 424.
+- Make Codex health repair wait until Gateway startup settles, and protect a newer installed Codex plugin from replacement.
+- Update the bundled OpenClaw runtime and Codex integration to 2026.11.6.
+
+See the complete [1.0.29 changelog](CHANGELOG.md#1029---2026-11-20).
+
+## Explore the workspace
 
 <table>
   <tr>
-    <td width="33%"><img src="docs/assets/readme/automnia-ui-missions.png" alt="Automnia AI Mission Control workspace" /></td>
-    <td width="33%"><img src="docs/assets/readme/automnia-ui-monitor.png" alt="Automnia AI Monitor workspace" /></td>
-    <td width="33%"><img src="docs/assets/readme/automnia-ui-plugins.png" alt="Automnia AI Plugins workspace" /></td>
+    <td width="33%"><img src="docs/assets/readme/automnia-ui-missions.png" alt="Automnia Mission Control" /></td>
+    <td width="33%"><img src="docs/assets/readme/automnia-ui-monitor.png" alt="Automnia Monitor showing runtime activity" /></td>
+    <td width="33%"><img src="docs/assets/readme/automnia-ui-plugins.png" alt="Automnia plugin management" /></td>
   </tr>
   <tr>
     <td align="center"><strong>Mission Control</strong></td>
@@ -77,67 +65,9 @@ The Command Console also supports one-tap dictation beside the Send button, with
   </tr>
 </table>
 
-## Example workflows
+## Run Automnia from source
 
-| Workflow | What the agents handle |
-| --- | --- |
-| **Code crew** | Architect, builder, reviewer, tester, and release-check agents working inside an approved repo. |
-| **Customer support desk** | Review incoming messages, prepare replies, organize context, and route follow-ups through configured tools. |
-| **Store operator** | Inspect inventory, orders, website data, SEO tasks, product details, and promotion ideas through compatible store tooling. |
-| **Content studio** | Plan scripts, hooks, titles, descriptions, thumbnails, launch posts, and media workflows through configured tools. |
-| **Research desk** | Compare sources, separate facts from assumptions, and return a decision-ready brief. |
-| **Watcher** | Check products, prices, releases, jobs, markets, alerts, or system signals on a cadence. |
-| **Personal operator** | Prepare plans, reminders, drafts, notes, summaries, and routine check-ins for review. |
-| **Mission control** | Turn a goal into assigned agents, timing, risk, acceptance criteria, recovery steps, and proof. |
-
-## Agent customization
-
-| Area | What you can tune |
-| --- | --- |
-| **Identity** | Name, role, description, personality, tone, and operating style. |
-| **Model lane** | Primary model, fallback model, provider route, thinking level, timeout, and runtime behavior. |
-| **Workspace** | A repo, docs folder, content folder, support export, store data folder, or no file access. |
-| **Doctrine** | Rules, memory notes, review policy, response style, and mission instructions. |
-| **Tools** | Files, browser tools, runtime actions, skills, plugins, provider routes, and compatible channel tools. |
-| **Schedule** | Run now, run once later, repeat on cadence, watch for changes, or loop until stopped. |
-
-## Architecture map
-
-```mermaid
-flowchart TD
-    Operator[Operator] --> App[Automnia AI Desktop Command Center]
-    App --> UI[Interface: Agents, Missions, Monitor, Plugins]
-    UI --> API[Local Control Plane API]
-    API --> Services[Service Layer]
-    Services --> State[Local State: agents, workspaces, ledgers, reports]
-    Services --> Runtime[OpenClaw Gateway]
-    Services --> Monitor[Monitor Evidence]
-    Services --> Review{Review needed?}
-    Runtime --> Models[Model Providers and Local Routes]
-    Runtime --> Tools[Tools, Skills, Plugins]
-    Runtime --> Channels[Compatible Channels]
-    Review --> Operator
-    Review --> Runtime
-```
-
-<details>
-<summary><strong>How the pieces fit together</strong></summary>
-
-| Piece | Plain meaning |
-| --- | --- |
-| **Desktop command center** | The local app where the operator creates agents, runs missions, checks Monitor, and manages plugins. |
-| **Interface** | React, Vite, and Electron surfaces for the agent roster, mission control, monitor, settings, and plugin views. |
-| **Control Plane API** | The local backend boundary for app actions, runtime status, files, provider setup, missions, and diagnostics. |
-| **Service layer** | Focused backend services for Gateway lifecycle, runtime recovery, missions, providers, plugins, filesystem, browser, and agent turns. |
-| **OpenClaw Gateway** | The runtime path for agent sessions, tools, plugins, compatible channels, and model/provider routes. |
-| **Monitor evidence** | The operator view of what ran, what is running, what failed, what recovered, and what proof came back. |
-| **Review loop** | A human review point before important actions execute. |
-
-</details>
-
-## Start simple
-
-Recommended runtime: Node.js 24, or Node.js 22.19+ for compatibility. You also need npm and Git.
+Recommended: Node.js 24. Node.js 22.19+ is supported for compatibility. You’ll also need npm and Git.
 
 ```bash
 git clone https://github.com/hotboysupreme12-hash/Automnia-AI-Nexus.git
@@ -147,52 +77,59 @@ npm run prepare:openclaw-vendor
 npm run desktop
 ```
 
-For development mode, run the server and client together:
+For the live development server, run:
 
 ```bash
 npm run dev
 ```
 
-For validation before changing or packaging the app:
+Packaged desktop targets include Windows x64, Intel and Apple silicon macOS, and Linux x86_64. Read [Installer Support](docs/INSTALLER_SUPPORT.md) for operating-system minimums, architecture details, and release caveats.
 
-```bash
-npm test
-npm run build:standalone
+## How it fits together
+
+<details>
+<summary><strong>Architecture</strong></summary>
+
+```mermaid
+flowchart TD
+    Operator[Operator] --> App[Automnia desktop app]
+    App --> UI[Agents, missions, Monitor, plugins]
+    UI --> API[Local control plane]
+    API --> Services[Agent, mission, provider, plugin services]
+    Services --> State[Local app state and workspaces]
+    Services --> Gateway[OpenClaw Gateway]
+    Gateway --> Models[Configured model providers]
+    Gateway --> Tools[Tools, skills, and plugins]
+    Gateway --> Channels[Compatible channels]
+    Services --> Monitor[Runtime status and activity]
+    Services --> Review{Review required?}
+    Review --> Operator
 ```
 
-For release evidence and optional signing validation:
+</details>
 
-```bash
-npm run release:evidence
-npm run release:sign
-npm run release:validate
-```
+## Release validation
 
-Manual public-release workflow runs build unsigned candidates for install testing and do not publish customer downloads. Tagged customer releases ordinarily require Windows Authenticode and macOS Developer ID plus Apple notarization credentials; the workflow fails closed when they are missing. The v1.0.28 release has a one-time unsigned-installer exception enabled only for the exact tag when repository variable `AUTOMNIA_ALLOW_UNSIGNED_V1_0_28=true` is set. Its updater manifest remains signed, and the exception does not apply to later tags. See [Installer Support](docs/INSTALLER_SUPPORT.md) for the target architectures, operating-system floors, and per-platform validation.
+Run `npm run release:validate` to check a packaged release candidate. When checksum-evidence signing is enabled, `npm run release:sign` can use `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE` for the signing key. Public release signing rules and the version-specific unsigned exceptions are documented in [Release Governance](docs/RELEASE_GOVERNANCE.md).
 
-Set `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE` or `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM` for optional checksum-evidence signing. Tagged releases also produce `distribution-signing.json` with consumer signature, update-channel signature, and install, upgrade, rollback, and uninstall evidence.
+## Documentation
 
-For complete setup, read the [User Guide](docs/USER_GUIDE.md). For recovery and feedback details, read the [Support Guide](docs/BETA_SUPPORT.md).
-
-## Current status
-
-Automnia AI is stable for Windows, macOS, and Linux.
-
-## Documentation map
-
-| Need | Go here |
+| If you want to… | Start here |
 | --- | --- |
-| Learn the app | [User Guide](docs/USER_GUIDE.md) |
+| Learn the main workflows | [User Guide](docs/USER_GUIDE.md) |
+| Design agents and missions | [Assistant Operations Manual](docs/AUTOMNIA_ASSISTANT_OPERATIONS_MANUAL.md) |
+| Browse the interface | [UI Reference](docs/AUTOMNIA_UI_REFERENCE.md) |
 | Get help or send feedback | [Support Guide](docs/BETA_SUPPORT.md) |
-| Install the desktop app on a supported system | [Installer Support](docs/INSTALLER_SUPPORT.md) |
-| Review release notes | [Release Notes](docs/BETA_RELEASE_NOTES.md) |
-| Review hosted CI proof | [CI Evidence](docs/CI_EVIDENCE.md) |
-| Check exact provider model support and compatibility | [Provider model compatibility](docs/PROVIDER_MODEL_COMPATIBILITY.md) |
-| Understand data boundaries | [Data Handling](DATA_HANDLING.md) |
-| Report security issues | [Security](SECURITY.md) |
-| Review release rules | [Release Governance](docs/RELEASE_GOVERNANCE.md) |
+| Check platform requirements | [Installer Support](docs/INSTALLER_SUPPORT.md) |
+| Read version history | [Changelog](CHANGELOG.md) |
+| Understand local and provider data boundaries | [Data Handling](DATA_HANDLING.md) |
+| Report a security issue | [Security](SECURITY.md) |
+| Review CI and release evidence | [CI Evidence](docs/CI_EVIDENCE.md) |
+| Understand release controls | [Release Governance](docs/RELEASE_GOVERNANCE.md) |
 | Deploy or migrate Automnia Cloud | [Google Cloud deployment package](infra/gcloud/README.md) |
 
-## Product synopsis
+<div align="center">
 
-**Automnia AI is a local AI operations nexus for building, running, scheduling, and monitoring powerful agents. It gives you the choice to run one general agent, a team of specialists, or highly focused workflows with tools, plugins, channels, memory, evidence, and human review where it matters.**
+**Automnia AI Nexus** · Build the team. Direct the work. See what happened.
+
+</div>
