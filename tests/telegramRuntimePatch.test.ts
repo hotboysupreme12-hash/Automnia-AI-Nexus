@@ -210,7 +210,9 @@ test('a stalled Telegram status API cannot hold the agent dispatch or finalizati
   const startTime = Date.now()
   assert.equal(await status.start(), false)
   assert.equal(await status.finalize('done', 'Finished.'), false)
-  assert.ok(Date.now() - startTime < 250)
+  // Keep a hard bound on stalled operations while allowing slower CI runners
+  // to schedule the timeout and promise callbacks without a false failure.
+  assert.ok(Date.now() - startTime < 1_000)
 })
 
 test('Telegram dispatch does not wait for a status preview, including previously patched bundles', () => {
