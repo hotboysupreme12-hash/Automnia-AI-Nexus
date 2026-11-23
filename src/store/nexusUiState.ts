@@ -1,6 +1,6 @@
 import type { OpenClawAgent } from '../types/nexus'
 
-export type AppTab = 'agents' | 'missions' | 'monitor' | 'plugins' | 'settings'
+export type AppTab = 'chat' | 'agents' | 'missions' | 'monitor' | 'plugins' | 'settings'
 
 export type AgentEditorTab = 'profile' | 'model' | 'heartbeat' | 'policy' | 'workspace' | 'skills' | 'files'
 
@@ -111,7 +111,7 @@ export function makeNexusUiState(
   options: { tab?: AppTab; selectedAgentId?: unknown; selectedAgentIds?: unknown } = {},
 ): NexusUiState {
   return {
-    tab: options.tab || 'agents',
+    tab: options.tab || 'chat',
     ...normalizeNexusSelection(agents, options.selectedAgentId, options.selectedAgentIds),
     isEditorOpen: false,
     editingAgentId: null,

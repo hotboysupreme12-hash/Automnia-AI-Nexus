@@ -789,13 +789,9 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
           </select>
         </Field>
       </SettingsCard>
-      <SettingsCard title="Agent chat panel" description="Choose how conversations appear in the Agents workspace.">
-        <ToggleField label="Show the chat panel" hint="Turn it off to give the agent list more room." checked={consolePreferences.visible} onChange={(value) => updateConsolePreferences({ visible: value }, 'Chat panel visibility')} />
-        <Field label={`Chat panel width · ${consolePreferences.width}px`} hint="The width adjusts automatically on smaller windows.">
-          <input type="range" min={360} max={760} step={20} value={consolePreferences.width} onChange={(event) => updateConsolePreferences({ width: Number(event.target.value) }, 'Chat panel width')} />
-        </Field>
+      <SettingsCard title="Agent Chat" description="Your conversations have their own workspace.">
         <ToggleField label="Remember unfinished messages" hint="Keeps unsent text when you leave or reopen the app." checked={consolePreferences.rememberDrafts} onChange={(value) => updateConsolePreferences({ rememberDrafts: value }, 'Unfinished messages')} />
-        <div className="dui-settings-actions"><button type="button" onClick={resetWorkspace}>Restore workspace defaults</button><button type="button" onClick={() => setTab('agents')}>Open Agents</button></div>
+        <div className="dui-settings-actions"><button type="button" onClick={resetWorkspace}>Restore workspace defaults</button><button type="button" onClick={() => setTab('chat')}>Open Agent Chat</button></div>
       </SettingsCard>
     </div>
   )

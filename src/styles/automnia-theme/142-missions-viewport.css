@@ -111,15 +111,92 @@ html.dui-pro-overhaul.dui-cohesive-ui .dui-missions-polished {
 }
 
 @media (min-width: 901px) and (min-height: 650px) and (max-height: 800px) {
-  html.dui-pro-overhaul.dui-cohesive-ui .dui-mission-wrap.dui-missions-polished .dui-missions-page-head h2 { display: none !important; }
   html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"].dui-mission-screen.dui-mission-polished {
     & .dui-mission-choice-group { gap: 0 !important; }
     & .dui-choice-head { min-height: 16px !important; margin-bottom: 4px !important; }
     & .dui-option { min-height: 42px !important; padding: 5px !important; }
     & .dui-mission-config-grid { gap: 6px !important; }
-    & .dui-mission-config-note { display: none !important; }
-    & .dui-template-copy small { display: none !important; }
     & .dui-template-copy strong { white-space: normal !important; overflow: visible !important; }
     & .dui-template-tile { min-height: 48px !important; }
+  }
+}
+
+/* At smaller effective window sizes, let the mission board grow and scroll
+   instead of forcing all choices into fixed tracks or clipping the objective. */
+@media (min-width: 901px) and (max-width: 1200px),
+       (min-width: 901px) and (max-height: 820px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"].dui-mission-screen.dui-mission-polished {
+    & .dui-mission-stage {
+      min-height: 0 !important;
+      grid-template-rows: auto !important;
+      align-items: start !important;
+      overflow-y: auto !important;
+      overscroll-behavior: contain;
+    }
+    & .dui-mission-main {
+      grid-template-rows: auto auto auto !important;
+      height: auto !important;
+    }
+    & .dui-mission-sidebar {
+      height: auto !important;
+      grid-template-rows: auto !important;
+    }
+    & .dui-agents-card { height: auto !important; overflow: visible !important; }
+    & .dui-mission-bottom-objective .dui-textarea {
+      height: auto !important;
+      min-height: 112px !important;
+      resize: vertical !important;
+    }
+    & :is(.dui-template-strip, .dui-segment-grid--organized, .dui-type-grid--organized) {
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 125px), 1fr)) !important;
+    }
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1200px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"].dui-mission-screen.dui-mission-polished .dui-mission-stage {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* The mission panel also contains the Workboard. A fixed viewport-height flex
+   layout divides the available height between them and overlaps the editor's
+   contents. Give both sections their natural height and use page scrolling. */
+@media (min-width: 901px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg > .dy-app-main:has(.dui-missions-polished) {
+    height: auto !important;
+    min-height: 100dvh !important;
+  }
+  html.dui-pro-overhaul.dui-cohesive-ui :is(#nexus-workspace-missions, .dy-mission-tab-frame, .dui-mission-wrap.dui-missions-polished) {
+    flex: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"].dui-mission-screen.dui-mission-polished {
+    flex: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    & .dui-mission-stage {
+      height: auto !important;
+      min-height: 0 !important;
+      grid-template-rows: auto !important;
+      align-items: start !important;
+      overflow: visible !important;
+    }
+    & .dui-mission-main {
+      height: auto !important;
+      grid-template-rows: auto auto auto !important;
+    }
+    & .dui-mission-sidebar {
+      height: auto !important;
+      grid-template-rows: auto auto !important;
+      align-content: start !important;
+    }
+    & .dui-agents-card { height: auto !important; overflow: visible !important; }
+    & .dui-mission-bottom-objective .dui-textarea {
+      height: auto !important;
+      min-height: 112px !important;
+      resize: vertical !important;
+    }
   }
 }

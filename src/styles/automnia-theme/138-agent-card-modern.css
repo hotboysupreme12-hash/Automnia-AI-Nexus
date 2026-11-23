@@ -34,7 +34,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro.agent-car
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"][data-agent-card-theme][data-agent-rarity] .agent-card-media {
-  aspect-ratio: 16 / 10 !important;
+  aspect-ratio: 16 / 9 !important;
   border: 0 !important;
   border-radius: 13px 13px 0 0 !important;
   transform: none !important;
@@ -61,7 +61,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro.agent-car
 
 html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"][data-agent-card-theme][data-agent-rarity] .agent-card-body {
   min-width: 0 !important;
-  padding: 18px !important;
+  padding: 14px !important;
   gap: 0 !important;
   transform: none !important;
   background: transparent !important;
@@ -71,7 +71,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro.agent-car
   min-height: 0 !important;
   min-width: 0 !important;
   overflow: hidden !important;
-  margin: 0 0 16px !important;
+  margin: 0 0 12px !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"][data-agent-card-theme][data-agent-rarity] .agent-card-kicker {
@@ -80,7 +80,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro.agent-car
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
   color: #9499a2 !important;
-  font-size: 10px !important;
+  font-size: 11px !important;
   font-weight: 600 !important;
   line-height: 1.5 !important;
   letter-spacing: .09em !important;
@@ -90,7 +90,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro.agent-car
 html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"][data-agent-card-theme][data-agent-rarity] .agent-card-name {
   margin: 6px 0 0 !important;
   color: #f5f5f7 !important;
-  font-size: 21px !important;
+  font-size: 18px !important;
   font-weight: 700 !important;
   line-height: 1.18 !important;
   letter-spacing: -.035em !important;
@@ -106,7 +106,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro.agent-car
   overflow: hidden !important;
   margin: 7px 0 0 !important;
   color: #b6bac3 !important;
-  font-size: 12px !important;
+  font-size: 13px !important;
   font-weight: 400 !important;
   line-height: 1.5 !important;
   min-height: 36px !important;
@@ -116,7 +116,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro.agent-car
   display: grid !important;
   grid-template-columns: minmax(0,1fr) auto !important;
   gap: 12px !important;
-  margin: auto 0 16px !important;
+  margin: auto 0 12px !important;
   padding: 0 !important;
   border: 0 !important;
   background: transparent !important;
@@ -136,7 +136,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro.agent-car
 
 html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"][data-agent-card-theme][data-agent-rarity] :is(.agent-card-simple-meta,.agent-card-details,.agent-card-list-details) span {
   color: #8f949f !important;
-  font-size: 10px !important;
+  font-size: 11px !important;
   font-weight: 400 !important;
   line-height: 1.5 !important;
   text-transform: none !important;
@@ -154,7 +154,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro.agent-car
 
 html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"][data-agent-card-theme][data-agent-rarity] .agent-card-details {
   gap: 10px !important;
-  margin: 0 0 16px !important;
+  margin: 0 0 12px !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"][data-agent-card-theme][data-agent-rarity] :is(.agent-card-details,.agent-card-list-details) > div {
@@ -172,7 +172,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro.agent-car
   display: grid !important;
   grid-template-columns: minmax(0,1fr) auto auto !important;
   gap: 6px !important;
-  padding-top: 14px !important;
+  padding-top: 10px !important;
   border-color: rgba(var(--agent-card-rarity-rgb),.12) !important;
 }
 

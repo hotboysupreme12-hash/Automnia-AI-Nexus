@@ -256,6 +256,7 @@ async function readRequestBody(request) {
 }
 
 function startStaticServer() {
+  let approvalPending = process.env.AUTOMNIA_UI_APPROVAL_FIXTURE === '1'
   const agentTurnStreamStats = { opened: 0, closed: 0 }
   const runtimeMonitorClearStats = { calls: 0, failures: 0, failNext: false }
   const gatewayRestartStats = { calls: 0 }
@@ -263,6 +264,15 @@ function startStaticServer() {
     try {
       const requestUrl = new URL(request.url || '/', 'http://127.0.0.1')
       const requestPath = requestUrl.pathname
+      if (process.env.AUTOMNIA_UI_APPROVAL_FIXTURE === '1' && requestPath === '/api/tool-approvals') {
+        sendJson(response, 200, { pending: approvalPending ? [{ id: 'fixture-approval', expiresAtMs: Date.now() + 60000, request: { agentId: 'smoke-agent-1', command: 'fixture command' } }] : [] })
+        return
+      }
+      if (process.env.AUTOMNIA_UI_APPROVAL_FIXTURE === '1' && requestPath === '/api/tool-approvals/fixture-approval/resolve') {
+        approvalPending = false
+        sendJson(response, 200, { ok: true })
+        return
+      }
       if (requestPath === '/api/auth/login') {
         sendJson(response, 200, { token: uiSmokeSessionToken })
         return
@@ -511,6 +521,8 @@ if (!targetUrl || !outputDir) {
 }
 const checks = [
   { label: 'desktop', width: 1440, height: 1000 },
+  { label: 'scaled-1080p', width: 1536, height: 816 },
+  { label: 'compact-desktop', width: 1280, height: 720 },
   { label: 'wide', width: 2048, height: 1152 },
   { label: 'mobile', width: 390, height: 844 },
 ]
@@ -550,6 +562,84 @@ function bitmapStats(image) {
     if (alpha > 0 && (red > 12 || green > 12 || blue > 12)) nonBlank += 1
   }
   return { sampled, nonBlank, nonBlankRatio: sampled ? nonBlank / sampled : 0 }
+}
+
+async function inspectLayoutOnly(window, viewport) {
+  const inspectChat = [
+    '(async () => {',
+    '  const wait = ms => new Promise(resolve => setTimeout(resolve, ms))',
+    "  for (let i = 0; i < 50 && !document.querySelector('.dy-chat-profile'); i++) await wait(100)",
+    "  const active = document.querySelector('#nexus-nav-chat')?.getAttribute('aria-current') === 'page'",
+    "  const textarea = document.querySelector('#nexus-workspace-chat .dy-command-textarea')",
+    "  const profiles = [...document.querySelectorAll('#nexus-workspace-chat .dy-chat-profile')]",
+    "  const avatar = profiles[1]?.querySelector('.dy-chat-profile__avatar')",
+    "  const avatarRect = avatar?.getBoundingClientRect()",
+    "  const chat = document.querySelector('#nexus-workspace-chat [data-chat-panel=true]')",
+    "  const chatRect = chat?.getBoundingClientRect()",
+    "  const composerRect = textarea?.getBoundingClientRect()",
+    "  profiles[1]?.click(); await wait(120)",
+    "  const selected = profiles[1]?.getAttribute('aria-pressed') === 'true'",
+    "  if (textarea) { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(textarea, ''); textarea.dispatchEvent(new Event('input', { bubbles: true })); await wait(150) }",
+    "  document.querySelector('.dy-chat-starters button')?.click(); await wait(100)",
+    "  const starterFilled = textarea?.value === 'Help me understand '",
+    "  const warningOverlays = [...document.querySelectorAll('[role=alert]')].filter(el => el.textContent.includes('Approval controls unavailable')).length",
+    "  if (textarea) { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(textarea, 'Keep this draft across navigation'); textarea.dispatchEvent(new Event('input', { bubbles: true })) }",
+    "  return { starterFilled, warningOverlays, metrics: ['#automnia-main', '#nexus-workspace-chat', '.dy-chat-workspace'].map(sel => { const el=document.querySelector(sel); const r=el?.getBoundingClientRect(); const c=el && getComputedStyle(el); return { sel, top:r?.top, bottom:r?.bottom, height:r?.height, minHeight:c?.minHeight, padding:c?.padding, margin:c?.margin, overflow:c?.overflow } }), chatClass: chat?.className, chatStyle: chat?.getAttribute('style'), chatPosition: chat ? getComputedStyle(chat).position : '', profileRects: profiles.map(p => { const r = p.getBoundingClientRect(); return { x:r.x, y:r.y, w:r.width, h:r.height, display:getComputedStyle(p).display } }), active, profileCount: profiles.length, selected, avatarWidth: avatarRect?.width || 0, avatarHeight: avatarRect?.height || 0, avatarRadius: avatar ? getComputedStyle(avatar).borderRadius : '', chatRect: chatRect && { left: chatRect.left, right: chatRect.right, top: chatRect.top, bottom: chatRect.bottom }, composerRect: composerRect && { top: composerRect.top, bottom: composerRect.bottom }, viewport: { width: innerWidth, height: innerHeight }, shellOverflow: Math.max(0, document.documentElement.scrollWidth - innerWidth) }",
+    '})()',
+  ].join('\n')
+  const chat = await window.webContents.executeJavaScript(inspectChat)
+  window.showInactive()
+  await new Promise(resolve => setTimeout(resolve, 200))
+  fs.writeFileSync(path.join(outputDir, 'chat-' + viewport.label + '.png'), (await window.webContents.capturePage()).toPNG())
+  const registry = await window.webContents.executeJavaScript([
+    '(async () => {',
+    '  const wait = ms => new Promise(resolve => setTimeout(resolve, ms))',
+    "  document.querySelector('#nexus-nav-agents')?.click()",
+    "  for (let i = 0; i < 50 && !document.querySelector('[data-agent-view-choice]'); i++) await wait(100)",
+    "  ;[...document.querySelectorAll('[data-agent-view-choice]')].find(button => button.textContent.trim() === 'Detailed')?.click()",
+    '  await wait(300)',
+    "  const grid = document.querySelector('[data-agent-grid-mode=grid10]')",
+    "  const cards = [...(grid?.querySelectorAll('[data-agent-card=true]') || [])]",
+    "  const bounds = cards.map(card => { const rect = card.getBoundingClientRect(); const actions = card.querySelector('.agent-card-actions')?.getBoundingClientRect(); return { width: rect.width, height: rect.height, actionsBottom: actions?.bottom || 0, bottom: rect.bottom } })",
+    "  return { grid: Boolean(grid), overflow: grid ? Math.max(0, grid.scrollWidth - grid.clientWidth) : -1, bounds, hasChat: Boolean(document.querySelector('#nexus-workspace-agents [data-chat-panel=true]:not([hidden])')?.closest('.dy-chat-workspace:not([hidden])')) }",
+    '})()',
+  ].join('\n'))
+  await new Promise(resolve => setTimeout(resolve, 200))
+  fs.writeFileSync(path.join(outputDir, 'registry-detailed-' + viewport.label + '.png'), (await window.webContents.capturePage()).toPNG())
+  const draft = await window.webContents.executeJavaScript([
+    '(async () => {',
+    "  document.querySelector('#nexus-nav-chat')?.click()",
+    '  await new Promise(resolve => setTimeout(resolve, 300))',
+    "  return document.querySelector('#nexus-workspace-chat .dy-command-textarea')?.value || ''",
+    '})()',
+  ].join('\n'))
+  const ok = chat.active && chat.profileCount >= 2 && chat.selected && chat.starterFilled && chat.warningOverlays === 0 && chat.avatarWidth > 0
+    && Math.abs(chat.avatarWidth - chat.avatarHeight) <= 1 && chat.avatarRadius === '50%'
+    && chat.shellOverflow <= 1 && chat.chatRect && chat.chatRect.right <= chat.viewport.width + 1
+    && chat.chatRect.bottom <= chat.viewport.height + 1
+    && chat.composerRect && chat.composerRect.bottom <= chat.viewport.height + 1
+    && registry.grid && !registry.hasChat && registry.overflow <= 1 && registry.bounds.length > 0
+    && registry.bounds.every(card => card.width > 0 && card.height > 0 && card.actionsBottom <= card.bottom + 1)
+    && draft === 'Keep this draft across navigation'
+  window.destroy()
+  return { label: viewport.label, ok: Boolean(ok), chat, registry, draftPreserved: draft === 'Keep this draft across navigation' }
+}
+
+async function inspectApprovalOnly(window, viewport) {
+  const result = await window.webContents.executeJavaScript([
+    '(async () => {',
+    '  const wait = ms => new Promise(resolve => setTimeout(resolve, ms))',
+    "  for (let i = 0; i < 50 && !document.querySelector('[aria-label=\"Tool approval\"]'); i++) await wait(100)",
+    "  const panel = document.querySelector('[aria-label=\"Tool approval\"]')",
+    "  const deny = [...(panel?.querySelectorAll('button') || [])].find(button => button.textContent.trim() === 'Deny')",
+    "  const showedRequest = Boolean(panel && panel.textContent.includes('fixture command') && deny)",
+    '  deny?.click()',
+    "  for (let i = 0; i < 50 && document.querySelector('[aria-label=\"Tool approval\"]'); i++) await wait(100)",
+    "  return { showedRequest, dismissed: !document.querySelector('[aria-label=\"Tool approval\"]') }",
+    '})()',
+  ].join('\n'))
+  window.destroy()
+  return { label: viewport.label, ok: result.showedRequest && result.dismissed, approval: result }
 }
 
 async function inspectRecruitMarkdownEditor(window) {
@@ -807,7 +897,7 @@ async function inspectWorkspaceNavigation(window) {
     "    const workspace = panel ? panel.querySelector('.dy-agents-workspace') : null",
     "    const party = panel ? panel.querySelector('.dy-active-party-pane') : null",
     "    const registry = panel ? panel.querySelector('.agent-registry-pane') : null",
-    "    const consolePane = panel ? panel.querySelector('.dy-agent-console-pane') : null",
+    "    const consolePane = panel ? panel.querySelector('.dy-chat-workspace') : null",
     "    const rect = (element) => {",
     "      const value = element ? element.getBoundingClientRect() : null",
     "      return value ? { left: Math.round(value.left), top: Math.round(value.top), right: Math.round(value.right), bottom: Math.round(value.bottom), width: Math.round(value.width), height: Math.round(value.height) } : null",
@@ -821,6 +911,9 @@ async function inspectWorkspaceNavigation(window) {
     "      partyRect: rect(party),",
     "      registryRect: rect(registry),",
     "      consoleRect: rect(consolePane),",
+    "      chatTitleRect: rect(consolePane?.querySelector('.dy-command-console__title')),",
+    "      chatConnectionRect: rect(consolePane?.querySelector('.dy-chat-connection')),",
+    "      chatActionsRect: rect(consolePane?.querySelector('.dy-command-console__meta')),",
     "    }",
     "  }",
     "  const inspectMonitorTabs = async () => {",
@@ -879,16 +972,17 @@ async function inspectWorkspaceNavigation(window) {
     "        selected: navItem.getAttribute('aria-current') === 'page',",
     "        ...summarizePanel(panel),",
     "      }",
-    "      if (navItem.id === 'nexus-nav-agents') {",
+    "      if (navItem.id === 'nexus-nav-chat') {",
     "        result.commandConsole = inspectCommandConsole(panel)",
     "        result.agentLayout = inspectAgentLayout(panel)",
     "      }",
+    "      if (navItem.id === 'nexus-nav-agents') result.registryOnly = Boolean(panel?.querySelector('[data-dui-panel=\"agent-registry\"]')) && !panel?.querySelector('.dy-chat-workspace:not([hidden])')",
     "      if (navItem.id === 'nexus-nav-monitor') result.monitorTabs = await inspectMonitorTabs()",
     "      results.push(result)",
     "    }",
     "    if (navItems[0]) {",
       "      navItems[0].click()",
-    "      await waitFor(() => document.getElementById('nexus-workspace-agents')?.innerText.replace(/\\s+/g, ' ').trim().length > 80, 5000)",
+    "      await waitFor(() => document.getElementById('nexus-workspace-chat')?.innerText.replace(/\\s+/g, ' ').trim().length > 80, 5000)",
     "      await wait(300)",
     "    }",
     "    return results",
@@ -915,7 +1009,7 @@ async function inspectAgentChatMode(window) {
     "    const commandConsole = document.querySelector('[data-dui-panel=\"command-console\"]')",
     "    const agentPicker = commandConsole?.querySelector('select[aria-label=\"Select an agent or party for this chat\"]')",
     "    const firstTargetName = commandConsole?.querySelector('.dy-command-target-chip strong')?.textContent?.trim() || ''",
-    "    const agentOption = agentPicker ? Array.from(agentPicker.options).find((option) => option.textContent.trim() === firstTargetName) : null",
+    "    const agentOption = agentPicker ? Array.from(agentPicker.options).find((option) => firstTargetName && option.textContent.trim() === firstTargetName) || Array.from(agentPicker.options).find((option) => !option.disabled && option.value !== '__party__' && option.value !== '__multiple__') : null",
     "    if (agentPicker && agentOption) {",
     "      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set",
     "      if (setter) setter.call(agentPicker, agentOption.value)",
@@ -938,7 +1032,7 @@ async function inspectAgentChatMode(window) {
     "    const fullScreenInlineStyle = fullScreenPanel?.getAttribute('style') || ''",
     "    const fullscreenRuleMatches = fullScreenPanel?.matches('html.dui-pro-overhaul .dy-command-console--fullscreen') || false",
     "    const fullscreenRuleText = Array.from(document.styleSheets).flatMap((sheet) => { try { return Array.from(sheet.cssRules || []).filter((rule) => rule.selectorText?.includes('.dy-command-console--fullscreen')).map((rule) => rule.cssText) } catch { return [] } }).slice(0, 3)",
-    "    const sidebar = fullScreenPanel?.querySelector('.dy-command-console__sidebar')",
+    "    const sidebar = fullScreenPanel?.querySelector('.dy-chat-profiles')",
     "    const sidebarRect = sidebar?.getBoundingClientRect()",
     "    const chatMainRect = fullScreenPanel?.querySelector('.dy-command-console__fullscreen-main')?.getBoundingClientRect()",
     "    const textareaFocused = Boolean(textarea && document.activeElement === textarea)",
@@ -953,7 +1047,7 @@ async function inspectAgentChatMode(window) {
     "    const settingsOpenedForSelectedAgent = Boolean(editorProfile && expectedAgentName && editorAgentName === expectedAgentName)",
     "    document.querySelector('button[aria-label=\"Close agent settings\"]')?.click()",
     "    await waitFor(() => !document.querySelector('[data-editor-panel=\"profile\"]'))",
-    "    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))",
+    "    document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))",
     "    await waitFor(() => document.querySelector('[data-chat-fullscreen=\"false\"]'))",
     "    await wait(80)",
     "    const focusRestoreButton = document.querySelector('button[aria-label=\"Open full-screen chat\"]')",
@@ -974,11 +1068,11 @@ async function inspectAgentChatMode(window) {
     "      fullscreenRuleMatches,",
     "      fullscreenRuleText,",
     "      fullScreenComputed: fullScreenStyle ? { position: fullScreenStyle.getPropertyValue('position'), width: fullScreenStyle.getPropertyValue('width'), height: fullScreenStyle.getPropertyValue('height'), display: fullScreenStyle.getPropertyValue('display'), visibility: fullScreenStyle.getPropertyValue('visibility') } : null,",
-    "      leftAgentPanelVisible: Boolean(sidebar && sidebarRect && sidebarRect.width >= (window.innerWidth <= 560 ? 60 : 200) && chatMainRect && chatMainRect.left >= sidebarRect.right - 1),",
+    "      leftAgentPanelVisible: Boolean(sidebar && sidebarRect && sidebarRect.width > 0 && sidebarRect.height > 0 && chatMainRect && sidebarRect.top >= chatMainRect.top),",
     "      sidebarRect: sidebarRect ? { left: sidebarRect.left, right: sidebarRect.right, width: sidebarRect.width } : null,",
     "      chatMainRect: chatMainRect ? { left: chatMainRect.left, right: chatMainRect.right, width: chatMainRect.width } : null,",
     "      activeElementAfterOpen,",
-    "      leftAgentCount: sidebar?.querySelectorAll('.dy-command-console__agent-row').length || 0,",
+    "      leftAgentCount: sidebar?.querySelectorAll('.dy-chat-profile:not(.dy-chat-profile--party)').length || 0,",
     "      escapedMonitorContainment: Boolean(fullScreenPanel && !fullScreenPanel.closest('.dy-agent-console-pane')),",
     "      textareaFocused,",
     "      bodyScrollLocked,",
@@ -1009,7 +1103,7 @@ async function seedRunningCommandConsole(window) {
     "    return null",
     "  }",
     "  return (async () => {",
-    "    const agentsNavItem = document.querySelector('#nexus-nav-agents')",
+    "    const agentsNavItem = document.querySelector('#nexus-nav-chat')",
     "    if (agentsNavItem) {",
     "      agentsNavItem.click()",
     "      await wait(700)",
@@ -1121,7 +1215,7 @@ async function seedMissingProviderAuthCommandConsole(window) {
     "    return null",
     "  }",
     "  return (async () => {",
-    "    const agentsNavItem = document.querySelector('#nexus-nav-agents')",
+    "    const agentsNavItem = document.querySelector('#nexus-nav-chat')",
     "    if (agentsNavItem) {",
     "      agentsNavItem.click()",
     "      await wait(500)",
@@ -1174,7 +1268,7 @@ async function seedRedactedFailedCommandConsole(window) {
     "    return null",
     "  }",
     "  return (async () => {",
-    "    const agentsNavItem = document.querySelector('#nexus-nav-agents')",
+    "    const agentsNavItem = document.querySelector('#nexus-nav-chat')",
     "    if (agentsNavItem) {",
     "      agentsNavItem.click()",
     "      await wait(500)",
@@ -1369,6 +1463,8 @@ async function inspectViewport(viewport) {
     "  })()"
   ].join('\n'))
   await new Promise((resolve) => setTimeout(resolve, 1200))
+  if (process.env.AUTOMNIA_UI_APPROVAL_FIXTURE === '1') return inspectApprovalOnly(window, viewport)
+  if (process.env.AUTOMNIA_UI_LAYOUT_ONLY === '1') return inspectLayoutOnly(window, viewport)
   const commandConsoleStopSeed = await seedRunningCommandConsole(window)
 
   const inspectScript = [
@@ -1404,6 +1500,24 @@ async function inspectViewport(viewport) {
   ].join('\n')
   const dom = await window.webContents.executeJavaScript(inspectScript)
   const workspaceNavigation = await inspectWorkspaceNavigation(window)
+  const missionLayout = await window.webContents.executeJavaScript([
+    '(async () => {',
+    "  document.querySelector('#nexus-nav-missions')?.click()",
+    '  const started = Date.now()',
+    "  while (!document.querySelector('[data-dui-panel=\"missions\"] .dui-mission-stage') && Date.now() - started < 5000) await new Promise(resolve => setTimeout(resolve, 100))",
+    "  const stage = document.querySelector('[data-dui-panel=\"missions\"] .dui-mission-stage')",
+    "  const objective = stage?.querySelector('textarea[aria-label=\"Mission objective\"]')",
+    "  const grids = Array.from(stage?.querySelectorAll('.dui-template-strip, .dui-segment-grid--organized, .dui-type-grid--organized') || [])",
+    "  const sections = Array.from(stage?.querySelectorAll('.dui-mission-main > .dui-card') || []).map(el => el.getBoundingClientRect())",
+    '  return { present: Boolean(stage && objective), stageWidth: stage?.clientWidth || 0, stageOverflow: stage ? Math.max(0, stage.scrollWidth - stage.clientWidth) : -1, objectiveHeight: objective?.getBoundingClientRect().height || 0, mainStackSeparated: sections.length >= 3 && sections.every((rect, index) => !index || rect.top >= sections[index - 1].bottom - 1), grids: grids.map(grid => ({ width: grid.clientWidth, overflow: Math.max(0, grid.scrollWidth - grid.clientWidth), columns: getComputedStyle(grid).gridTemplateColumns })) }',
+    '})()',
+  ].join('\n'))
+  window.showInactive()
+  await new Promise((resolve) => setTimeout(resolve, 200))
+  fs.writeFileSync(path.join(outputDir, 'ui-missions-' + viewport.label + '.png'), (await window.webContents.capturePage()).toPNG())
+  await window.webContents.executeJavaScript("document.querySelector('#nexus-nav-chat')?.click()")
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  fs.writeFileSync(path.join(outputDir, 'ui-agents-' + viewport.label + '.png'), (await window.webContents.capturePage()).toPNG())
   const agentChatMode = await inspectAgentChatMode(window)
   const agentChatFullscreenPreview = await window.webContents.executeJavaScript([
     "(() => (async () => {",
@@ -1430,12 +1544,10 @@ async function inspectViewport(viewport) {
   const agentChatFullscreenImage = await window.webContents.capturePage()
   const agentChatFullscreenScreenshotPath = path.join(outputDir, 'ui-agent-chat-fullscreen-' + viewport.label + '.png')
   fs.writeFileSync(agentChatFullscreenScreenshotPath, agentChatFullscreenImage.toPNG())
-  await window.webContents.executeJavaScript("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))")
+  await window.webContents.executeJavaScript("document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))")
   await new Promise((resolve) => setTimeout(resolve, 80))
-  window.hide()
   const recruitMarkdown = await inspectRecruitMarkdownEditor(window)
   const helpAssistant = await inspectHelpAssistant(window)
-  const fullscreenAgentSettings = await inspectFullscreenAgentSettings(window)
 
   await new Promise((resolve) => setTimeout(resolve, 250))
   const image = await window.webContents.capturePage()
@@ -1450,11 +1562,7 @@ async function inspectViewport(viewport) {
   window.destroy()
 
   const bitmap = bitmapStats(image)
-  const shellFillsViewport = viewport.label === 'mobile'
-    || (
-      dom.mainRect?.right >= dom.viewport.width - 2
-      && dom.workspaceContextRect?.right >= dom.viewport.width - 24
-    )
+  const shellFillsViewport = viewport.label === 'mobile' || dom.mainRect?.right >= dom.viewport.width - 2
   const workspaceNavigationOk = workspaceNavigation.length >= 4 && workspaceNavigation.every((workspaceNavItem) => (
     workspaceNavItem.selected
       && workspaceNavItem.panelTextLength >= 80
@@ -1462,72 +1570,60 @@ async function inspectViewport(viewport) {
       && workspaceNavItem.panelRect?.height > 0
   ))
   const agentsNavItem = workspaceNavigation.find((workspaceNavItem) => workspaceNavItem.id === 'nexus-nav-agents')
-  const agentLayout = agentsNavItem?.agentLayout
-  const agentLayoutOk = (() => {
-    const party = agentLayout?.partyRect
-    const registry = agentLayout?.registryRect
-    const consolePane = agentLayout?.consoleRect
-    if (!party || !registry || !consolePane) return false
-    if (agentLayout.gridTemplateAreas.includes('"party" "registry" "console"')) {
-      return registry.top >= party.bottom - 4
-        && consolePane.top >= registry.bottom - 4
-    }
-    if (agentLayout.viewportWidth <= 900) {
-      return consolePane.top >= party.bottom - 4
-        && registry.top >= consolePane.bottom - 4
-    }
-    return Math.abs(registry.top - consolePane.top) <= 4
-      && consolePane.left >= registry.right - 4
-  })()
-  const commandConsoleOk = Boolean(agentsNavItem?.commandConsole?.present)
-    && agentsNavItem.commandConsole.hasTextarea
-    && agentsNavItem.commandConsole.textareaAriaLabel === 'Command console message'
-    && agentsNavItem.commandConsole.sendButtonPresent
-    && agentsNavItem.commandConsole.sendDisabledWhenEmpty
-    && agentsNavItem.commandConsole.attachButtonPresent
-    && agentsNavItem.commandConsole.conversationSearchButtonPresent
-    && agentsNavItem.commandConsole.conversationSearchExpanded === 'false'
-    && !agentsNavItem.commandConsole.conversationSearchPanelPresent
-    && agentsNavItem.commandConsole.stopButtonPresent
-    && agentsNavItem.commandConsole.stopButtonAriaLabel.startsWith('Stop ')
-    && agentsNavItem.commandConsole.stopButtonText === 'Stop'
-    && agentsNavItem.commandConsole.stopButtonRect?.width > 0
-    && agentsNavItem.commandConsole.stopButtonRect?.height > 0
-    && /running/.test(agentsNavItem.commandConsole.busyIndicatorText)
-    && agentsNavItem.commandConsole.busyStatusRole === 'status'
-    && agentsNavItem.commandConsole.busyStatusAriaLive === 'polite'
-    && /^\d+ Command Console runs? running$/.test(agentsNavItem.commandConsole.busyStatusAriaLabel)
-    && !agentsNavItem.commandConsole.traceChipPresent
-    && agentsNavItem.commandConsole.traceChipTagName === ''
-    && agentsNavItem.commandConsole.traceChipText === ''
-    && agentsNavItem.commandConsole.traceChipTitle === ''
-    && agentsNavItem.commandConsole.traceChipAriaLabel === ''
-    && !agentsNavItem.commandConsole.evidencePreviewPresent
-    && !agentsNavItem.commandConsole.evidencePreviewOpen
-    && agentsNavItem.commandConsole.evidencePreviewAriaLabel === ''
-    && agentsNavItem.commandConsole.evidenceSummaryText === ''
-    && !agentsNavItem.commandConsole.activityPanelPresent
+  const agentLayout = workspaceNavigation.find((workspaceNavItem) => workspaceNavItem.id === 'nexus-nav-chat')?.agentLayout
+  const chatNavItem = workspaceNavigation.find((workspaceNavItem) => workspaceNavItem.id === 'nexus-nav-chat')
+  const agentLayoutOk = Boolean(agentsNavItem?.registryOnly && chatNavItem?.commandConsole?.present)
+  const commandConsoleOk = Boolean(chatNavItem?.commandConsole?.present)
+    && chatNavItem.commandConsole.hasTextarea
+    && agentLayout?.chatTitleRect?.right <= agentLayout?.chatConnectionRect?.left + 1
+    && (agentLayout?.chatActionsRect?.top >= agentLayout?.chatTitleRect?.bottom - 1 || agentLayout?.chatActionsRect?.left >= agentLayout?.chatTitleRect?.right - 1)
+    && chatNavItem.commandConsole.textareaAriaLabel === 'Command console message'
+    && chatNavItem.commandConsole.sendButtonPresent
+    && chatNavItem.commandConsole.sendDisabledWhenEmpty
+    && chatNavItem.commandConsole.attachButtonPresent
+    && chatNavItem.commandConsole.conversationSearchButtonPresent
+    && chatNavItem.commandConsole.conversationSearchExpanded === 'false'
+    && !chatNavItem.commandConsole.conversationSearchPanelPresent
+    && chatNavItem.commandConsole.stopButtonPresent
+    && chatNavItem.commandConsole.stopButtonAriaLabel.startsWith('Stop ')
+    && chatNavItem.commandConsole.stopButtonText === 'Stop'
+    && chatNavItem.commandConsole.stopButtonRect?.width > 0
+    && chatNavItem.commandConsole.stopButtonRect?.height > 0
+    && /running/.test(chatNavItem.commandConsole.busyIndicatorText)
+    && chatNavItem.commandConsole.busyStatusRole === 'status'
+    && chatNavItem.commandConsole.busyStatusAriaLive === 'polite'
+    && /^\d+ Command Console runs? running$/.test(chatNavItem.commandConsole.busyStatusAriaLabel)
+    && !chatNavItem.commandConsole.traceChipPresent
+    && chatNavItem.commandConsole.traceChipTagName === ''
+    && chatNavItem.commandConsole.traceChipText === ''
+    && chatNavItem.commandConsole.traceChipTitle === ''
+    && chatNavItem.commandConsole.traceChipAriaLabel === ''
+    && !chatNavItem.commandConsole.evidencePreviewPresent
+    && !chatNavItem.commandConsole.evidencePreviewOpen
+    && chatNavItem.commandConsole.evidencePreviewAriaLabel === ''
+    && chatNavItem.commandConsole.evidenceSummaryText === ''
+    && !chatNavItem.commandConsole.activityPanelPresent
     && (
       (
-        agentsNavItem.commandConsole.thinkingBodyPresent
-        && /^Thinking$/.test(agentsNavItem.commandConsole.thinkingBodyText)
-        && agentsNavItem.commandConsole.thinkingDotsPresent
-        && agentsNavItem.commandConsole.thinkingDotsCount === 3
+        chatNavItem.commandConsole.thinkingBodyPresent
+        && /^Thinking$/.test(chatNavItem.commandConsole.thinkingBodyText)
+        && chatNavItem.commandConsole.thinkingDotsPresent
+        && chatNavItem.commandConsole.thinkingDotsCount === 3
       )
       || (
-        agentsNavItem.commandConsole.progressBodyPresent
-        && agentsNavItem.commandConsole.progressBodyText.length > 0
+        chatNavItem.commandConsole.progressBodyPresent
+        && chatNavItem.commandConsole.progressBodyText.length > 0
       )
     )
-    && !agentsNavItem.commandConsole.thinkingCtaPresent
-    && !agentsNavItem.commandConsole.gatewayAcceptedVisible
-    && !agentsNavItem.commandConsole.runTraceVisible
-    && agentsNavItem.commandConsole.messagesRole === 'log'
-    && agentsNavItem.commandConsole.messagesAriaLive === 'polite'
-    && agentsNavItem.commandConsole.messagesAriaRelevant === 'additions text'
-    && agentsNavItem.commandConsole.messagesAriaLabel === 'Command console responses'
-    && agentsNavItem.commandConsole.messagesRect?.width > 0
-    && agentsNavItem.commandConsole.messagesRect?.height > 0
+    && !chatNavItem.commandConsole.thinkingCtaPresent
+    && !chatNavItem.commandConsole.gatewayAcceptedVisible
+    && !chatNavItem.commandConsole.runTraceVisible
+    && chatNavItem.commandConsole.messagesRole === 'log'
+    && chatNavItem.commandConsole.messagesAriaLive === 'polite'
+    && chatNavItem.commandConsole.messagesAriaRelevant === 'additions text'
+    && chatNavItem.commandConsole.messagesAriaLabel === 'Command console responses'
+    && chatNavItem.commandConsole.messagesRect?.width > 0
+    && chatNavItem.commandConsole.messagesRect?.height > 0
     && agentChatMode.attempted
     && agentChatMode.directTargetSelected
     && agentChatMode.fullScreenOpened
@@ -1587,6 +1683,12 @@ async function inspectViewport(viewport) {
     && dom.workspaceNavItems.length >= 4
     && workspaceNavigationOk
     && agentLayoutOk
+    && missionLayout.present
+    && missionLayout.stageOverflow <= 1
+    && missionLayout.objectiveHeight >= 48
+    && missionLayout.mainStackSeparated
+    && missionLayout.grids.length >= 3
+    && missionLayout.grids.every((grid) => grid.width > 0 && grid.overflow <= 1)
     && recruitMarkdown.present
     && recruitMarkdown.reviewRequiresExplicitRecruit
     && recruitMarkdown.editsPreserved
@@ -1612,7 +1714,6 @@ async function inspectViewport(viewport) {
     && helpAssistant.closed
     && /Automnia Assistant/.test(helpAssistant.panelText)
     && commandConsoleOk
-    && fullscreenAgentSettings.ok
     && commandConsoleStopClick.attempted
     && commandConsoleStopClick.clicked
     && commandConsoleStopClick.streamClosed
@@ -1698,13 +1799,17 @@ async function inspectViewport(viewport) {
     monitorCleanSlate,
     monitorCleanSlateFailure,
     workspaceNavigation,
+    missionLayout,
   }
 }
 
 app.whenReady().then(async () => {
   console.error('[ui-smoke] Electron ready; loading ' + targetUrl)
   const results = []
-  for (const viewport of checks) {
+  const selectedViewports = (process.env.AUTOMNIA_UI_SMOKE_VIEWPORTS || '').split(',').map((value) => value.trim()).filter(Boolean)
+  const selectedChecks = selectedViewports.length ? checks.filter((viewport) => selectedViewports.includes(viewport.label)) : checks
+  if (!selectedChecks.length) throw new Error('No matching UI smoke viewports selected')
+  for (const viewport of selectedChecks) {
     console.error('[ui-smoke] Checking ' + viewport.label + ' viewport')
     results.push(await inspectViewport(viewport))
   }

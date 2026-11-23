@@ -13,7 +13,7 @@ export function FirstSuccessGuide({ onNavigate }: { onNavigate: (target: HelpNav
   const hasParty = useNexusStore((state) => state.activePartyIds.length > 0)
   const hasSuccess = useNexusStore((state) => state.agentResponses.some((response) => response.ok && !response.streaming && Boolean(response.response.trim())))
   const saved = useSyncExternalStore(subscribeGuideState, readGuideState, readGuideState)
-  const [open, setOpen] = useState(() => !readPreferenceValue(KEY) && !hasParty)
+  const [open, setOpen] = useState(false)
   useEffect(() => {
     if (!hasSuccess || saved === 'complete') return
     savePreferenceEntries([[KEY, 'complete']])

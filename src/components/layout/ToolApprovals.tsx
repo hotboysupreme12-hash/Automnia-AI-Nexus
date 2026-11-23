@@ -5,7 +5,7 @@ import { useNexusStore } from '../../store/nexusStore'
 
 type Approval = { id: string; expiresAtMs: number; request: { agentId?: string; command?: string; cwd?: string } }
 
-export function ToolApprovals() {
+export function ToolApprovals({ onAvailabilityChange }: { onAvailabilityChange?: (available: boolean) => void }) {
   const [pending, setPending] = useState<Approval[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -16,9 +16,11 @@ export function ToolApprovals() {
     if (signal.aborted) return
     if (!result.ok) {
       setPollError(apiErrorMessage(result.error) || 'Tool approvals are unavailable while the Gateway is starting.')
+      onAvailabilityChange?.(false)
       return
     }
     setPollError('')
+    onAvailabilityChange?.(true)
     const next = result.data.pending.filter((item) => item.expiresAtMs > Date.now())
     setPending((previous) => {
       const unchanged = previous.length === next.length && previous.every((item, index) => {
@@ -29,11 +31,9 @@ export function ToolApprovals() {
       })
       return unchanged ? previous : next
     })
-  }, 2000), [])
+  }, 2000), [onAvailabilityChange])
   const current = pending[0]
-  if (!current) return pollError
-    ? <div role="alert" className="fixed bottom-6 right-6 z-[100] rounded-xl border border-amber-300/20 bg-[#10151d]/95 px-4 py-3 text-sm text-amber-100 shadow-2xl shadow-black/40">Approval controls unavailable: {pollError}</div>
-    : null
+  if (!current) return null
   const resolve = async (decision: 'allow-once' | 'allow-always' | 'deny', full = false) => {
     setBusy(true)
     setError('')

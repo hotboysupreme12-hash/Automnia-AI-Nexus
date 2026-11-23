@@ -79,6 +79,10 @@ if (rendererBootReady) try {
       </AppErrorBoundary>
     </StrictMode>,
   )
+  if (typeof document !== 'undefined') {
+    document.body.dataset.windowState = 'ready'
+    document.documentElement.dataset.windowState = 'ready'
+  }
 } catch (error) {
   renderBootFailure(error)
 }

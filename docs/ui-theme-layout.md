@@ -13,8 +13,12 @@ New profiles start at 100%; a saved user zoom remains authoritative. Ctrl+0
 (Command+0 on macOS) resets renderer zoom, and Ctrl/Command plus or minus
 changes it. A smaller zoom should not be required to make the layout fit.
 
-Registry cards use the actual available grid width to choose their column
-count. When checking a change, exercise narrow, short, wide and portrait
+Agent Chat is the startup workspace and remains mounted when navigating, so
+switching tabs does not discard an in-progress draft. Its profile strip uses
+the actual available width and scrolls horizontally when needed. The separate
+registry uses its available grid width to choose its column count. The mission
+editor and Workboard use natural document height so their contents can scroll
+without competing for a fixed viewport. When checking a change, exercise narrow, short, wide and portrait
 windows, resized panes, long text and increased zoom. Verify actual computed
 sizes, wrapping, scroll access and controls, including the mission editor and
 settings; a screenshot or a stylesheet check alone does not prove that every
@@ -30,3 +34,14 @@ responsive content-width limits. These are patterns, not proof of the computed
 styles of every screen. REA analyzed a JavaScript asset from that subset; the
 CSS observations came from a separate static inspection. REA's full-package
 analysis stopped on an integrity mismatch in an unpacked native dependency.
+
+## ChatGPT Desktop REA Parity Architecture
+
+The UI architecture integrates findings from the ChatGPT desktop reverse-engineering analysis (`OpenAI.Codex`):
+
+1. **Window Drag Regions**: Top chrome (`.dy-brand-strip`, `.automnia-titlebar`, `.dy-shell-header`) defines `-webkit-app-region: drag` while isolating controls (`button`, `input`, `select`, `[role="button"]`, tabs) with `-webkit-app-region: no-drag`.
+2. **Visibility Handoff**: `data-window-state="ready"` prevents dark-to-light flicker and unstyled layout jumps during Electron/browser hydration.
+3. **Focus Accessibility**: High-contrast `:focus-visible` outlines ensure keyboard navigation compliance while eliminating pointer focus-ring noise (`:focus:not(:focus-visible)`).
+4. **Streaming Message Stabilization**: Agent conversation bubbles and execution console entries use `contain: paint` and `content-visibility: auto` to prevent cumulative layout reflows during token streaming.
+5. **Sidecar / Companion Viewport**: Narrow desktop viewport rules adapt the chat and human rail seamlessly for sidecar split-screen coding (480px-720px).
+

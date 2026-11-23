@@ -142,7 +142,7 @@ type HelpDestinationMatch = {
 }
 
 const HELP_DESTINATION_MATCHES: HelpDestinationMatch[] = [
-  { alias: 'Command Console', label: 'Command Console', target: 'command-console', title: 'Open Agents with the Command Console ready.' },
+  { alias: 'Command Console', label: 'Command Console', target: 'command-console', title: 'Open Agent Chat ready for a message.' },
   { alias: 'Agent Editor', label: 'Agent Editor', target: 'agent-editor', title: 'Open the editor for the selected agent.' },
   { alias: 'Edit menu', label: 'Edit menu', target: 'agent-editor', title: 'Open the edit menu for the selected agent.' },
   { alias: 'Edit settings', label: 'Edit settings', target: 'agent-editor', title: 'Open agent edit settings for the selected agent.' },
@@ -174,17 +174,17 @@ const HELP_DESTINATION_MATCHES: HelpDestinationMatch[] = [
   { alias: 'Agent Behavior', label: 'Agent Behavior', target: 'settings-agents', title: 'Open Settings at Agent Behavior.' },
   { alias: 'Agent runtime', label: 'Agent Behavior', target: 'settings-agents', title: 'Open Settings at Agent Behavior.' },
   { alias: 'Runtime settings', label: 'Agent Behavior', target: 'settings-agents', title: 'Open Settings at Agent Behavior.' },
-  { alias: 'Google Workspace', label: 'Google Workspace', target: 'command-console', title: 'Open Agents and use the Command Console for this workflow.' },
+  { alias: 'Google Workspace', label: 'Google Workspace', target: 'command-console', title: 'Open Agent Chat for this workflow.' },
   { alias: 'ClawTalk', label: 'ClawTalk', target: 'plugins-clawtalk', title: 'Open Plugins and filter for ClawTalk.' },
   { alias: 'Telegram', label: 'Telegram', target: 'plugins-telegram', title: 'Open Plugins and filter for Telegram.' },
-  { alias: 'YouTube', label: 'YouTube', target: 'command-console', title: 'Open Agents and use the Command Console for research or drafting.' },
+  { alias: 'YouTube', label: 'YouTube', target: 'command-console', title: 'Open Agent Chat for research or drafting.' },
   { alias: 'Missions', label: 'Missions', target: 'missions', title: 'Open the Missions workspace.' },
   { alias: 'Monitor', label: 'Monitor', target: 'monitor', title: 'Open the Monitor workspace.' },
   { alias: 'Plugins', label: 'Plugins', target: 'plugins', title: 'Open the Plugins workspace.' },
   { alias: 'Settings', label: 'Settings', target: 'settings', title: 'Open the Settings workspace.' },
   { alias: 'Recruit', label: 'Recruit', target: 'recruit', title: 'Open the Recruit agent flow.' },
   { alias: 'Agents', label: 'Agents', target: 'agents', title: 'Open the Agents workspace.' },
-  { alias: 'Gog', label: 'Gog', target: 'command-console', title: 'Open Agents and use the Command Console to check Gog readiness.' },
+  { alias: 'Gog', label: 'Gog', target: 'command-console', title: 'Open Agent Chat to check Gog readiness.' },
 ]
 
 const HELP_DESTINATION_ALIASES = HELP_DESTINATION_MATCHES

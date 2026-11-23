@@ -2152,85 +2152,13 @@ export function AgentResponseConsole() {
         inset: 0,
         zIndex: 49,
         display: 'grid',
-        gridTemplateColumns: '258px minmax(0, 1fr)',
+        gridTemplateColumns: 'minmax(0, 1fr)',
         width: '100vw',
         height: '100dvh',
       } : undefined}
       className={`dy-command-console flex min-h-0 flex-col overflow-hidden${isFullScreen ? ' dy-command-console--fullscreen' : ''}`}
       onWheel={handleConsoleWheel}
     >
-      {isFullScreen && (
-        <aside className="dy-command-console__sidebar" aria-label="Agent conversations">
-          <div className="dy-command-console__sidebar-heading">
-            <div className="dy-command-console__sidebar-title-wrap">
-              <strong>Automnia</strong>
-              <span>Agent Chat</span>
-            </div>
-          </div>
-          <button
-            type="button"
-            className={`dy-command-console__conversation-target${selectedTargets.length === 0 ? ' is-active' : ''}`}
-            aria-current={selectedTargets.length === 0 ? 'page' : undefined}
-            onClick={() => { clearSelectedAgents(); setChatRemovedPartyIds([]) }}
-          >
-            <span className="dy-command-console__conversation-icon" aria-hidden="true">◈</span>
-            <span className="dy-command-console__conversation-copy">
-              <strong>Active party</strong>
-              <small>{partyTargetIds.length} agent{partyTargetIds.length === 1 ? '' : 's'}</small>
-            </span>
-            <span className="dy-command-console__conversation-status" aria-hidden="true" />
-          </button>
-          <div className="dy-command-console__sidebar-section-label">Agents</div>
-          <nav className="dy-command-console__agent-list" aria-label="Choose an agent">
-            {agents.map((agent) => {
-              const isSelected = selectedTargets.length === 1 && selectedTargets[0].id === agent.id
-              const isBusy = busyAgentIds.includes(agent.id)
-              const portraitSrc = portraitSrcForAgent(agent)
-              const portraitFailed = portraitSrc ? failedPortraitKeys.has(portraitFailureKey(agent.id, portraitSrc)) : false
-              return (
-                <div className="dy-command-console__agent-row" key={agent.id}>
-                  <button
-                    type="button"
-                    className="dy-command-console__conversation-target dy-command-console__agent-target"
-                    aria-current={isSelected ? 'page' : undefined}
-                    aria-label={`Chat with ${agent.name}${isBusy ? ', running' : ''}`}
-                    title={`Chat with ${agent.name}`}
-                    onClick={() => selectAgent(agent.id)}
-                  >
-                    <span className="dy-command-console__agent-avatar" aria-hidden="true">
-                      {portraitSrc && !portraitFailed
-                        ? <img src={portraitSrc} alt="" onError={() => markPortraitFailed(agent.id, portraitSrc)} />
-                        : <AvatarFallback name={agent.name} />}
-                    </span>
-                    <span className="dy-command-console__conversation-copy">
-                      <strong>{agent.name}</strong>
-                      <small>{isBusy ? 'Working' : 'Ready'}</small>
-                    </span>
-                    <span className={`dy-command-console__conversation-status${isBusy ? ' is-busy' : ''}`} aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    className="dy-command-console__sidebar-agent-settings"
-                    data-agent-editor-trigger="true"
-                    aria-label={`Edit ${agent.name} settings`}
-                    title={`Edit ${agent.name} settings`}
-                    onClick={() => openAgentEditor(agent.id)}
-                  >
-                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="3" />
-                      <path d="m19.4 15 .1.1a1.7 1.7 0 0 1-2.4 2.4l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a1.7 1.7 0 0 1-3.4 0v-.2a1.7 1.7 0 0 0-2.9-1.2l-.1.1a1.7 1.7 0 0 1-2.4-2.4l.1-.1A1.7 1.7 0 0 0 4.2 12h-.2a1.7 1.7 0 0 1 0-3.4h.2a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a1.7 1.7 0 0 1 2.4-2.4l.1.1a1.7 1.7 0 0 0 2.9-1.2v-.2a1.7 1.7 0 0 1 3.4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a1.7 1.7 0 0 1 2.4 2.4l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.2a1.7 1.7 0 0 1 0 3.4h-.2a1.7 1.7 0 0 0-1.2 2.9Z" />
-                    </svg>
-                  </button>
-                </div>
-              )
-            })}
-          </nav>
-          <div className="dy-command-console__sidebar-footer">
-            <span className={`dy-command-console__conversation-status${clawTalkStreamHealth.state === 'live' ? ' is-busy' : ''}`} aria-hidden="true" />
-            <span>{streamLabel[clawTalkStreamHealth.state]}</span>
-          </div>
-        </aside>
-      )}
       <div className="dy-command-console__fullscreen-main flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       {/* Header */}
       <div className="dy-command-console__header relative shrink-0 overflow-hidden">
@@ -2377,6 +2305,44 @@ export function AgentResponseConsole() {
             </div>
         </div>
       </div>
+
+      <nav className="dy-chat-profiles" aria-label="Choose a conversation">
+        <button
+          type="button"
+          className="dy-chat-profile dy-chat-profile--party"
+          aria-pressed={selectedTargets.length === 0}
+          aria-label={`Chat with active party, ${partyTargetIds.length} agents`}
+          onClick={() => { clearSelectedAgents(); setChatRemovedPartyIds([]) }}
+        >
+          <span className="dy-chat-profile__avatar dy-chat-profile__party-icon" aria-hidden="true">◈</span>
+          <span className="dy-chat-profile__name">Party</span>
+        </button>
+        {agents.map((agent) => {
+          const selected = selectedTargets.length === 1 && selectedTargets[0].id === agent.id
+          const busy = busyAgentIds.includes(agent.id)
+          const portraitSrc = portraitSrcForAgent(agent)
+          const portraitFailed = portraitSrc ? failedPortraitKeys.has(portraitFailureKey(agent.id, portraitSrc)) : false
+          return (
+            <button
+              type="button"
+              key={agent.id}
+              className="dy-chat-profile"
+              aria-pressed={selected}
+              aria-label={`Chat with ${agent.name}${busy ? ', working' : ''}`}
+              title={`${agent.name}${busy ? ' · Working' : ''}`}
+              onClick={() => selectAgent(agent.id)}
+            >
+              <span className="dy-chat-profile__avatar" aria-hidden="true">
+                {portraitSrc && !portraitFailed
+                  ? <img src={portraitSrc} alt="" onError={() => markPortraitFailed(agent.id, portraitSrc)} />
+                  : <AvatarFallback name={agent.name} />}
+                {busy && <i className="dy-chat-profile__busy" />}
+              </span>
+              <span className="dy-chat-profile__name">{agent.name}</span>
+            </button>
+          )
+        })}
+      </nav>
 
       {/* Target bar */}
       {(selectedTargets.length > 0 || partyTargetIds.length > 0 || chatBusyAgents.length > 0) && (
@@ -2679,13 +2645,24 @@ export function AgentResponseConsole() {
                 <path d="M5 4.5h14a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-6l-4 2v-2H5a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2Z" />
               </svg>
             </span>
-            <p className="dy-command-idle-hint__title">{targetCount ? 'What can we help with?' : 'No agent selected'}</p>
-            {targetCount > 0 && <p className="dy-command-idle-hint__copy">Ask a question, share a file, or delegate a task.</p>}
+            <p className="dy-command-idle-hint__title">{targetCount ? 'Ready to collaborate?' : 'Choose a conversation'}</p>
+            <p className="dy-command-idle-hint__copy">{targetCount ? 'Ask a question, share a file, or delegate a task.' : 'Select an agent above or start with your active party.'}</p>
             {targetCount === 0 && <Button variant="quiet" size="compact" onClick={() => {
-              const search = document.querySelector<HTMLInputElement>('input[aria-label="Search agents"]')
-              search?.scrollIntoView({ block: 'center', behavior: 'instant' })
-              search?.focus({ preventScroll: true })
+              const firstProfile = consoleRootRef.current?.querySelector<HTMLButtonElement>('.dy-chat-profile:not(.dy-chat-profile--party)')
+              if (firstProfile) firstProfile.focus({ preventScroll: true })
+              else useNexusStore.getState().setTab('agents')
             }}>Choose an agent</Button>}
+            {targetCount > 0 && <div className="dy-chat-starters" aria-label="Ways to get started">
+              <button type="button" onClick={() => { if (!promptRef.current.trim()) setPrompt('Help me understand '); textareaRef.current?.focus() }}>
+                <strong>Ask a question</strong><span>Get answers and ideas</span>
+              </button>
+              <button type="button" disabled={isUploading} onClick={() => fileInputRef.current?.click()}>
+                <strong>Analyze a file</strong><span>Explore an attachment</span>
+              </button>
+              <button type="button" onClick={() => { if (!promptRef.current.trim()) setPrompt('Help me plan and complete '); textareaRef.current?.focus() }}>
+                <strong>Delegate a task</strong><span>Turn a goal into action</span>
+              </button>
+            </div>}
           </div>
         )}
         <ResponseMessages visibleDisplayedResponses={visibleDisplayedResponses} agentMetaById={agentMetaById} failedPortraitKeys={failedPortraitKeys}

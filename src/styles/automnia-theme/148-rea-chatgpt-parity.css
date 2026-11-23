@@ -1,0 +1,118 @@
+/* REA (Reverse Engineering Analysis) Parity: ChatGPT Desktop Application
+   Incorporates high-impact UI/UX architecture findings:
+   1. Window drag region & top chrome control isolation
+   2. Visibility handoff and splash lifecycle stabilization
+   3. Universal keyboard :focus-visible outlines with no mouse ring clutter
+   4. Streaming message layout stabilization (contain / content-visibility)
+   5. Companion / sidecar compact popout ergonomics
+   6. Code block header and copy button ergonomics
+*/
+
+/* 1. Electron Window Drag Region & Modern Frameless Top Bar */
+.dy-brand-strip,
+.automnia-titlebar,
+.dy-shell-header,
+.dy-top-nav-bar {
+  -webkit-app-region: drag;
+}
+
+.dy-brand-strip button,
+.dy-brand-strip a,
+.dy-brand-strip input,
+.dy-brand-strip select,
+.dy-brand-strip textarea,
+.dy-brand-strip [role="button"],
+.dy-brand-strip [role="tab"],
+.automnia-titlebar button,
+.automnia-titlebar a,
+.automnia-titlebar input,
+.automnia-titlebar select,
+.automnia-titlebar [role="button"],
+.dy-shell-header button,
+.dy-shell-header a,
+.dy-shell-header input,
+.dy-shell-header select,
+.dy-shell-header [role="button"],
+.dy-top-nav-bar button,
+.dy-top-nav-bar a,
+.dy-top-nav-bar input,
+.dy-top-nav-bar [role="button"],
+.dy-human-rail,
+.dy-human-rail * {
+  -webkit-app-region: no-drag;
+}
+
+/* 2. Visibility Handoff & Seamless Splash Transition */
+body[data-window-state="ready"] .automnia-boot-splash,
+html[data-window-state="ready"] .automnia-boot-splash {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.2s;
+}
+
+/* 3. Universal Keyboard Focus Outlines (Accessible without mouse focus noise) */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-focus, #3b82f6) !important;
+  outline-offset: 2px !important;
+}
+
+/* 4. Streaming Message Layout Stabilization */
+.dy-agent-message-row,
+.dy-console-entry,
+.dy-chat-stream-message,
+.dy-streaming-token-block {
+  contain: paint;
+  content-visibility: auto;
+}
+
+/* 5. Code Block Top Header & Copy Action Ergonomics */
+.dy-code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--dy-surface-card-subtle, rgba(255, 255, 255, 0.04));
+  border-bottom: 1px solid var(--dy-border-subtle, rgba(255, 255, 255, 0.08));
+  font-size: 11px;
+  font-family: var(--dy-font-mono, monospace);
+  color: var(--dy-text-muted, #94a3b8);
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+}
+
+.dy-code-block-header .dy-copy-btn {
+  background: transparent;
+  border: 1px solid var(--dy-border-subtle, rgba(255, 255, 255, 0.12));
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--dy-text-secondary, #cbd5e1);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.dy-code-block-header .dy-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* 6. Compact Sidecar / Companion Popout Mode */
+@media (max-width: 720px) {
+  .dui-pro-overhaul.dui-cohesive-ui .dy-human-rail {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  .dui-pro-overhaul.dui-cohesive-ui .dy-app-shell {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .dy-chat-input-bar {
+    padding-inline: 8px !important;
+  }
+}

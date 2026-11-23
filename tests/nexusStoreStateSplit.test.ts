@@ -164,6 +164,7 @@ function makeAgentResponse(id: string, agentId = 'alpha'): AgentResponse {
 }
 
 test('nexus UI state owns only shell selection and editor state', () => {
+  assert.equal(makeNexusUiState(agents).tab, 'chat')
   assert.deepEqual(
     normalizeNexusSelection(agents, 'beta', ['alpha', 'missing', 'alpha']),
     { selectedAgentId: 'beta', selectedAgentIds: ['beta', 'alpha'] },

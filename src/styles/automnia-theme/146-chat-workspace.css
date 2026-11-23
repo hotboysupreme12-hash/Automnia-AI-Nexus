@@ -1,0 +1,186 @@
+/* Chat is a workspace within the application shell, so navigation stays
+   available and the conversation can keep its draft while another tab opens. */
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-workspace[hidden] {
+  display: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg > .dy-app-main[data-workspace="chat"] {
+  display: flex !important;
+  flex-direction: column !important;
+  box-sizing: border-box !important;
+  height: 100dvh !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-chat {
+  display: flex !important;
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-chat .dy-chat-workspace {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-chat .dy-command-console[data-chat-panel="true"] {
+  position: relative !important;
+  inset: auto !important;
+  z-index: auto !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+}
+
+/* Fullscreen is optional; it uses the same profile strip rather than taking
+   a second, redundant navigation rail from the available chat width. */
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"].dy-command-console--fullscreen {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profiles {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 8px 16px 10px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border-bottom: 1px solid rgb(255 255 255 / .06);
+  scrollbar-width: thin;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profile {
+  display: flex;
+  flex: 0 0 64px;
+  min-width: 0;
+  min-height: 0;
+  padding: 2px;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border: 0 !important;
+  border-radius: 9px;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #aebcc5;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profile__avatar {
+  position: relative;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  place-items: center;
+  border: 2px solid rgb(255 255 255 / .15);
+  border-radius: 50% !important;
+  background: #182122;
+  color: #a8e8d9;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profile__avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50% !important;
+  object-fit: cover;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profile[aria-pressed="true"] .dy-chat-profile__avatar {
+  border-color: #8ce1cf;
+  box-shadow: 0 0 0 2px rgb(140 225 207 / .2);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profile:focus-visible {
+  outline: 2px solid #8ce1cf;
+  outline-offset: 2px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profile__name {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profile__busy {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #101313;
+  border-radius: 50%;
+  background: #6fe0c7;
+}
+
+@media (min-width: 1101px) {
+  html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-chat .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__header-inner {
+    flex-wrap: nowrap !important;
+  }
+  html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-chat .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__title-row {
+    flex: 1 1 auto !important;
+  }
+  html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-chat .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__meta {
+    flex: 0 1 auto !important;
+  }
+  html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-chat .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-chat-agent-picker {
+    flex: 0 1 220px !important;
+    width: min(220px, 20vw) !important;
+  }
+}
+
+/* Keep detailed cards compact and let columns follow the actual registry
+   width. Cards grow for wrapped text instead of cropping their actions. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-grid-mode="grid10"]:not([data-agent-grid-mode="list"]) {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)) !important;
+  grid-auto-rows: max-content !important;
+  gap: 12px !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"][data-agent-card-theme][data-agent-rarity][data-agent-display-mode="grid10"] {
+  height: auto !important;
+  min-height: max-content !important;
+  max-height: none !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"][data-agent-card-theme][data-agent-rarity][data-agent-display-mode="grid10"] .agent-card-body {
+  flex: 0 0 auto !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"][data-agent-card-theme][data-agent-rarity][data-agent-display-mode="grid10"] .agent-card-media {
+  aspect-ratio: 2 / 1 !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"][data-agent-card-theme][data-agent-rarity][data-agent-display-mode="grid10"] .agent-card-details {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 8px 12px !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"][data-agent-card-theme][data-agent-rarity][data-agent-display-mode="grid10"] .agent-card-details > div {
+  min-width: 0 !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"][data-agent-card-theme][data-agent-rarity][data-agent-display-mode="grid10"] .agent-card-details strong {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 860px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg > .dy-app-main[data-workspace="chat"] {
+    min-height: 0 !important;
+    height: calc(100dvh - var(--dy-mobile-nav-height, 62px)) !important;
+    padding-top: 16px !important;
+    padding-bottom: 8px !important;
+  }
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profiles {
+    gap: 4px;
+    padding-inline: 8px;
+  }
+}

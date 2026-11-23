@@ -18,6 +18,9 @@ reports/
 coverage/
 
 # Local runtime and generated state
+.omni*.json
+.worktrees/
+shopify-theme-staging*/
 .cache/
 .codex/
 .dirac-symbol-index/

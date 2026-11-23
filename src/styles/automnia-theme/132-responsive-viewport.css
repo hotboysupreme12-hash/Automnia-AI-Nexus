@@ -68,19 +68,18 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-c
   }
 }
 
-/* 720p/768p laptops and compact desktop windows have enough width for the
-   registry when chat is stacked, but not enough height for both panels to sit
-   side by side without forcing a giant scroll region. */
-@media (min-width: 901px) and (max-width: 1400px),
-       (min-width: 901px) and (max-height: 820px) {
+/* Stack only when the available width cannot support both useful panes.
+   A short window alone is not a reason to push chat below the registry:
+   that makes the composer harder to reach on scaled 1080p displays. */
+@media (min-width: 901px) and (max-width: 1100px) {
   html.dui-pro-overhaul .dy-agents-workspace.is-console-visible,
   html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace.is-console-visible {
     grid-template-columns: minmax(0, 1fr) !important;
     grid-template-rows: auto auto auto !important;
     grid-template-areas:
       "party"
-      "registry"
-      "console" !important;
+      "console"
+      "registry" !important;
     align-items: stretch !important;
     overflow: visible !important;
   }

@@ -659,6 +659,28 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"
   flex-basis:auto !important;
 }
 
+/* The embedded chat is often only 320–420 CSS pixels wide even on a large
+   screen. Its title, connection state and actions need separate rows; window
+   width media queries cannot describe the size of this resizable pane. */
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"]:not(.dy-command-console--fullscreen) .dy-command-console__header-inner {
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  padding: 12px 16px !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"]:not(.dy-command-console--fullscreen) .dy-command-console__title-row {
+  flex: 1 1 100% !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"]:not(.dy-command-console--fullscreen) .dy-command-console__meta {
+  flex: 1 1 100% !important;
+  min-width: 0 !important;
+  flex-wrap: wrap !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"]:not(.dy-command-console--fullscreen) .dy-chat-agent-picker {
+  flex: 1 1 100px !important;
+  min-width: 80px !important;
+  max-width: 100% !important;
+}
+
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-target-chip[data-agent-rarity][data-target-mode] {
   border:1px solid #ffffff0b !important;
   background:#18181a !important;

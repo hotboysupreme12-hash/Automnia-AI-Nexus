@@ -1,0 +1,192 @@
+/* A quieter graphite shell keeps the product mark and content prominent. */
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail {
+  background: #0b0d0f !important;
+  border-color: #25292e !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav-icon-img[src*="/generated-graphite/"],
+html.dui-pro-overhaul.dui-cohesive-ui .automnia-generated-icon {
+  width: 30px !important;
+  height: 30px !important;
+  object-fit: cover !important;
+  filter: url(#automnia-generated-icon-ink) !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-approvals-status {
+  padding: 4px 16px;
+  color: #c0aa86;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+@media (min-width: 861px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-rail-head--lockup {
+    min-height: 86px !important;
+    height: 86px !important;
+    padding: 0 20px !important;
+    background: #0b0d0f !important;
+    border-color: #25292e !important;
+  }
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav {
+    gap: 3px !important;
+    padding: 10px 10px 0 !important;
+  }
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility) {
+    min-height: 52px !important;
+    padding: 6px 10px !important;
+    gap: 10px !important;
+    border: 1px solid transparent !important;
+    border-radius: 9px !important;
+    color: #aeb6be !important;
+  }
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(:hover, :focus-visible) {
+    background: #1c2024 !important;
+    border-color: #33383e !important;
+    color: #f2f4f5 !important;
+  }
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"]) {
+    background: #23272b !important;
+    border-color: #454b51 !important;
+    box-shadow: inset 3px 0 #b7c1c9 !important;
+    color: #f7f8f9 !important;
+  }
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav .dy-human-nav-icon {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    flex-basis: 34px !important;
+    border: 1px solid #343a40 !important;
+    border-radius: 9px !important;
+    background: #171a1d !important;
+  }
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav-copy {
+    line-height: 1.2 !important;
+  }
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] {
+  border-color: #2b3035 !important;
+  background: #0c0e10 !important;
+  color: #e5e8eb !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__header {
+  border-color: #262b30 !important;
+  background: #101316 !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__header-inner {
+  padding: 14px 18px !important;
+  gap: 12px !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profiles {
+  gap: 6px;
+  padding: 10px 18px 9px;
+  border-color: #262b30;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profile {
+  flex-basis: 82px;
+  gap: 5px;
+  color: #aeb6be;
+  font-size: 11px;
+  font-weight: 500;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profile__avatar {
+  overflow: hidden !important;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #4a5159 !important;
+  background: #1b2024 !important;
+  color: #cbd1d5 !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profile__avatar img {
+  display: block;
+  object-fit: cover;
+  object-position: center 30%;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profile[aria-pressed="true"] .dy-chat-profile__avatar {
+  border-color: #c3cbd1 !important;
+  box-shadow: 0 0 0 2px #6c778133 !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profile[aria-pressed="true"] .dy-chat-profile__name {
+  color: #f0f2f4;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-target-bar {
+  padding: 8px 18px !important;
+  border-color: #262b30 !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-messages {
+  background: radial-gradient(ellipse at 50% 55%, #171b1f 0%, #0c0e10 58%) !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-idle-hint {
+  gap: 9px !important;
+  width: 100% !important;
+  max-width: none !important;
+  align-self: stretch !important;
+  padding: 18px 12px !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-idle-hint__title {
+  font-size: 20px !important;
+  font-weight: 650 !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-idle-hint__copy {
+  max-width: 36rem !important;
+  color: #a6aeb7 !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-starters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  width: min(100%, 690px) !important;
+  max-width: none !important;
+  gap: 8px;
+  margin-top: 10px;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-starters button {
+  display: flex;
+  min-width: 0;
+  min-height: 58px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 4px;
+  padding: 9px 12px;
+  border: 1px solid #30363b !important;
+  border-radius: 9px !important;
+  background: #15191c !important;
+  color: #e0e4e7 !important;
+  text-align: left;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-starters button:hover,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-starters button:focus-visible {
+  border-color: #858f98 !important;
+  background: #202529 !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-starters button span {
+  color: #a4adb5 !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  line-height: 1.35 !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-composer__row {
+  border-color: #414850 !important;
+  background: #171a1d !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-composer__row:focus-within {
+  border-color: #abb6bf !important;
+  box-shadow: 0 0 0 2px #aeb9c21c !important;
+}
+@media (max-width: 860px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-approvals-status {
+    align-self: center;
+    flex: none;
+    padding: 4px 8px;
+    white-space: nowrap;
+  }
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profiles {
+    padding-inline: 8px;
+  }
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profile {
+    flex-basis: 72px;
+  }
+}
+@media (max-width: 560px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-starters {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}

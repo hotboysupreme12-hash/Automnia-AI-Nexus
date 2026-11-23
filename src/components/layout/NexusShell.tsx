@@ -3,8 +3,8 @@ import { BackgroundNotifications } from './BackgroundNotifications'
 import { ToolApprovals } from './ToolApprovals'
 import { FirstSuccessGuide } from './FirstSuccessGuide'
 import { NavigationTooltip } from './NavigationTooltip'
-import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, KeyboardEvent, PointerEvent } from 'react'
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AppTab } from '../../store/nexusStore'
 import { resolveAgentEditorId, type AgentEditorTab } from '../../store/nexusUiState'
@@ -17,12 +17,6 @@ import type { SettingsSectionId } from '../settings/SettingsPanel'
 import { ActivePartyStrip } from '../party/ActivePartyStrip'
 import { PartySelector } from '../party/PartySelector'
 import { applyStoredUiSettings } from '../settings/uiSettings'
-import {
-  CONSOLE_PREFS_CHANGED_EVENT,
-  readConsolePreferences,
-  saveConsolePreferences,
-  type ConsolePreferences,
-} from '../settings/workspaceSettings'
 import { Button, StatusChip } from '../ui'
 
 const LAZY_IMPORT_RELOAD_WINDOW_MS = 30_000
@@ -72,10 +66,7 @@ function recoverableLazyImport<T>(key: string, loader: () => Promise<T>): Promis
 const StableActivePartyStrip = memo(ActivePartyStrip)
 const StablePartySelector = memo(PartySelector)
 
-// The Agents workspace is the default landing surface. Keep its two critical
-// panels in the initial module graph so a slow or temporarily unavailable
-// dynamic chunk cannot leave the first screen parked on the Suspense loader.
-// Secondary workspaces stay lazy to keep their cost out of the default path.
+// Keep secondary workspaces lazy while chat is the default landing workspace.
 const MissionDeploymentPanel = memo(lazy(() => recoverableLazyImport('mission-deployment-panel', () => import('../mission/MissionDeploymentPanel').then((module) => ({ default: module.MissionDeploymentPanel })))))
 const AgentResponseConsole = memo(lazy(() => recoverableLazyImport('agent-response-console', () => import('../monitor/AgentResponseConsole').then((module) => ({ default: module.AgentResponseConsole })))))
 const LiveOperationMonitor = memo(lazy(() => recoverableLazyImport('live-operation-monitor', () => import('../monitor/LiveOperationMonitor').then((module) => ({ default: module.LiveOperationMonitor })))))
@@ -101,7 +92,8 @@ const CommandPalette = lazy(() => recoverableLazyImport('command-palette', () =>
 
 function prefetchWorkspace(tab: AppTab) {
   const load = {
-    agents: () => import('../monitor/AgentResponseConsole'),
+    chat: () => import('../monitor/AgentResponseConsole'),
+    agents: () => Promise.resolve(),
     missions: () => import('../mission/MissionDeploymentPanel'),
     monitor: () => import('../monitor/LiveOperationMonitor'),
     plugins: () => import('../plugins/PluginsPanel'),
@@ -134,10 +126,6 @@ const AUTOMNIA_BRAND_LABEL = 'Automnia AI Nexus'
 const RECRUIT_ICON_SRC = '/icons/nav-recruit-teal.png'
 const SETTINGS_ICON_SRC = '/icons/nav-settings-teal.png'
 const HELP_ICON_SRC = '/icons/nav-help-teal.png'
-const AGENT_CONSOLE_MIN_WIDTH = 360
-const AGENT_CONSOLE_MAX_WIDTH = 760
-const AGENT_REGISTRY_MIN_WIDTH = 640
-const AGENT_SPLIT_HANDLE_WIDTH = 18
 const EMPTY_RUNTIME_CRON_JOBS: RuntimeCronJob[] = []
 type ShellNotice = { tone: 'success' | 'warning' | 'error' | 'neutral'; message: string }
 
@@ -153,6 +141,7 @@ function resolveCronCountBand(count: number): CronCountBand {
 }
 
 const WORKSPACE_META: Record<AppTab, { label: string; railMeta: string; iconSrc: string; tone: string }> = {
+  chat: { label: 'Agent Chat', railMeta: 'Conversations', iconSrc: '/icons/generated-graphite/chat.png', tone: 'chat' },
   agents: { label: 'Agents', railMeta: 'Roster', iconSrc: '/icons/nav-agents-teal.png', tone: 'agents' },
   missions: { label: 'Missions', railMeta: 'Launch', iconSrc: '/icons/nav-missions-teal.png', tone: 'missions' },
   monitor: { label: 'Monitor', railMeta: 'Live ops', iconSrc: '/icons/nav-monitor-teal.png', tone: 'monitor' },
@@ -161,6 +150,7 @@ const WORKSPACE_META: Record<AppTab, { label: string; railMeta: string; iconSrc:
 }
 
 const PRIMARY_WORKSPACES: { id: PrimaryWorkspace; label: string; railMeta: string; iconSrc: string; tone: string }[] = [
+  { id: 'chat', label: 'Agent Chat', railMeta: 'Conversations', iconSrc: '/icons/generated-graphite/chat.png', tone: 'chat' },
   { id: 'agents', label: 'Agents', railMeta: 'Roster', iconSrc: '/icons/nav-agents-teal.png', tone: 'agents' },
   { id: 'missions', label: 'Missions', railMeta: 'Launch', iconSrc: '/icons/nav-missions-teal.png', tone: 'missions' },
   { id: 'monitor', label: 'Monitor', railMeta: 'Live ops', iconSrc: '/icons/nav-monitor-teal.png', tone: 'monitor' },
@@ -171,14 +161,6 @@ function navIconStyle(src: string): CSSProperties {
   return { '--dy-nav-icon': `url("${src}")` } as CSSProperties
 }
 
-function clampAgentConsoleWidth(value: number, workspace: HTMLElement): number {
-  const workspaceRect = workspace.getBoundingClientRect()
-  const workspaceStyle = window.getComputedStyle(workspace)
-  const gap = Number.parseFloat(workspaceStyle.columnGap || workspaceStyle.gap || '0') || 0
-  const maxFromWorkspace = workspaceRect.width - AGENT_REGISTRY_MIN_WIDTH - gap
-  const maxWidth = Math.max(AGENT_CONSOLE_MIN_WIDTH, Math.min(AGENT_CONSOLE_MAX_WIDTH, maxFromWorkspace))
-  return Math.round(Math.min(maxWidth, Math.max(AGENT_CONSOLE_MIN_WIDTH, value)))
-}
 
 function PanelLoader({ workspace = 'console' }: { workspace?: AppTab | 'console' }) {
   return (
@@ -204,6 +186,7 @@ function PanelLoader({ workspace = 'console' }: { workspace?: AppTab | 'console'
 }
 
 export function NexusShell() {
+  const [approvalsAvailable, setApprovalsAvailable] = useState(true)
   const tab = useNexusStore((s) => s.tab)
   const workspaceScrollRoot = useRef<HTMLDivElement>(null)
   useWorkspaceScroll(tab, workspaceScrollRoot)
@@ -281,7 +264,7 @@ export function NexusShell() {
   }, [activeMission, activePartyIds, agents, missionRunning])
   const workspaceState = gatewayMigration
     ? 'Gateway migration in progress'
-    : tab === 'agents'
+    : tab === 'agents' || tab === 'chat'
       ? busyAgentCount
         ? `${busyAgentCount} agent${busyAgentCount === 1 ? '' : 's'} active`
         : gatewayOnline
@@ -304,7 +287,7 @@ export function NexusShell() {
             : gatewayOnline ? 'Gateway connected · inspect extension status below' : runtimeStatus ? 'Gateway offline' : 'Checking gateway'
   const workspaceStateTone = gatewayMigration
     ? 'active'
-    : tab === 'agents'
+    : tab === 'agents' || tab === 'chat'
       ? busyAgentCount ? 'active' : gatewayOnline ? 'healthy' : runtimeStatus ? 'offline' : 'loading'
       : tab === 'missions'
         ? missionRunning ? 'active' : gatewayOnline ? 'healthy' : runtimeStatus ? 'offline' : 'loading'
@@ -351,16 +334,6 @@ export function NexusShell() {
   const [cronClearTargets, setCronClearTargets] = useState<RuntimeCronJob[]>([])
   const [cronNotice, setCronNotice] = useState<ShellNotice | null>(null)
   const pendingVoiceAgentId = useAgentVoiceStore((s) => s.pendingAgentId)
-  useEffect(() => {
-    if (pendingVoiceAgentId) setAgentConsoleVisible(true)
-  }, [pendingVoiceAgentId])
-  const [isAgentConsoleVisible, setAgentConsoleVisible] = useState(() => readConsolePreferences().visible)
-  const [agentConsoleWidth, setAgentConsoleWidth] = useState<number | null>(() => readConsolePreferences().width)
-  const [isAgentSplitResizing, setAgentSplitResizing] = useState(false)
-  const [splitMetrics, setSplitMetrics] = useState({ width: AGENT_CONSOLE_MIN_WIDTH, max: AGENT_CONSOLE_MAX_WIDTH })
-  const [agentsWorkspaceNode, setAgentsWorkspaceNode] = useState<HTMLDivElement | null>(null)
-  const [consoleFirst, setConsoleFirst] = useState(false)
-  const [agentRegistryPaneNode, setAgentRegistryPaneNode] = useState<HTMLDivElement | null>(null)
   const pendingTabRef = useRef<AppTab | null>(null)
   const tabFrameRef = useRef<number | null>(null)
   const selectTab = useCallback((nextTab: AppTab) => {
@@ -387,6 +360,9 @@ export function NexusShell() {
       setTab(targetTab)
     })
   }, [setTab])
+  useEffect(() => {
+    if (pendingVoiceAgentId) selectTab('chat')
+  }, [pendingVoiceAgentId, selectTab])
   const navigateFromHelp = useCallback((target: HelpNavigationTarget) => {
     closeHelp()
     if (target === 'recruit') {
@@ -418,9 +394,8 @@ export function NexusShell() {
       return
     }
     if (target === 'command-console') {
-      setAgentConsoleVisible(true)
       setFocusCommandConsole(true)
-      selectTab('agents')
+      selectTab('chat')
       return
     }
     if (target === 'plugins-clawtalk' || target === 'plugins-telegram') {
@@ -494,112 +469,9 @@ export function NexusShell() {
       setCronClearBusy(false)
     }
   }
-  const commitAgentConsoleWidth = useCallback((nextWidth: number) => {
-    setAgentConsoleWidth(nextWidth)
-    saveConsolePreferences({ ...readConsolePreferences(), width: nextWidth })
-  }, [])
-  const currentAgentConsoleWidth = useCallback((workspace: HTMLElement) => {
-    const consolePane = workspace.querySelector<HTMLElement>('.dy-agent-console-pane')
-    const measured = consolePane?.getBoundingClientRect().width || agentConsoleWidth || 0
-    return clampAgentConsoleWidth(measured || AGENT_CONSOLE_MIN_WIDTH, workspace)
-  }, [agentConsoleWidth])
-  const handleAgentSplitPointerDown = useCallback((event: PointerEvent<HTMLDivElement>) => {
-    const workspace = agentsWorkspaceNode
-    if (!workspace || !isAgentConsoleVisible) return
-
-    event.preventDefault()
-    const splitter = event.currentTarget
-    splitter.focus({ preventScroll: true })
-    const workspaceRect = workspace.getBoundingClientRect()
-    const workspaceStyle = window.getComputedStyle(workspace)
-    const gap = Number.parseFloat(workspaceStyle.columnGap || workspaceStyle.gap || '0') || 0
-    const maxFromWorkspace = workspaceRect.width - AGENT_REGISTRY_MIN_WIDTH - gap
-    const pointerMaxWidth = Math.max(AGENT_CONSOLE_MIN_WIDTH, Math.min(AGENT_CONSOLE_MAX_WIDTH, maxFromWorkspace))
-    let nextWidth = currentAgentConsoleWidth(workspace)
-    let paintFrame: number | null = null
-    const paintWidth = () => {
-      paintFrame = null
-      workspace.style.setProperty('--dy-command-console-width', `${nextWidth}px`)
-      splitter.setAttribute('aria-valuenow', String(nextWidth))
-      splitter.setAttribute('aria-valuetext', `${nextWidth} pixels`)
-    }
-
-    const resizeToPointer = (clientX: number) => {
-      const rawWidth = workspaceRect.right - clientX - gap
-      nextWidth = Math.round(Math.min(pointerMaxWidth, Math.max(AGENT_CONSOLE_MIN_WIDTH, rawWidth)))
-      // Keep pointer movement off React's render path. State and persistence
-      // are committed once when the drag finishes.
-      if (paintFrame === null) paintFrame = window.requestAnimationFrame(paintWidth)
-    }
-    const stopResize = () => {
-      if (paintFrame !== null) window.cancelAnimationFrame(paintFrame)
-      paintWidth()
-      setAgentSplitResizing(false)
-      document.documentElement.classList.remove('dy-agent-split-resizing')
-      window.removeEventListener('pointermove', handlePointerMove)
-      window.removeEventListener('pointerup', handlePointerUp)
-      window.removeEventListener('pointercancel', handlePointerUp)
-      commitAgentConsoleWidth(nextWidth)
-    }
-    const handlePointerMove = (moveEvent: globalThis.PointerEvent) => {
-      moveEvent.preventDefault()
-      resizeToPointer(moveEvent.clientX)
-    }
-    const handlePointerUp = () => {
-      stopResize()
-    }
-
-    setAgentSplitResizing(true)
-    document.documentElement.classList.add('dy-agent-split-resizing')
-    splitter.setPointerCapture?.(event.pointerId)
-    resizeToPointer(event.clientX)
-    window.addEventListener('pointermove', handlePointerMove, { passive: false })
-    window.addEventListener('pointerup', handlePointerUp, { once: true })
-    window.addEventListener('pointercancel', handlePointerUp, { once: true })
-  }, [agentsWorkspaceNode, commitAgentConsoleWidth, currentAgentConsoleWidth, isAgentConsoleVisible])
-  const handleAgentSplitKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
-    const workspace = agentsWorkspaceNode
-    if (!workspace || !isAgentConsoleVisible) return
-
-    const step = event.shiftKey ? 80 : 32
-    let nextWidth = currentAgentConsoleWidth(workspace)
-    if (event.key === 'ArrowRight') {
-      nextWidth -= step
-    } else if (event.key === 'ArrowLeft') {
-      nextWidth += step
-    } else if (event.key === 'Home') {
-      nextWidth = AGENT_CONSOLE_MAX_WIDTH
-    } else if (event.key === 'End') {
-      nextWidth = AGENT_CONSOLE_MIN_WIDTH
-    } else {
-      return
-    }
-
-    event.preventDefault()
-    commitAgentConsoleWidth(clampAgentConsoleWidth(nextWidth, workspace))
-  }, [agentsWorkspaceNode, commitAgentConsoleWidth, currentAgentConsoleWidth, isAgentConsoleVisible])
-  const agentWorkspaceStyle = agentConsoleWidth
-    ? ({ '--dy-command-console-width': `${agentConsoleWidth}px` } as CSSProperties)
-    : undefined
-
   useEffect(() => { void syncPartyOverview().catch(() => undefined) }, [syncPartyOverview])
   useEffect(() => { void syncMissionProjection().catch(() => undefined) }, [syncMissionProjection])
   useEffect(() => { applyStoredUiSettings() }, [])
-  useEffect(() => {
-    const syncConsolePreferences = (event?: Event) => {
-      const next = event instanceof CustomEvent
-        ? event.detail as ConsolePreferences
-        : readConsolePreferences()
-      setAgentConsoleVisible(next.visible)
-      setAgentConsoleWidth(next.width)
-    }
-    window.addEventListener(CONSOLE_PREFS_CHANGED_EVENT, syncConsolePreferences)
-    window.addEventListener('storage', syncConsolePreferences)
-    return () => {
-      window.removeEventListener(CONSOLE_PREFS_CHANGED_EVENT, syncConsolePreferences)
-      window.removeEventListener('storage', syncConsolePreferences)
-    }
-  }, [])
   useEffect(() => {
     const handleWorkspaceShortcut = (event: globalThis.KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k' && !event.defaultPrevented) {
@@ -636,10 +508,7 @@ export function NexusShell() {
     return () => window.removeEventListener('keydown', handleWorkspaceShortcut)
   }, [selectTab])
   useEffect(() => {
-    saveConsolePreferences({ ...readConsolePreferences(), visible: isAgentConsoleVisible })
-  }, [isAgentConsoleVisible])
-  useEffect(() => {
-    if (!focusCommandConsole || tab !== 'agents' || !isAgentConsoleVisible) return
+    if (!focusCommandConsole || tab !== 'chat') return
     const focusConsole = () => {
       const textarea = document.querySelector<HTMLTextAreaElement>('.dy-command-textarea')
       if (!textarea) return
@@ -649,121 +518,16 @@ export function NexusShell() {
     window.addEventListener('automnia:console-ready', focusConsole)
     focusConsole()
     return () => window.removeEventListener('automnia:console-ready', focusConsole)
-  }, [focusCommandConsole, isAgentConsoleVisible, tab])
-  useLayoutEffect(() => {
-    if (!agentsWorkspaceNode) return
-    const synchronizeOrder = () => {
-      const rows = window.getComputedStyle(agentsWorkspaceNode).gridTemplateAreas.match(/"[^"]+"/g) || []
-      const consoleRow = rows.findIndex((row) => row.includes('console'))
-      const registryRow = rows.findIndex((row) => row.includes('registry'))
-      setConsoleFirst(consoleRow >= 0 && registryRow >= 0 && consoleRow < registryRow)
-    }
-    synchronizeOrder()
-    const observer = new ResizeObserver(synchronizeOrder)
-    observer.observe(agentsWorkspaceNode)
-    window.addEventListener('resize', synchronizeOrder)
-    return () => { observer.disconnect(); window.removeEventListener('resize', synchronizeOrder) }
-  }, [agentsWorkspaceNode, isAgentConsoleVisible])
-  useEffect(() => {
-    if (tab !== 'agents' || !isAgentConsoleVisible || !agentsWorkspaceNode) return
-
-    const clampSavedWidth = () => {
-      const clamped = currentAgentConsoleWidth(agentsWorkspaceNode)
-      const max = clampAgentConsoleWidth(AGENT_CONSOLE_MAX_WIDTH, agentsWorkspaceNode)
-      setSplitMetrics((previous) => previous.width === clamped && previous.max === max ? previous : { width: clamped, max })
-      if (agentConsoleWidth !== null && clamped !== agentConsoleWidth) setAgentConsoleWidth(clamped)
-    }
-
-    clampSavedWidth()
-    if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', clampSavedWidth)
-      return () => window.removeEventListener('resize', clampSavedWidth)
-    }
-
-    const observer = new ResizeObserver(clampSavedWidth)
-    observer.observe(agentsWorkspaceNode)
-    return () => observer.disconnect()
-  }, [agentConsoleWidth, agentsWorkspaceNode, isAgentConsoleVisible, tab, currentAgentConsoleWidth])
-  useEffect(() => {
-    if (tab !== 'agents') return
-    const workspace = agentsWorkspaceNode
-    const registryPane = agentRegistryPaneNode
-    if (!workspace || !registryPane) return
-
-    let frameId = 0
-    let previousAvailableHeight = 0
-    const syncConsoleHeight = () => {
-      if (frameId) window.cancelAnimationFrame(frameId)
-      frameId = window.requestAnimationFrame(() => {
-        const registryPanel = registryPane.querySelector<HTMLElement>('[data-dui-panel="agent-registry"]')
-        const panelTop = (registryPanel ?? registryPane).getBoundingClientRect().top
-        const viewportHeight = window.visualViewport?.height ?? window.innerHeight
-        const rootStyle = window.getComputedStyle(document.documentElement)
-        const appMainStyle = window.getComputedStyle(workspace.closest<HTMLElement>('.dy-app-main') ?? workspace)
-        const shellGutter = Number.parseFloat(rootStyle.getPropertyValue('--dui-shell-gutter') || '0') || 0
-        const appMainPaddingBottom = Number.parseFloat(appMainStyle.paddingBottom || '0') || 0
-        const bottomInset = Math.max(8, shellGutter) + appMainPaddingBottom
-        const availableHeight = Math.floor(viewportHeight - panelTop - bottomInset)
-        const nextAvailableHeight = Math.max(320, availableHeight)
-        if (availableHeight > 0 && nextAvailableHeight !== previousAvailableHeight) {
-          previousAvailableHeight = nextAvailableHeight
-          workspace.style.setProperty('--dy-agent-registry-pane-height', `${nextAvailableHeight}px`)
-        }
-      })
-    }
-
-    syncConsoleHeight()
-    window.addEventListener('resize', syncConsoleHeight)
-    window.visualViewport?.addEventListener('resize', syncConsoleHeight)
-
-    if (typeof ResizeObserver === 'undefined') {
-      return () => {
-        if (frameId) window.cancelAnimationFrame(frameId)
-        window.removeEventListener('resize', syncConsoleHeight)
-        window.visualViewport?.removeEventListener('resize', syncConsoleHeight)
-      }
-    }
-
-    const observer = new ResizeObserver(syncConsoleHeight)
-    observer.observe(workspace)
-    observer.observe(registryPane)
-    return () => {
-      if (frameId) window.cancelAnimationFrame(frameId)
-      window.removeEventListener('resize', syncConsoleHeight)
-      window.visualViewport?.removeEventListener('resize', syncConsoleHeight)
-      observer.disconnect()
-    }
-  }, [agentRegistryPaneNode, agentsWorkspaceNode, isAgentConsoleVisible, tab])
-  const agentPanes = {
-    registry: (<div key="registry" ref={setAgentRegistryPaneNode} className="agent-registry-pane min-h-0">
-                <StablePartySelector />
-              </div>),
-    split: isAgentConsoleVisible ? (<div key="split"
-                  className="dy-agent-split-resizer"
-                  role="separator"
-                  aria-orientation="vertical"
-                  aria-label="Resize agent registry and command console"
-                  aria-valuemin={AGENT_CONSOLE_MIN_WIDTH}
-                  aria-valuemax={splitMetrics.max}
-                  aria-valuenow={splitMetrics.width}
-                  aria-valuetext={`${splitMetrics.width} pixels`}
-                  tabIndex={0}
-                  title="Drag the Agent Registry edge to resize"
-                  style={{ '--dy-agent-split-resizer-width': `${AGENT_SPLIT_HANDLE_WIDTH}px` } as CSSProperties}
-                  onPointerDown={handleAgentSplitPointerDown}
-                  onKeyDown={handleAgentSplitKeyDown}
-                >
-                  <span aria-hidden="true" />
-                </div>) : null,
-    console: isAgentConsoleVisible ? (<div key="console" className="dy-agent-console-pane min-h-0">
-                  <Suspense fallback={<PanelLoader />}>
-                    <AgentResponseConsole />
-                  </Suspense>
-                </div>) : null,
-  }
+  }, [focusCommandConsole, tab])
   return (
     <div className={`app-bg relative min-h-screen text-[var(--text-1)] ${tab === 'monitor' ? 'dy-monitor-focus' : ''} ${isEditorOpen ? 'dy-editor-open' : ''}`}>
-      <ToolApprovals />
+      <svg aria-hidden="true" width="0" height="0" style={{ position: 'absolute', overflow: 'hidden' }}>
+        <defs><filter id="automnia-generated-icon-ink" x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
+          <feComponentTransfer result="shape"><feFuncA type="discrete" tableValues="0 0 0 0 0 0 0 0 1" /></feComponentTransfer>
+          <feFlood floodColor="#d3d9df" result="ink" /><feComposite in="ink" in2="shape" operator="in" />
+        </filter></defs>
+      </svg>
+      <ToolApprovals onAvailabilityChange={setApprovalsAvailable} />
       <div className="pointer-events-none fixed inset-0 grid-overlay" />
       <a className="dy-skip-link" href="#automnia-main">Skip to workspace</a>
 
@@ -830,6 +594,7 @@ export function NexusShell() {
           </nav>
 
           <div className="dy-human-rail-bottom">
+            {!approvalsAvailable && <div className="dy-approvals-status" role="status" title="Approval requests may be unavailable while the connection is being restored.">Approvals reconnecting</div>}
             <nav className="dy-human-nav dy-human-nav--utility flex flex-col" aria-label="Utility navigation">
             <Button
               id="nexus-nav-settings"
@@ -876,9 +641,9 @@ export function NexusShell() {
 
       </aside>
 
-      <main id="automnia-main" tabIndex={-1} className="dy-app-main mx-auto max-w-[1680px] px-4 py-6 sm:px-6 sm:py-8">
+      <main id="automnia-main" data-workspace={tab} tabIndex={-1} className="dy-app-main mx-auto max-w-[1680px] px-4 py-6 sm:px-6 sm:py-8">
         {/* Workspace header */}
-        <section className="dy-workspace-context" data-workspace={tab} aria-labelledby="automnia-workspace-title">
+        {tab !== 'chat' && <section className="dy-workspace-context" data-workspace={tab} aria-labelledby="automnia-workspace-title">
           <div className="dy-workspace-context__copy">
             <h1
               id="automnia-workspace-title"
@@ -1029,7 +794,7 @@ export function NexusShell() {
               onCancel={cronClearTargets.length > 0 ? cancelClearCronJobs : undefined}
             />
           )}
-        </section>
+        </section>}
 
         <NavigationTooltip />
         <BackgroundNotifications />
@@ -1050,44 +815,16 @@ export function NexusShell() {
           aria-label={`${activeTab.label} workspace`}
           className="dy-tab-content dy-surface-enter"
         >
+          <div className="dy-chat-workspace" hidden={tab !== 'chat'}>
+            <Suspense fallback={<PanelLoader workspace="chat" />}>
+              <AgentResponseConsole />
+            </Suspense>
+          </div>
+
           {tab === 'agents' && (
-            <div
-              key="agents"
-              ref={setAgentsWorkspaceNode}
-              className={`dy-agents-workspace grid gap-5 ${isAgentConsoleVisible ? 'is-console-visible' : 'is-console-hidden'}`}
-              data-console-visible={isAgentConsoleVisible ? 'true' : 'false'}
-              data-agent-split-resizing={isAgentSplitResizing ? 'true' : 'false'}
-              style={agentWorkspaceStyle}
-            >
-              <div className="dy-active-party-pane min-w-0">
-                <StableActivePartyStrip
-                  toolbar={
-                    <Button
-                      variant="quiet"
-                      size="compact"
-                      className="dy-console-toggle"
-                      aria-pressed={isAgentConsoleVisible}
-                      aria-label={isAgentConsoleVisible ? 'Hide command console' : 'Show command console'}
-                      title={isAgentConsoleVisible ? 'Hide command console' : 'Show command console'}
-                      leadingIcon={(
-                        <span className="dy-console-toggle__icon" aria-hidden="true">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
-                            <path d="M14.5 5.5v13" />
-                            {isAgentConsoleVisible ? <path d="m17 9-3 3 3 3" /> : <path d="m12 9 3 3-3 3" />}
-                          </svg>
-                        </span>
-                      )}
-                      onClick={() => {
-                        setAgentConsoleVisible((visible) => !visible)
-                      }}
-                    >
-                      <span className="dy-console-toggle__label">{isAgentConsoleVisible ? 'Hide console' : 'Show console'}</span>
-                    </Button>
-                  }
-                />
-              </div>
-              {(consoleFirst ? ['console', 'registry', 'split'] as const : ['registry', 'split', 'console'] as const).map((pane) => agentPanes[pane])}
+            <div className="dy-agents-workspace is-console-hidden grid gap-5" data-console-visible="false">
+              <div className="dy-active-party-pane min-w-0"><StableActivePartyStrip /></div>
+              <div className="agent-registry-pane min-h-0"><StablePartySelector /></div>
             </div>
           )}
 
