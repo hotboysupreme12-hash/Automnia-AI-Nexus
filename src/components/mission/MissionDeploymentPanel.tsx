@@ -53,15 +53,7 @@ export function MissionGlyphIcon({ icon, className = 'dui-flat-glyph' }: { icon:
     )
   }
 
-  return (
-    <img
-      src={MISSION_GLYPH_ASSETS[icon]}
-      alt=""
-      aria-hidden="true"
-      decoding="async"
-      className={`dui-mission-glyph ${className}`}
-    />
-  )
+  return null
 }
 
 function FlatGlyph({ icon }: { icon: MissionGlyph }) {

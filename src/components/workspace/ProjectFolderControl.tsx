@@ -62,11 +62,13 @@ function directoryFromPickedFolderFile(file: File, filePath: string): string {
   return lastSeparator > 0 ? normalizedAbsolute.slice(0, lastSeparator) : normalizedAbsolute
 }
 
+const EMPTY_TARGET_IDS: string[] = []
+
 function uniqueIds(ids: string[]): string[] {
   return [...new Set(ids.map((id) => id.trim()).filter(Boolean))]
 }
 
-export function ProjectFolderControl({ targetAgentIds = [], targetScopeLabel = 'Current lanes', className = '', compact = false }: ProjectFolderControlProps) {
+export function ProjectFolderControl({ targetAgentIds = EMPTY_TARGET_IDS, targetScopeLabel = 'Current lanes', className = '', compact = false }: ProjectFolderControlProps) {
   const agents = useNexusStore((state) => state.agents)
   const updateAgentMeta = useNexusStore((state) => state.updateAgentMeta)
   const [projectFolder, setProjectFolder] = useState(readProjectFolder)

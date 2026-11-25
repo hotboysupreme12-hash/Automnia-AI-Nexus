@@ -1367,6 +1367,7 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
           const externalDetail = `external gateway listener pid=${listenerPid} left running; manual restart can take over if needed`
           logs.push(`[gateway-external] ${externalDetail}`)
           startGatewayHealthMonitor()
+          recordGatewayRestartRequest(restartReason, 'skipped')
           markGatewayRestartOutcome('skipped')
           return { restarted: false, detail: logs.join('\n') }
         }
