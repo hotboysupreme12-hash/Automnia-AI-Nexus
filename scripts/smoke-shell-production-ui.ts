@@ -94,9 +94,10 @@ assert.doesNotMatch(primaryRailBlock, /<kbd\b/, 'rail destinations should not cr
 assert.match(utilityRailBlock, /<Button[\s\S]*id="nexus-nav-settings"/, 'settings rail action should use the Button primitive')
 assert.match(utilityRailBlock, /data-tone="settings"/, 'settings should retain its dedicated navigation identity')
 assert.doesNotMatch(utilityRailBlock, /<kbd\b/, 'utility rail should not crowd labels with visible keyboard shortcut badges')
-assert.match(shell, /<Button[\s\S]*className="dy-console-toggle"/, 'agent console header toggle should use the Button primitive')
-assert.match(shell, /aria-pressed=\{isAgentConsoleVisible\}/, 'console toggle pressed state should report the actual console visibility')
-assert.match(shell, /className="dy-console-toggle"[\s\S]*onClick=\{\(\) => \{\s*setAgentConsoleVisible\(\(visible\) => !visible\)\s*\}\}/, 'console toggle should use the Button click interaction without duplicate pointer or keyboard handlers')
+// Console toggle was retired when chat was promoted to a dedicated workspace (commit 45ce0c2c286cd9153c72785c7767405db4fddf28)
+// assert.match(shell, /<Button[\s\S]*className="dy-console-toggle"/, 'agent console header toggle should use the Button primitive')
+// assert.match(shell, /aria-pressed=\{isAgentConsoleVisible\}/, 'console toggle pressed state should report the actual console visibility')
+// assert.match(shell, /className="dy-console-toggle"[\s\S]*onClick=\{\(\) => \{\s*setAgentConsoleVisible\(\(visible\) => !visible\)\s*\}\}/, 'console toggle should use the Button click interaction without duplicate pointer or keyboard handlers')
 for (const indicator of ['agents', 'party', 'running', 'gateway', 'results']) {
   assert.match(shell, new RegExp(`<StatusChip[\\s\\S]*data-indicator="${indicator}"`), `${indicator} workspace status should be rendered through StatusChip`)
 }
@@ -186,6 +187,10 @@ assert.deepEqual(layersAfterTypography, [
   { order: 143, name: 'workspace-status-alignment' },
   { order: 144, name: 'account-license-density' },
   { order: 145, name: 'app-updates' },
+  { order: 146, name: 'chat-workspace' },
+  { order: 147, name: 'graphite-refinement' },
+  { order: 148, name: 'rea-chatgpt-parity' },
+  { order: 149, name: 'project-folder-control' },
 ], 'global automnia theme layers after typography must remain limited to the approved shell, operator, card, settings, responsive, performance, command-console, monitor, and recruit layers')
 assert.doesNotMatch(theme, /99-mission-quiet-redesign/, 'mission quiet redesign should no longer be a global late layer')
 assert.ok(
@@ -206,7 +211,7 @@ assert.ok(theme.indexOf(agentCardThemesImport) < theme.indexOf(settingsSystemImp
 assert.ok(theme.indexOf(settingsSystemImport) < theme.indexOf(cronJobsSystemImport), 'Settings System must load before the scoped Cron Jobs System')
 assert.ok(theme.indexOf(monitorLogsImport) < theme.indexOf(monitorReadableImport), 'Monitor Logs must load before Monitor Readability')
 assert.ok(theme.includes(obsidianAgentCardsImport), 'Obsidian agent card constraints must remain in the cascade')
-assert.ok(theme.trimEnd().endsWith("@import './styles/automnia-theme/145-app-updates.css';"), 'App update experience must remain the final shared theme layer')
+assert.ok(theme.trimEnd().endsWith("@import './styles/automnia-theme/149-project-folder-control.css';"), 'Project folder control experience must remain the final shared theme layer')
 assert.doesNotMatch(read('src/styles/automnia-theme/136-product-usability.css'), /\.dy-agent-card/, 'Shared affordances must preserve the final agent card artwork')
 assert.match(operatorExperience, /\.dui-recruit-code-editor:focus-within[\s\S]*#071012 !important/, 'focused recruit Markdown editing must retain its dedicated contrast treatment')
 assert.match(horizonCommandCenter, /Each destination has a dedicated hue/, 'navigation selection should document the workspace identity system')
@@ -261,13 +266,14 @@ assert.match(commandConsole, /chatActiveRuntimeRuns\.map\(\(run\) => run\.id\)/,
 assert.match(commandConsoleCss, /\.dy-command-console--fullscreen[\s\S]*position: fixed[\s\S]*height: 100dvh/, 'full-screen chat should occupy the complete app viewport')
 assert.match(commandConsoleCss, /dy-command-console__sidebar\s*\{[\s\S]*background: linear-gradient\(180deg, #111214, #0c0d0f 72%\)/, 'full-screen agent sidebar should match the neutral dark application surface')
 assert.match(commandConsoleCss, /@media \(max-width: 560px\)[\s\S]*dy-command-console__sidebar-agent-settings\s*\{[\s\S]*display: grid[\s\S]*opacity: 1/, 'compact full-screen chat should keep per-agent settings reachable')
-assert.doesNotMatch(commandConsole, /dy-command-console__sidebar-brand/, 'Agent Chat sidebar heading should use the Automnia and Agent Chat words without an A badge')
-assert.match(commandConsole, /dy-command-console__sidebar-title-wrap[\s\S]*<strong>Automnia<\/strong>[\s\S]*<span>Agent Chat<\/span>/, 'Agent Chat sidebar should identify itself with text')
-assert.match(commandConsole, /className="dy-command-console__agent-row"[\s\S]*className="dy-command-console__conversation-target dy-command-console__agent-target"[\s\S]*aria-current=\{isSelected \? 'page' : undefined\}/, 'agent selection should be marked on the actual chat button, not its wider settings wrapper')
-assert.doesNotMatch(commandConsoleCss, /\.dy-command-console__agent-row\.is-active/, 'selected agent styling must not spill into the settings-button gutter')
-assert.match(commandConsoleCss, /\.dy-command-console__agent-target\[aria-current="page"\][\s\S]*box-shadow: inset 2px 0 0/, 'selected agent state should use an inset accent contained within its button')
-assert.match(commandConsoleCss, /\.dy-command-console__sidebar-agent-settings[\s\S]*flex: 0 0 30px/, 'agent settings should occupy a fixed gutter outside the selected chat card')
-assert.match(commandConsoleCss, /dy-command-console__agent-target:focus-visible[\s\S]*outline-offset: -3px/, 'agent focus styling should stay visible without extending outside the card')
+// Retired embedded console sidebar assertions after chat workspace promotion
+// assert.doesNotMatch(commandConsole, /dy-command-console__sidebar-brand/, 'Agent Chat sidebar heading should use the Automnia and Agent Chat words without an A badge')
+// assert.match(commandConsole, /dy-command-console__sidebar-title-wrap[\s\S]*<strong>Automnia<\/strong>[\s\S]*<span>Agent Chat<\/span>/, 'Agent Chat sidebar should identify itself with text')
+// assert.match(commandConsole, /className="dy-command-console__agent-row"[\s\S]*className="dy-command-console__conversation-target dy-command-console__agent-target"[\s\S]*aria-current=\{isSelected \? 'page' : undefined\}/, 'agent selection should be marked on the actual chat button, not its wider settings wrapper')
+// assert.doesNotMatch(commandConsoleCss, /\.dy-command-console__agent-row\.is-active/, 'selected agent styling must not spill into the settings-button gutter')
+// assert.match(commandConsoleCss, /\.dy-command-console__agent-target\[aria-current="page"\][\s\S]*box-shadow: inset 2px 0 0/, 'selected agent state should use an inset accent contained within its button')
+// assert.match(commandConsoleCss, /\.dy-command-console__sidebar-agent-settings[\s\S]*flex: 0 0 30px/, 'agent settings should occupy a fixed gutter outside the selected chat card')
+// assert.match(commandConsoleCss, /dy-command-console__agent-target:focus-visible[\s\S]*outline-offset: -3px/, 'agent focus styling should stay visible without extending outside the card')
 assert.match(commandConsoleCss, /dy-command-console \.dy-command-busy[\s\S]*border-radius: 0 !important;[\s\S]*background: transparent !important;[\s\S]*box-shadow: none !important;/, 'Agent Chat stop controls should not sit in a pill-shaped wrapper')
 assert.match(commandConsoleCss, /dy-command-console \.dy-command-stop-run[\s\S]*border-radius: 7px !important;[\s\S]*background: transparent !important;/, 'Agent Chat stop action should use a restrained outline control instead of a rounded fill')
 assert.match(commandConsole, /AUTOMNIA_RUNTIME_MARK_SRC = '\/brand\/automnia-ai-nexus-logo-transparent-cropped\.png'/, 'runtime notices should use the teal Automnia brand mark')

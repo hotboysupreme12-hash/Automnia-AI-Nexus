@@ -1,0 +1,594 @@
+/* Shared project context and explicit multi-agent dispatch controls. */
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(148, 202, 173, .18);
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(120, 225, 176, .055), transparent 48%),
+    rgba(6, 9, 10, .92);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__head,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__path-row,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__scope {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__head {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__head > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__eyebrow {
+  color: #8fa49a;
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__head strong {
+  overflow: hidden;
+  color: #e7f0eb;
+  font-size: 12px;
+  font-weight: 720;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__agent-count {
+  flex: 0 0 auto;
+  color: #9bdab6;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__path-row {
+  gap: 7px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__path {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  padding: 8px 9px;
+  border: 1px solid rgba(224, 236, 229, .10);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, .22);
+  color: #b4c4ba;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__browse,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__apply,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__scope button {
+  border: 1px solid rgba(224, 236, 229, .13);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .045);
+  color: #d9e5de;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 720;
+  transition: border-color .16s ease, background .16s ease, color .16s ease, transform .16s ease;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__browse {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__browse:hover,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__scope button:hover:not(:disabled) {
+  border-color: rgba(139, 212, 170, .38);
+  background: rgba(139, 212, 170, .09);
+  color: #effcf3;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__scope {
+  gap: 6px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__scope button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 7px 8px;
+  color: #95a69d;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__scope button span {
+  margin-left: 4px;
+  color: #dce9e0;
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__scope button.is-active {
+  border-color: rgba(139, 212, 170, .36);
+  background: rgba(139, 212, 170, .11);
+  color: #dcf8e6;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__scope button:disabled {
+  cursor: not-allowed;
+  opacity: .42;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__apply {
+  width: 100%;
+  padding: 9px 10px;
+  border-color: rgba(139, 212, 170, .33);
+  background: linear-gradient(135deg, rgba(139, 212, 170, .20), rgba(74, 142, 109, .14));
+  color: #e9fff0;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__apply:hover:not(:disabled) {
+  border-color: rgba(139, 212, 170, .56);
+  background: linear-gradient(135deg, rgba(139, 212, 170, .28), rgba(74, 142, 109, .20));
+  transform: translateY(-1px);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__apply:disabled {
+  cursor: not-allowed;
+  opacity: .42;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__status {
+  min-height: 26px;
+  margin: 0;
+  color: #84958c;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__input {
+  display: none;
+}
+
+/* Compact mode stays fixed in the header. Its workflow opens as an overlay. */
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control.is-compact {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  max-width: max-content;
+  flex: 0 0 auto;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__compact-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 3px 5px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #87968e;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 650;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__compact-trigger:hover,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__compact-trigger[aria-expanded="true"] {
+  border-color: rgba(139, 212, 170, .17);
+  background: rgba(139, 212, 170, .045);
+  color: #c3d5c9;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__compact-dot {
+  width: 5px;
+  height: 5px;
+  border: 1px solid #788b80;
+  border-radius: 50%;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__compact-path,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__compact-chevron {
+  color: #718078;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: .05em;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control.is-compact .dui-project-folder-control__panel {
+  position: fixed;
+  z-index: 1000;
+  display: grid;
+  width: min(320px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: min(70vh, 560px);
+  overflow: auto;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid rgba(224, 236, 229, .10);
+  border-radius: 8px;
+  background: rgba(8, 11, 12, .98);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .28);
+}
+
+/* The chat header keeps this control compact while preserving the same actions. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control {
+  display: inline-flex;
+  width: auto;
+  max-width: min(330px, 30vw);
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control__head {
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control__eyebrow {
+  color: #718078;
+  font-size: 9px;
+  letter-spacing: .07em;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control__head strong {
+  max-width: 112px;
+  color: #a8b6ad;
+  font-size: 10px;
+  font-weight: 620;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control__status {
+  display: none;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control__agent-count {
+  display: none;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control__path-row {
+  flex: 0 1 auto;
+  max-width: 190px;
+  gap: 3px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control__path {
+  max-width: 142px;
+  padding: 4px 6px;
+  border-color: rgba(224, 236, 229, .08);
+  border-radius: 5px;
+  color: #84938b;
+  font-size: 9px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control__browse,
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control__scope button,
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control__apply {
+  min-height: 24px;
+  padding: 4px 6px;
+  border-color: transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: #87968e;
+  font-size: 9px;
+  font-weight: 620;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control__browse:hover,
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control__scope button:hover:not(:disabled),
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control__apply:hover:not(:disabled) {
+  border-color: rgba(139, 212, 170, .18);
+  background: rgba(139, 212, 170, .055);
+  color: #c6d7cc;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control__scope {
+  flex: 0 0 auto;
+  gap: 1px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control__scope button {
+  flex: 0 0 auto;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control__scope button span {
+  color: #9aaa9f;
+  font-size: 8px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control__scope button.is-active {
+  border-color: rgba(139, 212, 170, .16);
+  background: rgba(139, 212, 170, .045);
+  color: #b4c7ba;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control__apply {
+  width: auto;
+  border-color: rgba(139, 212, 170, .16);
+  color: #a3b9aa;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control.is-compact .dui-project-folder-control__head strong {
+  max-width: 160px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control.is-compact .dui-project-folder-control__status {
+  display: block;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control.is-compact .dui-project-folder-control__panel {
+  position: fixed;
+  display: grid;
+  width: min(320px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: min(70vh, 560px);
+  overflow: auto;
+  flex: initial;
+  flex-wrap: initial;
+  align-items: initial;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid rgba(224, 236, 229, .10);
+  border-radius: 8px;
+  background: rgba(8, 11, 12, .98);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .28);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 26px;
+  padding: 3px 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #84938b;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: .02em;
+  transition: border-color .16s ease, background .16s ease, color .16s ease;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle:hover {
+  border-color: rgba(139, 212, 170, .17);
+  background: rgba(139, 212, 170, .045);
+  color: #c3d5c9;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle__orbit {
+  position: relative;
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border: 1px solid rgba(197, 211, 202, .24);
+  border-radius: 50%;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle__orbit::before,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle__orbit::after {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #809289;
+  content: '';
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle__orbit::before { top: -2px; right: 3px; }
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle__orbit::after { bottom: 0; left: 2px; }
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle__core {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #7d8a83;
+  box-shadow: 0 0 0 2px rgba(125, 138, 131, .07);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle[aria-checked="true"] {
+  border-color: rgba(139, 212, 170, .16);
+  background: rgba(139, 212, 170, .045);
+  color: #b7cbbd;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle[aria-checked="true"] .dy-chat-parallel-toggle__orbit {
+  border-color: rgba(139, 212, 170, .72);
+  animation: dui-parallel-orbit 2.2s linear infinite;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle[aria-checked="true"] .dy-chat-parallel-toggle__orbit::before,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle[aria-checked="true"] .dy-chat-parallel-toggle__orbit::after,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle[aria-checked="true"] .dy-chat-parallel-toggle__core {
+  background: #8bd4aa;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle__state {
+  color: #819b89;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: .08em;
+}
+
+@keyframes dui-parallel-orbit {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle[aria-checked="true"] .dy-chat-parallel-toggle__orbit {
+    animation: none;
+  }
+}
+
+@media (max-width: 1180px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control {
+    max-width: min(280px, 28vw);
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control.is-compact .dui-project-folder-control__panel {
+    width: min(300px, 78vw);
+  }
+}
+
+@media (max-width: 920px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-folder-control {
+    max-width: 100%;
+  }
+}
+
+/* ChatGPT-style composer tools: keep secondary actions in an anchored
+   overlay so opening project controls never grows the chat header or composer. */
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-composer-tools-menu {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-plus-menu {
+  position: absolute;
+  z-index: 30;
+  bottom: calc(100% + 8px);
+  left: 0;
+  display: grid;
+  width: min(320px, calc(100vw - 32px));
+  max-height: min(72vh, 480px);
+  gap: 4px;
+  overflow-y: auto;
+  padding: 7px;
+  border: 1px solid rgba(224, 236, 229, .12);
+  border-radius: 10px;
+  background: rgba(8, 11, 12, .985);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .38), inset 0 1px 0 rgba(255, 255, 255, .035);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-plus-menu__item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 9px;
+  min-height: 42px;
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #d9e5de;
+  cursor: pointer;
+  text-align: left;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-plus-menu__item:hover,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-plus-menu__item:focus-visible {
+  border-color: rgba(139, 212, 170, .18);
+  background: rgba(139, 212, 170, .065);
+  outline: none;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-plus-menu__item > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-plus-menu__item strong {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-plus-menu__item small {
+  color: #82928a;
+  font-size: 9px;
+  line-height: 1.25;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-plus-menu__icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(224, 236, 229, .15);
+  border-radius: 6px;
+  color: #9bdab6;
+  font-size: 17px;
+  line-height: 1;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-plus-menu .dui-project-folder-control {
+  display: grid;
+  width: 100%;
+  max-width: none;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-plus-menu .dui-project-folder-control__compact-trigger {
+  width: 100%;
+  justify-content: flex-start;
+  min-height: 42px;
+  padding: 7px 9px;
+  border-color: transparent;
+  border-radius: 7px;
+  color: #d9e5de;
+  font-size: 11px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-plus-menu .dui-project-folder-control__compact-trigger:hover,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-plus-menu .dui-project-folder-control__compact-trigger[aria-expanded="true"] {
+  border-color: rgba(139, 212, 170, .18);
+  background: rgba(139, 212, 170, .065);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-plus-menu .dui-project-folder-control__compact-path {
+  margin-left: auto;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-plus-menu .dui-project-folder-control.is-compact .dui-project-folder-control__panel {
+  position: fixed;
+  width: min(320px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: min(70vh, 560px);
+  overflow: auto;
+  padding: 7px;
+  border-color: rgba(224, 236, 229, .10);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .28);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-plus-menu .dui-project-folder-control__head strong {
+  max-width: 190px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-plus-menu .dui-project-folder-control__status {
+  display: block;
+}

@@ -78,12 +78,14 @@ function spawnServer(port: number, workspaceRoot: string, stateDir: string, home
   const openClawConfigPath = path.join(stateDir, 'openclaw.json')
   writeFileSync(openClawConfigPath, '{}\n', 'utf-8')
 
-  return spawn(process.execPath, ['--import', 'tsx', 'server/index.ts'], {
+  const child = spawn(process.execPath, ['--import', 'tsx', 'server/index.ts'], {
     cwd: root,
     env: {
       ...process.env,
       HOME: homeDir,
       USERPROFILE: homeDir,
+      AUTOMNIA_DESKTOP_SERVER_CHILD: '0',
+      AUTOMNIA_DESKTOP_SERVER_PARENT_PID: '0',
       CONTROL_CENTER_PORT: String(port),
       CONTROL_CENTER_TOKEN: CONTROL_TOKEN,
       CONTROL_CENTER_LOGIN_MAX_ATTEMPTS: '3',
@@ -104,6 +106,7 @@ function spawnServer(port: number, workspaceRoot: string, stateDir: string, home
     },
     windowsHide: true,
   })
+  return child
 }
 
 function waitForServer(child: ChildProcessWithoutNullStreams, port: number) {

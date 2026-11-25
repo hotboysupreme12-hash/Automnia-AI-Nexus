@@ -56,6 +56,12 @@ import { openMicrophoneSettings } from '../../speech/microphonePermissions'
 import { monitorVoiceActivity } from '../../speech/voiceActivity'
 import { Badge, Button, IconButton, StatusChip } from '../ui'
 import type { BadgeTone } from '../ui'
+import { ProjectFolderControl } from '../workspace/ProjectFolderControl'
+import {
+  CONSOLE_PREFS_CHANGED_EVENT,
+  readConsolePreferences,
+  saveConsolePreferences,
+} from '../settings/workspaceSettings'
 
 const RARITY_RING: Record<string, string> = {
   legendary: 'ring-[#f2cc62]/55',
@@ -950,6 +956,8 @@ export function AgentResponseConsole() {
   const [responseQuery, setResponseQuery] = useState('')
   const [historySearchOpen, setHistorySearchOpen] = useState(false)
   const [isFullScreen, setIsFullScreen] = useState(false)
+  const [composerToolsOpen, setComposerToolsOpen] = useState(false)
+  const [parallelAgentChat, setParallelAgentChat] = useState(() => readConsolePreferences().parallelAgentChat)
   const [responseLimit, setResponseLimit] = useState(MESSAGE_RENDER_LIMIT)
   const [followingLatest, setFollowingLatest] = useState(true)
   const historySearchInputRef = useRef<HTMLInputElement | null>(null)
@@ -1001,6 +1009,14 @@ export function AgentResponseConsole() {
     useAgentVoiceStore.setState({ phase })
     setVoicePhaseState(phase)
   }, [])
+  useEffect(() => {
+    if (!composerToolsOpen) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setComposerToolsOpen(false)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [composerToolsOpen])
   const [voiceStatus, setVoiceStatus] = useState('')
   const [voiceError, setVoiceError] = useState('')
   const voiceRequestRef = useRef<AbortController | null>(null)
@@ -1033,6 +1049,23 @@ export function AgentResponseConsole() {
   const recordingDiscardReasonRef = useRef('')
   const voiceStatusClearRef = useRef<number | null>(null)
   const voiceMountedRef = useRef(true)
+  useEffect(() => {
+    const syncConsolePreferences = (event?: Event) => {
+      const next = event instanceof CustomEvent ? event.detail as { parallelAgentChat?: unknown } : readConsolePreferences()
+      setParallelAgentChat(typeof next.parallelAgentChat === 'boolean' ? next.parallelAgentChat : readConsolePreferences().parallelAgentChat)
+    }
+    window.addEventListener(CONSOLE_PREFS_CHANGED_EVENT, syncConsolePreferences)
+    window.addEventListener('storage', syncConsolePreferences)
+    return () => {
+      window.removeEventListener(CONSOLE_PREFS_CHANGED_EVENT, syncConsolePreferences)
+      window.removeEventListener('storage', syncConsolePreferences)
+    }
+  }, [])
+  const toggleParallelAgentChat = () => {
+    const next = !parallelAgentChat
+    saveConsolePreferences({ ...readConsolePreferences(), parallelAgentChat: next })
+    setParallelAgentChat(next)
+  }
   useDialogFocus({
     open: isFullScreen,
     rootRef: consoleRootRef,
@@ -2204,6 +2237,19 @@ export function AgentResponseConsole() {
             </div>
           </div>
           <div className="dy-command-console__meta" role="group" aria-label="Conversation actions">
+              <button
+                type="button"
+                className="dy-chat-parallel-toggle"
+                role="switch"
+                aria-checked={parallelAgentChat}
+                aria-label="Run addressed agents in parallel"
+                title={parallelAgentChat ? 'Parallel lanes are on. Addressed agents start together.' : 'Parallel lanes are off. Addressed agents run one at a time.'}
+                onClick={toggleParallelAgentChat}
+              >
+                <span className="dy-chat-parallel-toggle__orbit" aria-hidden="true"><span className="dy-chat-parallel-toggle__core" /></span>
+                <span>Parallel lanes</span>
+                <span className="dy-chat-parallel-toggle__state">{parallelAgentChat ? 'ON' : 'OFF'}</span>
+              </button>
               <label className="dy-chat-agent-picker__label" htmlFor="agent-chat-target-picker">Chat with</label>
               <select
                 id="agent-chat-target-picker"
@@ -2806,20 +2852,39 @@ export function AgentResponseConsole() {
 
           <div className="dy-command-composer__toolbar">
             <div className="dy-command-composer__tools">
-              <IconButton
-                aria-label="Attach file"
-                disabled={isUploading}
-                onClick={() => fileInputRef.current?.click()}
-                className="dy-command-icon-button flex h-10 w-10 shrink-0 items-center justify-center"
-                title="Attach file"
-                variant="quiet"
-                icon={(
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]" aria-hidden="true">
-                  <path d="M12 5v14" />
-                  <path d="M5 12h14" />
-                </svg>
-                )}
-              />
+              <div className="dy-chat-composer-tools-menu">
+                <IconButton
+                  aria-label="Add files and more"
+                  aria-expanded={composerToolsOpen}
+                  aria-haspopup="menu"
+                  disabled={isUploading}
+                  onClick={() => setComposerToolsOpen((open) => !open)}
+                  className="dy-command-icon-button flex h-10 w-10 shrink-0 items-center justify-center"
+                  title="Add files and more"
+                  variant="quiet"
+                  icon={(
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]" aria-hidden="true">
+                    <path d="M12 5v14" />
+                    <path d="M5 12h14" />
+                  </svg>
+                  )}
+                />
+                {composerToolsOpen && <div className="dy-chat-plus-menu" role="menu" aria-label="Add files and more">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="dy-chat-plus-menu__item"
+                    onClick={() => {
+                      setComposerToolsOpen(false)
+                      fileInputRef.current?.click()
+                    }}
+                  >
+                    <span className="dy-chat-plus-menu__icon" aria-hidden="true">＋</span>
+                    <span><strong>Add files</strong><small>Upload from computer</small></span>
+                  </button>
+                  <ProjectFolderControl compact targetAgentIds={armedTargets.map((agent) => agent.id)} targetScopeLabel="Active party" />
+                </div>}
+              </div>
               <input
                 ref={fileInputRef}
                 type="file"

@@ -22,6 +22,7 @@ type HarnessOptions = {
   releaseResult?: { released: boolean; detail: string }
   repairClawTalkResult?: string[]
   repairTelegramResult?: string[]
+  startupMaintenanceMode?: 'off' | 'deferred' | 'blocking'
   onClawTalkRepair?: () => Promise<void> | void
   onTelegramRepair?: () => Promise<void> | void
   onSpawn?: (child: ChildProcess) => void
@@ -77,6 +78,7 @@ function createHarness(config: HarnessOptions = {}) {
     startupHealthGraceMs: 15_000,
     startupHealthConfirmTimeoutMs: 50,
     startupHealthPollMs: 1,
+    startupMaintenanceMode: config.startupMaintenanceMode,
     isShuttingDown: () => false,
     isOpenClawRuntimeAvailable: () => config.runtimeAvailable !== false,
     openClawRuntimeUnavailableMessage: () => 'missing-runtime',
@@ -421,6 +423,25 @@ test('normal startup spawns without rebuilding the persisted plugin registry', a
   assert.equal(harness.spawnOptionsSeen[0]?.detached, process.platform !== 'win32')
 })
 
+test('fast startup skips integrity, plugin, lock, and config maintenance before spawning', async () => {
+  const harness = createHarness({
+    startupMaintenanceMode: 'off',
+    healthSequence: [false, false, true],
+    repairClawTalkResult: ['should-not-run'],
+    repairTelegramResult: ['should-not-run'],
+  })
+
+  await harness.service.ensureGatewayRunning()
+  harness.service.stopGatewayHealthMonitor()
+
+  assert.equal(harness.spawnCalls, 1)
+  assert.equal(harness.clawTalkRepairCalls, 0)
+  assert.equal(harness.telegramRepairCalls, 0)
+  assert.deepEqual(harness.registryRefreshReasons, [])
+  assert.deepEqual(harness.startupRepairSummaries, [])
+  assert.match(harness.logs.map((entry) => entry.message).join('\n'), /maintenance disabled for fast start/i)
+})
+
 test('ensureGatewayRunning does not spawn over a stale listener that remains busy after release fails', async () => {
   const harness = createHarness({
     healthSequence: [false, false],
@@ -456,12 +477,12 @@ test('forced restart releases the port and starts the gateway with Control Cente
   assert.equal(harness.service.lifecycleSnapshot().lastRestartOutcome, 'succeeded')
 })
 
-test('Telegram ingress handler timeout matches long hosted turns and preserves valid overrides', () => {
-  assert.equal(DEFAULT_TELEGRAM_SPOOLED_HANDLER_TIMEOUT_MS, 7_200_000)
-  assert.equal(resolveTelegramSpooledHandlerTimeoutMs(undefined), 7_200_000)
+test('Telegram ingress adoption timeout stays bounded and preserves valid overrides', () => {
+  assert.equal(DEFAULT_TELEGRAM_SPOOLED_HANDLER_TIMEOUT_MS, 300_000)
+  assert.equal(resolveTelegramSpooledHandlerTimeoutMs(undefined), 300_000)
   assert.equal(resolveTelegramSpooledHandlerTimeoutMs('900000'), 900_000)
-  assert.equal(resolveTelegramSpooledHandlerTimeoutMs('0'), 7_200_000)
-  assert.equal(resolveTelegramSpooledHandlerTimeoutMs('invalid'), 7_200_000)
+  assert.equal(resolveTelegramSpooledHandlerTimeoutMs('0'), 300_000)
+  assert.equal(resolveTelegramSpooledHandlerTimeoutMs('invalid'), 300_000)
 })
 
 test('forced restart waits for an active startup before replacing the gateway', async () => {

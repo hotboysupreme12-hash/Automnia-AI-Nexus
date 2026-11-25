@@ -436,7 +436,7 @@ assertIncludes(server, 'delete nextConfig.apiKeyStorage', 'ClawTalk unsupported 
 assertIncludes(gatewayLifecycleService, 'allowExternalTakeover', 'Gateway restart ownership guard')
 assertIncludes(gatewayLifecycleService, 'refusing to spawn a duplicate', 'Gateway startup will not duplicate an owned slow-starting process')
 assertIncludes(server, 'CONTROL_CENTER_GATEWAY_STARTUP_HEALTH_CONFIRM_TIMEOUT_MS || 300_000', 'Gateway cold-start confirmation exceeds the observed Telegram-enabled startup time')
-assertIncludes(gatewayLifecycleService, 'DEFAULT_TELEGRAM_SPOOLED_HANDLER_TIMEOUT_MS = 2 * 60 * 60 * 1000', 'Telegram ingress timeout covers long-running configured model turns')
+assertIncludes(gatewayLifecycleService, 'DEFAULT_TELEGRAM_SPOOLED_HANDLER_TIMEOUT_MS = 5 * 60 * 1000', 'Telegram pre-adoption watchdog stays bounded while adopted model work uses its own timeout')
 assertIncludes(gatewayLifecycleService, 'OPENCLAW_TELEGRAM_SPOOLED_HANDLER_TIMEOUT_MS: String(resolveTelegramSpooledHandlerTimeoutMs())', 'Gateway exports the Telegram adoption timeout while retaining operator overrides')
 
 assertRegex(

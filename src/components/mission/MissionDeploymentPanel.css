@@ -1387,3 +1387,62 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-cad
   font-size: 11px;
   color: var(--text-muted);
 }
+
+/* Final desktop board pass: the review card is a real lower rail, and both
+   rails stretch to the same board height instead of leaving a dead strip. */
+@media (min-width: 1181px) and (min-height: 700px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-stage {
+    align-items: stretch !important;
+    min-height: 0 !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-main--organized {
+    min-height: 100% !important;
+    grid-template-rows: auto auto minmax(220px, 1fr) !important;
+    align-content: stretch !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-objective {
+    display: flex !important;
+    min-height: 220px !important;
+    flex-direction: column !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-objective .dui-textarea {
+    flex: 1 1 auto !important;
+    min-height: 132px !important;
+    height: auto !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-sidebar {
+    min-height: 100% !important;
+    grid-template-rows: minmax(0, .9fr) minmax(300px, 1.1fr) !important;
+    align-content: stretch !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agents-card,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-tuning {
+    min-height: 0 !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-tuning {
+    display: flex !important;
+    height: 100% !important;
+    flex-direction: column !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-tuning .dui-action-grid {
+    margin-top: auto !important;
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1180px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-tuning {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-tuning .dui-action-grid {
+    margin-top: auto !important;
+  }
+}

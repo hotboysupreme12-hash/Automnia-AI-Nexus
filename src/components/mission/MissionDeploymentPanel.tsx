@@ -1,3 +1,4 @@
+import { ProjectFolderControl } from '../workspace/ProjectFolderControl'
 import { useEffect, useId, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useNexusStore } from '../../store/nexusStore'
@@ -523,6 +524,11 @@ export function MissionDeploymentPanel() {
                   )
                 })}
                 {!selectedAgents.length && <div className="dui-empty-state"><MissionGlyphIcon icon="command" /><strong>Every mission starts with a team</strong><p>Add agents to your active party from the Agents tab. They’ll appear here, ready to deploy.</p></div>}
+                {selectedAgents.length > 0 && (
+                  <div className="dui-mission-project-folder" style={{ marginTop: '0.75rem' }}>
+                    <ProjectFolderControl compact targetAgentIds={selectedAgents.map((agent) => agent.id)} />
+                  </div>
+                )}
               </div>
             </div>
             <section className="dui-card dui-mission-bottom-tuning">

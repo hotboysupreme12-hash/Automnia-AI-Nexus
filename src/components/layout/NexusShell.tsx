@@ -641,7 +641,7 @@ export function NexusShell() {
 
       </aside>
 
-      <main id="automnia-main" data-workspace={tab} tabIndex={-1} className="dy-app-main mx-auto max-w-[1680px] px-4 py-6 sm:px-6 sm:py-8">
+      <main id="automnia-main" tabIndex={-1} data-workspace={tab} className="dy-app-main mx-auto max-w-[1680px] px-4 py-6 sm:px-6 sm:py-8">
         {/* Workspace header */}
         {tab !== 'chat' && <section className="dy-workspace-context" data-workspace={tab} aria-labelledby="automnia-workspace-title">
           <div className="dy-workspace-context__copy">

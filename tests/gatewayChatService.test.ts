@@ -40,6 +40,7 @@ async function waitUntil(predicate: () => boolean, timeoutMs = 2_000) {
 
 function createHarness(options: {
   history?: unknown
+  startup?: unknown | ((params: unknown) => unknown)
   messageGet?: unknown
   finalPayload?: Record<string, unknown> | ((runId: string) => Record<string, unknown>)
   suppressFinal?: boolean
@@ -151,6 +152,11 @@ function createHarness(options: {
                 { role: 'assistant', text: 'History final' },
               ],
             }
+          }
+          if (method === 'chat.startup') {
+            return typeof options.startup === 'function'
+              ? options.startup(params)
+              : options.startup ?? { messages: [] }
           }
           if (method === 'chat.message.get') {
             return options.messageGet ?? { ok: true, message: { text: 'Full final' } }
@@ -581,8 +587,18 @@ test('abortRun closes an active Gateway waiter for an explicit operator stop', a
   assert.equal(harness.finishes.at(-1)?.status, 'aborted')
 })
 
-test('Gateway disconnect interrupts the visible run and clears its active record', async () => {
-  const harness = createHarness({ suppressFinal: true })
+test('Gateway reconnect recovers a completed run from saved history', async () => {
+  let acceptedRunId = ''
+  const harness = createHarness({
+    suppressFinal: true,
+    startup: () => ({
+      messages: [
+        { role: 'user', idempotencyKey: acceptedRunId, text: 'disconnect me' },
+        { role: 'assistant', __openclaw: { runId: acceptedRunId }, text: 'Recovered answer' },
+      ],
+      sessionInfo: { hasActiveRun: false, activeRunIds: [] },
+    }),
+  })
   const events: Array<{ event: string; data: Record<string, unknown> }> = []
   const stream = harness.service.registerStreamObserver((event, data) => events.push({ event, data }))
   const pending = harness.service.runTurn({
@@ -596,13 +612,22 @@ test('Gateway disconnect interrupts the visible run and clears its active record
   })
 
   await waitUntil(() => harness.requests.some((request) => request.method === 'chat.send'))
+  const send = harness.requests.find((request) => request.method === 'chat.send')!
+  acceptedRunId = String((send.params as { idempotencyKey: string }).idempotencyKey)
   harness.clientOptions?.onClose?.(1006, 'gateway starting')
+  await delay(0)
 
-  await assert.rejects(pending, /gateway client disconnected: gateway starting/)
+  assert.equal(harness.service.runtimeSnapshot().activeRuns, 1)
+  assert.equal(harness.finishes.length, 0)
+  assert.equal(events.some((entry) => entry.event === 'status' && entry.data.type === 'interrupted'), false)
+  harness.clientOptions?.onHelloOk?.({ ok: true })
+  await waitUntil(() => harness.requests.some((request) => request.method === 'chat.startup'))
+  const result = await pending
+  assert.equal(result.code, 0)
+  assert.match(String(result.stdout), /Recovered answer/)
   assert.equal(harness.service.runtimeSnapshot().activeRuns, 0)
-  assert.equal(harness.finishes.at(-1)?.status, 'failed')
-  assert.equal(events.some((entry) => entry.event === 'status' && entry.data.type === 'interrupted'), true)
-  assert.match(String(events.find((entry) => entry.event === 'status' && entry.data.type === 'interrupted')?.data.message), /retry only after Gateway is healthy/)
+  assert.equal(harness.finishes.at(-1)?.status, 'completed')
+  assert.equal(events.some((entry) => entry.event === 'status' && entry.data.type === 'reconnecting'), true)
 })
 
 test('gatewayPayloadChatState normalizes Gateway terminal and delta states', () => {

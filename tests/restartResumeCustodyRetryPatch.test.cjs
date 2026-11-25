@@ -28,6 +28,25 @@ async function resumeMarkedSessions(e) {
 }
 async function resumeAgentSessions(e, t, n) {}`
 
+const originalDatabaseStartup = `class AgentDatabaseStartup {
+	constructor() {
+		this.work = /* @__PURE__ */ new Set();
+	}
+	waitForAgentPreparation(e, t = {}) {
+		const n = this.pending.get(e);
+		return raceWithTimeout(n.completion, i, () => {
+			throw new Error('preparation timed out');
+		}, { signal: r });
+	}
+	scheduling(e, t, n) {
+		const p = Promise.resolve();
+			this.track(p);
+	}
+	track(e) {
+		this.work.add(e);
+	}
+}`
+
 function deferred() {
   let resolve
   const promise = new Promise((done) => { resolve = done })
@@ -36,7 +55,8 @@ function deferred() {
 
 function loadPatchedResume(source, dependencies) {
   const patched = patchRestartResumeCustodyRetrySource(source)
-  const start = patched.indexOf('// Automnia: retry restart resume after session database custody drift.')
+  const markerIndex = patched.indexOf('Automnia: retry restart resume after session database custody drift')
+  const start = patched.lastIndexOf('//', markerIndex)
   const end = patched.indexOf('\nasync function resumeAgentSessions(e, t, n) {', start)
   assert.ok(start >= 0 && end > start)
   const module = new Function(
@@ -91,7 +111,7 @@ test('deferred restart resume retries custody drift once after all configured ag
   await Promise.all(tracked)
 
   assert.deepEqual(calls, [['hn-architect'], ['hn-coordinator'], ['hn-architect']])
-  assert.match(warnings[0], /waiting for agent database preparation before one fresh retry/)
+  assert.match(warnings[0], /waiting for complete agent database preparation before retry 2\/3/)
 })
 
 test('deferred restart resume does not retry failures unrelated to session database custody', async () => {
@@ -129,6 +149,7 @@ test('runtime preparation applies the retry patch idempotently to the pinned res
     fs.mkdirSync(dist, { recursive: true })
     const file = path.join(dist, 'session-restart-resume-test.mjs')
     fs.writeFileSync(file, original)
+    fs.writeFileSync(path.join(dist, 'agent-database-startup-test.mjs'), originalDatabaseStartup)
     ensureRestartResumeCustodyRetry(root)
     const patched = fs.readFileSync(file, 'utf8')
     assert.match(patched, /retry restart resume after session database custody drift/)

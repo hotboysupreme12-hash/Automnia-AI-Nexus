@@ -82,6 +82,7 @@ const MAX_GATEWAY_CHAT_STREAMED_TEXT_CHARS = 256_000
 export type GatewayClientState = {
   client: GatewayClientLike
   ready: boolean
+  connectedOnce?: boolean
   readyPromise: Promise<void>
   resolveReady?: () => void
   rejectReady?: (error: Error) => void
@@ -120,6 +121,9 @@ type GatewayChatRunWaiter = {
   execStartupTimers: Map<string, NodeJS.Timeout>
   streamObserverId?: string
   streamedText: string
+  message: string
+  recoveryPending: boolean
+  aliases: Set<string>
   resolve: (payload: Record<string, unknown>) => void
   reject: (error: Error) => void
   timer: NodeJS.Timeout
@@ -142,6 +146,7 @@ export type GatewayChatServiceOptions<RunRecord> = {
   getGatewayAuthEnv: () => Record<string, string>
   isShuttingDown: () => boolean
   ensureGatewayRunning: () => Promise<void>
+  waitForGatewayAdmission?: (signal?: AbortSignal) => Promise<void>
   startGatewayHealthMonitor: () => void
   isGatewayHealthy: () => Promise<boolean>
   getOpenClawAgentRunDefaultsReady: () => boolean
@@ -233,6 +238,8 @@ export class LightweightGatewayClient implements GatewayClientLike {
   private pending = new Map<string, LightweightGatewayPendingRequest>()
   private lastSeq: number | null = null
   private connectRetryTimer: NodeJS.Timeout | null = null
+  private reconnectAttempt = 0
+  private socketGeneration = 0
   private readonly options: LightweightGatewayClientOptions
 
   constructor(options: LightweightGatewayClientOptions) {
@@ -240,29 +247,63 @@ export class LightweightGatewayClient implements GatewayClientLike {
   }
 
   start(): void {
+    if (this.ws || this.connectRetryTimer) return
+    this.closed = false
+    this.connect()
+  }
+
+  private connect() {
+    if (this.closed) return
     const WebSocketCtor = (globalThis as unknown as { WebSocket?: LightweightWebSocketConstructor }).WebSocket
     if (!WebSocketCtor) {
       this.options.onConnectError?.(new Error('global WebSocket is not available in this Node runtime'))
+      this.scheduleReconnect()
       return
     }
-    this.closed = false
-    const ws = new WebSocketCtor(this.options.url)
+    let ws: LightweightWebSocket
+    try {
+      ws = new WebSocketCtor(this.options.url)
+    } catch (error) {
+      this.options.onConnectError?.(error instanceof Error ? error : new Error(String(error)))
+      this.scheduleReconnect()
+      return
+    }
+    const generation = ++this.socketGeneration
     this.ws = ws
     ws.addEventListener('open', () => {
+      if (generation !== this.socketGeneration || this.ws !== ws) return
       this.sendConnect()
     })
     ws.addEventListener('message', (event: { data?: unknown }) => {
+      if (generation !== this.socketGeneration || this.ws !== ws) return
       this.handleFrameData(event.data)
     })
     ws.addEventListener('error', (event: unknown) => {
+      if (generation !== this.socketGeneration || this.ws !== ws) return
       this.options.onConnectError?.(new Error(`gateway websocket error: ${String(event)}`))
     })
     ws.addEventListener('close', (event: { code?: number; reason?: string }) => {
+      if (generation !== this.socketGeneration || this.ws !== ws) return
+      this.ws = null
       const code = typeof event.code === 'number' ? event.code : 0
       const reason = typeof event.reason === 'string' ? event.reason : ''
       this.rejectAll(new Error(`gateway client disconnected: ${reason || `code ${code}`}`))
-      if (!this.closed) this.options.onClose?.(code, reason)
+      if (!this.closed) {
+        this.options.onClose?.(code, reason)
+        this.scheduleReconnect()
+      }
     })
+  }
+
+  private scheduleReconnect() {
+    if (this.closed || this.connectRetryTimer) return
+    const delayMs = Math.min(500 * 2 ** Math.min(this.reconnectAttempt, 6), 30_000)
+    this.reconnectAttempt += 1
+    this.connectRetryTimer = setTimeout(() => {
+      this.connectRetryTimer = null
+      this.connect()
+    }, delayMs)
+    this.connectRetryTimer.unref?.()
   }
 
   stop(): void {
@@ -395,6 +436,7 @@ export class LightweightGatewayClient implements GatewayClientLike {
     this.clearPendingRequest(pending)
     if (frame.ok === true) {
       if (pending.method === 'connect') {
+        this.reconnectAttempt = 0
         this.options.onHelloOk?.(frame.payload)
       }
       pending.resolve(frame.payload)
@@ -536,6 +578,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
   let prewarmedAt = ''
 
   const gatewayChatRunWaiters = new Map<string, GatewayChatRunWaiter>()
+  const gatewayChatRunAliases = new Map<string, string>()
   const gatewayChatStreamObservers = new Map<string, GatewayChatStreamObserver>()
   const gatewayChatRecoveryEvents: GatewayChatRecoveryEvent[] = []
 
@@ -636,13 +679,30 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     return true
   }
 
+  function removeGatewayChatRunWaiter(runId: string) {
+    const waiter = gatewayChatRunWaiters.get(runId)
+    if (!waiter) return null
+    gatewayChatRunWaiters.delete(runId)
+    for (const alias of waiter.aliases) gatewayChatRunAliases.delete(alias)
+    waiter.aliases.clear()
+    return waiter
+  }
+
+  function addGatewayChatRunAlias(waiter: GatewayChatRunWaiter, alias: string) {
+    const cleanAlias = alias.trim()
+    if (!cleanAlias || cleanAlias === waiter.runId) return
+    gatewayChatRunAliases.set(cleanAlias, waiter.runId)
+    waiter.aliases.add(cleanAlias)
+  }
+
   function abortRun(runId: string, reason = 'operator stop requested') {
     const cleanRunId = runId.trim()
     if (!cleanRunId) return false
-    const waiter = gatewayChatRunWaiters.get(cleanRunId)
+    const canonicalRunId = gatewayChatRunAliases.get(cleanRunId) || cleanRunId
+    const waiter = gatewayChatRunWaiters.get(canonicalRunId)
     if (!waiter) return false
 
-    gatewayChatRunWaiters.delete(cleanRunId)
+    removeGatewayChatRunWaiter(canonicalRunId)
     clearTimeout(waiter.timer)
     const client = gatewayClientState?.ready ? gatewayClientState.client : null
     if (client) {
@@ -680,7 +740,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       const ageMs = Math.max(0, now - waiter.startedAt)
       if (ageMs < minAge) continue
 
-      gatewayChatRunWaiters.delete(waiter.runId)
+      removeGatewayChatRunWaiter(waiter.runId)
       clearTimeout(waiter.timer)
       if (client) {
         requestGatewayChatAbort(client, waiter.sessionKey, waiter.runId, reason)
@@ -970,30 +1030,28 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     rejectReady?.(error)
   }
 
-  function rejectGatewayChatWaiters(error: Error) {
+  function markGatewayChatWaitersForRecovery() {
     for (const waiter of gatewayChatRunWaiters.values()) {
-      clearTimeout(waiter.timer)
+      waiter.recoveryPending = true
       const observer = streamObserver(waiter.streamObserverId)
       try {
         observer?.emit('status', {
-          type: 'interrupted',
+          type: 'reconnecting',
           runId: waiter.runId,
           sessionKey: waiter.sessionKey,
           agent: waiter.agentId,
-          message: 'Gateway disconnected while this run was active. The run was stopped; retry only after Gateway is healthy.',
+          message: 'Gateway disconnected. Reconnecting and reconciling the accepted run before reporting its result.',
         })
       } catch {
         // The renderer may already have disconnected.
       }
-      waiter.reject(error)
     }
-    gatewayChatRunWaiters.clear()
   }
 
   function rejectGatewayChatWaiter(runId: string, error: Error) {
     const waiter = gatewayChatRunWaiters.get(runId)
     if (!waiter) return
-    gatewayChatRunWaiters.delete(runId)
+    removeGatewayChatRunWaiter(runId)
     clearTimeout(waiter.timer)
     waiter.reject(error)
   }
@@ -1002,7 +1060,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     const error = gatewayChatAbortError(reason)
     const client = gatewayClientState?.client
     for (const waiter of Array.from(gatewayChatRunWaiters.values())) {
-      gatewayChatRunWaiters.delete(waiter.runId)
+      removeGatewayChatRunWaiter(waiter.runId)
       clearTimeout(waiter.timer)
       if (client) requestGatewayChatAbort(client, waiter.sessionKey, waiter.runId, reason)
       const observer = streamObserver(waiter.streamObserverId)
@@ -1040,8 +1098,9 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     const eventName = typeof evt.event === 'string' ? evt.event : ''
     const payload = isLooseRecord(evt.payload) ? evt.payload : null
     if (!eventName || !payload) return
-    const runId = gatewayPayloadRunId(payload)
-    if (!runId) return
+    const eventRunId = gatewayPayloadRunId(payload)
+    if (!eventRunId) return
+    const runId = gatewayChatRunAliases.get(eventRunId) || eventRunId
     const waiter = gatewayChatRunWaiters.get(runId)
     if (!waiter) return
     if (eventName === 'session.tool' || eventName === 'agent') {
@@ -1096,9 +1155,83 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     }
     if (!state) return
     if (state === 'final' && isVisibleGatewayAssistantText(gatewayChatMessageText(payload.message)) && !isGatewayProtocolStatusText(gatewayChatMessageText(payload.message))) emitGatewayChatDelta(waiter, payload)
-    gatewayChatRunWaiters.delete(runId)
+    removeGatewayChatRunWaiter(runId)
     clearTimeout(waiter.timer)
     waiter.resolve(payload)
+  }
+
+  function gatewayHistoryRunId(message: Record<string, unknown>) {
+    const metadata = isLooseRecord(message.__openclaw) ? message.__openclaw : null
+    const values = [metadata?.runId, message.runId, message.clientRunId]
+    return values.find((value): value is string => typeof value === 'string' && value.trim().length > 0)?.trim() || ''
+  }
+
+  function gatewayHistoryInputRunId(message: Record<string, unknown>) {
+    const metadata = isLooseRecord(message.__openclaw) ? message.__openclaw : null
+    const values = [message.idempotencyKey, message.clientRunId, metadata?.idempotencyKey, metadata?.clientRunId]
+    return values.find((value): value is string => typeof value === 'string' && value.trim().length > 0)?.trim() || ''
+  }
+
+  function gatewayHistoryTerminalPayload(messages: unknown[], runId: string): Record<string, unknown> | null {
+    for (const message of [...messages].reverse()) {
+      if (!isLooseRecord(message) || String(message.role || '').toLowerCase() !== 'assistant') continue
+      if (gatewayHistoryRunId(message) !== runId) continue
+      const metadata = isLooseRecord(message.__openclaw) ? message.__openclaw : {}
+      const stopReason = String(message.stopReason || message.stop_reason || metadata.stopReason || metadata.phase || '').toLowerCase()
+      const state = /abort|cancel/.test(stopReason) ? 'aborted' : /error|fail/.test(stopReason) ? 'error' : 'final'
+      return {
+        runId,
+        state,
+        message,
+        ...(typeof message.errorMessage === 'string' ? { errorMessage: message.errorMessage } : {}),
+      }
+    }
+    return null
+  }
+
+  async function reconcileGatewayChatWaiterAfterReconnect(state: GatewayClientState, waiter: GatewayChatRunWaiter) {
+    if (!waiter.recoveryPending || gatewayChatRunWaiters.get(waiter.runId) !== waiter || !state.ready) return
+    try {
+      const snapshot = await state.client.request('chat.startup', {
+        sessionKey: waiter.sessionKey,
+        agentId: waiter.agentId,
+        limit: 20,
+        maxChars: 60_000,
+      }, { timeoutMs: 15_000 })
+      if (!isLooseRecord(snapshot) || gatewayChatRunWaiters.get(waiter.runId) !== waiter) return
+      const messages = Array.isArray(snapshot.messages) ? snapshot.messages : []
+      const activeRun = isLooseRecord(snapshot.inFlightRun) ? snapshot.inFlightRun : null
+      const activeRunId = typeof activeRun?.runId === 'string' ? activeRun.runId.trim() : ''
+      if (activeRunId === waiter.runId) {
+        waiter.recoveryPending = false
+        return
+      }
+
+      const acceptedInputStillPresent = messages.some((message) => isLooseRecord(message)
+        && String(message.role || '').toLowerCase() === 'user'
+        && gatewayHistoryInputRunId(message) === waiter.runId)
+      if (activeRunId && acceptedInputStillPresent) {
+        addGatewayChatRunAlias(waiter, activeRunId)
+        waiter.recoveryPending = false
+        return
+      }
+
+      const terminal = gatewayHistoryTerminalPayload(messages, waiter.runId)
+      if (terminal) {
+        waiter.recoveryPending = false
+        handleGatewayClientEvent({ event: 'chat', payload: terminal })
+        return
+      }
+
+    } catch (error) {
+      options.pushGatewayLog('gateway', `could not reconcile accepted run ${waiter.runId} after reconnect: ${options.redactSensitiveText(String(error))}`, 'warning')
+    }
+  }
+
+  function reconcileGatewayChatWaitersAfterReconnect(state: GatewayClientState) {
+    for (const waiter of Array.from(gatewayChatRunWaiters.values())) {
+      void reconcileGatewayChatWaiterAfterReconnect(state, waiter)
+    }
   }
 
   function waitForGatewayReady(state: GatewayClientState, timeoutMs: number, signal?: AbortSignal) {
@@ -1230,8 +1363,10 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       onHelloOk: (hello: unknown) => {
         if (gatewayClientState?.generation !== state.generation) return
         state.lastHello = hello
+        state.connectedOnce = true
         state.ready = true
         state.resolveReady?.()
+        reconcileGatewayChatWaitersAfterReconnect(state)
       },
       onEvent: handleGatewayClientEvent,
       onConnectError: (error: Error) => {
@@ -1254,7 +1389,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
         if (gatewayClientState?.generation !== state.generation) return
         const error = new Error(`gateway client disconnected: ${reason || 'no reason'}`)
         resetGatewayReadyPromiseAfterFailure(state, error)
-        rejectGatewayChatWaiters(error)
+        markGatewayChatWaitersForRecovery()
       },
       onReconnectPaused: (info: unknown) => {
         if (gatewayClientState?.generation !== state.generation) return
@@ -1293,6 +1428,12 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
 
   async function ensureClient(signal?: AbortSignal): Promise<GatewayClientState> {
     if (gatewayClientState?.ready) return gatewayClientState
+    if (gatewayClientState?.connectedOnce) {
+      const reconnectingState = gatewayClientState
+      await waitForGatewayReady(reconnectingState, readyTimeoutMs, signal)
+      if (gatewayClientState?.generation === reconnectingState.generation) return reconnectingState
+      return ensureClient(signal)
+    }
     if (!gatewayClientConnectPromise) {
       gatewayClientConnectPromise = startClient().finally(() => {
         gatewayClientConnectPromise = null
@@ -1429,6 +1570,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     sessionKey: string
     timeoutMs: number
     streamObserverId?: string
+    message: string
     signal?: AbortSignal
   }): Promise<{ payload: Record<string, unknown>; toolEvents: unknown[]; streamedText: string }> {
     if (params.signal?.aborted) {
@@ -1436,7 +1578,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     }
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        gatewayChatRunWaiters.delete(params.runId)
+        removeGatewayChatRunWaiter(params.runId)
         requestGatewayChatAbort(params.client, params.sessionKey, params.runId, 'waiter timeout')
         waiter.reject(new Error(`gateway chat run timed out after ${params.timeoutMs}ms`))
       }, params.timeoutMs)
@@ -1452,6 +1594,9 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
         execStartupTimers: new Map(),
         streamObserverId: params.streamObserverId,
         streamedText: '',
+        message: params.message,
+        recoveryPending: false,
+        aliases: new Set<string>(),
         timer,
         resolve: (payload) => {
           cleanup()
@@ -1463,7 +1608,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
         },
       }
       const onAbort = () => {
-        gatewayChatRunWaiters.delete(params.runId)
+        removeGatewayChatRunWaiter(params.runId)
         requestGatewayChatAbort(params.client, params.sessionKey, params.runId, 'request cancellation')
         waiter.reject(Object.assign(new Error('gateway chat run aborted'), { name: 'AbortError' }))
       }
@@ -1493,13 +1638,13 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     streamObserverId?: string
     signal?: AbortSignal
   }): Promise<GatewayChatTurnResult> {
+    await options.waitForGatewayAdmission?.(params.signal)
     // Startup prewarming is also a turn barrier. The UI can become
     // interactive before the background startup task finishes; the first
     // message must join that same promise instead of triggering lifecycle
     // work for the first time after the user has already sent a message.
     await options.ensureOpenclawAgentRunConfigDefaults(params.agentId)
     await prewarm('first-message')
-    const state = await ensureClient(params.signal)
     const runId = randomUUID()
     const agentName = params.agentName?.trim() || params.agentId
     const sessionKey = gatewayChatSessionKey(params.agentId, params.sessionId, params.requestedSessionKey, params.freshSession)
@@ -1515,6 +1660,10 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       sessionKey,
       runId,
     })
+    // A restart may have begun while defaults, attachments, or the Gateway
+    // client were being prepared. Recheck immediately before recording the
+    // run so restarts can drain cleanly without losing a just-submitted turn.
+    await options.waitForGatewayAdmission?.(params.signal)
     const runRecord = options.beginGatewayChatRun({
       runId,
       agentId: params.agentId,
@@ -1523,6 +1672,27 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       cwd: params.cwd,
       timeoutMs: params.timeoutMs,
     })
+    let state: GatewayClientState
+    try {
+      // The run is tracked before connecting so a restart requested during
+      // connection setup sees this admitted turn and waits for it to finish.
+      state = await ensureClient(params.signal)
+    } catch (error) {
+      const aborted = params.signal?.aborted === true
+      const shapedError = aborted
+        ? gatewayChatAbortError(redactedGatewayErrorText(error, 'gateway chat run aborted'))
+        : redactedGatewayError(error, 'gateway chat connection failed')
+      options.finishGatewayChatRun(runRecord, aborted ? 'aborted' : 'failed', {
+        stderr: shapedError.message,
+        code: 1,
+        failureKind: aborted ? 'aborted' : options.classifyFailureKind(shapedError.message, 'failed'),
+      })
+      throw Object.assign(shapedError, {
+        gatewayDispatchState: 'not-dispatched',
+        gatewayRunId: runId,
+        gatewaySessionKey: sessionKey,
+      })
+    }
     const finalPromise = waitForGatewayChatRun({
       client: state.client,
       runId,
@@ -1532,6 +1702,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       sessionKey,
       timeoutMs: params.timeoutMs + finalExtraTimeoutMs,
       streamObserverId: params.streamObserverId,
+      message: params.message,
       signal: params.signal,
     })
     // chat.send can fail before this function reaches the normal final await.
@@ -1539,27 +1710,58 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     void finalPromise.catch(() => undefined)
     let ack: unknown
     const fastMode = options.normalizeFastMode(params.fastMode)
+    const chatSendParams = {
+      sessionKey,
+      // The Gateway owns the physical session id for this key. `params.sessionId`
+      // is Automnia's local generation id, so sending it as an OpenClaw
+      // session precondition can reject a newly-created session before work
+      // starts with SESSION_WORK_START_CHANGED.
+      agentId: params.agentId,
+      message: params.message,
+      ...(attachments.length ? { attachments } : {}),
+      thinking: params.thinking,
+      ...(fastMode ? {
+        fastMode,
+        ...(fastMode === 'auto' ? { fastAutoOnSeconds: options.fastAutoOnSeconds } : {}),
+      } : {}),
+      timeoutMs: params.timeoutMs,
+      idempotencyKey: runId,
+    }
     try {
-      ack = await state.client.request('chat.send', {
-        sessionKey,
-        // The Gateway owns the physical session id for this key. `params.sessionId`
-        // is Automnia's local generation id, so sending it as an OpenClaw
-        // session precondition can reject a newly-created session before work
-        // starts with SESSION_WORK_START_CHANGED.
-        agentId: params.agentId,
-        message: params.message,
-        ...(attachments.length ? { attachments } : {}),
-        thinking: params.thinking,
-        ...(fastMode ? {
-          fastMode,
-          ...(fastMode === 'auto' ? { fastAutoOnSeconds: options.fastAutoOnSeconds } : {}),
-        } : {}),
-        timeoutMs: params.timeoutMs,
-        idempotencyKey: runId,
-      }, {
-        timeoutMs: requestTimeoutMs,
-        signal: params.signal,
-      })
+      try {
+        ack = await state.client.request('chat.send', chatSendParams, {
+          timeoutMs: requestTimeoutMs,
+          signal: params.signal,
+        })
+      } catch (sendError) {
+        const sendErrorMessage = sendError instanceof Error ? sendError.message : String(sendError)
+        const retryableUncertainSend = !params.signal?.aborted && (
+          sendError instanceof Error && sendError.name === 'TimeoutError'
+          || /gateway client disconnected|gateway websocket|websocket is not open/iu.test(sendErrorMessage)
+        )
+        if (!retryableUncertainSend) throw sendError
+
+        // chat.send is safe to reconcile with the same idempotency key: the
+        // Gateway returns the existing admission instead of starting a second
+        // run. This closes the lost-ack gap after a socket drop or slow queue.
+        options.pushGatewayLog('gateway', `chat.send acknowledgement was uncertain for run ${runId}; reconnecting and retrying with its original idempotency key.`, 'warning')
+        try {
+          const retryState = await ensureClient(params.signal)
+          ack = await retryState.client.request('chat.send', chatSendParams, {
+            timeoutMs: requestTimeoutMs,
+            signal: params.signal,
+          })
+        } catch (retryError) {
+          const retryErrorMessage = retryError instanceof Error ? retryError.message : String(retryError)
+          const retryStillUncertain = !params.signal?.aborted && (
+            retryError instanceof Error && retryError.name === 'TimeoutError'
+            || /gateway client disconnected|gateway websocket|websocket is not open|gateway client connection timed out/iu.test(retryErrorMessage)
+          )
+          if (!retryStillUncertain) throw retryError
+          options.pushGatewayLog('gateway', `chat.send remains unacknowledged for run ${runId}; keeping its waiter active for a terminal event or saved-history recovery.`, 'warning')
+          ack = { accepted: 'uncertain', idempotencyKey: runId }
+        }
+      }
       const waiter = gatewayChatRunWaiters.get(runId)
       if (waiter) emitGatewayChatStart(waiter)
     } catch (error) {

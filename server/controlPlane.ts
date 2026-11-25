@@ -190,6 +190,7 @@ import { createPickerSessionService } from './services/filesystem/pickerSessionS
 import {
   createGatewayLifecycleService,
   type GatewayLifecycleService,
+  type GatewayStartupMaintenanceMode,
   type GatewayStartupPluginRepairSummary,
 } from './services/gateway/gatewayLifecycleService'
 import { applyTelegramPluginConfigValues } from './services/plugins/telegramConfigMapping'
@@ -569,8 +570,12 @@ const CONTROL_CENTER_GATEWAY_CHAT_CLIENT = !/^(0|false|no)$/i.test(
   process.env.CONTROL_CENTER_GATEWAY_CHAT_CLIENT || (CONTROL_CENTER_GATEWAY_AGENT_SESSIONS ? '1' : ''),
 )
 const CONTROL_CENTER_GATEWAY_PREWARM_ON_STARTUP = /^(1|true|yes)$/i.test(
-  process.env.CONTROL_CENTER_GATEWAY_PREWARM_ON_STARTUP || '1',
+  process.env.CONTROL_CENTER_GATEWAY_PREWARM_ON_STARTUP || '0',
 )
+const CONTROL_CENTER_GATEWAY_STARTUP_MAINTENANCE: GatewayStartupMaintenanceMode = (() => {
+  const configured = (process.env.CONTROL_CENTER_GATEWAY_STARTUP_MAINTENANCE || 'off').trim().toLowerCase()
+  return configured === 'blocking' || configured === 'deferred' ? configured : 'off'
+})()
 const CONTROL_CENTER_GATEWAY_TOOLS_EFFECTIVE_DIAGNOSTIC = /^(1|true|yes)$/i.test(
   process.env.CONTROL_CENTER_GATEWAY_TOOLS_EFFECTIVE_DIAGNOSTIC || '',
 )
@@ -3843,6 +3848,7 @@ const gatewayChatService = createGatewayChatService({
   getGatewayAuthEnv,
   isShuttingDown: () => shuttingDown,
   ensureGatewayRunning,
+  waitForGatewayAdmission: (signal) => gatewayLifecycleRef.current?.waitForGatewayAdmission(signal) || Promise.resolve(),
   startGatewayHealthMonitor,
   isGatewayHealthy,
   getOpenClawAgentRunDefaultsReady: () => openclawAgentRunDefaultsReady,
@@ -4254,6 +4260,48 @@ function readGatewayStabilitySnapshot(limit = 12) {
   return gatewayDiagnostics.readGatewayStabilitySnapshot(limit)
 }
 
+let gatewaySessionLockActivityCacheExpiresAt = 0
+let gatewaySessionLockActivityCacheCount: number | null = null
+let gatewaySessionLockActivityScan: Promise<number | null> | null = null
+
+async function readActiveGatewaySessionLockCount(): Promise<number | null> {
+  if (Date.now() < gatewaySessionLockActivityCacheExpiresAt) return gatewaySessionLockActivityCacheCount
+  if (!gatewaySessionLockActivityScan) {
+    gatewaySessionLockActivityScan = inspectOpenClawSessionLocks({ all: true })
+      .then((report) => report.errors.length
+        ? null
+        : report.locks.filter((lock) => lock.ownerAlive === true
+          && lock.pid !== null
+          && !lock.staleReasons.includes('non-openclaw-owner')).length)
+      .catch(() => null)
+  }
+  const scan = gatewaySessionLockActivityScan
+  const count = await scan
+  if (gatewaySessionLockActivityScan === scan) {
+    gatewaySessionLockActivityScan = null
+    gatewaySessionLockActivityCacheCount = count
+    gatewaySessionLockActivityCacheExpiresAt = Date.now() + 2_000
+  }
+  return count
+}
+
+async function readLiveGatewaySessionLockCount(): Promise<number | null> {
+  const report = await inspectOpenClawSessionLocks({ all: true }).catch(() => null)
+  if (!report || report.errors.length) return null
+  return report.locks.filter((lock) => lock.ownerAlive === true
+    && lock.pid !== null
+    && !lock.staleReasons.includes('non-openclaw-owner')).length
+}
+
+async function activeGatewayAgentRunCount(): Promise<number | null> {
+  const trackedRuns = Math.max(activeOpenClawRuns.size, gatewayChatService.runtimeSnapshot().activeRuns)
+  const restartAdmissionPaused = gatewayLifecycleRef.current?.isGatewayRestartAdmissionPaused() === true
+  const sessionLocks = restartAdmissionPaused
+    ? await readLiveGatewaySessionLockCount()
+    : await readActiveGatewaySessionLockCount()
+  return sessionLocks === null ? (trackedRuns > 0 ? trackedRuns : null) : Math.max(trackedRuns, sessionLocks)
+}
+
 const gatewayLifecycle = createGatewayLifecycleService({
   gatewayHttpPort: GATEWAY_HTTP_PORT,
   controlCenterPort: PORT,
@@ -4263,6 +4311,7 @@ const gatewayLifecycle = createGatewayLifecycleService({
   startupHealthGraceMs: GATEWAY_STARTUP_HEALTH_GRACE_MS,
   startupHealthConfirmTimeoutMs: GATEWAY_STARTUP_HEALTH_CONFIRM_TIMEOUT_MS,
   startupHealthPollMs: GATEWAY_STARTUP_HEALTH_POLL_MS,
+  startupMaintenanceMode: CONTROL_CENTER_GATEWAY_STARTUP_MAINTENANCE,
   isShuttingDown: () => shuttingDown,
   isOpenClawRuntimeAvailable,
   openClawRuntimeUnavailableMessage,
@@ -4300,6 +4349,7 @@ const gatewayLifecycle = createGatewayLifecycleService({
   scheduleOpenClawSessionLockSweep,
   sweepOpenClawSessionLocks,
   stopControlCenterGatewayClient,
+  getActiveAgentRunCount: activeGatewayAgentRunCount,
 })
 gatewayLifecycleRef.current = gatewayLifecycle
 
@@ -20382,6 +20432,14 @@ controlServer = app.listen(PORT, '127.0.0.1', () => {
     .catch((error) => {
       console.error('[agent-config-sync] startup sync failed:', error)
     })
+  // Keep licensing and usage-priority routing authoritative without putting
+  // the config/doctor/plugin work back on the desktop readiness path. The
+  // lifecycle now spawns the Gateway first; this reconciliation joins that
+  // startup in the background and still blocks a turn if the route cannot be
+  // confirmed before use.
+  void synchronizeBillingRouteWithGateway().catch((error) => {
+    console.warn('[license-route] startup reconciliation deferred:', error)
+  })
   if (AUTO_START_GATEWAY) {
     if (gatewayAutostartTimer) clearTimeout(gatewayAutostartTimer)
     startGatewayHealthMonitor()

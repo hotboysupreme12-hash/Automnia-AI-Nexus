@@ -159,10 +159,11 @@ export function readConsolePreferences(): ConsolePreferences {
   const width = Number.isFinite(storedWidth) && storedWidth > 0
     ? Math.max(360, Math.min(760, Math.round(storedWidth)))
     : DEFAULT_CONSOLE_PREFERENCES.width
+  const storedParallelChat = readPreferenceValue(CONSOLE_PARALLEL_CHAT_KEY)
   return {
     visible: readPreferenceValue(CONSOLE_VISIBILITY_KEY) !== 'hidden',
     width,
-    parallelAgentChat: readPreferenceValue(CONSOLE_PARALLEL_CHAT_KEY) === 'on',
+    parallelAgentChat: storedParallelChat ? storedParallelChat === 'on' : DEFAULT_CONSOLE_PREFERENCES.parallelAgentChat,
     rememberDrafts: readPreferenceValue(CONSOLE_DRAFTS_KEY) !== 'off',
   }
 }
@@ -171,7 +172,7 @@ export function saveConsolePreferences(preferences: ConsolePreferences): void {
   const normalized: ConsolePreferences = {
     visible: Boolean(preferences.visible),
     width: Math.max(360, Math.min(760, Math.round(preferences.width))),
-    parallelAgentChat: preferences.parallelAgentChat !== false,
+    parallelAgentChat: Boolean(preferences.parallelAgentChat),
     rememberDrafts: Boolean(preferences.rememberDrafts),
   }
   savePreferenceEntries([[CONSOLE_PARALLEL_CHAT_KEY, normalized.parallelAgentChat ? 'on' : 'off'], [CONSOLE_VISIBILITY_KEY, normalized.visible ? 'visible' : 'hidden'], [CONSOLE_WIDTH_KEY, String(normalized.width)], [CONSOLE_DRAFTS_KEY, normalized.rememberDrafts ? 'on' : 'off']])

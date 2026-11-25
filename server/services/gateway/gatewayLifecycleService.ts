@@ -1,7 +1,9 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import type { BoundedProcessResult } from '../process/boundedProcessService'
 
-export const DEFAULT_TELEGRAM_SPOOLED_HANDLER_TIMEOUT_MS = 2 * 60 * 60 * 1000
+export const DEFAULT_TELEGRAM_SPOOLED_HANDLER_TIMEOUT_MS = 5 * 60 * 1000
+const DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT_MS = 2 * 60 * 60 * 1000
+const GATEWAY_RESTART_GRACEFUL_STOP_TIMEOUT_MS = 15_000
 const PLUGIN_MUTATION_DRAIN_TIMEOUT_MS = 315_000
 const PLUGIN_MUTATION_FORCE_EXIT_TIMEOUT_MS = 15_000
 const PLUGIN_MUTATION_PORT_RELEASE_TIMEOUT_MS = 30_000
@@ -100,6 +102,8 @@ export type GatewaySpawnSpec = {
   shell: boolean
 }
 
+export type GatewayStartupMaintenanceMode = 'off' | 'deferred' | 'blocking'
+
 export type SpawnTextResult = BoundedProcessResult
 
 type GatewayHealthResult = {
@@ -136,6 +140,12 @@ export type GatewayLifecycleServiceOptions = {
   startupHealthGraceMs: number
   startupHealthConfirmTimeoutMs: number
   startupHealthPollMs: number
+  /**
+   * Keep filesystem/plugin/config maintenance out of the critical startup
+   * path by default. The desktop app uses `off`; tests and explicit recovery
+   * callers can retain the historical `blocking` behavior.
+   */
+  startupMaintenanceMode?: GatewayStartupMaintenanceMode
   isShuttingDown: () => boolean
   isOpenClawRuntimeAvailable: () => boolean
   openClawRuntimeUnavailableMessage: () => string
@@ -149,6 +159,8 @@ export type GatewayLifecycleServiceOptions = {
   tryReleaseGatewayPort: () => Promise<{ released: boolean; detail: string }>
   isPidAlive: (pid: number) => boolean
   delayMs: (ms: number) => Promise<void>
+  getActiveAgentRunCount?: () => number | null | Promise<number | null>
+  gatewayRestartDrainTimeoutMs?: number
   appendBoundedRuntimeOutput: (current: string, chunk: unknown) => string
   compactGatewayLogMessage: (value: string, max?: number) => string
   redactSensitiveText: (value: string) => string
@@ -200,6 +212,7 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
   let gatewayRestartInFlight: Promise<{ restarted: boolean; detail: string }> | null = null
   let pluginOfflineMutationQueue: Promise<void> = Promise.resolve()
   let pluginOfflineMutationPending = 0
+  const gatewayRestartAdmissionPauses = new Set<symbol>()
   let gatewayProcessOwnedByControlCenter = false
   let lastGatewayPortReleaseAt = 0
   let gatewayAutoRestartPaused = false
@@ -220,6 +233,34 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
   let gatewayMigrationRetryAfterAt: string | null = null
 
   const gatewayMigrationMessage = 'OpenClaw is applying startup migrations. The Gateway may restart several times while this completes.'
+
+  function pauseGatewayRestartAdmission(reason: string): () => void {
+    const token = Symbol(reason)
+    gatewayRestartAdmissionPauses.add(token)
+    options.pushGatewayLog('lifecycle', `Gateway turn admission paused: ${reason}`)
+    return () => {
+      if (!gatewayRestartAdmissionPauses.delete(token)) return
+      if (gatewayRestartAdmissionPauses.size === 0) {
+        options.pushGatewayLog('lifecycle', `Gateway turn admission resumed after: ${reason}`)
+      }
+    }
+  }
+
+  async function waitForGatewayAdmission(signal?: AbortSignal): Promise<void> {
+    while (gatewayRestartAdmissionPauses.size > 0) {
+      if (signal?.aborted) {
+        const error = new Error('Gateway agent turn aborted while waiting for restart admission')
+        error.name = 'AbortError'
+        throw error
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 100))
+    }
+    if (signal?.aborted) {
+      const error = new Error('Gateway agent turn aborted before dispatch')
+      error.name = 'AbortError'
+      throw error
+    }
+  }
 
   function migrationRetryAfterFromText(value: string): string | null {
     const match = value.match(/\b(20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z)\b/)
@@ -557,10 +598,10 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
       }
       const spec = options.openClawSpawnSpec(buildGatewayRunArgs(options.gatewayHttpPort))
       const env = options.openClawProcessEnv({
-        // Telegram's default 5-minute claim→adoption watchdog was shorter than
-        // the hosted model route's 2-hour request deadline. Keep durable turns
-        // claimed until the configured model route can finish, but preserve an
-        // explicit operator override.
+        // Telegram's watchdog only covers claim→handler adoption. Once adopted,
+        // long model work is governed by the agent turn timeout. Keep the
+        // watchdog at its five-minute recovery window so a pre-adoption stall
+        // cannot leave a durable Telegram update claimed for hours.
         OPENCLAW_TELEGRAM_SPOOLED_HANDLER_TIMEOUT_MS: String(resolveTelegramSpooledHandlerTimeoutMs()),
         // The Gateway is a local untrusted boundary from the billing point
         // of view. Give injected channel runtimes the same bearer credential
@@ -731,6 +772,69 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
     return generation === gatewayEnsureGeneration && !gatewayAutoRestartPaused && !options.isShuttingDown()
   }
 
+  type GatewayStartupMaintenanceResult = {
+    configReady: boolean
+    repairedClawTalkManifests: string[]
+    repairedTelegramRuntimes: string[]
+    clawTalkRegistryRefreshed: boolean
+  }
+
+  async function runGatewayStartupMaintenance(
+    generation: number,
+    reason: string,
+  ): Promise<GatewayStartupMaintenanceResult | null> {
+    const [clawTalkRepairResult, telegramRepairResult] = await Promise.all([
+      options.repairClawTalkPluginManifestContracts().then((repaired) => ({ ok: true as const, repaired })).catch((error) => {
+        log.warn('[plugins/clawtalk] startup repair failed:', error)
+        return { ok: false as const, repaired: [] as string[] }
+      }),
+      options.repairTelegramAgentRoutingRuntime().then((repaired) => ({ ok: true as const, repaired })).catch((error) => {
+        log.warn('[plugins/telegram] startup agent-routing repair failed:', error)
+        return { ok: false as const, repaired: [] as string[] }
+      }),
+    ])
+    if (!isGatewayEnsureCurrent(generation)) return null
+
+    const repairedClawTalkManifests = clawTalkRepairResult.repaired
+    const repairedTelegramRuntimes = telegramRepairResult.repaired
+    let clawTalkRegistryRefreshed = false
+    if (repairedClawTalkManifests.length) {
+      log.info(`[plugins/clawtalk] repaired package contracts/runtime in ${repairedClawTalkManifests.length} install(s)`)
+      const registryResult = await options.refreshOpenClawPluginRegistry('clawtalk-startup-repair').catch((error) => {
+        log.warn('[plugins/clawtalk] registry refresh after startup repair failed:', error)
+        return null
+      })
+      clawTalkRegistryRefreshed = registryResult?.code === 0
+    }
+    if (repairedTelegramRuntimes.length) {
+      log.info(`[plugins/telegram] repaired agent-routing runtime in ${repairedTelegramRuntimes.length} install(s)`)
+    }
+    if (!isGatewayEnsureCurrent(generation)) return null
+
+    await options.sweepOpenClawSessionLocks(reason, { minIntervalMs: 0, minAgeMs: 0 })
+    if (!isGatewayEnsureCurrent(generation)) return null
+    await options.ensureGatewayStartupPluginDefaults({
+      ...(clawTalkRepairResult.ok ? { repairedClawTalkManifests } : {}),
+      ...(telegramRepairResult.ok ? { repairedTelegramRuntimes } : {}),
+      clawTalkRegistryRefreshed,
+    })
+    if (!isGatewayEnsureCurrent(generation)) return null
+
+    recordGatewayStartupEvent('config', 'started', 'Validating OpenClaw config')
+    const configReady = await options.prepareOpenClawConfigForGatewayStartup(reason)
+    if (configReady) {
+      recordGatewayStartupEvent('config', 'completed', 'OpenClaw config is valid')
+    } else {
+      recordGatewayStartupEvent('config', 'failed', 'OpenClaw config validation did not complete')
+    }
+    return {
+      configReady,
+      repairedClawTalkManifests,
+      repairedTelegramRuntimes,
+      clawTalkRegistryRefreshed,
+    }
+  }
+
   async function ensureGatewayRunningIfAllowed(): Promise<void> {
     if (gatewayAutoRestartPaused || options.isShuttingDown()) return
     const generation = gatewayEnsureGeneration
@@ -774,31 +878,36 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
       }
     }
 
-    const [clawTalkRepairResult, telegramRepairResult] = await Promise.all([
-      options.repairClawTalkPluginManifestContracts().then((repaired) => ({ ok: true as const, repaired })).catch((error) => {
-        log.warn('[plugins/clawtalk] startup repair failed:', error)
-        return { ok: false as const, repaired: [] as string[] }
-      }),
-      options.repairTelegramAgentRoutingRuntime().then((repaired) => ({ ok: true as const, repaired })).catch((error) => {
-        log.warn('[plugins/telegram] startup agent-routing repair failed:', error)
-        return { ok: false as const, repaired: [] as string[] }
-      }),
-    ])
-    if (!isGatewayEnsureCurrent(generation)) return
-    const repairedClawTalkManifests = clawTalkRepairResult.repaired
-    const repairedTelegramRuntimes = telegramRepairResult.repaired
-    let clawTalkRegistryRefreshed = false
-    if (repairedClawTalkManifests.length) {
-      log.info(`[plugins/clawtalk] repaired package contracts/runtime in ${repairedClawTalkManifests.length} install(s)`)
-      const registryResult = await options.refreshOpenClawPluginRegistry('clawtalk-startup-repair').catch((error) => {
-        log.warn('[plugins/clawtalk] registry refresh after startup repair failed:', error)
-        return null
-      })
-      clawTalkRegistryRefreshed = registryResult?.code === 0
+    log.log(`[gateway] starting OpenClaw gateway on port ${options.gatewayHttpPort}...`)
+    markGatewayStartupGrace()
+    resetGatewayStartupTimeline(`Gateway startup requested on port ${options.gatewayHttpPort}`)
+    options.pushGatewayLog('lifecycle', `starting requested on port ${options.gatewayHttpPort}`)
+
+    const startupMaintenanceMode = options.startupMaintenanceMode ?? 'blocking'
+    let maintenanceResult: GatewayStartupMaintenanceResult | null = null
+    if (startupMaintenanceMode === 'blocking') {
+      try {
+        maintenanceResult = await runGatewayStartupMaintenance(generation, 'gateway startup')
+      } catch (error) {
+        log.error('[gateway] startup maintenance failed:', error)
+        options.pushGatewayLog('lifecycle', `startup maintenance failed: ${String(error)}`, 'warning')
+        recordGatewayStartupEvent('config', 'failed', `Gateway startup maintenance failed: ${String(error)}`)
+        if (gatewayLastRestartOutcome === 'scheduled' || gatewayLastRestartOutcome === 'started') {
+          markGatewayRestartOutcome('failed')
+        }
+        return
+      }
+      if (!maintenanceResult || !isGatewayEnsureCurrent(generation)) return
+    } else {
+      const message = startupMaintenanceMode === 'deferred'
+        ? 'Gateway startup maintenance deferred until after the listener is online'
+        : 'Gateway startup maintenance disabled for fast start'
+      options.pushGatewayLog('lifecycle', message)
+      recordGatewayStartupEvent('config', 'completed', message)
     }
-    if (repairedTelegramRuntimes.length) {
-      log.info(`[plugins/telegram] repaired agent-routing runtime in ${repairedTelegramRuntimes.length} install(s)`)
-    }
+
+    const repairedClawTalkManifests = maintenanceResult?.repairedClawTalkManifests || []
+    const repairedTelegramRuntimes = maintenanceResult?.repairedTelegramRuntimes || []
     const healthy = await isGatewayHealthy()
     if (!isGatewayEnsureCurrent(generation)) return
     if (healthy) {
@@ -839,6 +948,16 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
       const now = Date.now()
       if (now - lastGatewayPortReleaseAt < 5000) {
         log.warn(`[gateway] port ${options.gatewayHttpPort} is busy but unhealthy; waiting before another recovery attempt`)
+        gatewayStartupGraceUntilMs = 0
+        return
+      }
+      const activeWork = await waitForGatewayAgentRunsToDrain('unhealthy Gateway listener recovery', 0)
+      if (!activeWork.drained) {
+        const detail = activeWork.activeRuns === null
+          ? 'Gateway listener recovery deferred because active agent session state could not be confirmed.'
+          : `Gateway listener recovery deferred because ${activeWork.activeRuns} agent run(s) are still active.`
+        options.pushGatewayLog('lifecycle', detail, 'warning')
+        gatewayStartupGraceUntilMs = 0
         return
       }
       lastGatewayPortReleaseAt = now
@@ -848,27 +967,13 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
       log.warn(`[gateway] stale listener release ${released.released ? 'ok' : 'failed'}: ${released.detail}`)
       clearListenerPidCache()
       if (!released.released && (await options.checkTcpPort('127.0.0.1', options.gatewayHttpPort, 700))) {
+        gatewayStartupGraceUntilMs = 0
         return
       }
     }
 
-    log.log(`[gateway] starting OpenClaw gateway on port ${options.gatewayHttpPort}...`)
-    markGatewayStartupGrace()
-    resetGatewayStartupTimeline(`Gateway startup requested on port ${options.gatewayHttpPort}`)
-    options.pushGatewayLog('lifecycle', `starting requested on port ${options.gatewayHttpPort}`)
     try {
-      await options.sweepOpenClawSessionLocks('gateway startup', { minIntervalMs: 0, minAgeMs: 0 })
-      if (!isGatewayEnsureCurrent(generation)) return
-      await options.ensureGatewayStartupPluginDefaults({
-        ...(clawTalkRepairResult.ok ? { repairedClawTalkManifests } : {}),
-        ...(telegramRepairResult.ok ? { repairedTelegramRuntimes } : {}),
-        clawTalkRegistryRefreshed,
-      })
-      if (!isGatewayEnsureCurrent(generation)) return
-      recordGatewayStartupEvent('config', 'started', 'Validating OpenClaw config')
-      const configReady = await options.prepareOpenClawConfigForGatewayStartup('gateway startup')
-      if (!isGatewayEnsureCurrent(generation)) return
-      if (!configReady) {
+      if (startupMaintenanceMode === 'blocking' && !maintenanceResult?.configReady) {
         gatewayStartupGraceUntilMs = 0
         if (gatewayLastRestartOutcome === 'scheduled' || gatewayLastRestartOutcome === 'started') {
           markGatewayRestartOutcome('failed')
@@ -876,7 +981,6 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
         recordGatewayStartupEvent('config', 'failed', 'OpenClaw config validation blocked Gateway startup')
         return
       }
-      recordGatewayStartupEvent('config', 'completed', 'OpenClaw config is valid')
       // OpenClaw reads its persisted cold registry during normal startup.
       // --refresh is a repair operation: launching a second CLI here repeats
       // runtime initialization and delays the Gateway (up to the CLI timeout).
@@ -886,6 +990,22 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
       recordGatewayStartupEvent('spawned', 'completed', `Gateway process spawned with pid ${pid}`, { pid })
       log.log(`[gateway] started with pid ${pid}`)
       options.pushGatewayLog('lifecycle', `started with pid ${pid}`)
+
+      if (startupMaintenanceMode === 'deferred') {
+        const deferredMaintenanceTimer = setTimeout(() => {
+          if (!isGatewayEnsureCurrent(generation)) return
+          void runGatewayStartupMaintenance(generation, 'deferred gateway startup maintenance').then((result) => {
+            if (result && !result.configReady) {
+              options.pushGatewayLog('lifecycle', 'deferred Gateway startup maintenance found an invalid config; use Doctor for repair details', 'warning')
+            }
+          }).catch((error) => {
+            log.warn('[gateway] deferred startup maintenance failed:', error)
+            options.pushGatewayLog('lifecycle', `deferred startup maintenance failed: ${String(error)}`, 'warning')
+          })
+        }, 1500)
+        deferredMaintenanceTimer.unref?.()
+      }
+
       if (await waitForGatewayStartupHealth()) {
         gatewayStartupGraceUntilMs = 0
         recordGatewayStartupEvent('healthy', 'completed', 'Gateway health confirmed', { pid })
@@ -1143,11 +1263,47 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
     }
     if (gatewayRestartInFlight) return gatewayRestartInFlight
 
+    const releaseAdmission = pauseGatewayRestartAdmission(optionsArg.reason || 'Gateway restart')
     const restartPromise = tryRestartGatewayServiceInner(optionsArg).finally(() => {
+      releaseAdmission()
       if (gatewayRestartInFlight === restartPromise) gatewayRestartInFlight = null
     })
     gatewayRestartInFlight = restartPromise
     return restartPromise
+  }
+
+  async function waitForGatewayAgentRunsToDrain(
+    reason: string,
+    requestedTimeoutMs = options.gatewayRestartDrainTimeoutMs ?? DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT_MS,
+  ): Promise<{ drained: boolean; activeRuns: number | null }> {
+    const timeoutMs = Math.max(0, requestedTimeoutMs)
+    const startedAt = Date.now()
+    const deadline = startedAt + timeoutMs
+    let lastLogAt = 0
+    const readActiveRuns = async () => {
+      if (!options.getActiveAgentRunCount) return 0
+      try {
+        const count = await options.getActiveAgentRunCount()
+        return typeof count === 'number' && Number.isFinite(count) ? Math.max(0, Math.floor(count)) : null
+      } catch {
+        return null
+      }
+    }
+    let activeRuns = await readActiveRuns()
+
+    while (activeRuns !== 0 && Date.now() < deadline && !options.isShuttingDown()) {
+      if (!lastLogAt || Date.now() - lastLogAt >= 30_000) {
+        const waitedMs = Date.now() - startedAt
+        const activity = activeRuns === null ? 'active agent session state is unavailable' : `${activeRuns} active agent run(s)`
+        const message = `Gateway restart waiting for ${activity} (${Math.round(waitedMs / 1000)}s elapsed): ${reason}`
+        options.pushGatewayLog('lifecycle', message)
+        lastLogAt = Date.now()
+      }
+      await options.delayMs(Math.min(1_000, Math.max(1, deadline - Date.now())))
+      activeRuns = await readActiveRuns()
+    }
+
+    return { drained: activeRuns === 0, activeRuns }
   }
 
   async function tryRestartGatewayServiceInner(optionsArg: { force?: boolean; allowExternalTakeover?: boolean; reason?: string } = {}): Promise<{ restarted: boolean; detail: string }> {
@@ -1166,8 +1322,6 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
         recordGatewayRestartRequest(restartReason, 'skipped')
         return { restarted: true, detail: 'gateway startup completed and health was confirmed' }
       }
-      recordGatewayRestartRequest(restartReason, 'started')
-
       // A forced restart may arrive while the initial start is still running.
       // Join that attempt before stopping anything so a second OpenClaw process
       // cannot enter the same state directory during startup migrations.
@@ -1177,18 +1331,30 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
 
       if (gatewayProcess) {
         const pid = gatewayProcess.pid
+        const drain = await waitForGatewayAgentRunsToDrain(restartReason)
+        if (!drain.drained) {
+          const detail = drain.activeRuns === null
+            ? 'Gateway restart was deferred because active agent session state could not be confirmed; let current work finish, then retry the restart.'
+            : `Gateway restart was deferred because ${drain.activeRuns} agent run(s) are still active; let the current work finish, then retry the restart.`
+          options.pushGatewayLog('lifecycle', detail, 'warning')
+          recordGatewayRestartRequest(restartReason, 'skipped')
+          markGatewayRestartOutcome('skipped')
+          return { restarted: false, detail }
+        }
+        recordGatewayRestartRequest(restartReason, 'started')
         try {
-          await options.terminateProcessTree(pid, 'gateway restart', true)
+          await options.terminateProcessTree(pid, 'gateway restart')
         } catch {
-          // The port release path below is authoritative.
+          // The graceful process shutdown path below is authoritative.
         }
         if (pid && options.isPidAlive(pid)) {
-          const deadline = Date.now() + 5000
+          const deadline = Date.now() + GATEWAY_RESTART_GRACEFUL_STOP_TIMEOUT_MS
           while (Date.now() <= deadline && options.isPidAlive(pid)) {
             await options.delayMs(Math.min(options.startupHealthPollMs, Math.max(1, deadline - Date.now())))
           }
           if (options.isPidAlive(pid)) {
-            const detail = `owned gateway process pid=${pid} is still running after termination; refusing to launch a duplicate`
+            const detail = `owned gateway process pid=${pid} did not exit after graceful shutdown; leaving it running and refusing to force-kill active runtime resources`
+            options.pushGatewayLog('lifecycle', detail, 'warning')
             markGatewayRestartOutcome('failed')
             return { restarted: false, detail }
           }
@@ -1204,6 +1370,17 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
           markGatewayRestartOutcome('skipped')
           return { restarted: false, detail: logs.join('\n') }
         }
+        const drain = await waitForGatewayAgentRunsToDrain(restartReason)
+        if (!drain.drained) {
+          const detail = drain.activeRuns === null
+            ? 'Gateway takeover was deferred because active agent session state could not be confirmed; let current work finish, then retry.'
+            : `Gateway takeover was deferred because ${drain.activeRuns} agent run(s) are still active; let current work finish, then retry.`
+          options.pushGatewayLog('lifecycle', detail, 'warning')
+          recordGatewayRestartRequest(restartReason, 'skipped')
+          markGatewayRestartOutcome('skipped')
+          return { restarted: false, detail }
+        }
+        recordGatewayRestartRequest(restartReason, 'started')
       }
 
       const released = await options.tryReleaseGatewayPort()
@@ -1254,7 +1431,14 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
     operation: () => Promise<T>,
   ): Promise<{ value: T; restarted: boolean; detail: string }> {
     pluginOfflineMutationPending += 1
-    const run = pluginOfflineMutationQueue.then(() => withGatewayStoppedForPluginMutationInner(reason, operation))
+    const run = pluginOfflineMutationQueue.then(async () => {
+      const releaseAdmission = pauseGatewayRestartAdmission(`plugin mutation: ${reason}`)
+      try {
+        return await withGatewayStoppedForPluginMutationInner(reason, operation)
+      } finally {
+        releaseAdmission()
+      }
+    })
     pluginOfflineMutationQueue = run.then(
       () => { pluginOfflineMutationPending = Math.max(0, pluginOfflineMutationPending - 1) },
       () => { pluginOfflineMutationPending = Math.max(0, pluginOfflineMutationPending - 1) },
@@ -1303,6 +1487,13 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
           )
         }
       } else if (managedPid) {
+        const activeWork = await waitForGatewayAgentRunsToDrain(reason, PLUGIN_MUTATION_DRAIN_TIMEOUT_MS)
+        if (!activeWork.drained) {
+          const detail = activeWork.activeRuns === null
+            ? `Cannot run ${reason}: active agent session state could not be confirmed, so the Gateway was left running and no plugin files were changed.`
+            : `Cannot run ${reason}: ${activeWork.activeRuns} agent run(s) are still active, so the Gateway was left running and no plugin files were changed.`
+          throw new Error(detail)
+        }
         const gracefulStop = await options.terminateProcessTree(managedPid, `plugin mutation drain: ${reason}`)
         options.pushGatewayLog(
           'lifecycle',
@@ -1419,6 +1610,8 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
     stopGatewayHealthMonitor,
     stopGatewayRuntime,
     tryRestartGatewayService,
+    waitForGatewayAdmission,
+    isGatewayRestartAdmissionPaused: () => gatewayRestartAdmissionPauses.size > 0,
     withGatewayStoppedForPluginMutation,
     waitForGatewayStartupHealthIfStarting,
     ensureGatewayRunning,
