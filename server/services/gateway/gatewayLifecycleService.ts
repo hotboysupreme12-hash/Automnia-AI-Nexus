@@ -4,6 +4,7 @@ import type { BoundedProcessResult } from '../process/boundedProcessService'
 export const DEFAULT_TELEGRAM_SPOOLED_HANDLER_TIMEOUT_MS = 5 * 60 * 1000
 const DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT_MS = 2 * 60 * 60 * 1000
 const GATEWAY_RESTART_GRACEFUL_STOP_TIMEOUT_MS = 15_000
+const GATEWAY_RESTART_FORCE_EXIT_TIMEOUT_MS = 15_000
 const PLUGIN_MUTATION_DRAIN_TIMEOUT_MS = 315_000
 const PLUGIN_MUTATION_FORCE_EXIT_TIMEOUT_MS = 15_000
 const PLUGIN_MUTATION_PORT_RELEASE_TIMEOUT_MS = 30_000
@@ -1353,10 +1354,28 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
             await options.delayMs(Math.min(options.startupHealthPollMs, Math.max(1, deadline - Date.now())))
           }
           if (options.isPidAlive(pid)) {
-            const detail = `owned gateway process pid=${pid} did not exit after graceful shutdown; leaving it running and refusing to force-kill active runtime resources`
-            options.pushGatewayLog('lifecycle', detail, 'warning')
-            markGatewayRestartOutcome('failed')
-            return { restarted: false, detail }
+            const finalDrain = await waitForGatewayAgentRunsToDrain(`${restartReason} force-stop safety check`, 0)
+            if (!finalDrain.drained) {
+              const detail = finalDrain.activeRuns === null
+                ? `Owned Gateway pid=${pid} did not exit gracefully; active agent state could not be confirmed, so it remains running.`
+                : `Owned Gateway pid=${pid} did not exit gracefully; ${finalDrain.activeRuns} agent run(s) remain active, so it remains running.`
+              options.pushGatewayLog('lifecycle', detail, 'warning')
+              markGatewayRestartOutcome('skipped')
+              return { restarted: false, detail }
+            }
+
+            await options.terminateProcessTree(pid, 'gateway restart force escalation', true).catch(() => undefined)
+            const forceDeadline = Date.now() + GATEWAY_RESTART_FORCE_EXIT_TIMEOUT_MS
+            while (Date.now() <= forceDeadline && options.isPidAlive(pid)) {
+              await options.delayMs(Math.min(options.startupHealthPollMs, Math.max(1, forceDeadline - Date.now())))
+            }
+            if (options.isPidAlive(pid)) {
+              const detail = `Owned Gateway pid=${pid} did not exit after graceful and forced shutdown.`
+              options.pushGatewayLog('lifecycle', detail, 'warning')
+              markGatewayRestartOutcome('failed')
+              return { restarted: false, detail }
+            }
+            options.pushGatewayLog('lifecycle', `Gateway pid=${pid} required forced shutdown after agent work drained; restart is continuing.`)
           }
         }
         gatewayProcess = null
