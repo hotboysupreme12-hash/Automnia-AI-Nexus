@@ -180,11 +180,10 @@ html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control.is-compact {
 html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__compact-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
   min-height: 26px;
-  padding: 3px 5px;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  padding: 3px 0;
+  border: 0;
+  border-radius: 0;
   background: transparent;
   color: #87968e;
   cursor: pointer;
@@ -194,9 +193,9 @@ html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__compact-trigg
 
 html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__compact-trigger:hover,
 html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__compact-trigger[aria-expanded="true"] {
-  border-color: rgba(139, 212, 170, .17);
-  background: rgba(139, 212, 170, .045);
   color: #c3d5c9;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__compact-dot {
