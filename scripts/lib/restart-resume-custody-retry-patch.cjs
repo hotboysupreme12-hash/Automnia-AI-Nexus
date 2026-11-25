@@ -184,7 +184,6 @@ async function resumeMarkedSessions(e) {
 }
 
 function ensureRestartResumeCustodyRetry(vendorRoot) {
-  ensureAgentDatabaseStartupPreparationBarrier(vendorRoot)
   const dist = path.join(vendorRoot, 'dist')
   const candidates = fs.readdirSync(dist).filter((name) => /^session-restart-resume-.*\.mjs$/.test(name))
   const matches = candidates.map((name) => ({ file: path.join(dist, name), source: fs.readFileSync(path.join(dist, name), 'utf8') }))
