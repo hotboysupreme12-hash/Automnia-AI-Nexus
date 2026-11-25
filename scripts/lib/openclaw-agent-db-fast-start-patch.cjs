@@ -3,9 +3,39 @@ const path = require('node:path')
 
 const dbMarker = 'Automnia: bypass stale agent database full integrity gate'
 const schemaMarker = 'Automnia: bypass stale agent database integrity scan'
+const startupMarker = 'Automnia: skip background agent database startup preparation'
+
+function ensureAutomniaAgentDatabaseStartupPreparationDisabled(distRoot) {
+  const candidates = fs.readdirSync(distRoot)
+    .filter((name) => /^agent-database-startup-[^/]+\.mjs$/.test(name))
+    .map((name) => ({ file: path.join(distRoot, name), source: fs.readFileSync(path.join(distRoot, name), 'utf8') }))
+    .filter(({ source }) => source.includes('defer(e) {') && source.includes('waitForAgentPreparation(e, t = {}) {'))
+  if (candidates.length !== 1) {
+    throw new Error(`[openclaw-vendor] Expected one agent database startup admission bundle, found ${candidates.length}`)
+  }
+
+  const { file, source } = candidates[0]
+  const deferPattern = /\tdefer\(e\) \{[\s\S]*?\n\t\}/u
+  const waitPattern = /\twaitForAgentPreparation\(e, t = \{\}\) \{[\s\S]*?\n\t\}/u
+  const waitAllPattern = /\tasync waitForAgentPreparations\(e\) \{[\s\S]*?\n\t\}/u
+  if (!deferPattern.test(source) || !waitPattern.test(source) || !waitAllPattern.test(source)) {
+    throw new Error('[openclaw-vendor] Agent database startup preparation methods changed')
+  }
+
+  let patched = source
+  if (!source.includes(startupMarker)) {
+    patched = patched
+      .replace(deferPattern, `\tdefer(e) {\n\t\tthis.signal.throwIfAborted();\n\t\treturn [];\n\t}`)
+      .replace(waitPattern, `\twaitForAgentPreparation(e, t = {}) {\n\t\treturn;\n\t}`)
+      .replace(waitAllPattern, `\tasync waitForAgentPreparations(e) {\n\t\treturn;\n\t}`)
+    patched = `// ${startupMarker}\n${patched}`
+  }
+  if (patched !== source) fs.writeFileSync(file, patched)
+}
 
 function ensureAutomniaAgentDatabaseFastStart(vendorRoot) {
   const distRoot = path.join(vendorRoot, 'dist')
+  ensureAutomniaAgentDatabaseStartupPreparationDisabled(distRoot)
   const dbFiles = fs.readdirSync(distRoot)
     .filter((name) => /^openclaw-agent-db-[^/]+\.mjs$/.test(name))
     .map((name) => ({ file: path.join(distRoot, name), source: fs.readFileSync(path.join(distRoot, name), 'utf8') }))
