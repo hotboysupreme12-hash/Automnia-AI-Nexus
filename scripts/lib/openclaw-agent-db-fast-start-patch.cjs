@@ -2,7 +2,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 const dbMarker = 'Automnia: bypass stale agent database full integrity gate'
-const schemaMarker = 'Automnia: bypass stale agent database integrity scan'
+const schemaMarker = 'Automnia: bypass all agent database integrity scans'
 const startupMarker = 'Automnia: skip background agent database startup preparation'
 
 function ensureAutomniaAgentDatabaseStartupPreparationDisabled(distRoot) {
@@ -81,7 +81,7 @@ function ensureAutomniaAgentDatabaseFastStart(vendorRoot) {
     if (start < 0 || body < 0 || !schema.source.slice(start, body).includes('r,')) {
       throw new Error('[openclaw-vendor] Agent database integrity gate signature changed')
     }
-    const bypass = `\n\t// ${schemaMarker}\n\tif (r?.integrityGateReason === "process-death") {\n\t\tr.integrityGateMode = "bypassed";\n\t\tr.integrityGateOutcome = "bypassed";\n\t\treturn false;\n\t}\n`
+    const bypass = `\n\t// ${schemaMarker}\n\tif (r) {\n\t\tr.integrityGateMode = "bypassed";\n\t\tr.integrityGateOutcome = "bypassed";\n\t}\n\treturn false;\n`
     fs.writeFileSync(schema.file, `${schema.source.slice(0, body + 1)}${bypass}${schema.source.slice(body + 1)}`)
   }
 
