@@ -84,7 +84,7 @@ PY
 sleep 5
 
 set +e
-npm run dist:mac -- "--$architecture" dmg 2>&1 | tee "$retry_log"
+npm run dist:mac -- "--$architecture" --config.mac.target=dmg 2>&1 | tee "$retry_log"
 retry_status=${PIPESTATUS[0]}
 set -e
 

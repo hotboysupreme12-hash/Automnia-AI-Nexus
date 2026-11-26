@@ -133,7 +133,7 @@ assert.ok(publicRelease.includes('bash scripts/build-macos-release.sh arm64'), '
 assert.ok(macOSReleaseBuild.includes('npm run dist:mac -- "--$architecture"'), 'macOS release build must use electron-builder for the selected architecture')
 assert.ok(macOSReleaseBuild.includes("Unable to detach device cleanly: hdiutil: couldn't eject") && macOSReleaseBuild.includes('Resource busy'), 'DMG retry must be limited to the observed hdiutil resource-busy cleanup failure')
 assert.ok(macOSReleaseBuild.includes('["hdiutil", "info", "-plist"]') && macOSReleaseBuild.includes('os.path.commonpath([image_path, root]) == root'), 'DMG recovery must inspect and detach only temporary images from this runner')
-assert.ok(macOSReleaseBuild.includes('npm run dist:mac -- "--$architecture" dmg'), 'macOS release build must retry only the DMG target after transient eject contention')
+assert.ok(macOSReleaseBuild.includes('npm run dist:mac -- "--$architecture" --config.mac.target=dmg'), 'macOS release build must retry only the DMG target after transient eject contention')
 assert.match(publicRelease, /Build Intel Mac DMG and ZIP[\s\S]*?AUTOMNIA_TARGET_ARCH:\s*x64/, 'Intel macOS packaging must prepare an Intel Node runtime even on Apple silicon runners')
 assert.match(publicRelease, /macos-arm64:\s*\r?\n\s*if:[^\r\n]*\r?\n\s*name: Apple silicon macOS DMG and ZIP\s*\r?\n\s*runs-on: macos-15[\s\S]*?bash scripts\/build-macos-release\.sh arm64/, 'Apple silicon packaging must run on the GitHub ARM macOS runner')
 const armReleaseJob = publicRelease.match(/macos-arm64:[\s\S]*?\n {2}linux:/)?.[0] || ''
