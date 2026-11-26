@@ -480,7 +480,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-plus-menu {
   width: min(320px, calc(100vw - 32px));
   max-height: min(72vh, 480px);
   gap: 4px;
-  overflow-y: auto;
+  overflow: visible;
   padding: 7px;
   border: 1px solid rgba(224, 236, 229, .12);
   border-radius: 10px;

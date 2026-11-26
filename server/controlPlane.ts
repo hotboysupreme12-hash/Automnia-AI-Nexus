@@ -19761,7 +19761,7 @@ const synchronizeBillingRouteWithGateway = () => {
 
 registerToolApprovalRoutes(app, {
   interruptAgent: (agentId) => gatewayChatService.interruptAgent(agentId),
-  request: async (method, params) => (await gatewayChatService.ensureClient()).client.request(method, params),
+  request: async (method, params, requestOptions) => (await gatewayChatService.ensureClient()).client.request(method, params, requestOptions),
   validAgent: async (id) => isValidAgentId(id) && !isRetiredAgentId(id) && (
     isImplicitMainAgentId(id) || Boolean((await readOpenclawConfig()).agents?.list?.some((entry) => entry.id === id))
   ),

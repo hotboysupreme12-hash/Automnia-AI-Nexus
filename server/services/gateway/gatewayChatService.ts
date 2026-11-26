@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { setTimeout as delay } from 'node:timers/promises'
 
 export type GatewayChatFailureKind =
   | 'timeout'
@@ -1643,12 +1644,16 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     // interactive before the background startup task finishes; the first
     // message must join that same promise instead of triggering lifecycle
     // work for the first time after the user has already sent a message.
-    await options.ensureOpenclawAgentRunConfigDefaults(params.agentId)
-    await prewarm('first-message')
     const runId = randomUUID()
     const agentName = params.agentName?.trim() || params.agentId
     const sessionKey = gatewayChatSessionKey(params.agentId, params.sessionId, params.requestedSessionKey, params.freshSession)
-    const attachments = await options.gatewayChatAttachmentsFromTurnAttachments(params.attachments)
+    const [, attachments] = await Promise.all([
+      Promise.all([
+        options.ensureOpenclawAgentRunConfigDefaults(params.agentId),
+        prewarm('first-message'),
+      ]),
+      options.gatewayChatAttachmentsFromTurnAttachments(params.attachments),
+    ])
     streamObserver(params.streamObserverId)?.emit('progress', {
       transport: 'gateway-chat',
       liveTokens: true,
@@ -1727,12 +1732,39 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       timeoutMs: params.timeoutMs,
       idempotencyKey: runId,
     }
+    async function sendWhenReady(client: GatewayClientLike) {
+      const startupDeadline = nowMs() + Math.min(params.timeoutMs, 20_000)
+      let retryDelayMs = 250
+      while (true) {
+        params.signal?.throwIfAborted()
+        try {
+          return await client.request('chat.send', chatSendParams, {
+            timeoutMs: requestTimeoutMs,
+            signal: params.signal,
+          })
+        } catch (error) {
+          const startupRejected = error instanceof Error
+            && /^chat\.send unavailable during gateway startup\b/iu.test(error.message)
+          if (!startupRejected || nowMs() + retryDelayMs >= startupDeadline || !gatewayChatRunWaiters.has(runId)) throw error
+          if (retryDelayMs === 250) {
+            streamObserver(params.streamObserverId)?.emit('progress', {
+              transport: 'gateway-chat',
+              text: 'Gateway is starting. Waiting to submit this turn.',
+              agentName,
+              agent: params.agentId,
+              sessionKey,
+              runId,
+            })
+          }
+          await delay(retryDelayMs, undefined, { signal: params.signal })
+          retryDelayMs = Math.min(retryDelayMs * 2, 2_000)
+          if (!gatewayChatRunWaiters.has(runId)) throw error
+        }
+      }
+    }
     try {
       try {
-        ack = await state.client.request('chat.send', chatSendParams, {
-          timeoutMs: requestTimeoutMs,
-          signal: params.signal,
-        })
+        ack = await sendWhenReady(state.client)
       } catch (sendError) {
         const sendErrorMessage = sendError instanceof Error ? sendError.message : String(sendError)
         const retryableUncertainSend = !params.signal?.aborted && (
@@ -1882,10 +1914,17 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       const waiters = [...gatewayChatRunWaiters.values()].filter((waiter) => waiter.agentId === agentId)
       if (!waiters.length) return 0
       const state = await ensureClient()
-      for (const waiter of waiters) {
+      const abortResults = await Promise.allSettled(waiters.map(async (waiter) => {
         await state.client.request('chat.abort', { sessionKey: waiter.sessionKey, runId: waiter.runId }, { timeoutMs: 10_000 })
-        rejectGatewayChatWaiter(waiter.runId, gatewayChatAbortError('Permissions changed. This turn was stopped before applying the new policy. Send your request again to continue; commands were not automatically replayed.'))
+        return waiter.runId
+      }))
+      const abortReason = gatewayChatAbortError('Permissions changed. This turn was stopped before applying the new policy. Send your request again to continue; commands were not automatically replayed.')
+      let failedAborts = 0
+      for (const result of abortResults) {
+        if (result.status === 'fulfilled') rejectGatewayChatWaiter(result.value, abortReason)
+        else failedAborts += 1
       }
+      if (failedAborts) throw new Error(`Could not stop ${failedAborts} active Gateway turn(s) before changing permissions.`)
       return waiters.length
     },
     abortRun,

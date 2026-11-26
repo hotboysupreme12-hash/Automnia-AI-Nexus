@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { apiRequest } from '../../api/client'
+import { apiErrorMessage, apiRequest } from '../../api/client'
 
 type Tool = { id: string; label: string; description?: string }
 type Group = { id: string; label: string; tools: Tool[] }
@@ -13,14 +13,25 @@ export function AgentToolPicker({ agentId, allow, deny, onChange }: {
   const [retry, setRetry] = useState(0)
   useEffect(() => {
     let cancelled = false
-    void apiRequest<{ catalog: { groups: Group[] } }>(`/api/party/agent/${encodeURIComponent(agentId)}/tool-catalog`, { timeoutMs: 20000 }).then(result => {
+    const controller = new AbortController()
+    const slowLoadTimer = window.setTimeout(() => {
+      if (!cancelled) setStatus('The Gateway is still loading tools…')
+    }, 4_000)
+    void apiRequest<{ catalog: { groups: Group[] } }>(`/api/party/agent/${encodeURIComponent(agentId)}/tool-catalog`, {
+      timeoutMs: 15_000,
+      signal: controller.signal,
+    }).then(result => {
       if (cancelled) return
       if (result.ok && Array.isArray(result.data.catalog?.groups)) {
         setGroups(result.data.catalog.groups)
         setStatus('')
-      } else setStatus('Could not load tools. Retry when the gateway is ready.')
-    }).catch(() => { if (!cancelled) setStatus('Could not load tools. Please retry.') })
-    return () => { cancelled = true }
+      } else setStatus(result.ok ? 'The Gateway returned an incomplete tool catalog. Retry.' : `Could not load tools: ${apiErrorMessage(result.error)}`)
+    }).catch(() => { if (!cancelled) setStatus('Could not load tools. Please retry.') }).finally(() => window.clearTimeout(slowLoadTimer))
+    return () => {
+      cancelled = true
+      window.clearTimeout(slowLoadTimer)
+      controller.abort()
+    }
   }, [agentId, retry])
   const split = (value: string) => value.split(',').map(s => s.trim()).filter(Boolean)
   const allowed = split(allow), denied = split(deny)

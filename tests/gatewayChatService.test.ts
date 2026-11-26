@@ -44,7 +44,7 @@ function createHarness(options: {
   messageGet?: unknown
   finalPayload?: Record<string, unknown> | ((runId: string) => Record<string, unknown>)
   suppressFinal?: boolean
-  sendError?: Error
+  sendError?: Error | (() => Error | undefined)
   attachments?: Record<string, unknown>[]
   now?: () => number
   deltaText?: string
@@ -120,7 +120,8 @@ function createHarness(options: {
           requests.push({ method, params, timeoutMs: requestOptions?.timeoutMs })
           if (method === 'sessions.compact') return options.compactResult ?? { ok: true, compacted: true }
           if (method === 'chat.send') {
-            if (options.sendError) throw options.sendError
+            const sendError = typeof options.sendError === 'function' ? options.sendError() : options.sendError
+            if (sendError) throw sendError
             const runId = isRecord(params) && typeof params.idempotencyKey === 'string' ? params.idempotencyKey : ''
             if (!options.suppressFinal) {
               setTimeout(() => {
@@ -244,6 +245,34 @@ for (const kind of ['approval', 'process-progress'] as const) {
     harness.service.stopClient('test complete')
   })
 }
+
+test('runTurn waits through Gateway startup and retries with the same run identity', async () => {
+  let attempts = 0
+  const harness = createHarness({
+    sendError: () => attempts++ === 0 ? new Error('chat.send unavailable during gateway startup') : undefined,
+    finalPayload: (runId) => ({ runId, state: 'final', message: { text: 'Terminal reply after startup' } }),
+  })
+  const reports: string[] = []
+  const stream = harness.service.registerStreamObserver((_event, data) => {
+    reports.push(String(data.text ?? data.message ?? ''))
+  })
+
+  const result = await harness.service.runTurn({
+    agentId: 'agent-alpha',
+    message: 'hello',
+    sessionId: 'session-1',
+    timeoutMs: 2_000,
+    cwd: process.cwd(),
+    streamObserverId: stream.observer.id,
+  })
+
+  const sends = harness.requests.filter((request) => request.method === 'chat.send')
+  assert.equal(JSON.parse(result.stdout).text, 'Terminal reply after startup')
+  assert.equal(sends.length, 2)
+  assert.deepEqual(sends[0].params, sends[1].params)
+  assert.equal(reports.filter((text) => text.includes('Waiting to submit this turn')).length, 1)
+  assert.equal(reports.filter((text) => text.includes('Gateway accepted the live chat run')).length, 1)
+})
 
 test('runTurn sends Gateway chat payloads and uses a visible terminal reply without a history round trip', async () => {
   const harness = createHarness({

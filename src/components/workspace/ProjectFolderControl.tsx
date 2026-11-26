@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { apiErrorMessage, apiRequest } from '../../api/client'
 import { useNexusStore } from '../../store/nexusStore'
 
@@ -79,6 +80,7 @@ export function ProjectFolderControl({ targetAgentIds = EMPTY_TARGET_IDS, target
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 16 })
   const [status, setStatus] = useState('')
   const controlRef = useRef<HTMLElement | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
   const directoryInputRef = useRef<HTMLInputElement | null>(null)
 
   const targetIds = useMemo(
@@ -108,7 +110,7 @@ export function ProjectFolderControl({ targetAgentIds = EMPTY_TARGET_IDS, target
   useEffect(() => {
     if (!compact || !isExpanded) return
     const dismissOutside = (event: PointerEvent) => {
-      if (event.target instanceof Node && !controlRef.current?.contains(event.target)) setIsExpanded(false)
+      if (event.target instanceof Node && !controlRef.current?.contains(event.target) && !panelRef.current?.contains(event.target)) setIsExpanded(false)
     }
     const dismissOnKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setIsExpanded(false)
@@ -258,9 +260,10 @@ export function ProjectFolderControl({ targetAgentIds = EMPTY_TARGET_IDS, target
           <span>Project</span>
         </button>
       )}
-      {(!compact || isExpanded) && <div
+      {(!compact || isExpanded) && (compact ? createPortal(<div
+        ref={panelRef}
         className="dui-project-folder-control__panel"
-        style={compact ? { position: 'fixed', top: popoverPosition.top, left: popoverPosition.left, zIndex: 1000 } : undefined}
+        style={{ position: 'fixed', top: popoverPosition.top, left: popoverPosition.left, zIndex: 10000 }}
       >
         <div className="dui-project-folder-control__head">
           <div>
@@ -298,7 +301,23 @@ export function ProjectFolderControl({ targetAgentIds = EMPTY_TARGET_IDS, target
         <p className="dui-project-folder-control__status" role="status" aria-live="polite">
           {status || (projectFolder ? 'Agents will use this folder for code, files, and runtime memory.' : 'Pick a folder, then sync the agents that should use it.')}
         </p>
-      </div>}
+      </div>, document.body) : <div className="dui-project-folder-control__panel">
+        <div className="dui-project-folder-control__head">
+          <div><span className="dui-project-folder-control__eyebrow">Project folder</span><strong>{projectFolder ? 'Shared workspace ready' : 'Choose a project workspace'}</strong></div>
+          <span className="dui-project-folder-control__agent-count">{allAgentIds.length} agents</span>
+        </div>
+        <div className="dui-project-folder-control__path-row">
+          <span className="dui-project-folder-control__path" title={projectFolder || undefined}>{projectFolder || 'No project folder selected'}</span>
+          <button type="button" className="dui-project-folder-control__browse" onClick={() => void pickFolder()} disabled={isPicking || isApplying}>{isPicking ? 'Opening.' : 'Browse'}</button>
+          <input ref={directoryInputRef} type="file" className="dui-project-folder-control__input" onChange={(event) => void handleFolderInput(event.currentTarget.files)} {...({ webkitdirectory: '', directory: '' } as Record<string, string>)} />
+        </div>
+        <div className="dui-project-folder-control__scope" role="group" aria-label="Agents that receive this project folder">
+          <button type="button" className={scope === 'all' ? 'is-active' : ''} onClick={() => setScope('all')} aria-pressed={scope === 'all'}>All agents <span>{allAgentIds.length}</span></button>
+          <button type="button" className={scope === 'targets' ? 'is-active' : ''} onClick={() => setScope('targets')} disabled={!targetIds.length} aria-pressed={scope === 'targets'}>{targetScopeLabel} <span>{targetIds.length}</span></button>
+        </div>
+        <button type="button" className="dui-project-folder-control__apply" onClick={() => void applyWorkspace()} disabled={!projectFolder || !applyIds.length || isApplying}>{isApplying ? 'Syncing workspaces.' : applyLabel}</button>
+        <p className="dui-project-folder-control__status" role="status" aria-live="polite">{status || (projectFolder ? 'Agents will use this folder for code, files, and runtime memory.' : 'Pick a folder, then sync the agents that should use it.')}</p>
+      </div>)}
     </section>
   )
 }
