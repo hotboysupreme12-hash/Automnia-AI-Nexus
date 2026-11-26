@@ -16,6 +16,9 @@
   "dependencies": {
     "@shopify/cli": "4.8.2"
   },
+  "overrides": {
+    "minimatch": "11.0.1"
+  },
   "trustedDependencies": [
     "@shopify/plugin-cloudflare"
   ],
