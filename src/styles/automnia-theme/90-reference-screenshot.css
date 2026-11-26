@@ -1781,51 +1781,6 @@ html.dui-pro-overhaul .dui-steer-button {
 }
 
 @media (max-width: 860px) {
-  html.dui-pro-overhaul {
-    --dui-rail: 0px;
-  }
-
-  html.dui-pro-overhaul .dy-human-rail {
-    position: sticky !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: auto !important;
-    width: 100% !important;
-    height: auto !important;
-    min-height: 74px !important;
-    border: 0 !important;
-    border-bottom: 1px solid rgba(80, 132, 168, .20) !important;
-    border-radius: 0 !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    gap: 8px !important;
-    padding: 8px !important;
-  }
-
-  html.dui-pro-overhaul .dy-human-rail-head,
-  html.dui-pro-overhaul .dy-human-rail-bottom {
-    display: none !important;
-  }
-
-  html.dui-pro-overhaul .dy-human-nav {
-    display: flex !important;
-    flex-direction: row !important;
-    overflow-x: auto !important;
-    padding: 0 !important;
-  }
-
-  html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility) {
-    width: 58px !important;
-    min-width: 58px !important;
-  }
-
-  html.dui-pro-overhaul .app-bg > .dy-app-main {
-    width: 100% !important;
-    margin-left: 0 !important;
-    padding: 10px !important;
-  }
-
   html.dui-pro-overhaul .dy-status-grid,
   html.dui-pro-overhaul .dui-template-strip,
   html.dui-pro-overhaul .dui-segment-grid--organized,
@@ -2421,7 +2376,6 @@ html.dui-pro-overhaul .dy-human-rail-head--lockup {
 }
 
 html.dui-pro-overhaul .dy-human-rail-lockup {
-  display: block !important;
   width: min(182px, 88%) !important;
   max-width: 182px !important;
   max-height: 76px !important;

@@ -1910,6 +1910,17 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
   }
 
   return {
+    async waitForAgentRunsToFinish(agentId: string, timeoutMs = 2 * 60 * 60 * 1000) {
+      const startedAt = Date.now()
+      const deadline = startedAt + Math.max(0, timeoutMs)
+      const activeCount = () => [...gatewayChatRunWaiters.values()].filter((waiter) => waiter.agentId === agentId).length
+      let activeRuns = activeCount()
+      while (activeRuns > 0 && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, Math.min(250, Math.max(1, deadline - Date.now()))))
+        activeRuns = activeCount()
+      }
+      return { drained: activeRuns === 0, activeRuns, waitedMs: Date.now() - startedAt }
+    },
     async interruptAgent(agentId: string) {
       const waiters = [...gatewayChatRunWaiters.values()].filter((waiter) => waiter.agentId === agentId)
       if (!waiters.length) return 0

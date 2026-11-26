@@ -2709,10 +2709,7 @@ function createMainWindow() {
           logE2e('renderer-journey-ok')
           if (process.env.AUTOMNIA_ELECTRON_E2E_QUIT_AFTER_RENDERER_JOURNEY === '1') app.quit()
         }).catch((error) => {
-          if (e2eRendererJourneyComplete) return
-          // A renderer restart can invalidate executeJavaScript while the
-          // recovered page is already scheduling the next journey attempt.
-          if (e2eRendererLoadCount > 1 && !win.isDestroyed()) return
+          if (e2eRendererJourneyComplete || win.isDestroyed()) return
           logE2e(`renderer-journey-failed:${error?.message || error}`)
           process.exit(6)
         })
@@ -3347,10 +3344,17 @@ async function runElectronE2eNativePtySmoke() {
 async function runElectronE2eRendererJourney(win) {
   if (!ELECTRON_E2E || process.env.AUTOMNIA_ELECTRON_E2E_ASSERT_RENDERER_JOURNEY !== '1') return
   const e2eAuthToken = JSON.stringify(String(process.env.CONTROL_CENTER_TOKEN || ''))
-  const hasPrimaryNavigation = await win.webContents.executeJavaScript(
-    'Boolean(document.querySelector(\'nav[aria-label="Primary navigation"]\'))',
-    true,
-  )
+  const hasPrimaryNavigation = await win.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      const startedAt = Date.now();
+      const poll = () => {
+        const available = Boolean(document.querySelector('nav[aria-label="Primary navigation"]'));
+        if (available || Date.now() - startedAt >= 12000) return resolve(available);
+        setTimeout(poll, 50);
+      };
+      poll();
+    })
+  `, true)
   if (!hasPrimaryNavigation && !e2eRendererJourneyAuthReloadRequested) {
     if (!process.env.CONTROL_CENTER_TOKEN) throw new Error('E2E control-center token is missing')
     await win.webContents.executeJavaScript(`
@@ -3384,7 +3388,7 @@ async function runElectronE2eRendererJourney(win) {
       if (!main || !skip) throw new Error('Main landmark or skip link is missing');
 
       const visited = [];
-      for (const label of ['Missions', 'Monitor', 'Plugins', 'Agents']) {
+      for (const label of ['Agents', 'Monitor', 'Plugins']) {
         const button = [...nav.querySelectorAll('button')]
           .find((candidate) => candidate.getAttribute('aria-label')?.startsWith(label + ' '));
         if (!button) throw new Error('Missing navigation button for ' + label);
@@ -3404,11 +3408,21 @@ async function runElectronE2eRendererJourney(win) {
         );
         visited.push(label);
       }
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '2', altKey: true, bubbles: true }));
+      await waitFor(
+        () => document.querySelector('#automnia-workspace-title')?.textContent?.trim() === 'Missions',
+        'Missions keyboard shortcut',
+      );
+      await waitFor(
+        () => document.querySelector('[role="region"][aria-label="Missions workspace"]'),
+        'Missions workspace region',
+      );
+      visited.push('Missions');
       return { ok: true, visited };
     })()
   `, true)
   assertElectronE2e(Boolean(result?.ok), 'renderer journey must finish successfully')
-  assertElectronE2e(Array.isArray(result?.visited) && result.visited.join(',') === 'Missions,Monitor,Plugins,Agents', 'renderer journey must visit every primary workspace')
+  assertElectronE2e(Array.isArray(result?.visited) && result.visited.join(',') === 'Agents,Monitor,Plugins,Missions', 'renderer journey must visit every primary workspace and the keyboard-accessible Missions workspace')
   return true
 }
 

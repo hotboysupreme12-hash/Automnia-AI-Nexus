@@ -1603,8 +1603,95 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
           const lastRunAtMs = snapshot.lastRunAt ? Date.parse(snapshot.lastRunAt) : NaN
           const observedLastRunAtMs = job.lastRunAt ? Date.parse(job.lastRunAt) : NaN
           const observedStartedAtMs = job.startedAt ? Date.parse(job.startedAt) : NaN
+          const isSkippedStatus = /^skipped$/i.test(snapshot.lastRunStatus || '')
+          const terminalStatus = /^(ok|completed|success)$/i.test(snapshot.lastRunStatus || '')
+            ? 'completed'
+            : /^(error|failed|timeout|timed_out|cancelled)$/i.test(snapshot.lastRunStatus || '')
+              ? 'failed'
+              : null
+          const lastRunIsNew = Number.isFinite(lastRunAtMs)
+            && lastRunAtMs > (Number.isFinite(observedLastRunAtMs) ? observedLastRunAtMs : 0)
+          const terminalReplacesSkip = terminalStatus !== null
+            && job.lastRunStatus === 'skipped'
+            && Number.isFinite(lastRunAtMs)
+            && (
+              lastRunAtMs === observedLastRunAtMs
+              || (
+                job.status === 'running'
+                && (!Number.isFinite(runningAtMs) || runningAtMs > lastRunAtMs)
+                && Number.isFinite(observedStartedAtMs)
+                && lastRunAtMs >= observedStartedAtMs
+              )
+            )
+
+          if (isSkippedStatus && lastRunIsNew) {
+            const activeExecutionContinues = Number.isFinite(runningAtMs)
+            job.lastRunAt = snapshot.lastRunAt
+            job.lastRunStatus = 'skipped'
+            job.summary = snapshot.lastError
+              ? safeError(snapshot.lastError)
+              : activeExecutionContinues
+                ? 'Scheduled cron trigger skipped while active execution continues.'
+                : 'Scheduled cron trigger skipped.'
+            if (!activeExecutionContinues && job.status === 'running') {
+              job.status = 'created'
+              if (mission.scheduler.activeJobId === job.id) mission.scheduler.activeJobId = null
+            }
+            changed = true
+            options.pushMissionEvent({
+              missionId: mission.id,
+              type: 'agent_update',
+              agentId: job.agentId,
+              actor: 'scheduler',
+              message: `Scheduled cycle skipped: ${job.agentId} (${job.role}) — ${job.summary}`,
+              evidence: {
+                cronId: job.cronId,
+                runningAt: snapshot.runningAt,
+                lastRunAt: snapshot.lastRunAt,
+                lastRunStatus: snapshot.lastRunStatus,
+                nextRunAt: snapshot.nextRunAt,
+              },
+            })
+          } else if (terminalStatus !== null && (lastRunIsNew || terminalReplacesSkip)) {
+            job.status = 'created'
+            job.endedAt = snapshot.lastRunAt
+            job.lastRunAt = snapshot.lastRunAt
+            job.lastRunStatus = terminalStatus
+            job.runCount = Math.max(0, job.runCount || 0) + 1
+            job.completedRunCount = Math.max(0, job.completedRunCount || 0) + (terminalStatus === 'completed' ? 1 : 0)
+            job.failedRunCount = Math.max(0, job.failedRunCount || 0) + (terminalStatus === 'failed' ? 1 : 0)
+            job.summary = terminalStatus === 'completed'
+              ? 'Scheduled cron cycle completed.'
+              : snapshot.lastError ? safeError(snapshot.lastError) : `Scheduled cron cycle ended with ${snapshot.lastRunStatus || 'an error'}.`
+            if (mission.scheduler.activeJobId === job.id) mission.scheduler.activeJobId = null
+            if (terminalStatus === 'failed') mission.scheduler.lastError = `${job.agentId} scheduled cycle failed: ${job.summary}`
+            changed = true
+            options.pushMissionEvent({
+              missionId: mission.id,
+              type: 'agent_update',
+              agentId: job.agentId,
+              actor: 'scheduler',
+              message: terminalStatus === 'completed'
+                ? `Scheduled cycle completed: ${job.agentId} (${job.role}).`
+                : `Scheduled cycle failed: ${job.agentId} (${job.role}) — ${job.summary}`,
+              evidence: {
+                cronId: job.cronId,
+                lastRunAt: snapshot.lastRunAt,
+                lastRunStatus: snapshot.lastRunStatus,
+                nextRunAt: snapshot.nextRunAt,
+              },
+            })
+          } else if (!Number.isFinite(runningAtMs) && job.status === 'running') {
+            job.status = 'created'
+            if (mission.scheduler.activeJobId === job.id) mission.scheduler.activeJobId = null
+            changed = true
+          }
+
+          const latestNonSkippedRunAtMs = !isSkippedStatus && Number.isFinite(lastRunAtMs)
+            ? lastRunAtMs
+            : (!isSkippedStatus && job.lastRunStatus !== 'skipped' && Number.isFinite(observedLastRunAtMs) ? observedLastRunAtMs : 0)
           const runningIsNew = Number.isFinite(runningAtMs)
-            && runningAtMs > Math.max(Number.isFinite(observedLastRunAtMs) ? observedLastRunAtMs : 0, Number.isFinite(observedStartedAtMs) ? observedStartedAtMs : 0)
+            && runningAtMs > Math.max(latestNonSkippedRunAtMs, Number.isFinite(observedStartedAtMs) ? observedStartedAtMs : 0)
 
           if (runningIsNew && job.status !== 'running') {
             job.status = 'running'
@@ -1622,45 +1709,6 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
               evidence: { cronId: job.cronId, runningAt: snapshot.runningAt },
             })
           }
-
-          const terminalStatus = /^(ok|completed|success)$/i.test(snapshot.lastRunStatus || '')
-            ? 'completed'
-            : /^(error|failed|timeout|timed_out|cancelled|skipped)$/i.test(snapshot.lastRunStatus || '')
-              ? 'failed'
-              : null
-          const terminalIsNew = terminalStatus !== null
-            && Number.isFinite(lastRunAtMs)
-            && lastRunAtMs > (Number.isFinite(observedLastRunAtMs) ? observedLastRunAtMs : 0)
-          if (!terminalIsNew) continue
-
-          job.status = 'created'
-          job.endedAt = snapshot.lastRunAt
-          job.lastRunAt = snapshot.lastRunAt
-          job.lastRunStatus = terminalStatus
-          job.runCount = Math.max(0, job.runCount || 0) + 1
-          job.completedRunCount = Math.max(0, job.completedRunCount || 0) + (terminalStatus === 'completed' ? 1 : 0)
-          job.failedRunCount = Math.max(0, job.failedRunCount || 0) + (terminalStatus === 'failed' ? 1 : 0)
-          job.summary = terminalStatus === 'completed'
-            ? 'Scheduled cron cycle completed.'
-            : snapshot.lastError ? safeError(snapshot.lastError) : `Scheduled cron cycle ended with ${snapshot.lastRunStatus || 'an error'}.`
-          if (mission.scheduler.activeJobId === job.id) mission.scheduler.activeJobId = null
-          if (terminalStatus === 'failed') mission.scheduler.lastError = `${job.agentId} scheduled cycle failed: ${job.summary}`
-          changed = true
-          options.pushMissionEvent({
-            missionId: mission.id,
-            type: 'agent_update',
-            agentId: job.agentId,
-            actor: 'scheduler',
-            message: terminalStatus === 'completed'
-              ? `Scheduled cycle completed: ${job.agentId} (${job.role}).`
-              : `Scheduled cycle failed: ${job.agentId} (${job.role}) — ${job.summary}`,
-            evidence: {
-              cronId: job.cronId,
-              lastRunAt: snapshot.lastRunAt,
-              lastRunStatus: snapshot.lastRunStatus,
-              nextRunAt: snapshot.nextRunAt,
-            },
-          })
         }
 
         const nextRunTimes = recurringJobs

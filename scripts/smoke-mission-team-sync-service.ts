@@ -34,7 +34,7 @@ assert.match(missionSchedulerService, /ensureTeamSyncFile: \(filePath: string\) 
 assert.match(missionSchedulerService, /writeTeamSyncSnapshot: \(params: \{/, 'mission scheduler should receive Team Sync writes through options')
 assert.match(partyCoordinationRoutes, /ensureTeamSyncFile: \(filePath: string\) => Promise<void>/, 'party routes should receive Team Sync file repair through options')
 assert.match(partyCoordinationRoutes, /writeTeamSyncSnapshot: \(params: \{/, 'party routes should receive Team Sync snapshots through options')
-assert.match(partyCoordinationRoutes, /fs\.appendFile\(targetPath/, 'Team Sync append endpoint should remain append-only at the route')
+assert.match(partyCoordinationRoutes, /fs\.open\(reverifiedTargetPath, 'a', 0o600\)[\s\S]*handle\.writeFile\(/, 'Team Sync append endpoint should open the revalidated file in append mode')
 
 assert.equal(packageJson.scripts?.['smoke:mission-team-sync'], 'tsx scripts/smoke-mission-team-sync-service.ts')
 assert.match(packageJson.scripts?.['test:ci'] || '', /npm run smoke:mission-team-sync/)

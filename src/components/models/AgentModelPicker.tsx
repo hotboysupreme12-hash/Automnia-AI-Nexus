@@ -93,7 +93,7 @@ export function AgentModelPicker({ models, selectedIds, fallbackIds, loading, di
     <input ref={searchRef} type="search" aria-label="Search models and providers" placeholder="Search models or providers…" value={query} onChange={event => setQuery(event.target.value)} />
     <div className="amp-row amp-filters" role="group" aria-label="Filter models">
       {(['all', 'favorites', 'recent'] as const).map(value => <button key={value} type="button" aria-pressed={filter === value} onClick={() => { setFilter(value); if (value === 'all') setProviderFilter('all') }}>{value === 'all' ? 'All models' : value === 'favorites' ? 'Favorites' : 'Recent'}</button>)}
-      <span role="status">{visible.length} models</span>
+      <span role="status">{loading && !groups.length ? 'Loading models…' : `${visible.length} models`}</span>
     </div>
     <div className="amp-provider-chips" role="group" aria-label="Filter by provider">
       {groups.map(group => <button type="button" className="amp-provider-chip" key={group.key} aria-pressed={providerFilter === group.key} onClick={() => setProviderFilter(group.key)}><ProviderLogo provider={group.key} label={group.label} />{group.label}</button>)}

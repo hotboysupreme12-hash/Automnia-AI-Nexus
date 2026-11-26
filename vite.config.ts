@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from 'tailwindcss'
 import autoprefixer from 'autoprefixer'
-import { dedupeCssDeclarations } from './scripts/cssOptimization'
+import { dedupeCssDeclarations, scaleUiCssDimensions } from './scripts/cssOptimization'
 
 const apiTarget = process.env.VITE_CONTROL_CENTER_API_TARGET
   || process.env.CONTROL_CENTER_API_TARGET
@@ -16,7 +16,7 @@ export default defineConfig({
   },
   css: {
     postcss: {
-      plugins: [tailwindcss({ config: './tailwind.config.js' }), autoprefixer(), dedupeCssDeclarations()],
+      plugins: [tailwindcss({ config: './tailwind.config.js' }), autoprefixer(), dedupeCssDeclarations(), scaleUiCssDimensions(0.8)],
     },
   },
   server: {

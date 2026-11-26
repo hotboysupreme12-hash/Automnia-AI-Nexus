@@ -223,7 +223,7 @@ export interface MissionRun extends MissionDraft {
       completedRunCount?: number
       failedRunCount?: number
       lastRunAt?: string | null
-      lastRunStatus?: 'completed' | 'failed' | null
+      lastRunStatus?: 'completed' | 'failed' | 'skipped' | null
     }>
   }
 }

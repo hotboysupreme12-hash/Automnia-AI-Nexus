@@ -1,0 +1,656 @@
+/* Give Plugins the same continuous graphite surface as Agent Chat, and let it
+   use the workspace height instead of reserving an arbitrary bottom gap. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"].dy-plugins-panel {
+  --plugin-cyan: #62d9d0;
+  --plugin-cyan-soft: rgba(98, 217, 208, .11);
+  --plugin-green: #9be5ad;
+  --plugin-amber: #f1c979;
+  --plugin-red: #f18a92;
+  --plugin-ink: #202428;
+  --plugin-panel: #22272b;
+  --plugin-card: #252a2e;
+  --plugin-line: rgb(226 232 236 / 11%);
+  box-sizing: border-box !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  flex: 1 1 0 !important;
+  align-self: stretch !important;
+  margin: 0 !important;
+  border-color: rgb(226 232 236 / 12%) !important;
+  border-radius: 14px !important;
+  background: linear-gradient(135deg, #202428 0%, #191d21 52%, #14181b 100%) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg > .dy-app-main[data-workspace="plugins"] {
+  display: flex !important;
+  box-sizing: border-box !important;
+  height: calc(100dvh / .88) !important;
+  min-height: calc(100dvh / .88) !important;
+  max-height: none !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  padding-block: 0 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-plugins {
+  display: flex !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  flex: 1 1 0 !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  background: linear-gradient(135deg, #202428 0%, #191d21 52%, #14181b 100%) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-header {
+  border-color: rgb(226 232 236 / 10%) !important;
+  background: linear-gradient(180deg, rgb(255 255 255 / 4%), rgb(255 255 255 / 1%)), #22272b !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-title-row > span,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-eyebrow,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-registry-label,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-header-description,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-overview-cell > span,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-overview-cell > small {
+  color: #aab2b8 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-eyebrow .dy-plugin-signal-led {
+  background: #c3cbd0 !important;
+  box-shadow: 0 0 0 3px rgb(220 226 230 / 9%) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] :is(
+  .dy-plugins-overview-cell,
+  .dy-plugin-summary-chip,
+  .dy-plugin-search-field,
+  .dy-plugin-search-results,
+  .dy-plugin-pin-toggle,
+  .dy-plugin-filter-button,
+  .dy-plugin-card-icon,
+  .dy-plugin-card-signal,
+  .dy-plugin-card-stat,
+  .dy-plugin-card-detail,
+  .dy-plugin-clawtalk-ops,
+  .dy-plugin-empty-state
+) {
+  border-color: rgb(226 232 236 / 10%) !important;
+  background: rgb(255 255 255 / 3%) !important;
+  color: #cbd1d5 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-card-icon:not([data-plugin-id="openai"]) {
+  background: #2b3034 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-state-badge,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-summary-chip[data-tone="browser-on"] {
+  border-color: rgb(226 232 236 / 14%) !important;
+  background: #292e32 !important;
+  color: #d7dce0 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-overview-cell > strong,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-card-title-line h3,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-card-stat > strong {
+  color: #e6eaed !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-row {
+  border-color: rgb(226 232 236 / 10%) !important;
+  background: linear-gradient(145deg, rgb(255 255 255 / 4%), rgb(255 255 255 / 1%) 55%), #22272b !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-row:hover {
+  border-color: rgb(226 232 236 / 20%) !important;
+  background: linear-gradient(145deg, rgb(255 255 255 / 6%), rgb(255 255 255 / 2%) 55%), #272c30 !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%) !important;
+  transform: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] :is(
+  .dy-plugin-search-input,
+  .dy-plugin-search-input::placeholder,
+  .dy-plugin-card-meta,
+  .dy-plugin-card-meta code,
+  .dy-plugin-card-description,
+  .dy-plugin-card-signal,
+  .dy-plugin-card-stat > span,
+  .dy-plugin-results-count
+) {
+  color: #aab2b8 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] :is(
+  .dy-plugin-summary-chip[data-tone],
+  .dy-plugin-filter-button[data-active="true"],
+  .dy-plugin-filter-button[class*="bg-cyan"],
+  .dy-plugin-row-action,
+  .dy-plugin-row-setup,
+  .dy-plugin-row-power.is-start,
+  .dy-plugin-row-power.is-stop,
+  .dy-plugin-row-manage.is-open,
+  .dy-plugin-search-button,
+  .dy-plugins-update-all,
+  .dy-plugin-card-detail-actions button
+) {
+  border-color: rgb(226 232 236 / 14%) !important;
+  background: #292e32 !important;
+  color: #d7dce0 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] :is(
+  .dy-plugin-row-action:hover:not(:disabled),
+  .dy-plugin-search-button:hover:not(:disabled),
+  .dy-plugins-update-all:hover:not(:disabled),
+  .dy-plugin-card-detail-actions button:hover:not(:disabled)
+) {
+  border-color: rgb(226 232 236 / 24%) !important;
+  background: #33393e !important;
+  color: #f0f2f4 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] :is(
+  [role="alert"],
+  [role="status"]
+) {
+  border-color: rgb(226 232 236 / 12%) !important;
+  background: rgb(255 255 255 / 4%) !important;
+  color: #cbd1d5 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-scroll {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  background: transparent !important;
+  scrollbar-color: rgb(226 232 236 / 25%) transparent !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-list {
+  min-height: 100% !important;
+  background: transparent !important;
+}
+
+@media (max-width: 860px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg > .dy-app-main[data-workspace="plugins"] {
+    height: auto !important;
+    min-height: calc(100dvh / .88) !important;
+    overflow: visible !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-plugins {
+    min-height: calc(100dvh / .88 - 110px) !important;
+    overflow: visible !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"].dy-plugins-panel {
+    min-height: 0 !important;
+    flex: 1 1 auto !important;
+  }
+}
+
+/* Keep action and state colors as clear status cues against the gray surfaces. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-summary-chip[data-tone="browser-on"] {
+  border-color: rgba(98, 217, 208, .38) !important;
+  background: rgba(98, 217, 208, .10) !important;
+  color: #baf5ed !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-filter-button:is([data-active="true"], [class*="bg-cyan"]) {
+  border-color: rgba(98, 217, 208, .42) !important;
+  background: rgba(98, 217, 208, .12) !important;
+  color: #baf5ed !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-row-setup {
+  border-color: rgba(241, 201, 121, .34) !important;
+  background: rgba(241, 201, 121, .09) !important;
+  color: #f0d798 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-row-power.is-start,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-state-badge[data-plugin-state="enabled"] {
+  border-color: rgba(155, 229, 173, .38) !important;
+  background: rgba(155, 229, 173, .10) !important;
+  color: #c3f2cd !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-row-power.is-stop,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-state-badge[data-plugin-state="failed"] {
+  border-color: rgba(241, 138, 146, .36) !important;
+  background: rgba(241, 138, 146, .09) !important;
+  color: #ffc8cb !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-state-badge:is(
+  [data-plugin-state="missing-auth"],
+  [data-plugin-state="needs-setup"],
+  [data-plugin-state="unavailable"]
+) {
+  border-color: rgba(241, 201, 121, .36) !important;
+  background: rgba(241, 201, 121, .09) !important;
+  color: #f0d798 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-row-manage.is-open {
+  border-color: rgba(98, 217, 208, .40) !important;
+  background: rgba(98, 217, 208, .12) !important;
+  color: #c8fff7 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-row-power.is-start:hover:not(:disabled) {
+  border-color: rgba(155, 229, 173, .52) !important;
+  background: rgba(155, 229, 173, .15) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-row-manage.is-open:hover:not(:disabled) {
+  border-color: rgba(98, 217, 208, .52) !important;
+  background: rgba(98, 217, 208, .16) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-row-power.is-stop:hover:not(:disabled) {
+  border-color: rgba(241, 138, 146, .5) !important;
+  background: rgba(241, 138, 146, .14) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-row-setup:hover:not(:disabled) {
+  border-color: rgba(241, 201, 121, .5) !important;
+  background: rgba(241, 201, 121, .14) !important;
+}
+
+/* Use Monitor's flat graphite palette throughout Plugins. */
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel {
+  --plugin-ink: #1b1e21;
+  --plugin-panel: #202428;
+  --plugin-card: #252a2e;
+  --plugin-line: #343a40;
+  border-color: #30363b !important;
+  border-radius: 0 !important;
+  background: #1b1e21 !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel :is(
+  .dy-plugins-header,
+  .dy-plugins-scroll,
+  .dy-plugins-list,
+  .dy-plugins-discovery-wrap,
+  .dy-plugin-discovery
+) {
+  border-color: #30363b !important;
+  border-radius: 0 !important;
+  background: #1b1e21 !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel :is(
+  .dy-plugins-overview-cell,
+  .dy-plugin-search-field,
+  .dy-plugin-search-results,
+  .dy-plugin-pin-toggle,
+  .dy-plugin-row,
+  .dy-plugin-card-detail,
+  .dy-plugin-clawtalk-ops,
+  .dy-plugin-empty-state
+) {
+  border-color: #343a40 !important;
+  border-radius: 0 !important;
+  background: #202428 !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel :is(
+  .dy-plugin-card-icon:not([data-plugin-id="openai"]),
+  .dy-plugin-card-signal,
+  .dy-plugin-card-stat,
+  .dy-plugin-card-detail-actions button,
+  .dy-plugin-summary-chip,
+  .dy-plugin-state-badge,
+  .dy-plugin-filter-button,
+  .dy-plugin-search-button,
+  .dy-plugins-update-all
+) {
+  border-color: #373e44 !important;
+  border-radius: 0 !important;
+  background: #252a2e !important;
+  background-image: none !important;
+  color: #d5d9dc !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-card-icon:not([data-plugin-id="openai"]) {
+  background: #252a2e !important;
+}
+
+/* Keep the black OpenAI mark legible on its intentionally light logo tile. */
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-card-icon[data-plugin-id="openai"] {
+  border-color: #d5d9dc !important;
+  background: #e3e6e8 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-row:hover {
+  border-color: #41484f !important;
+  background: #252a2e !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-search-input {
+  border-color: #343a40 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: #e3e6e8 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-search-input::placeholder {
+  color: #aeb6be !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-search-field:focus-within {
+  border-color: #4a525a !important;
+  background: #252a2e !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-search-field {
+  gap: 12px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-search-field:hover {
+  background: linear-gradient(100deg, rgb(255 255 255 / 4%) 0%, rgb(255 255 255 / 2%) 38%, rgb(255 255 255 / 0%) 100%), #202428 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel :is(
+  .dy-plugin-row-action,
+  .dy-plugin-discovery > [role="group"] button,
+  .dy-plugin-search-button,
+  .dy-plugin-filter-button,
+  .dy-plugins-update-all,
+  .dy-plugin-card-detail-actions button
+) {
+  border-color: #373e44 !important;
+  border-radius: 0 !important;
+  background: #252a2e !important;
+  background-image: none !important;
+  color: #d5d9dc !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel :is(
+  .dy-plugin-row-action:hover:not(:disabled),
+  .dy-plugin-discovery > [role="group"] button:hover:not(:disabled),
+  .dy-plugin-search-button:hover:not(:disabled),
+  .dy-plugin-filter-button:hover:not(:disabled),
+  .dy-plugins-update-all:hover:not(:disabled),
+  .dy-plugin-card-detail-actions button:hover:not(:disabled)
+) {
+  border-color: #4a525a !important;
+  background: #2d3338 !important;
+  background-image: none !important;
+  color: #f0f2f4 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel :is([role="alert"], [role="status"]) {
+  border-color: #373e44 !important;
+  border-radius: 0 !important;
+  background: #252a2e !important;
+  background-image: none !important;
+  color: #d5d9dc !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel :is(
+  .dy-plugin-card-title-line h3,
+  .dy-plugins-overview-cell > strong
+) {
+  color: #e3e6e8 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel :is(
+  .dy-plugins-eyebrow,
+  .dy-plugins-registry-label,
+  .dy-plugins-header-description,
+  .dy-plugins-overview-cell > span,
+  .dy-plugins-overview-cell > small,
+  .dy-plugin-card-meta,
+  .dy-plugin-card-description,
+  .dy-plugin-card-stat > span,
+  .dy-plugin-results-count
+) {
+  color: #aeb6be !important;
+}
+
+/* Restore semantic accents after the flat surface rules above. */
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-row-power.is-start,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-state-badge[data-plugin-state="enabled"] {
+  border-color: #4a9561 !important;
+  background: #17452e !important;
+  background-image: none !important;
+  color: #d8f4df !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-row-power.is-stop,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-state-badge[data-plugin-state="failed"] {
+  border-color: #a34a55 !important;
+  background: #4d1d26 !important;
+  background-image: none !important;
+  color: #ffe0e3 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-row-setup,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-state-badge:is(
+  [data-plugin-state="missing-auth"],
+  [data-plugin-state="needs-setup"],
+  [data-plugin-state="unavailable"]
+) {
+  border-color: rgba(241, 201, 121, .40) !important;
+  background: rgba(241, 201, 121, .10) !important;
+  background-image: none !important;
+  color: #f0d798 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-row-manage.is-open {
+  border-color: rgba(98, 217, 208, .42) !important;
+  background: rgba(98, 217, 208, .12) !important;
+  background-image: none !important;
+  color: #c8fff7 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-row-power.is-start:hover:not(:disabled) {
+  border-color: #5cab75 !important;
+  background: #205c3b !important;
+  color: #e5f8e9 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-row-power.is-stop:hover:not(:disabled) {
+  border-color: #bd5b67 !important;
+  background: #682832 !important;
+  color: #fff0f1 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-summary-chip[data-tone="browser-on"],
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-filter-button:is([data-active="true"], [class*="bg-cyan"]) {
+  border-color: rgba(98, 217, 208, .42) !important;
+  background: rgba(98, 217, 208, .12) !important;
+  background-image: none !important;
+  color: #baf5ed !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-state-dot[data-tone="healthy"],
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-signal-led[data-tone="healthy"] {
+  background: #9be5ad !important;
+  box-shadow: 0 0 0 3px rgba(155, 229, 173, .13) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-state-dot[data-tone="attention"],
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-signal-led[data-tone="attention"] {
+  background: #f1c979 !important;
+  box-shadow: 0 0 0 3px rgba(241, 201, 121, .13) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-state-dot[data-tone="failed"] {
+  background: #f18a92 !important;
+  box-shadow: 0 0 0 3px rgba(241, 138, 146, .13) !important;
+}
+
+/* Preserve red, green, amber, and teal action feedback on top of graphite. */
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-row-power.is-start {
+  border-color: rgb(155 229 173 / 38%) !important;
+  background: rgb(155 229 173 / 10%) !important;
+  color: #c3f2cd !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-row-power.is-start:is(:hover, :focus-visible):not(:disabled) {
+  border-color: rgb(155 229 173 / 68%) !important;
+  background: rgb(155 229 173 / 20%) !important;
+  color: #e2ffe8 !important;
+  box-shadow: 0 0 0 1px rgb(155 229 173 / 14%) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-row-power.is-stop {
+  border-color: rgb(241 138 146 / 38%) !important;
+  background: rgb(241 138 146 / 10%) !important;
+  color: #ffc8cb !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-row-power.is-stop:is(:hover, :focus-visible):not(:disabled) {
+  border-color: rgb(241 138 146 / 70%) !important;
+  background: rgb(241 138 146 / 21%) !important;
+  color: #ffe3e5 !important;
+  box-shadow: 0 0 0 1px rgb(241 138 146 / 14%) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-row-setup {
+  border-color: rgb(241 201 121 / 36%) !important;
+  background: rgb(241 201 121 / 9%) !important;
+  color: #f0d798 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-row-setup:is(:hover, :focus-visible):not(:disabled) {
+  border-color: rgb(241 201 121 / 68%) !important;
+  background: rgb(241 201 121 / 19%) !important;
+  color: #fff0c9 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-row-manage.is-open {
+  border-color: rgb(98 217 208 / 42%) !important;
+  background: rgb(98 217 208 / 11%) !important;
+  color: #c8fff7 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-row-manage.is-open:is(:hover, :focus-visible):not(:disabled) {
+  border-color: rgb(98 217 208 / 70%) !important;
+  background: rgb(98 217 208 / 20%) !important;
+  color: #e1fffa !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel :is(
+  .dy-plugin-state-dot[data-tone="healthy"],
+  .dy-plugin-signal-led[data-tone="healthy"]
+) {
+  background: #9be5ad !important;
+  box-shadow: 0 0 0 3px rgb(155 229 173 / 15%) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel :is(
+  .dy-plugin-state-dot[data-tone="attention"],
+  .dy-plugin-signal-led[data-tone="attention"]
+) {
+  background: #f1c979 !important;
+  box-shadow: 0 0 0 3px rgb(241 201 121 / 15%) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-row[data-plugin-state="failed"] .dy-plugin-state-dot {
+  background: #f18a92 !important;
+  box-shadow: 0 0 0 3px rgb(241 138 146 / 16%) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-card-signal[data-tone="healthy"] {
+  border-color: rgb(155 229 173 / 30%) !important;
+  background: #202428 !important;
+  color: #a9e6bf !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-card-signal[data-tone="attention"] {
+  border-color: rgb(241 201 121 / 34%) !important;
+  background: rgb(241 201 121 / 6%) !important;
+  color: #f0d58b !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-row[data-plugin-state="failed"] .dy-plugin-card-signal {
+  border-color: rgb(241 138 146 / 34%) !important;
+  background: rgb(241 138 146 / 6%) !important;
+  color: #ffc8cb !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel :is(
+  .dy-plugin-state-badge[data-plugin-state="enabled"],
+  .dy-plugin-state-badge[data-plugin-state="loaded"]
+) {
+  border-color: rgb(155 229 173 / 32%) !important;
+  background: rgb(155 229 173 / 8%) !important;
+  color: #c3f2cd !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-state-badge[data-plugin-state="failed"] {
+  border-color: rgb(241 138 146 / 38%) !important;
+  background: rgb(241 138 146 / 9%) !important;
+  color: #ffc8cb !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel :is(
+  .dy-plugin-state-badge[data-plugin-state="needs-setup"],
+  .dy-plugin-state-badge[data-plugin-state="missing-auth"],
+  .dy-plugin-state-badge[data-plugin-state="unavailable"]
+) {
+  border-color: rgb(241 201 121 / 36%) !important;
+  background: rgb(241 201 121 / 8%) !important;
+  color: #f0d798 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugins-overview-cell[data-tone="healthy"] {
+  border-color: rgb(155 229 173 / 30%) !important;
+  background: rgb(155 229 173 / 4%) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugins-overview-cell[data-tone="healthy"] > strong {
+  color: #a9e6bf !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugins-overview-cell[data-tone="attention"] {
+  border-color: rgb(241 201 121 / 34%) !important;
+  background: rgb(241 201 121 / 5%) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugins-overview-cell[data-tone="attention"] > strong {
+  color: #f0d58b !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugins-update-all {
+  border-color: rgb(98 217 208 / 38%) !important;
+  background: rgb(98 217 208 / 8%) !important;
+  color: #baf5ed !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugins-update-all:is(:hover, :focus-visible):not(:disabled) {
+  border-color: rgb(98 217 208 / 68%) !important;
+  background: rgb(98 217 208 / 17%) !important;
+  color: #e1fffa !important;
+}

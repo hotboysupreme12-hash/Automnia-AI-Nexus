@@ -1,0 +1,61 @@
+/* Keep chat targets compact while giving profiles enough room to show their
+   full names. */
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-chat .dy-chat-profiles {
+  display: grid !important;
+  grid-auto-flow: column !important;
+  grid-auto-columns: 114px !important;
+  gap: 4px !important;
+  width: 100% !important;
+  background-color: #17191b !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-chat .dy-chat-profile {
+  width: 100% !important;
+  min-width: 54px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-chat .dy-chat-profile__avatar {
+  width: 32px !important;
+  height: 32px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-chat .dy-chat-profile__name {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: visible !important;
+  overflow-wrap: anywhere !important;
+  font-size: 10px !important;
+  line-height: 1.15 !important;
+  text-overflow: clip !important;
+  text-wrap: balance !important;
+  white-space: normal !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-chat .dy-chat-profile__busy {
+  width: 8px !important;
+  height: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-chat .dy-command-target-chip {
+  gap: 6px !important;
+  padding: 3px 5px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-chat .dy-command-target-avatar {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-chat .dy-command-target-identity {
+  gap: 1px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-chat .dy-command-target-identity strong {
+  font-size: 11px !important;
+  line-height: 1.15 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-chat .dy-command-target-identity small {
+  font-size: 9px !important;
+  line-height: 1.2 !important;
+}

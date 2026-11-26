@@ -1,0 +1,131 @@
+/* Keep the cold-start plugin registry state readable while runtime inventory
+   is being fetched. The status label also lets workspace scroll restoration
+   wait until the registry's first layout has settled. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-loading {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-loading-copy {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 10px;
+  color: #d5d9dc;
+  font-size: 11px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-loading-copy > span:last-child {
+  display: grid;
+  gap: 3px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-loading-copy strong {
+  color: #e3e6e8;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-loading-copy small {
+  color: #aeb6be;
+  font-size: 10px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-loading-indicator {
+  box-sizing: border-box;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  border: 2px solid #505960;
+  border-top-color: #b8c3c8;
+  border-radius: 50%;
+  animation: dy-plugin-loading-spin .8s linear infinite;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-loading-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr));
+  gap: 10px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-loading-card {
+  box-sizing: border-box;
+  display: grid;
+  min-width: 0;
+  min-height: 62px;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #343a40;
+  border-radius: 0;
+  background: #202428;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] :is(
+  .dy-plugin-loading-icon,
+  .dy-plugin-loading-lines > span,
+  .dy-plugin-loading-badge
+) {
+  display: block;
+  background-color: #2d3338;
+  background-image: linear-gradient(100deg, #2d3338 22%, #3b444a 42%, #2d3338 62%);
+  background-size: 220% 100%;
+  animation: dy-plugin-loading-shimmer 1.6s ease-in-out infinite;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-loading-icon {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #3a4248;
+  border-radius: 0;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-loading-lines {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-loading-lines > span {
+  height: 7px;
+  border-radius: 2px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-loading-lines > span:first-child {
+  width: 43%;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-loading-lines > span:last-child {
+  width: 76%;
+  opacity: .62;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-loading-badge {
+  width: 56px;
+  height: 21px;
+  border: 1px solid #3a4248;
+  border-radius: 0;
+  opacity: .72;
+}
+
+@keyframes dy-plugin-loading-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes dy-plugin-loading-shimmer {
+  to { background-position: -220% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] :is(
+    .dy-plugin-loading-indicator,
+    .dy-plugin-loading-icon,
+    .dy-plugin-loading-lines > span,
+    .dy-plugin-loading-badge
+  ) {
+    animation: none;
+  }
+}

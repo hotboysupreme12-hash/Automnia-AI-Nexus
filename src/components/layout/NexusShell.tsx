@@ -141,7 +141,7 @@ function resolveCronCountBand(count: number): CronCountBand {
 }
 
 const WORKSPACE_META: Record<AppTab, { label: string; railMeta: string; iconSrc: string; tone: string }> = {
-  chat: { label: 'Agent Chat', railMeta: 'Conversations', iconSrc: '/icons/generated-graphite/chat.png', tone: 'chat' },
+  chat: { label: 'Workspace', railMeta: 'Chat', iconSrc: '/icons/nav-workspace.png', tone: 'chat' },
   agents: { label: 'Agents', railMeta: 'Roster', iconSrc: '/icons/nav-agents-teal.png', tone: 'agents' },
   missions: { label: 'Missions', railMeta: 'Launch', iconSrc: '/icons/nav-missions-teal.png', tone: 'missions' },
   monitor: { label: 'Monitor', railMeta: 'Live ops', iconSrc: '/icons/nav-monitor-teal.png', tone: 'monitor' },
@@ -150,9 +150,8 @@ const WORKSPACE_META: Record<AppTab, { label: string; railMeta: string; iconSrc:
 }
 
 const PRIMARY_WORKSPACES: { id: PrimaryWorkspace; label: string; railMeta: string; iconSrc: string; tone: string }[] = [
-  { id: 'chat', label: 'Agent Chat', railMeta: 'Conversations', iconSrc: '/icons/generated-graphite/chat.png', tone: 'chat' },
+  { id: 'chat', label: 'Workspace', railMeta: 'Chat', iconSrc: '/icons/nav-workspace.png', tone: 'chat' },
   { id: 'agents', label: 'Agents', railMeta: 'Roster', iconSrc: '/icons/nav-agents-teal.png', tone: 'agents' },
-  { id: 'missions', label: 'Missions', railMeta: 'Launch', iconSrc: '/icons/nav-missions-teal.png', tone: 'missions' },
   { id: 'monitor', label: 'Monitor', railMeta: 'Live ops', iconSrc: '/icons/nav-monitor-teal.png', tone: 'monitor' },
   { id: 'plugins', label: 'Plugins', railMeta: 'Runtime', iconSrc: '/icons/nav-plugins-teal.png', tone: 'plugins' },
 ]
@@ -163,23 +162,28 @@ function navIconStyle(src: string): CSSProperties {
 
 
 function PanelLoader({ workspace = 'console' }: { workspace?: AppTab | 'console' }) {
+  const workspaceLabel = workspace === 'console' ? 'workspace' : `${WORKSPACE_META[workspace].label} workspace`
+
   return (
     <div
       className="min-h-[280px] rounded-xl border border-white/10 p-4 sm:p-6"
       role="status"
       aria-live="polite"
-      aria-label={`Loading ${workspace}`}
+      aria-label={`Loading ${workspaceLabel}`}
     >
-      <span className="sr-only">Loading {workspace}. Your workspace will appear here.</span>
-      <div aria-hidden="true" className="space-y-4 animate-pulse motion-reduce:animate-none">
-        <div className="h-5 w-40 rounded bg-white/10" />
-        <div className="h-10 rounded-lg bg-white/5" />
+      <div className="mb-4 flex items-center gap-3">
+        <span className="h-4 w-4 animate-spin motion-reduce:animate-none rounded-full border-2 border-slate-400/30 border-t-slate-200" aria-hidden="true" />
+        <span className="text-xs font-semibold text-slate-200">Loading {workspaceLabel}…</span>
+      </div>
+      <div aria-hidden="true" className="space-y-4">
+        <div data-skeleton className="h-5 w-40 rounded bg-white/10" />
+        <div data-skeleton className="h-10 rounded-lg bg-white/5" />
         <div className={`grid gap-3 ${workspace === 'plugins' || workspace === 'missions' ? 'sm:grid-cols-2 lg:grid-cols-3' : ''}`}>
           {Array.from({ length: workspace === 'console' ? 2 : 3 }, (_, index) => <div key={index} className="space-y-3 rounded-lg border border-white/5 p-4">
-            <div className="h-3 w-2/3 rounded bg-white/10" /><div className="h-3 w-full rounded bg-white/5" /><div className="h-3 w-4/5 rounded bg-white/5" />
+            <div data-skeleton className="h-3 w-2/3 rounded bg-white/10" /><div data-skeleton className="h-3 w-full rounded bg-white/5" /><div data-skeleton className="h-3 w-4/5 rounded bg-white/5" />
           </div>)}
         </div>
-        {workspace === 'console' && <div className="h-16 rounded-lg border border-white/10 bg-white/5" />}
+        {workspace === 'console' && <div data-skeleton className="h-16 rounded-lg border border-white/10 bg-white/5" />}
       </div>
     </div>
   )
@@ -268,7 +272,7 @@ export function NexusShell() {
       ? busyAgentCount
         ? `${busyAgentCount} agent${busyAgentCount === 1 ? '' : 's'} active`
         : gatewayOnline
-          ? 'Ready for commands'
+          ? null
           : runtimeStatus
             ? 'Runtime offline'
             : 'Connecting to runtime'
@@ -592,10 +596,11 @@ export function NexusShell() {
             </Button>
           ))}
           </nav>
+        </div>
 
-          <div className="dy-human-rail-bottom">
-            {!approvalsAvailable && <div className="dy-approvals-status" role="status" title="Approval requests may be unavailable while the connection is being restored.">Approvals reconnecting</div>}
-            <nav className="dy-human-nav dy-human-nav--utility flex flex-col" aria-label="Utility navigation">
+        <div className="dy-human-rail-bottom">
+          {!approvalsAvailable && <div className="dy-approvals-status" role="status" title="Approval requests may be unavailable while the connection is being restored.">Approvals reconnecting</div>}
+          <nav className="dy-human-nav dy-human-nav--utility flex flex-col" aria-label="Utility navigation">
             <Button
               id="nexus-nav-settings"
               variant="quiet"
@@ -634,9 +639,7 @@ export function NexusShell() {
                 <span className="block">Assistant</span>
               </span>
             </Button>
-            </nav>
-
-          </div>
+          </nav>
         </div>
 
       </aside>
@@ -748,9 +751,11 @@ export function NexusShell() {
                 />
               )}
             </div>
-            <div className="dy-workspace-context__state" data-state={workspaceStateTone} role="status" aria-live="polite">
-              {workspaceState}
-            </div>
+            {workspaceState && (
+              <div className="dy-workspace-context__state" data-state={workspaceStateTone} role="status" aria-live="polite">
+                {workspaceState}
+              </div>
+            )}
             <Button
               variant="quiet"
               size="compact"

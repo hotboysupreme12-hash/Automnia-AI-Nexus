@@ -9004,6 +9004,7 @@ async function delayMs(ms: number) {
 
 async function retryTransientFileLock<T>(operation: () => Promise<T>, label: string, attempts = 10): Promise<T> {
   let lastError: unknown
+  let loggedRetry = false
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
       return await operation()
@@ -9011,7 +9012,10 @@ async function retryTransientFileLock<T>(operation: () => Promise<T>, label: str
       lastError = error
       if (!isTransientFileLockError(error) || attempt === attempts - 1) throw error
       const waitMs = Math.min(1000, 75 * Math.pow(1.55, attempt))
-      console.warn(`[file-lock-retry] ${label} failed with ${(error as NodeJS.ErrnoException).code}; retrying in ${Math.round(waitMs)}ms`)
+      if (!loggedRetry) {
+        console.warn(`[file-lock-retry] ${label} failed with ${(error as NodeJS.ErrnoException).code}; retrying with backoff`)
+        loggedRetry = true
+      }
       await delayMs(waitMs)
     }
   }
@@ -9028,6 +9032,23 @@ async function writeTextFileWithLockRetry(filePath: string, content: string) {
 
 async function renameWithLockRetry(fromPath: string, toPath: string) {
   return retryTransientFileLock(() => fs.rename(fromPath, toPath), `rename ${fromPath} -> ${toPath}`)
+}
+
+async function replaceOpenclawConfigWithLockRetry(tempPath: string) {
+  try {
+    await renameWithLockRetry(tempPath, OPENCLAW_CONFIG_PATH)
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code
+    if (process.platform !== 'win32' || (code !== 'EPERM' && code !== 'EEXIST')) throw error
+
+    // Windows scanners and indexers can temporarily deny replacing an existing
+    // config file. Keep the atomic rename as the primary path, then use the
+    // compatible copy fallback used by OpenClaw's own atomic JSON writer.
+    await retryTransientFileLock(
+      () => fs.copyFile(tempPath, OPENCLAW_CONFIG_PATH),
+      `copy ${tempPath} -> ${OPENCLAW_CONFIG_PATH}`,
+    )
+  }
 }
 
 function isCompleteModelProviderConfig(value: unknown, providerId?: string): value is ModelProviderConfig {
@@ -9945,7 +9966,7 @@ async function writeOpenclawConfig(config: unknown, options: { allowDuringAgentT
           // An external editor can change the file while normalization awaits.
           // Rebase again instead of renaming an older revision over that edit.
           if (await readCurrent() !== current) continue
-          await renameWithLockRetry(tempPath, OPENCLAW_CONFIG_PATH)
+          await replaceOpenclawConfigWithLockRetry(tempPath)
         } finally { await fs.unlink(tempPath).catch(() => undefined) }
       }
       modelCatalogService.invalidateAvailableModels()
@@ -19761,6 +19782,7 @@ const synchronizeBillingRouteWithGateway = () => {
 
 registerToolApprovalRoutes(app, {
   interruptAgent: (agentId) => gatewayChatService.interruptAgent(agentId),
+  waitForAgentRunsToFinish: (agentId, timeoutMs) => gatewayChatService.waitForAgentRunsToFinish(agentId, timeoutMs),
   request: async (method, params, requestOptions) => (await gatewayChatService.ensureClient()).client.request(method, params, requestOptions),
   validAgent: async (id) => isValidAgentId(id) && !isRetiredAgentId(id) && (
     isImplicitMainAgentId(id) || Boolean((await readOpenclawConfig()).agents?.list?.some((entry) => entry.id === id))

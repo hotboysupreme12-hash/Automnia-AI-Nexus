@@ -56,6 +56,8 @@ type AgentConfigPayload = {
 type AgentModelSavePayload = {
   ok?: boolean
   error?: string
+  warning?: string
+  model?: OpenClawAgent['model']
   config?: { model?: OpenClawAgent['model'] }
 }
 
@@ -452,6 +454,7 @@ export function AgentEditorModal() {
 
   const [tAllow,setTAllow] = useState(''); const [tDeny,setTDeny] = useState('')
   const [ps,setPs] = useState(false); const [psStatus,setPsStatus] = useState('')
+  const [pendingToolAccessSave,setPendingToolAccessSave] = useState<{mode:string;previousMode:string}|null>(null)
   const policySaveTimerRef = useRef<number|null>(null)
   const policySaveQueueRef = useRef<Promise<void>>(Promise.resolve())
   const policyRevisionRef = useRef(0)
@@ -772,10 +775,10 @@ export function AgentEditorModal() {
     configLoadSeqRef.current += 1
     let saveRequest:Promise<ApiResult<AgentModelSavePayload>>|null=null
     try {
-      saveRequest=apiRequest<AgentModelSavePayload>(`/api/party/agent/${encodeURIComponent(agent.id)}/config`, {
+      saveRequest=apiRequest<AgentModelSavePayload>(`/api/party/agent/${encodeURIComponent(agent.id)}/model`, {
         method: 'POST',
-        timeoutMs: 18_000,
-        body: { model: { primary:nextPrimary, fallbacks:nextFallbacks } },
+        timeoutMs: 60_000,
+        body: { primary:nextPrimary, fallbacks:nextFallbacks },
       })
       modelSaveInFlightRef.current=saveRequest
       const result = await saveRequest
@@ -787,7 +790,7 @@ export function AgentEditorModal() {
         setAutosaveMessage(`Model autosave failed: ${message}`)
         return
       }
-      const savedModel = result.data.config?.model || { primary:nextPrimary, fallbacks:nextFallbacks }
+      const savedModel = result.data.model || result.data.config?.model || { primary:nextPrimary, fallbacks:nextFallbacks }
       const pendingModelSave=pendingModelSaveRef.current
       const requestIsCurrent = requestSeq===modelSaveSeqRef.current
         && pendingModelSave?.agentId===agent.id
@@ -804,9 +807,9 @@ export function AgentEditorModal() {
       pendingModelSaveRef.current=null
       agentConfigCache.delete(agent.id)
       clearConfigDirty('model')
-      setMsStatus('Model saved.')
+      setMsStatus(result.data.warning ? `Model saved. ${result.data.warning}` : 'Model saved.')
       setAutosavePhase('saved')
-      setAutosaveMessage('All changes saved')
+      setAutosaveMessage(result.data.warning ? `Model saved with note: ${result.data.warning}` : 'All changes saved')
     } catch (e) {
       if (requestSeq!==modelSaveSeqRef.current) return
       const message=errorMessage(e)
@@ -1940,21 +1943,29 @@ export function AgentEditorModal() {
                         const previousMode = toolAccess
                         setPs(true)
                         setToolAccess(mode)
-                        setPsStatus('Saving command permissions…')
+                        setPsStatus('Checking briefly for active turns before saving permissions…')
                         try {
-                          const result = await apiRequest(`/api/party/agent/${encodeURIComponent(agent.id)}/tool-access`, { method: 'POST', body: { mode }, timeoutMs: 15000 })
+                          const result = await apiRequest<{ mode?: string; interrupted?: number }>(`/api/party/agent/${encodeURIComponent(agent.id)}/tool-access`, { method: 'POST', body: { mode }, timeoutMs: 15_000 })
                           if (result.ok) {
                             agentConfigCache.delete(agent.id)
+                            setPendingToolAccessSave(null)
                             setPsStatus('Command permissions saved. Refreshing agent settings…')
                             // The tool-access endpoint is authoritative for this save. A follow-up
                             // config read is only a UI refresh and must not make a successful save
                             // appear stuck or failed when the Gateway is recovering.
                             void LdP(true).catch(() => undefined)
                           } else {
-                            setToolAccess(previousMode)
-                            setPsStatus(`Save failed: ${apiErrorMessage(result.error)}`)
+                            if (result.error.code === 'agent_turn_still_running') {
+                              setPendingToolAccessSave({ mode, previousMode })
+                              setPsStatus(apiErrorMessage(result.error))
+                            } else {
+                              setPendingToolAccessSave(null)
+                              setToolAccess(previousMode)
+                              setPsStatus(`Save failed: ${apiErrorMessage(result.error)}`)
+                            }
                           }
                         } catch (error) {
+                          setPendingToolAccessSave(null)
                           setToolAccess(previousMode)
                           setPsStatus(`Save failed: ${errorMessage(error)}. Check Runtime Monitor and retry when Gateway is connected.`)
                         } finally {
@@ -1967,6 +1978,39 @@ export function AgentEditorModal() {
                       </select>
                     </label>
                     <p className="text-xs text-slate-400">Tools load on demand. Full access grants the available catalog and host commands without approval prompts. OS permissions and service logins still apply.</p>
+                    {pendingToolAccessSave && <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.05] p-3">
+                      <p className="flex-1 text-xs text-amber-100">The agent is still working. You can leave it running and save again later, or stop its active work to apply these permissions now.</p>
+                      <button type="button" disabled={ps} onClick={async () => {
+                        if (!agent || !pendingToolAccessSave) return
+                        const { mode, previousMode } = pendingToolAccessSave
+                        setPs(true)
+                        setPsStatus('Stopping active work and saving permissions…')
+                        try {
+                          const result = await apiRequest<{ mode?: string; interrupted?: number }>(`/api/party/agent/${encodeURIComponent(agent.id)}/tool-access`, { method: 'POST', body: { mode, stopActiveTurns: true }, timeoutMs: 60_000 })
+                          if (result.ok) {
+                            agentConfigCache.delete(agent.id)
+                            setPendingToolAccessSave(null)
+                            setPsStatus('Command permissions saved. Any interrupted task can be sent again. Refreshing agent settings…')
+                            void LdP(true).catch(() => undefined)
+                          } else {
+                            setToolAccess(previousMode)
+                            setPendingToolAccessSave(null)
+                            setPsStatus(`Save failed: ${apiErrorMessage(result.error)}`)
+                          }
+                        } catch (error) {
+                          setToolAccess(previousMode)
+                          setPendingToolAccessSave(null)
+                          setPsStatus(`Save failed: ${errorMessage(error)}. Check Runtime Monitor and retry when Gateway is connected.`)
+                        } finally {
+                          setPs(false)
+                        }
+                      }} className="rounded-md border border-amber-200/30 bg-amber-200/[0.1] px-3 py-2 text-xs font-semibold text-amber-50 disabled:opacity-50">Stop active work and save</button>
+                      <button type="button" disabled={ps} onClick={() => {
+                        setToolAccess(pendingToolAccessSave.previousMode)
+                        setPendingToolAccessSave(null)
+                        setPsStatus('')
+                      }} className="rounded-md border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300 disabled:opacity-50">Keep current permissions</button>
+                    </div>}
                     {toolAccess !== 'full' && <>
                     <AgentToolPicker key={agent.id} agentId={agent.id} allow={tAllow} deny={tDeny} onChange={(allow,deny)=>{setTAllow(allow);setTDeny(deny);schedulePolicyAutosave({allow,deny})}} />
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -1980,7 +2024,7 @@ export function AgentEditorModal() {
                       </div>
                     </div>
                     </>}
-                    {psStatus && <div data-editor-autosave="section" data-phase={psStatus.toLowerCase().includes('fail')?'error':ps?'saving':'saved'} role={psStatus.toLowerCase().includes('fail')?'alert':'status'} aria-live="polite"><i aria-hidden="true" /><span>{psStatus}</span></div>}
+                    {psStatus && <div data-editor-autosave="section" data-phase={psStatus.toLowerCase().includes('fail')?'error':ps||pendingToolAccessSave?'saving':'saved'} role={psStatus.toLowerCase().includes('fail')?'alert':'status'} aria-live="polite"><i aria-hidden="true" /><span>{psStatus}</span></div>}
                   </div>
                 )}
 

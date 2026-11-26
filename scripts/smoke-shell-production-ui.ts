@@ -77,9 +77,10 @@ assert.doesNotMatch(shell, /dy-command-header/, 'shell should not render the ret
 assert.doesNotMatch(shell, /className="dy-top-tabs/, 'shell should not render a duplicate hidden tab bar')
 assert.match(shell, /aria-keyshortcuts=\{activeCronCount && !cronStatusUnavailable \? 'Delete'/, 'cron cleanup review should be keyboard discoverable only when cron state is available')
 assert.match(shell, /event\.key !== 'Delete'/, 'cron cleanup should support the declared keyboard shortcut')
-assert.match(shell, /role="status"[\s\S]*aria-label=\{`Loading \$\{workspace\}`\}/, 'lazy workspace loading should announce its destination')
-assert.match(shell, /animate-pulse motion-reduce:animate-none/, 'lazy workspace placeholders must honor reduced motion')
-assert.match(shell, /Loading \{workspace\}\. Your workspace will appear here\./, 'lazy workspace loading should explain the pending destination')
+assert.match(shell, /const workspaceLabel = workspace === 'console' \? 'workspace' : `\$\{WORKSPACE_META\[workspace\]\.label\} workspace`/, 'lazy workspace loading should map each destination to its visible workspace label')
+assert.match(shell, /role="status"[\s\S]*aria-label=\{`Loading \$\{workspaceLabel\}`\}/, 'lazy workspace loading should announce its destination')
+assert.match(shell, /animate-spin motion-reduce:animate-none/, 'lazy workspace spinner must honor reduced motion')
+assert.match(shell, /Loading \{workspaceLabel\}…/, 'lazy workspace loading should show the human-readable destination')
 assert.match(shell, /function isLazyImportFailure\(error: unknown\): boolean[\s\S]*error instanceof Error[\s\S]*unable to preload css/i, 'lazy imports should recover from Vite CSS preload failures')
 assert.match(shell, /className="dy-workspace-context" data-workspace=\{tab\}/, 'shell should expose a contextual workspace header')
 assert.match(shell, /id="automnia-workspace-title"[\s\S]*activeTab\.label/, 'workspace context should expose the active page title')
@@ -191,7 +192,19 @@ assert.deepEqual(layersAfterTypography, [
   { order: 147, name: 'graphite-refinement' },
   { order: 148, name: 'rea-chatgpt-parity' },
   { order: 149, name: 'project-folder-control' },
-], 'global automnia theme layers after typography must remain limited to the approved shell, operator, card, settings, responsive, performance, command-console, monitor, and recruit layers')
+  { order: 150, name: 'compact-ui-scale' },
+  { order: 151, name: 'transparent-chat-composer' },
+  { order: 152, name: 'chat-target-density' },
+  { order: 153, name: 'active-party-action-buttons' },
+  { order: 154, name: 'monitor-graphite-flat' },
+  { order: 155, name: 'plugin-compact-layout' },
+  { order: 156, name: 'plugin-graphite-viewport' },
+  { order: 157, name: 'agent-workspace-graphite' },
+  { order: 157, name: 'calm-navigation-selection' },
+  { order: 158, name: 'workspace-graphite-surfaces' },
+  { order: 159, name: 'plugin-loading-state' },
+  { order: 161, name: 'agent-registry-zoom-fit' },
+], 'global automnia theme layers should remain in the reviewed cascade order')
 assert.doesNotMatch(theme, /99-mission-quiet-redesign/, 'mission quiet redesign should no longer be a global late layer')
 assert.ok(
   theme.indexOf(productionPolishImport) < theme.indexOf(referenceScreenshotImport),
@@ -211,7 +224,7 @@ assert.ok(theme.indexOf(agentCardThemesImport) < theme.indexOf(settingsSystemImp
 assert.ok(theme.indexOf(settingsSystemImport) < theme.indexOf(cronJobsSystemImport), 'Settings System must load before the scoped Cron Jobs System')
 assert.ok(theme.indexOf(monitorLogsImport) < theme.indexOf(monitorReadableImport), 'Monitor Logs must load before Monitor Readability')
 assert.ok(theme.includes(obsidianAgentCardsImport), 'Obsidian agent card constraints must remain in the cascade')
-assert.ok(theme.trimEnd().endsWith("@import './styles/automnia-theme/149-project-folder-control.css';"), 'Project folder control experience must remain the final shared theme layer')
+assert.ok(theme.trimEnd().endsWith("@import './styles/automnia-theme/161-agent-registry-zoom-fit.css';"), 'Agent registry zoom-fit must remain the final shared theme layer')
 assert.doesNotMatch(read('src/styles/automnia-theme/136-product-usability.css'), /\.dy-agent-card/, 'Shared affordances must preserve the final agent card artwork')
 assert.match(operatorExperience, /\.dui-recruit-code-editor:focus-within[\s\S]*#071012 !important/, 'focused recruit Markdown editing must retain its dedicated contrast treatment')
 assert.match(horizonCommandCenter, /Each destination has a dedicated hue/, 'navigation selection should document the workspace identity system')

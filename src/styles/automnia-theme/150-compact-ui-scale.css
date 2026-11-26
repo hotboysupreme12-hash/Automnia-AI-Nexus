@@ -1,0 +1,57 @@
+/* The registry has six agents at this viewport size. Let all six share the
+   row instead of leaving an empty grid track and wrapping the last card. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-grid-mode]:not([data-agent-grid-mode="list"]) {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)) !important;
+  gap: 10px !important;
+  align-items: stretch !important;
+}
+
+/* Trading-card proportions: a tall full-bleed portrait above a compact text
+   panel, with the grid shrinking cards through its column count. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"]:not([data-agent-display-mode="list"]) .agent-card-media {
+  aspect-ratio: 0.9 / 1 !important;
+  background: #05080b !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"]:not([data-agent-display-mode="list"]) .agent-card-portrait-img {
+  object-fit: cover !important;
+  object-position: center 28% !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"]:not([data-agent-display-mode="list"]) {
+  min-height: 0 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"]:not([data-agent-display-mode="list"]) .agent-card-body {
+  padding: 10px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"]:not([data-agent-display-mode="list"]) .agent-card-heading {
+  margin-bottom: 7px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"]:not([data-agent-display-mode="list"]) .agent-card-name {
+  margin-top: 4px !important;
+  font-size: 16px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"]:not([data-agent-display-mode="list"]) .agent-card-role {
+  min-height: 0 !important;
+  margin-top: 5px !important;
+  font-size: 12px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"]:not([data-agent-display-mode="list"]) :is(.agent-card-simple-meta, .agent-card-details) {
+  gap: 8px !important;
+  margin-bottom: 6px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"]:not([data-agent-display-mode="list"]) .agent-card-actions {
+  gap: 5px !important;
+  padding-top: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"]:not([data-agent-display-mode="list"]) .agent-card-actions button {
+  min-height: 30px !important;
+  padding: 6px 8px !important;
+}

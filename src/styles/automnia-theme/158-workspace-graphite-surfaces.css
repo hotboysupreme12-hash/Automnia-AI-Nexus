@@ -1,0 +1,63 @@
+/* Give each workspace title/status header the same graphite base. Status chips
+   retain their own green, amber, red, and other state colors. */
+html.dui-pro-overhaul.dui-cohesive-ui #automnia-main .dy-workspace-context[data-workspace] {
+  border-color: #30363b !important;
+  background: #202428 !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* The app-main padding also sits between the workspace title and its panels;
+   give that surrounding canvas the same base while Agents is active. */
+html.dui-pro-overhaul.dui-cohesive-ui #automnia-main:has(#nexus-workspace-agents) {
+  background: #202428 !important;
+  background-image: none !important;
+}
+
+/* Keep the outer shell and its remaining page gutters on that same gray. */
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg:has(#nexus-workspace-agents) {
+  background: #202428 !important;
+  background-image: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui:has(#nexus-workspace-agents),
+html.dui-pro-overhaul.dui-cohesive-ui body:has(#nexus-workspace-agents) {
+  background: #202428 !important;
+  background-image: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-agents [data-agent-status] {
+  background: #202428 !important;
+  background-image: none !important;
+}
+
+/* Earlier reference-theme rules layer a blue radial canvas and HUD wallpaper
+   on the Agents workspace pseudo-elements. Remove those overlays so the gray
+   canvas shows through its gutters without tinting. */
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-agents .dy-agents-workspace::before,
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-agents .dy-agents-workspace::after,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg:has(#nexus-workspace-agents)::before,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg:has(#nexus-workspace-agents)::after,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg:has(#nexus-workspace-agents) .grid-overlay {
+  display: none !important;
+  content: none !important;
+  background: none !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  opacity: 0 !important;
+}
+
+/* Remove the blue tinted card shell while keeping the portrait/fallback media,
+   rarity borders, profile badges, and colored actions intact. */
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-agents .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"][data-agent-card-theme][data-agent-rarity],
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-agents .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"][data-agent-card-theme][data-agent-rarity]:hover {
+  background: #202428 !important;
+  background-image: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-agents .agent-card-shell.agent-card-pro.agent-card-modern[data-agent-card="true"][data-agent-card-theme][data-agent-rarity] .agent-card-body {
+  background: #202428 !important;
+  background-image: none !important;
+}

@@ -82,7 +82,7 @@ test('approvals validate decisions, preserve other agents, and synchronize host 
       assert.deepEqual(calls.at(-1)?.params, { id: 'pending-1', decision })
     }
     const before = calls.length
-    assert.equal((await post('/api/party/agent/missing/tool-access', { mode: 'full' })).status, 400)
+    assert.equal((await post('/api/party/agent/missing/tool-access', { mode: 'full' })).status, 404)
     assert.equal(calls.length, before)
     for (const mode of ['ask', 'full']) {
       assert.equal((await post('/api/party/agent/brandon/tool-access', { mode })).status, 200)
@@ -103,3 +103,50 @@ test('approvals validate decisions, preserve other agents, and synchronize host 
     }
   } finally { await new Promise<void>((resolve) => server.close(() => resolve())) }
 })
+
+test('tool-access waits briefly for active turns and returns 409 unless stopActiveTurns is confirmed', async () => {
+  const app = express()
+  app.use(express.json())
+  const calls: string[] = []
+  registerToolApprovalRoutes(app, {
+    validAgent: (id) => id === 'brandon',
+    waitForAgentRunsToFinish: async (_agentId, timeoutMs) => {
+      calls.push(`wait:${timeoutMs}`)
+      return { drained: false, activeRuns: 2, waitedMs: 3000 }
+    },
+    interruptAgent: async () => { calls.push('interrupt'); return 2 },
+    configure: async () => { calls.push('configure') },
+    resetAgentContext: async () => { calls.push('reset'); return { sessions: 1 } },
+    request: async (method) => {
+      calls.push(method)
+      if (method === 'exec.approvals.get') return { hash: 'rev-2', file: { version: 1, agents: {} } }
+      return { ok: true }
+    },
+  })
+  const server = app.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  try {
+    const conflict = await fetch(`${base}/api/party/agent/brandon/tool-access`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'full' }),
+    })
+    assert.equal(conflict.status, 409)
+    const conflictBody = await conflict.json()
+    assert.equal(conflictBody.error.code, 'agent_turn_still_running')
+    assert.deepEqual(calls, ['wait:3000'])
+
+    const confirmed = await fetch(`${base}/api/party/agent/brandon/tool-access`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'full', stopActiveTurns: true }),
+    })
+    assert.equal(confirmed.status, 200)
+    assert.deepEqual(calls, ['wait:3000', 'interrupt', 'exec.approvals.get', 'configure', 'exec.approvals.set', 'reset'])
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+  }
+})
+
+\n

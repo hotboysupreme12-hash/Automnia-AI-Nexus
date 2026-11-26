@@ -1,3 +1,5 @@
+import { AUTOMNIA_DESKTOP_VERSION } from './releaseMetadata.js';
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -72,7 +74,7 @@ export function buildLicenseEmailHtml(record, context = {}) {
     ? 'Your new plan order is linked to your existing Automnia account. Keep using the same license key below to access your account.'
     : 'Thank you for choosing Automnia AI Nexus. Your purchase has been provisioned and your account is ready to link.';
   const downloadSection = downloadAccessUrl
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:26px 0 0;border:1px solid #B9D8F1;border-radius:14px;background:#EEF7FF;"><tr><td style="padding:22px 22px 20px;"><div style="margin:0 0 8px;color:${brand.blue};font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;">Your secure download</div><p style="margin:0 0 16px;color:${brand.lightMuted};font-size:14px;line-height:1.6;">Use this private page whenever you need an installer. It checks your active access and creates a fresh, short-lived download link.</p><a href="${escapeHtml(downloadAccessUrl)}" style="display:inline-block;padding:13px 18px;border-radius:8px;background:${brand.ink};color:${brand.cyan};font-size:14px;font-weight:800;text-decoration:none;">Download Automnia <span aria-hidden="true">→</span></a></td></tr></table>`
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:26px 0 0;border:1px solid #B9D8F1;border-radius:14px;background:#EEF7FF;"><tr><td style="padding:22px 22px 20px;"><div style="margin:0 0 8px;color:${brand.blue};font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;">Your secure download · v${AUTOMNIA_DESKTOP_VERSION}</div><p style="margin:0 0 16px;color:${brand.lightMuted};font-size:14px;line-height:1.6;">Use this private page whenever you need an installer. It checks your active access and creates a fresh, short-lived download link.</p><a href="${escapeHtml(downloadAccessUrl)}" style="display:inline-block;padding:13px 18px;border-radius:8px;background:${brand.ink};color:${brand.cyan};font-size:14px;font-weight:800;text-decoration:none;">Download Automnia v${AUTOMNIA_DESKTOP_VERSION} <span aria-hidden="true">→</span></a></td></tr></table>`
     : '';
   const instructions = onboardingInstructions(record, context)
     .map((instruction, index) => `<tr><td valign="top" style="padding:0 12px 14px 0;"><div style="width:26px;height:26px;border-radius:50%;background:${brand.ink};color:${brand.cyan};font-size:12px;font-weight:800;line-height:26px;text-align:center;">${index + 1}</div></td><td valign="top" style="padding:2px 0 14px;color:${brand.lightMuted};font-size:14px;line-height:1.55;">${escapeHtml(String(instruction).replace(/^\d+\.\s*/, ''))}</td></tr>`)

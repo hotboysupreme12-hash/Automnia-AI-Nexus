@@ -3398,8 +3398,7 @@ html.dui-pro-overhaul .dy-command-icon-button svg {
 }
 
 
-html.dui-pro-overhaul .dy-command-busy > span,
-html.dui-pro-overhaul [class*="animate-pulse"]:not(.agent-card-pro):not(.agent-card-pro *) {
+html.dui-pro-overhaul .dy-command-busy > span {
   background-color: #9fb3bc !important;
   box-shadow: 0 0 9px rgba(159, 179, 188, .34) !important;
 }

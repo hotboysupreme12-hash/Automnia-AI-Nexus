@@ -577,7 +577,6 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
       local.agent.updatedAt = new Date().toISOString()
       await writeTextFileWithLockRetry(agentLocalConfigPath(agentId), `${JSON.stringify(local, null, 2)}\n`)
       await rememberAgentLocalConfigCache(agentLocalConfigPath(agentId), local)
-      await syncAgentDerivedFiles(agentId, local)
 
       applyLocalConfigToGlobal(agentId, local, config)
 
@@ -587,10 +586,18 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
       // provider model.
       await writeOpenclawConfig(config, { allowDuringAgentTurn: true })
       const modelSessionReset = resetAgentTurnSessionsForModelChange(agentId)
-      const modelOverrideCleanup = await clearDisallowedAutoModelOverridesForAgent(agentId, nextModel, { clearManualOverrides: true })
-      return apiSuccess(res, { ok: true, model: nextModel, modelOverrideCleanup, modelSessionReset })
+      let modelOverrideCleanup: Awaited<ReturnType<typeof clearDisallowedAutoModelOverridesForAgent>> | null = null
+      let warning: string | undefined
+      try {
+        modelOverrideCleanup = await clearDisallowedAutoModelOverridesForAgent(agentId, nextModel, { clearManualOverrides: true })
+      } catch (error) {
+        warning = 'The model was saved, but an older session override could not be cleared.'
+        console.warn(`[agent-model] ${agentId}: ${warning}`, error)
+      }
+      return apiSuccess(res, { ok: true, model: nextModel, modelOverrideCleanup, modelSessionReset, ...(warning ? { warning } : {}) })
     } catch (error) {
-      return apiFailure(res, 500, 'model_operation_failed', 'Failed to update agent model', { agentId: requestedAgent, detail: String(error) })
+      const detail = error instanceof Error ? error.message : String(error)
+      return apiFailure(res, 500, 'model_operation_failed', `Failed to update agent model: ${detail}`, { agentId: requestedAgent, detail })
     }
   })
 }

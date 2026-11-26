@@ -57,6 +57,7 @@ import { monitorVoiceActivity } from '../../speech/voiceActivity'
 import { Badge, Button, IconButton, StatusChip } from '../ui'
 import type { BadgeTone } from '../ui'
 import { ProjectFolderControl } from '../workspace/ProjectFolderControl'
+import './command-console-jump-latest.css'
 import {
   CONSOLE_PREFS_CHANGED_EVENT,
   readConsolePreferences,
@@ -549,23 +550,6 @@ function portraitFailureKey(agentId: string, src: string) {
   return `${agentId}::${src}`
 }
 
-function handleResponseWheel(event: WheelEvent<HTMLDivElement>) {
-  const surface = event.currentTarget
-  if (event.deltaY === 0 || surface.scrollHeight <= surface.clientHeight) return
-
-  // Keep wheel/trackpad input on the response under the pointer. Explicitly
-  // moving this surface avoids browser scroll-chain differences in Electron
-  // and prevents the surrounding chat history from growing or moving instead.
-  const delta = event.deltaMode === 1
-    ? event.deltaY * 16
-    : event.deltaMode === 2
-      ? event.deltaY * surface.clientHeight
-      : event.deltaY
-  event.preventDefault()
-  event.stopPropagation()
-  surface.scrollTop += delta
-}
-
 const ResponseMessage = memo(function ResponseMessage({
   entry,
   meta,
@@ -717,12 +701,8 @@ const ResponseMessage = memo(function ResponseMessage({
       {displayText || showInlineThinking ? (
         <div className="dy-command-message-body-wrap relative">
           <div
-            className="dy-command-message-body-scroll"
+            className="dy-command-message-body-content"
             data-body-state={bodyState}
-            data-scroll-surface="agent-response"
-            aria-label={bodyState === 'response' ? `Scrollable response from ${name}` : undefined}
-            tabIndex={bodyState === 'response' ? 0 : undefined}
-            onWheel={bodyState === 'response' ? handleResponseWheel : undefined}
           >
             <div
               className="dy-command-message-body whitespace-pre-wrap break-words border border-white/[0.04] bg-slate-950/30 px-3 py-2.5 text-[14px] leading-relaxed text-slate-300/95"
@@ -956,7 +936,6 @@ export function AgentResponseConsole() {
   const [responseQuery, setResponseQuery] = useState('')
   const [historySearchOpen, setHistorySearchOpen] = useState(false)
   const [isFullScreen, setIsFullScreen] = useState(false)
-  const [composerToolsOpen, setComposerToolsOpen] = useState(false)
   const [parallelAgentChat, setParallelAgentChat] = useState(() => readConsolePreferences().parallelAgentChat)
   const [responseLimit, setResponseLimit] = useState(MESSAGE_RENDER_LIMIT)
   const [followingLatest, setFollowingLatest] = useState(true)
@@ -973,6 +952,7 @@ export function AgentResponseConsole() {
   const activePartyIds = useNexusStore((s) => s.activePartyIds)
   const confirmedPartyIds = useNexusStore((s) => s.confirmedPartyIds)
   const responses = useNexusStore((s) => s.agentResponses)
+  const unreadResponseCount = Math.max(0, responses.findIndex((entry) => entry.id === lastReadResponseId.current))
   const busyAgentIds = useNexusStore((s) => s.busyAgentIds)
   const sendPromptToAgent = useNexusStore((s) => s.sendPromptToAgent)
   const sendPromptToSelectedAgents = useNexusStore((s) => s.sendPromptToSelectedAgents)
@@ -1009,14 +989,6 @@ export function AgentResponseConsole() {
     useAgentVoiceStore.setState({ phase })
     setVoicePhaseState(phase)
   }, [])
-  useEffect(() => {
-    if (!composerToolsOpen) return
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setComposerToolsOpen(false)
-    }
-    window.addEventListener('keydown', closeOnEscape)
-    return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [composerToolsOpen])
   const [voiceStatus, setVoiceStatus] = useState('')
   const [voiceError, setVoiceError] = useState('')
   const voiceRequestRef = useRef<AbortController | null>(null)
@@ -1065,6 +1037,9 @@ export function AgentResponseConsole() {
     const next = !parallelAgentChat
     saveConsolePreferences({ ...readConsolePreferences(), parallelAgentChat: next })
     setParallelAgentChat(next)
+  }
+  const openAttachmentPicker = () => {
+    if (!isUploading) fileInputRef.current?.click()
   }
   useDialogFocus({
     open: isFullScreen,
@@ -1557,14 +1532,8 @@ export function AgentResponseConsole() {
     const target = event.target
     if (!(target instanceof Element)) return
 
-    // Keep the two existing inner scroll surfaces native. The response body
-    // owns its own wheel input, while the message list owns wheel input over
-    // cards and the gaps between them.
-    if (
-      target.closest('.dy-command-message-body-scroll[data-body-state="response"]') ||
-      target.closest('.dy-command-message-body[data-body-state="response"]') ||
-      target.closest('.dy-command-messages')
-    ) return
+    // The message history is the only scroll surface inside the conversation.
+    if (target.closest('.dy-command-messages')) return
 
     // The console header, target bar, status/error rows, and composer are
     // siblings of the message list. Forward their wheel input to that list so
@@ -2215,7 +2184,7 @@ export function AgentResponseConsole() {
             </span>
             <div className="min-w-0">
               <h2 className="dy-command-console__title">
-                Agent Chat
+                Workspace
               </h2>
               <p className="dy-command-console__subtitle">
                 {targetMode} · {targetCount} recipient{targetCount === 1 ? '' : 's'}{thinkingCount ? ` · ${thinkingCount} reasoning` : ''}
@@ -2246,11 +2215,9 @@ export function AgentResponseConsole() {
                 title={parallelAgentChat ? 'Parallel lanes are on. Addressed agents start together.' : 'Parallel lanes are off. Addressed agents run one at a time.'}
                 onClick={toggleParallelAgentChat}
               >
-                <span className="dy-chat-parallel-toggle__orbit" aria-hidden="true"><span className="dy-chat-parallel-toggle__core" /></span>
-                <span>Parallel lanes</span>
-                <span className="dy-chat-parallel-toggle__state">{parallelAgentChat ? 'ON' : 'OFF'}</span>
+                <span className="dy-chat-parallel-toggle__switch" aria-hidden="true"><span className="dy-chat-parallel-toggle__thumb" /></span>
+                <span>Parallel</span>
               </button>
-              <label className="dy-chat-agent-picker__label" htmlFor="agent-chat-target-picker">Chat with</label>
               <select
                 id="agent-chat-target-picker"
                 className="dy-chat-agent-picker"
@@ -2275,7 +2242,7 @@ export function AgentResponseConsole() {
                 variant="quiet"
                 size="compact"
                 icon={(
-                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="12" r="3" />
                     <path d="m19.4 15 .1.1a1.7 1.7 0 0 1-2.4 2.4l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a1.7 1.7 0 0 1-3.4 0v-.2a1.7 1.7 0 0 0-2.9-1.2l-.1.1a1.7 1.7 0 0 1-2.4-2.4l.1-.1A1.7 1.7 0 0 0 4.2 12h-.2a1.7 1.7 0 0 1 0-3.4h.2a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a1.7 1.7 0 0 1 2.4-2.4l.1.1a1.7 1.7 0 0 0 2.9-1.2v-.2a1.7 1.7 0 0 1 3.4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a1.7 1.7 0 0 1 2.4 2.4l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.2a1.7 1.7 0 0 1 0 3.4h-.2a1.7 1.7 0 0 0-1.2 2.9Z" />
                   </svg>
@@ -2293,9 +2260,9 @@ export function AgentResponseConsole() {
                 variant="quiet"
                 size="compact"
                 icon={(
-                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="11" cy="11" r="6.5" />
-                    <path d="m16 16 4 4" />
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="10.75" cy="10.75" r="6.25" />
+                    <path d="m15.4 15.4 4.35 4.35" />
                   </svg>
                 )}
               />
@@ -2312,15 +2279,15 @@ export function AgentResponseConsole() {
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  strokeWidth="1.8"
+                  strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 >
-                  <path d="M3 6h18" />
-                  <path d="M8 6V4h8v2" />
-                  <path d="m6 6 1 14h10l1-14" />
-                  <path d="M10 11v5" />
-                  <path d="M14 11v5" />
+                  <path d="M4 6.5h16" />
+                  <path d="M9 6.5V4.25h6V6.5" />
+                  <path d="m6.5 6.5.85 12.2a1 1 0 0 0 1 .93h7.3a1 1 0 0 0 1-.93l.85-12.2" />
+                  <path d="M10 10.5v5.25" />
+                  <path d="M14 10.5v5.25" />
                 </svg>
                 )}
               />
@@ -2339,11 +2306,11 @@ export function AgentResponseConsole() {
                 variant="quiet"
                 size="compact"
                 icon={isFullScreen ? (
-                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M8 3v5H3M16 3v5h5M3 16h5v5M21 16h-5v5" />
                   </svg>
                 ) : (
-                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5" />
                   </svg>
                 )}
@@ -2528,7 +2495,7 @@ export function AgentResponseConsole() {
               ? `Gateway ${gatewayStartupNotice.state === 'ready' ? 'ready' : gatewayStartupNotice.state === 'attention' ? 'attention' : 'starting'}`
               : `${standaloneRuntimeRuns.length} live`}</span>
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-0">
             {gatewayStartupNotice && (
               <div className="dy-automnia-runtime-notice" data-gateway-startup-phase={gatewayStartupNotice.phase} data-runtime-notification-id="gateway-startup">
                 <div className="dy-automnia-runtime-avatar" aria-hidden="true">
@@ -2702,7 +2669,7 @@ export function AgentResponseConsole() {
               <button type="button" onClick={() => { if (!promptRef.current.trim()) setPrompt('Help me understand '); textareaRef.current?.focus() }}>
                 <strong>Ask a question</strong><span>Get answers and ideas</span>
               </button>
-              <button type="button" disabled={isUploading} onClick={() => fileInputRef.current?.click()}>
+              <button type="button" disabled={isUploading} onClick={openAttachmentPicker}>
                 <strong>Analyze a file</strong><span>Explore an attachment</span>
               </button>
               <button type="button" onClick={() => { if (!promptRef.current.trim()) setPrompt('Help me plan and complete '); textareaRef.current?.focus() }}>
@@ -2745,12 +2712,27 @@ export function AgentResponseConsole() {
         <Button size="compact" variant="quiet" onClick={() => { setRetryRecording(null); setVoiceError(''); setVoiceStatus('Recording discarded.') }}>Discard recording</Button>
       </div>}
       {/* Input area */}
-      {!followingLatest && <Button size="compact" variant="quiet" onClick={() => {
-        if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight
-        stickToBottomRef.current = true
-        setFollowingLatest(true)
-        lastReadResponseId.current = responses[0]?.id
-      }}>Jump to latest{responses.findIndex((entry) => entry.id === lastReadResponseId.current) > 0 ? ` · ${responses.findIndex((entry) => entry.id === lastReadResponseId.current)} new` : ''}</Button>}
+      {!followingLatest && <div className="dy-command-jump-latest">
+        <IconButton
+          className="dy-command-jump-latest__button"
+          variant="quiet"
+          size="compact"
+          aria-label={`Jump to latest messages${unreadResponseCount ? `, ${unreadResponseCount} new` : ''}`}
+          onClick={() => {
+            if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight
+            stickToBottomRef.current = true
+            setFollowingLatest(true)
+            lastReadResponseId.current = responses[0]?.id
+          }}
+          icon={(
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 4v11" />
+              <path d="m7.5 11.5 4.5 4.5 4.5-4.5" />
+              <path d="M5 19h14" />
+            </svg>
+          )}
+        />
+      </div>}
       <div className="dy-command-composer shrink-0"
         onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy' } }}
         onDrop={(event) => { if (event.dataTransfer.files.length) { event.preventDefault(); addAttachments(Array.from(event.dataTransfer.files)) } }}
@@ -2852,39 +2834,10 @@ export function AgentResponseConsole() {
 
           <div className="dy-command-composer__toolbar">
             <div className="dy-command-composer__tools">
-              <div className="dy-chat-composer-tools-menu">
-                <IconButton
-                  aria-label="Add files and more"
-                  aria-expanded={composerToolsOpen}
-                  aria-haspopup="menu"
-                  disabled={isUploading}
-                  onClick={() => setComposerToolsOpen((open) => !open)}
-                  className="dy-command-icon-button flex h-10 w-10 shrink-0 items-center justify-center"
-                  title="Add files and more"
-                  variant="quiet"
-                  icon={(
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]" aria-hidden="true">
-                    <path d="M12 5v14" />
-                    <path d="M5 12h14" />
-                  </svg>
-                  )}
-                />
-                {composerToolsOpen && <div className="dy-chat-plus-menu" role="menu" aria-label="Add files and more">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="dy-chat-plus-menu__item"
-                    onClick={() => {
-                      setComposerToolsOpen(false)
-                      fileInputRef.current?.click()
-                    }}
-                  >
-                    <span className="dy-chat-plus-menu__icon" aria-hidden="true">＋</span>
-                    <span><strong>Add files</strong><small>Upload from computer</small></span>
-                  </button>
-                  <ProjectFolderControl compact targetAgentIds={armedTargets.map((agent) => agent.id)} targetScopeLabel="Active party" />
-                </div>}
-              </div>
+              <Button size="compact" variant="quiet" disabled={isUploading} onClick={openAttachmentPicker} title="Upload files from your computer">
+                Browse
+              </Button>
+              <ProjectFolderControl compact targetAgentIds={armedTargets.map((agent) => agent.id)} targetScopeLabel="Active party" />
               <input
                 ref={fileInputRef}
                 type="file"

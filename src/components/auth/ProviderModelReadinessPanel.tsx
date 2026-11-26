@@ -80,6 +80,7 @@ export function ProviderModelReadinessView({
 }: ProviderModelReadinessViewProps) {
   const authConfigured = onboarding?.authentication.configured ?? authenticationConfigured
   const catalog = onboarding?.catalog
+  const checkingCatalog = loading || refreshing
   const probeAvailable = onboarding?.probeContract.available === true
   const summary = onboarding ? capabilitySummary(onboarding) : null
   const selectedModel = models.find((model) => model.id === selectedModelId)
@@ -102,7 +103,7 @@ export function ProviderModelReadinessView({
         <div className="rounded-xl border border-white/[0.08] bg-slate-950/35 px-3 py-2.5">
           <dt className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500">Authentication</dt>
           <dd className={`mt-1 text-xs font-semibold ${authConfigured ? 'text-emerald-200' : authConfigured === false ? 'text-amber-200' : 'text-slate-300'}`}>
-            {authConfigured === undefined ? 'Not checked' : authConfigured ? 'Configured' : 'Not configured'}
+            {authConfigured === undefined ? checkingCatalog ? 'Checking…' : 'Not checked' : authConfigured ? 'Configured' : 'Not configured'}
           </dd>
         </div>
         <div className="rounded-xl border border-white/[0.08] bg-slate-950/35 px-3 py-2.5">
@@ -114,7 +115,7 @@ export function ProviderModelReadinessView({
         <div className="rounded-xl border border-white/[0.08] bg-slate-950/35 px-3 py-2.5">
           <dt className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500">Last catalog discovery</dt>
           <dd className="mt-1 text-xs font-medium text-slate-200">
-            {catalog ? `${displayDate(catalog.verifiedAt)} · ${catalog.modelCount} model${catalog.modelCount === 1 ? '' : 's'}${catalog.stale ? ' · stale' : ''}` : 'No snapshot'}
+            {catalog ? `${displayDate(catalog.verifiedAt)} · ${catalog.modelCount} model${catalog.modelCount === 1 ? '' : 's'}${catalog.stale ? ' · stale' : ''}` : checkingCatalog ? 'Checking catalog…' : 'No snapshot'}
           </dd>
         </div>
         <div className="rounded-xl border border-white/[0.08] bg-slate-950/35 px-3 py-2.5">
@@ -122,7 +123,7 @@ export function ProviderModelReadinessView({
           <dd className="mt-1 text-xs leading-5 text-slate-200">
             {summary
               ? `Input: ${summary.modalities} · Output: ${summary.outputModalities}. ${summary.capabilities.reasoningModelCount} reasoning, ${summary.capabilities.toolCapableModelCount} tool-capable, ${summary.capabilities.contextWindowModelCount} with context metadata.`
-              : 'Capabilities are available after discovery.'}
+              : checkingCatalog ? 'Capability details will appear after discovery.' : 'Capabilities are available after discovery.'}
           </dd>
         </div>
       </dl>

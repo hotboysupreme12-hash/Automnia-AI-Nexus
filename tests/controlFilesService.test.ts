@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 
-import { createControlFilesService } from '../server/services/controlFilesService'
+import { ControlFileConflict, controlFileRevision, createControlFilesService } from '../server/services/controlFilesService'
 
 async function createTempWorkspace(t: { after(callback: () => Promise<void> | void): void }) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'automnia-control-files-'))
@@ -120,3 +120,27 @@ test('control files service rejects symlink escapes before read and write', asyn
   )
   assert.equal(await fs.readFile(outsidePath, 'utf-8'), 'outside doctrine\n')
 })
+
+test('control files service serializes atomic writes and rejects stale expectedRevision mutations', async (t) => {
+  const workspaceRoot = await createTempWorkspace(t)
+  const service = createControlFilesService(workspaceRoot)
+
+  const initialRevision = await service.writeFile('MEMORY.md', '# Initial memory\n')
+  assert.equal(initialRevision, controlFileRevision('# Initial memory\n'))
+  assert.deepEqual(await service.readFileWithRevision('MEMORY.md'), {
+    content: '# Initial memory\n',
+    revision: initialRevision,
+  })
+
+  const [first, second] = await Promise.allSettled([
+    service.writeFile('MEMORY.md', '# First atomic update\n', initialRevision),
+    service.writeFile('MEMORY.md', '# Concurrent stale update\n', initialRevision),
+  ])
+  assert.equal(first.status, 'fulfilled')
+  assert.equal(second.status, 'rejected')
+  assert.ok(second.status === 'rejected' && second.reason instanceof ControlFileConflict)
+  assert.equal(await service.readFile('MEMORY.md'), '# First atomic update\n')
+  assert.deepEqual(await fs.readdir(workspaceRoot), ['MEMORY.md'])
+})
+
+\n

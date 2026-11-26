@@ -1476,32 +1476,32 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
                   pausing={cronCancelKey === job.id || cronCancelKey === '__all__'}
                 />
               ))}
-              {activeCronJobs.length > 0 && (
-                <div className="dy-cron-list-footer" aria-label="Cron job list status">
-                  <span>
-                    Showing {visibleCronStart + 1}–{Math.min(visibleCronStart + visibleCronJobs.length, activeCronJobs.length)} of {activeCronJobs.length} loaded {activeCronJobs.length === 1 ? 'run' : 'runs'}{cronListTruncated ? ` · ${activeCronCount} total` : ''}
+              {cronPageCount > 1 && (
+                <div className="dy-cron-list-footer">
+                  <span className="dy-cron-pagination" role="group" aria-label="Scheduled run pages">
+                    <Button
+                      onClick={() => setCronPage((page) => Math.max(0, Math.min(page, cronPageCount - 1) - 1))}
+                      disabled={visibleCronPage === 0}
+                      variant="quiet"
+                      size="compact"
+                      className="dy-cron-page-arrow"
+                      aria-label="Previous scheduled runs"
+                      title="Previous scheduled runs"
+                    >
+                      ‹
+                    </Button>
+                    <Button
+                      onClick={() => setCronPage((page) => Math.min(cronPageCount - 1, page + 1))}
+                      disabled={visibleCronPage >= cronPageCount - 1}
+                      variant="quiet"
+                      size="compact"
+                      className="dy-cron-page-arrow"
+                      aria-label="Next scheduled runs"
+                      title="Next scheduled runs"
+                    >
+                      ›
+                    </Button>
                   </span>
-                  {cronPageCount > 1 && (
-                    <span className="dy-cron-pagination" aria-label="Scheduled run pages">
-                      <Button
-                        onClick={() => setCronPage((page) => Math.max(0, Math.min(page, cronPageCount - 1) - 1))}
-                        disabled={visibleCronPage === 0}
-                        variant="quiet"
-                        size="compact"
-                      >
-                        Previous
-                      </Button>
-                      <span>Page {visibleCronPage + 1} of {cronPageCount}</span>
-                      <Button
-                        onClick={() => setCronPage((page) => Math.min(cronPageCount - 1, page + 1))}
-                        disabled={visibleCronPage >= cronPageCount - 1}
-                        variant="quiet"
-                        size="compact"
-                      >
-                        Next
-                      </Button>
-                    </span>
-                  )}
                 </div>
               )}
               {!activeCronJobs.length && cronSyncError && (

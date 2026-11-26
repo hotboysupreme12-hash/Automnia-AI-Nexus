@@ -1,7 +1,7 @@
 import express, { type Express } from 'express'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
-import type { ControlFilesService } from '../services/controlFilesService'
+import { ControlFileConflict, controlFileRevision, type ControlFilesService } from '../services/controlFilesService'
 
 type CommandConsoleFileRoutesOptions = {
   controlFiles: ControlFilesService
@@ -64,7 +64,8 @@ export function registerCommandConsoleFileRoutes(app: Express, options: CommandC
     if (!controlFiles.isAllowedFile(file)) return apiFailure(res, 400, 'invalid_payload', 'File is not in allowed control list.')
 
     try {
-      return apiSuccess(res, { file, content: await controlFiles.readFile(file) })
+      const content = await controlFiles.readFile(file)
+      return apiSuccess(res, { file, content, revision: controlFileRevision(content) })
     } catch (error) {
       return apiFailure(res, 404, 'control_file_operation_failed', `Could not read ${file}`, String(error))
     }
@@ -74,14 +75,18 @@ export function registerCommandConsoleFileRoutes(app: Express, options: CommandC
     const file = req.params.file
     if (!controlFiles.isAllowedFile(file)) return apiFailure(res, 400, 'invalid_payload', 'File is not in allowed control list.')
 
-    const schema = z.object({ content: z.string() })
+    const schema = z.object({
+      content: z.string().max(2_000_000),
+      expectedRevision: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    })
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     try {
-      await controlFiles.writeFile(file, parsed.data.content)
-      return apiSuccess(res, { file })
+      const revision = await controlFiles.writeFile(file, parsed.data.content, parsed.data.expectedRevision)
+      return apiSuccess(res, { file, revision })
     } catch (error) {
+      if (error instanceof ControlFileConflict) return apiFailure(res, 409, 'resource_conflict', error.message)
       return apiFailure(res, 500, 'control_file_operation_failed', `Could not write ${file}`, String(error))
     }
   })

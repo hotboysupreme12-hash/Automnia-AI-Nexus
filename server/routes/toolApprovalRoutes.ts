@@ -19,6 +19,7 @@ export function registerToolApprovalRoutes(app: Express, options: {
   request: (method: string, params: Record<string, unknown>, requestOptions?: GatewayRequestOptions) => Promise<unknown>
   configure: (agentId: string, access: ExecAccess) => Promise<void>
   interruptAgent: (agentId: string) => Promise<unknown>
+  waitForAgentRunsToFinish?: (agentId: string, timeoutMs?: number) => Promise<{ drained: boolean; activeRuns: number; waitedMs: number }>
   resetAgentContext: (agentId: string) => unknown | Promise<unknown>
   validAgent: (agentId: string) => boolean | Promise<boolean>
   resolveToolCatalogAgentId?: (agentId: string) => string | Promise<string>
@@ -81,16 +82,35 @@ export function registerToolApprovalRoutes(app: Express, options: {
     }
   })
   app.post('/api/party/agent/:agentId/tool-access', async (req, res) => {
-    const parsed = z.object({ mode: z.enum(['ask', 'full']) }).safeParse(req.body)
+    const parsed = z.object({ mode: z.enum(['ask', 'full']), stopActiveTurns: z.boolean().optional() }).safeParse(req.body)
     const agentId = String(req.params.agentId)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Choose a valid access mode.')
     if (!isImplicitMainAgentId(agentId) && !await options.validAgent(agentId)) return apiFailure(res, 404, 'agent_not_found', 'Agent not found. Refresh the agent list and try again.')
     const access = execAccessForMode(parsed.data.mode)
-    // Stop turns built with the old policy BEFORE mutating the approval
-    // snapshot. Otherwise an approved command fails revalidation and its
-    // retry still carries stale execution/tool definitions.
     try {
-      const interrupted = await options.interruptAgent(agentId)
+      let interrupted: unknown
+      let waitedMs = 0
+      if (parsed.data.stopActiveTurns || !options.waitForAgentRunsToFinish) {
+        // Stop turns built with the old policy before mutating the approval
+        // snapshot. The user must explicitly choose this when work is active.
+        // Older route compositions without a drain callback retain the same
+        // fail-closed behavior they had before the bounded wait was added.
+        interrupted = await options.interruptAgent(agentId)
+      } else {
+        // Bound the first request so the editor can offer an explicit stop and
+        // save action instead of appearing to hang for the entire agent turn.
+        const drain = await options.waitForAgentRunsToFinish(agentId, 3_000)
+        waitedMs = drain.waitedMs
+        if (!drain.drained) {
+          return apiFailure(
+            res,
+            409,
+            'agent_turn_still_running',
+            `This agent still has ${drain.activeRuns} active turn(s). Wait for them to finish, or stop the active work to save these permissions.`,
+            { activeRuns: drain.activeRuns, waitedMs: drain.waitedMs },
+          )
+        }
+      }
       // Keep the host approval policy and agent policy in agreement. The hash
       // prevents overwriting a concurrent approval/allowlist update.
       const snapshot = await options.request('exec.approvals.get', {}, { timeoutMs: APPROVALS_REQUEST_TIMEOUT_MS }) as {
@@ -109,7 +129,7 @@ export function registerToolApprovalRoutes(app: Express, options: {
       // cached session after changing access so the very next turn observes the
       // new command policy instead of inheriting the previous tool set.
       const contextReset = await options.resetAgentContext(agentId)
-      return apiSuccess(res, { mode: parsed.data.mode, contextReset, interrupted })
+      return apiSuccess(res, { mode: parsed.data.mode, contextReset, interrupted, waitedMs })
     } catch (error) {
       if (error instanceof ToolAccessPolicyConflictError) {
         return apiFailure(res, 409, 'shared_tool_policy_conflict', error.message)

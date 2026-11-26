@@ -28,6 +28,7 @@ import {
   AUTOMNIA_RELAY_TOKEN_OPTIMIZATION_VERSION,
 } from './tokenOptimization.js';
 import { buildLicenseEmailHtml } from './welcomeEmail.js';
+import { AUTOMNIA_DESKTOP_VERSION } from './releaseMetadata.js';
 import {
   buildLicenseEmailMimeMessage,
   encodeGmailRawMessage,
@@ -716,7 +717,59 @@ function downloadPage(record, query, availablePlatforms) {
     url.searchParams.set('platform', option.id);
     return `<a class="download" data-platform="${escapeHtml(option.id)}" href="${escapeHtml(url.toString())}"><strong>${escapeHtml(option.label)}</strong><small>${escapeHtml(option.description)}</small></a>`;
   }).join('');
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Download Automnia</title><meta name="referrer" content="no-referrer"><style>body{margin:0;background:#081016;color:#e5edf5;font:16px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.wrap{max-width:680px;margin:0 auto;padding:64px 20px}h1{margin:0 0 10px;font-size:32px}p{color:#a7b7c7;line-height:1.55}.card{margin-top:28px;padding:24px;border:1px solid #28404a;border-radius:16px;background:#101b24}.download{display:block;margin:12px 0;padding:17px 18px;border:1px solid #3d6871;border-radius:12px;background:#102d31;color:#eafffb;text-decoration:none}.download:hover{background:#164248}.download strong,.download small{display:block}.download small{margin-top:5px;color:#a7c7c7}.note{font-size:13px}</style></head><body><main class="wrap"><h1>Download Automnia AI Nexus</h1><p>Your Automnia access is active for order ${safeOrder}. Choose your installer below.</p><p id="mac-arch-note" class="note" hidden>On Mac, choose Apple silicon for M-series Macs or Intel for Intel Macs. A browser cannot reliably identify the Mac processor architecture.</p><section class="card">${links || '<p>Installers are being published. Please contact Automnia support.</p>'}</section><p class="note">Each installer link is generated just for this download and expires shortly. Return to this page whenever you need a fresh download while your subscription remains active.</p></main><script>const ua=navigator.userAgent||'';const target=/Windows/i.test(ua)?'windows-x64':/Linux/i.test(ua)?'linux-appimage-x64':'';const el=target&&document.querySelector('[data-platform="'+target+'"]');if(el)el.style.outline='2px solid #77ebd7';if(/Mac/i.test(ua)){const note=document.getElementById('mac-arch-note');if(note)note.hidden=false;}</script></body></html>`;
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <meta name="referrer" content="no-referrer">
+    <title>Automnia AI Nexus v${AUTOMNIA_DESKTOP_VERSION} download</title>
+    <style>
+      :root{color-scheme:light;--ink:#030913;--canvas:#07111E;--cyan:#2EFCE6;--text:#132238;--muted:#52657C;--panel:#F5F9FD;--white:#fff}
+      *{box-sizing:border-box}body{margin:0;background:var(--ink);color:var(--text);font:16px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+      .wrap{max-width:720px;margin:0 auto;padding:40px 18px}.card{overflow:hidden;border:1px solid #1D3950;border-radius:18px;background:var(--white);box-shadow:0 24px 70px rgba(0,0,0,.28)}
+      .brand{padding:28px 30px 24px;text-align:center;background:var(--canvas);border-bottom:1px solid #1D3950}.brand img{display:block;width:260px;max-width:100%;height:auto;margin:0 auto}.eyebrow{margin:17px 0 0;color:#A7B5C8;font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase}
+      .release{display:inline-block;margin:14px 0 0;padding:7px 11px;border:1px solid rgba(46,252,230,.45);border-radius:999px;background:rgba(46,252,230,.08);color:var(--cyan);font-size:12px;font-weight:800;letter-spacing:.05em}
+      .content{padding:34px;background:var(--panel)}h1{margin:0 0 10px;color:var(--text);font-size:28px;line-height:1.2;letter-spacing:-.02em}.intro{margin:0;color:var(--muted);line-height:1.65}.downloads{margin-top:26px;padding:22px;border:1px solid #A9D4F2;border-radius:15px;background:var(--white)}
+      .downloads h2{margin:0 0 8px;color:var(--text);font-size:18px}.downloads > p{margin:0 0 14px;color:var(--muted);font-size:14px;line-height:1.6}
+      .download{display:block;margin:10px 0;padding:15px 16px;border:1px solid #2B5D78;border-left:4px solid var(--cyan);border-radius:10px;background:var(--ink);color:var(--cyan);text-decoration:none;transition:background-color .16s ease,transform .16s ease}.download:hover{background:#102238;transform:translateY(-1px)}.download:focus-visible{outline:3px solid #0B7772;outline-offset:3px}.download strong,.download small{display:block}.download strong{font-size:15px}.download small{margin-top:5px;color:#A7B5C8;font-size:13px;line-height:1.45}
+      .note{margin:18px 0 0;color:var(--muted);font-size:13px;line-height:1.6}.footer{padding:19px 24px;text-align:center;background:var(--canvas);color:#A7B5C8;font-size:12px;line-height:1.65}.footer a{color:var(--cyan);text-decoration:none}
+      @media(max-width:520px){.wrap{padding:18px 12px}.brand{padding:24px 20px 20px}.content{padding:25px 20px}.downloads{padding:17px}.brand img{width:220px}h1{font-size:25px}}
+      @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <article class="card">
+        <header class="brand">
+          <a href="https://automnia.app" aria-label="Automnia AI Nexus home"><img src="https://automnia.app/cdn/shop/t/3/assets/automnia-ai-nexus-logo.png" alt="Automnia AI Nexus"></a>
+          <p class="eyebrow">Your intelligent command center</p>
+          <p class="release">Desktop release v${AUTOMNIA_DESKTOP_VERSION}</p>
+        </header>
+        <div class="content">
+          <h1>Your Automnia download is ready</h1>
+          <p class="intro">Your access is active for order ${safeOrder}. Choose the installer for your computer below.</p>
+          <p id="mac-arch-note" class="note" hidden>On Mac, choose Apple silicon for M-series Macs or Intel for Intel Macs. A browser cannot reliably identify the Mac processor architecture.</p>
+          <section class="downloads" aria-labelledby="download-options-heading">
+            <h2 id="download-options-heading">Choose your installer</h2>
+            <p>Download Automnia AI Nexus v${AUTOMNIA_DESKTOP_VERSION}. Each link is secured for your order.</p>
+            ${links || '<p>Installers are being published. Please contact Automnia support.</p>'}
+          </section>
+          <p class="note">Each installer link is short-lived. Return to this private page whenever you need a fresh download while your subscription remains active.</p>
+        </div>
+        <footer class="footer">Automnia AI Nexus · Secure account activation<br><a href="mailto:support@automnia.app">support@automnia.app</a></footer>
+      </article>
+    </main>
+    <script>
+      const ua=navigator.userAgent||'';
+      const target=/Windows/i.test(ua)?'windows-x64':/Linux/i.test(ua)?'linux-appimage-x64':'';
+      const el=target&&document.querySelector('[data-platform="'+target+'"]');
+      if(el)el.style.outline='2px solid #0B7772';
+      if(/Mac/i.test(ua)){const note=document.getElementById('mac-arch-note');if(note)note.hidden=false;}
+    </script>
+  </body>
+</html>`;
 }
 
 function normalizePlanId(value) {

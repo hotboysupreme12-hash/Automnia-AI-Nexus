@@ -857,6 +857,7 @@ function PluginDiscoveryPanel({
   filter,
   setFilter,
   visibleCount,
+  loading,
   setNotice,
   setError,
 }: {
@@ -868,6 +869,7 @@ function PluginDiscoveryPanel({
   filter: PluginFilter
   setFilter: (filter: PluginFilter) => void
   visibleCount: number
+  loading: boolean
   setNotice: (notice: string) => void
   setError: (error: string) => void
 }) {
@@ -985,7 +987,7 @@ function PluginDiscoveryPanel({
             {option.label}
           </Button>
         ))}
-        <span className="dy-plugin-results-count">{visibleCount} shown</span>
+        <span className="dy-plugin-results-count">{loading ? 'Loading registry…' : `${visibleCount} shown`}</span>
       </div>
 
       {localError && (
@@ -1022,6 +1024,32 @@ function PluginDiscoveryPanel({
         </div>
       )}
     </section>
+  )
+}
+
+function PluginLoadingState() {
+  return (
+    <div className="dy-plugin-loading" role="status" aria-live="polite" aria-label="Loading plugin registry">
+      <div className="dy-plugin-loading-copy">
+        <span className="dy-plugin-loading-indicator" aria-hidden="true" />
+        <span>
+          <strong>Loading plugin registry</strong>
+          <small>Reading installed integrations and runtime status…</small>
+        </span>
+      </div>
+      <div className="dy-plugin-loading-grid" aria-hidden="true">
+        {Array.from({ length: 4 }, (_, index) => (
+          <div className="dy-plugin-loading-card" key={index}>
+            <span className="dy-plugin-loading-icon" />
+            <span className="dy-plugin-loading-lines">
+              <span />
+              <span />
+            </span>
+            <span className="dy-plugin-loading-badge" />
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -1329,12 +1357,22 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
     return plugin.needsSetup || state.key === 'failed' || state.key === 'unavailable'
   }).length
   const attentionCount = pluginAttentionCount + actionFailureCount
-  const cacheLabel = pluginsPanelCache?.cache?.source === 'openclaw' ? 'LIVE REGISTRY' : 'BUNDLED REGISTRY'
+  const initialLoading = loading && !pluginsPanelCache && plugins.length === 0
+  const cacheLabel = pluginsPanelCache?.cache?.source === 'openclaw'
+    ? 'LIVE REGISTRY'
+    : pluginsPanelCache
+      ? 'BUNDLED REGISTRY'
+      : initialLoading
+        ? 'LOADING REGISTRY'
+        : error
+          ? 'REGISTRY UNAVAILABLE'
+          : 'BUNDLED REGISTRY'
   const statusMessage = compactPluginNoticeText(error || notice)
 
   return (
     <section
       data-dui-panel="plugins"
+      aria-busy={initialLoading}
       className="dy-plugins-panel flex min-h-0 flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-[linear-gradient(180deg,#0b1425,#060b18)] shadow-2xl shadow-black/40"
     >
       <div className="dy-plugins-header">
@@ -1378,22 +1416,22 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
         <div className="dy-plugins-overview" aria-label="Plugin workspace summary">
           <div className="dy-plugins-overview-cell" data-tone="neutral">
             <span>Installed</span>
-            <strong>{stateSummary.installed}</strong>
+            <strong>{initialLoading ? '—' : stateSummary.installed}</strong>
             <small>runtime packages, including bundled</small>
           </div>
           <div className="dy-plugins-overview-cell" data-tone="healthy">
             <span>Active</span>
-            <strong>{stateSummary.enabled}</strong>
+            <strong>{initialLoading ? '—' : stateSummary.enabled}</strong>
             <small>enabled in gateway</small>
           </div>
-          <div className="dy-plugins-overview-cell" data-tone={attentionCount ? 'attention' : 'healthy'}>
+          <div className="dy-plugins-overview-cell" data-tone={initialLoading ? 'neutral' : attentionCount ? 'attention' : 'healthy'}>
             <span>Attention</span>
-            <strong>{attentionCount}</strong>
-            <small>{actionFailureCount ? 'plugin action failed' : attentionCount ? 'setup or runtime action' : 'all systems clear'}</small>
+            <strong>{initialLoading ? '—' : attentionCount}</strong>
+            <small>{initialLoading ? 'checking runtime' : actionFailureCount ? 'plugin action failed' : attentionCount ? 'setup or runtime action' : 'all systems clear'}</small>
           </div>
           <div className="dy-plugins-overview-cell" data-tone="muted">
             <span>Available</span>
-            <strong>{stateSummary.available}</strong>
+            <strong>{initialLoading ? '—' : stateSummary.available}</strong>
             <small>compatible catalog packages</small>
           </div>
         </div>
@@ -1408,6 +1446,7 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
             filter={filter}
             setFilter={updateFilter}
             visibleCount={visiblePlugins.length}
+            loading={initialLoading}
             setNotice={setNotice}
             setError={setError}
           />
@@ -1481,12 +1520,8 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
               />
             )}
 
-            {loading ? (
-              <div className="grid gap-3">
-                <div className="h-16 animate-pulse rounded-lg bg-white/[0.035]" />
-                <div className="h-16 animate-pulse rounded-lg bg-white/[0.025]" />
-                <div className="h-16 animate-pulse rounded-lg bg-white/[0.020]" />
-              </div>
+            {initialLoading ? (
+              <PluginLoadingState />
             ) : visiblePlugins.length ? (
               visiblePlugins.map((plugin) => (
                 <PluginRow

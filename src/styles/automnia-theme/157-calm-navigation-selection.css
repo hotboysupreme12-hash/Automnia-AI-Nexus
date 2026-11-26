@@ -1,0 +1,10 @@
+/* Keep the active workspace clear without decorative marker glows. */
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"]) {
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"])::before {
+  display: none !important;
+  content: none !important;
+  box-shadow: none !important;
+}

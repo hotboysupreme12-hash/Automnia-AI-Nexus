@@ -18,7 +18,8 @@ function ensureAutomniaAgentDatabaseStartupPreparationDisabled(distRoot) {
   const deferPattern = /\tdefer\(e\) \{[\s\S]*?\n\t\}/u
   const waitPattern = /\twaitForAgentPreparation\(e, t = \{\}\) \{[\s\S]*?\n\t\}/u
   const waitAllPattern = /\tasync waitForAgentPreparations\(e\) \{[\s\S]*?\n\t\}/u
-  if (!deferPattern.test(source) || !waitPattern.test(source) || !waitAllPattern.test(source)) {
+  const hasWaitAll = source.includes('async waitForAgentPreparations(e) {')
+  if (!deferPattern.test(source) || !waitPattern.test(source) || (hasWaitAll && !waitAllPattern.test(source))) {
     throw new Error('[openclaw-vendor] Agent database startup preparation methods changed')
   }
 
@@ -27,7 +28,9 @@ function ensureAutomniaAgentDatabaseStartupPreparationDisabled(distRoot) {
     patched = patched
       .replace(deferPattern, `\tdefer(e) {\n\t\tthis.signal.throwIfAborted();\n\t\treturn [];\n\t}`)
       .replace(waitPattern, `\twaitForAgentPreparation(e, t = {}) {\n\t\treturn;\n\t}`)
-      .replace(waitAllPattern, `\tasync waitForAgentPreparations(e) {\n\t\treturn;\n\t}`)
+    if (hasWaitAll) {
+      patched = patched.replace(waitAllPattern, `\tasync waitForAgentPreparations(e) {\n\t\treturn;\n\t}`)
+    }
     patched = `// ${startupMarker}\n${patched}`
   }
   if (patched !== source) fs.writeFileSync(file, patched)

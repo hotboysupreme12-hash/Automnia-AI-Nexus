@@ -1,0 +1,137 @@
+/* Keep Plugins aligned with the lighter Agent workspace and reduce unused
+   horizontal space on wide screens. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"].dy-plugins-panel {
+  width: min(100%, 1240px) !important;
+  max-width: 1240px !important;
+  align-self: center !important;
+  margin-inline: auto !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-header {
+  padding: 14px 16px 12px !important;
+  background: transparent !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-header-top {
+  gap: 14px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-title-row {
+  gap: 10px !important;
+  margin-top: 5px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-title-row h2 {
+  font-size: 22px !important;
+  font-weight: 680 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-title-row > span {
+  font-size: 10px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-overview {
+  gap: 7px !important;
+  margin-top: 12px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-overview-cell {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  grid-template-rows: auto auto !important;
+  align-items: center !important;
+  padding: 8px 10px !important;
+  border-radius: 9px !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-overview-cell > span {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-overview-cell > strong {
+  grid-column: 2 !important;
+  grid-row: 1 / span 2 !important;
+  margin: 0 0 0 8px !important;
+  font-size: 17px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-overview-cell > small {
+  grid-column: 1 !important;
+  grid-row: 2 !important;
+  margin-top: 3px !important;
+  font-size: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-discovery-wrap {
+  margin-top: 10px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-discovery {
+  padding: 8px !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-discovery > div[role="group"] {
+  margin-bottom: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-search-field {
+  min-height: 34px !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-search-input {
+  height: 32px !important;
+  font-size: 11px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-search-button {
+  min-height: 34px !important;
+  border-radius: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-discovery-controls {
+  gap: 5px !important;
+  margin-top: 7px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] :is(.dy-plugin-pin-toggle, .dy-plugin-filter-button) {
+  min-height: 27px !important;
+  padding-inline: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-list {
+  padding: 12px 14px 18px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-card-grid {
+  gap: 10px !important;
+}
+
+@media (max-width: 760px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"].dy-plugins-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 10px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-header {
+    padding: 12px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-list {
+    padding: 10px !important;
+  }
+}
+
+\n

@@ -26,7 +26,7 @@ export function TeamPresets() {
     catch { setMessage('Teams could not be saved. Free local storage and try again.'); return false }
   }
   return <>
-    <Button variant="quiet" size="compact" onClick={() => setOpen(true)}>Saved teams</Button>
+    <Button variant="secondary" size="compact" className="active-party-action" onClick={() => setOpen(true)}>Saved teams</Button>
     <Dialog open={open} onClose={() => setOpen(false)} title="Saved teams" description="Save a party once and restore its members in the same order.">
       <div className="grid min-w-0 gap-3">
         <label htmlFor={nameId}>Name this party</label>

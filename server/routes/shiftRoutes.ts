@@ -50,6 +50,87 @@ type ShiftRoutesOptions = {
   writeHeartbeatRuntimePerAgent: (store: HeartbeatRuntimePerAgentStore) => Promise<void>
 }
 
+const CRON_MACRO_SCHEDULES = new Set([
+  '@yearly',
+  '@annually',
+  '@monthly',
+  '@weekly',
+  '@daily',
+  '@midnight',
+  '@hourly',
+])
+
+export function isValidCronScheduleExpression(value: string): boolean {
+  const trimmed = value.trim()
+  if (!trimmed || trimmed.length > 240) return false
+  for (let index = 0; index < trimmed.length; index += 1) {
+    if (trimmed.charCodeAt(index) <= 0x1f || trimmed.charCodeAt(index) === 0x7f) return false
+  }
+  if (CRON_MACRO_SCHEDULES.has(trimmed.toLowerCase())) return true
+  const fields = trimmed.split(/\s+/)
+  if (fields.length !== 5 && fields.length !== 6) return false
+  return fields.every((field) => /^[A-Za-z0-9*,/?#L-]+$/.test(field))
+}
+
+export function buildStaggeredCronExpression(
+  interval: string,
+  agentIndex: number,
+  agentCount: number,
+  staggerMinutes?: number,
+): string | null {
+  const match = interval.trim().toLowerCase().match(/^(\d+)([smhdw])$/)
+  if (!match) return null
+  const amount = Number.parseInt(match[1], 10)
+  const unit = match[2]
+  if (!Number.isFinite(amount) || amount <= 0) return null
+
+  const safeCount = Math.max(1, Math.trunc(agentCount))
+  const safeIndex = Math.max(0, Math.trunc(agentIndex))
+
+  if (unit === 'm') {
+    if (amount < 1) return null
+    if (amount < 60) {
+      if (60 % amount !== 0) return null
+      const roundedStep = Math.round(amount / safeCount)
+      const defaultStep =
+        roundedStep >= 1 && roundedStep * (safeCount - 1) < amount
+          ? roundedStep
+          : Math.max(1, Math.floor(amount / safeCount))
+      const stepOffset = staggerMinutes !== undefined ? Math.max(1, Math.trunc(staggerMinutes)) : defaultStep
+      const baseMinute = (safeIndex * stepOffset) % amount
+      const minutes: number[] = []
+      for (let minute = baseMinute; minute < 60; minute += amount) {
+        minutes.push(minute)
+      }
+      return `${minutes.join(',')} * * * *`
+    }
+    if (amount % 60 === 0) {
+      const hours = amount / 60
+      if (hours >= 1 && hours <= 23) {
+        const stepOffset =
+          staggerMinutes !== undefined
+            ? Math.max(1, Math.trunc(staggerMinutes))
+            : Math.max(1, Math.floor(60 / safeCount))
+        const minute = (safeIndex * stepOffset) % 60
+        return `${minute} ${hours === 1 ? '*' : `*/${hours}`} * * *`
+      }
+    }
+    return null
+  }
+
+  if (unit === 'h') {
+    if (amount < 1 || amount > 23) return null
+    const stepOffset =
+      staggerMinutes !== undefined
+        ? Math.max(1, Math.trunc(staggerMinutes))
+        : Math.max(1, Math.floor(60 / safeCount))
+    const minute = (safeIndex * stepOffset) % 60
+    return `${minute} ${amount === 1 ? '*' : `*/${amount}`} * * *`
+  }
+
+  return null
+}
+
 function isValidCronJobId(value: string) {
   return /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,180}$/.test(value)
 }
@@ -129,6 +210,9 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
       if (kind === 'every' && !/^\d+[smhdw]$/u.test(schedule)) {
         context.addIssue({ code: z.ZodIssueCode.custom, path: ['schedule'], message: 'Use an interval like 15m, 2h, 1d, or 1w' })
       }
+      if (kind === 'cron' && !isValidCronScheduleExpression(schedule)) {
+        context.addIssue({ code: z.ZodIssueCode.custom, path: ['schedule'], message: 'Use a valid 5- or 6-field cron expression (for example: 0,20,40 * * * *)' })
+      }
     })
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
@@ -152,14 +236,46 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
   })
 
   app.post('/api/shifts/start-batch', async (req, res) => {
+    const agentOverrideSchema = z.object({
+      name: z.string().min(1).max(80).optional(),
+      every: z.string().regex(/^\d+[smhdw]$/).optional(),
+      scheduleKind: z.enum(['every', 'cron', 'at']).optional(),
+      schedule: z.string().min(1).max(240).optional(),
+      message: z.string().min(5).optional(),
+      model: z.string().min(3).max(160).optional(),
+      thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
+      timeoutSeconds: z.number().int().min(30).max(7200).optional(),
+      wake: z.enum(['now', 'next-heartbeat']).optional(),
+      session: z.enum(['main', 'isolated']).optional(),
+      announce: z.boolean().optional(),
+    }).superRefine((override, context) => {
+      const overrideSchedule = override.schedule?.trim() || override.every?.trim()
+      const overrideKind = override.scheduleKind || (override.schedule ? 'cron' : override.every ? 'every' : undefined)
+      if (override.scheduleKind && !overrideSchedule) {
+        context.addIssue({ code: z.ZodIssueCode.custom, path: ['schedule'], message: 'A schedule value is required when scheduleKind is set' })
+        return
+      }
+      if (overrideKind === 'every' && overrideSchedule && !/^\d+[smhdw]$/u.test(overrideSchedule)) {
+        context.addIssue({ code: z.ZodIssueCode.custom, path: ['schedule'], message: 'Use an interval like 15m, 2h, 1d, or 1w' })
+      }
+      if (overrideKind === 'cron' && overrideSchedule && !isValidCronScheduleExpression(overrideSchedule)) {
+        context.addIssue({ code: z.ZodIssueCode.custom, path: ['schedule'], message: 'Use a valid 5- or 6-field cron expression' })
+      }
+    })
+
     const schema = z.object({
       idempotencyKey: z.string().min(8).max(200).optional(),
       namePrefix: z.string().min(1).max(80).optional(),
       agentIds: z.array(z.string().min(1)).min(1).max(20),
       leadAgent: z.string().min(1).optional(),
-      every: z.string().regex(/^\d+[smhdw]$/),
+      every: z.string().regex(/^\d+[smhdw]$/).optional(),
+      scheduleKind: z.enum(['every', 'cron', 'at']).optional(),
+      schedule: z.string().min(1).max(240).optional(),
       leadEvery: z.string().regex(/^\d+[smhdw]$/).optional(),
       workerEvery: z.string().regex(/^\d+[smhdw]$/).optional(),
+      stagger: z.boolean().optional(),
+      staggerMinutes: z.number().int().min(1).max(59).optional(),
+      agentOverrides: z.record(z.string().min(1), agentOverrideSchema).optional(),
       durationMinutes: z.number().int().min(1).max(10080).optional(),
       durationValue: z.number().int().min(1).max(10080).optional(),
       durationUnit: z.enum(['minutes', 'hours', 'days', 'weeks']).optional(),
@@ -179,17 +295,53 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
       runId: z.string().min(3).max(160).optional(),
       targetFile: z.string().min(1).max(260).optional(),
       announce: z.boolean().optional(),
+    }).superRefine((batch, context) => {
+      const baseKind = batch.scheduleKind || 'every'
+      const baseSchedule = batch.schedule?.trim() || batch.every?.trim()
+      const uniqueIds = Array.from(new Set(batch.agentIds.map((id) => id.trim()).filter(Boolean)))
+      const everyAgentHasExplicitSchedule =
+        uniqueIds.length > 0 &&
+        uniqueIds.every((id) => {
+          const override = batch.agentOverrides?.[id]
+          return Boolean(override?.schedule?.trim() || override?.every?.trim())
+        })
+      if (!baseSchedule && !everyAgentHasExplicitSchedule) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['every'],
+          message: 'Supply every, schedule, or per-agent schedule overrides for every agent',
+        })
+        return
+      }
+      if (baseSchedule) {
+        if (baseKind === 'every' && !/^\d+[smhdw]$/u.test(baseSchedule)) {
+          context.addIssue({ code: z.ZodIssueCode.custom, path: ['schedule'], message: 'Use an interval like 15m, 2h, 1d, or 1w' })
+        }
+        if (baseKind === 'cron' && !isValidCronScheduleExpression(baseSchedule)) {
+          context.addIssue({ code: z.ZodIssueCode.custom, path: ['schedule'], message: 'Use a valid 5- or 6-field cron expression' })
+        }
+      }
     })
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     const payload = parsed.data
-    const blockedModel = [payload.model, payload.leadModel, payload.workerModel].find((modelId) => modelId && modelSelectionBlocked?.(modelId))
+    const overrideModels = Object.values(payload.agentOverrides || {}).map((override) => override.model)
+    const blockedModel = [payload.model, payload.leadModel, payload.workerModel, ...overrideModels].find(
+      (modelId) => modelId && modelSelectionBlocked?.(modelId),
+    )
     if (blockedModel) return apiFailure(res, 403, 'byok_not_allowed', CREDITS_ONLY_MODEL_ACCESS_MESSAGE, { modelId: blockedModel })
     const uniqueAgents = Array.from(new Set(payload.agentIds.map((agentId) => agentId.trim()).filter(Boolean)))
     if (!uniqueAgents.length) return apiFailure(res, 400, 'invalid_payload', 'No valid agent ids supplied')
     const invalidAgent = uniqueAgents.find((agentId) => !isValidAgentId(agentId))
     if (invalidAgent) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id', { agentId: invalidAgent })
+
+    const unknownOverrideAgent = Object.keys(payload.agentOverrides || {}).find((agentId) => !uniqueAgents.includes(agentId.trim()))
+    if (unknownOverrideAgent) {
+      return apiFailure(res, 400, 'invalid_payload', 'Agent override target must be included in agentIds', {
+        agentId: unknownOverrideAgent,
+      })
+    }
 
     const requestedLeadAgent = payload.leadAgent?.trim()
     if (requestedLeadAgent && !isValidAgentId(requestedLeadAgent)) {
@@ -202,38 +354,68 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
     const leadAgent = requestedLeadAgent || uniqueAgents[0]
     const defaultsMessage = payload.message || 'Read TEAM_SYNC.md, execute one concrete assigned task, and update status.'
     const namePrefix = payload.namePrefix?.trim() || 'Heartbeat'
-    const leadEvery = payload.leadEvery || payload.every
-    const workerEvery = payload.workerEvery || payload.every
+    const baseScheduleKind = payload.scheduleKind || 'every'
+    const baseScheduleValue = payload.schedule?.trim() || payload.every?.trim() || '20m'
+    const leadEvery = payload.leadEvery || (baseScheduleKind === 'every' ? baseScheduleValue : payload.every || '20m')
+    const workerEvery = payload.workerEvery || (baseScheduleKind === 'every' ? baseScheduleValue : payload.every || '20m')
     const leadSession = payload.leadSession || payload.session || 'main'
     const workerSession = payload.workerSession || 'isolated'
     const leadModel = payload.leadModel || payload.model
     const workerModel = payload.workerModel || payload.model
+    const staggerRequested = payload.stagger === true || (payload.stagger !== false && payload.staggerMinutes !== undefined)
 
     const shifts: Shift[] = []
     const errors: Array<{ agentId: string; error: string }> = []
     let entitlementBlocked = false
     const unstartedAgentIds: string[] = []
 
-    for (const agentId of uniqueAgents) {
+    for (const [agentIndex, agentId] of uniqueAgents.entries()) {
       const isLead = agentId === leadAgent
-      const roleMessage = isLead ? payload.leadMessage || defaultsMessage : payload.workerMessage || defaultsMessage
-      const shiftName = `${namePrefix}-${agentId}`.slice(0, 80)
+      const agentOverride = payload.agentOverrides?.[agentId]
+      const roleMessage = agentOverride?.message || (isLead ? payload.leadMessage || defaultsMessage : payload.workerMessage || defaultsMessage)
+      const shiftName = (agentOverride?.name?.trim() || `${namePrefix}-${agentId}`).slice(0, 80)
+
+      let resolvedScheduleKind: 'every' | 'cron' | 'at' = baseScheduleKind
+      let resolvedSchedule = isLead ? leadEvery : workerEvery
+      if (baseScheduleKind !== 'every') {
+        resolvedSchedule = baseScheduleValue
+      }
+
+      if (agentOverride?.schedule?.trim() || agentOverride?.every?.trim()) {
+        const rawOverride = (agentOverride.schedule || agentOverride.every || '').trim()
+        resolvedScheduleKind = agentOverride.scheduleKind || (agentOverride.schedule ? 'cron' : 'every')
+        resolvedSchedule = rawOverride
+      } else if (staggerRequested && resolvedScheduleKind === 'every' && uniqueAgents.length > 1) {
+        const staggeredCron = buildStaggeredCronExpression(
+          resolvedSchedule,
+          agentIndex,
+          uniqueAgents.length,
+          payload.staggerMinutes,
+        )
+        if (staggeredCron) {
+          resolvedScheduleKind = 'cron'
+          resolvedSchedule = staggeredCron
+        }
+      }
+
       try {
         const shift = await createShiftFromPayload({
           ...(payload.idempotencyKey ? { idempotencyKey: `${payload.idempotencyKey}:${agentId}` } : {}),
           name: shiftName,
           agent: agentId,
-          every: isLead ? leadEvery : workerEvery,
+          ...(resolvedScheduleKind === 'every'
+            ? { every: resolvedSchedule, scheduleKind: 'every', schedule: resolvedSchedule }
+            : { scheduleKind: resolvedScheduleKind, schedule: resolvedSchedule }),
           durationMinutes: payload.durationMinutes,
           durationValue: payload.durationValue,
           durationUnit: payload.durationUnit,
           message: roleMessage,
-          model: isLead ? leadModel : workerModel,
-          thinking: payload.thinking,
-          timeoutSeconds: payload.timeoutSeconds,
-          wake: payload.wake,
-          session: isLead ? leadSession : workerSession,
-          announce: payload.announce,
+          model: agentOverride?.model || (isLead ? leadModel : workerModel),
+          thinking: agentOverride?.thinking || payload.thinking,
+          timeoutSeconds: agentOverride?.timeoutSeconds ?? payload.timeoutSeconds,
+          wake: agentOverride?.wake || payload.wake,
+          session: agentOverride?.session || (isLead ? leadSession : workerSession),
+          announce: agentOverride?.announce ?? payload.announce,
         })
         shifts.push(shift)
       } catch (error) {
@@ -403,6 +585,9 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
         args.push('--every', every)
         updatePatch.schedule = every
       } else if (payload.scheduleKind === 'cron') {
+        if (!isValidCronScheduleExpression(rawSchedule)) {
+          return apiFailure(res, 400, 'invalid_payload', 'Use a valid 5- or 6-field cron expression.')
+        }
         args.push('--cron', rawSchedule)
         updatePatch.schedule = rawSchedule
       } else {

@@ -175,7 +175,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-c
 @media (max-width: 860px) {
   html.dui-pro-overhaul.dui-cohesive-ui .app-bg > .dy-app-main[data-workspace="chat"] {
     min-height: 0 !important;
-    height: calc(100dvh - var(--dy-mobile-nav-height, 62px)) !important;
+    height: 100dvh !important;
     padding-top: 16px !important;
     padding-bottom: 8px !important;
   }

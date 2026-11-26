@@ -2,6 +2,11 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 
+import {
+  assertRegularDestinationFile,
+  replaceFileAtomicallyWithLockRetry,
+  withSerializedFileLock,
+} from '../filesystem/atomicControlFile'
 import type { TeamSyncAssignment } from './missionStateService'
 
 export type TeamSyncSnapshotParams = {
@@ -31,11 +36,27 @@ export function createMissionTeamSyncService(options: MissionTeamSyncServiceOpti
   const now = () => options.now?.() || new Date()
   let snapshotQueue: Promise<void> = Promise.resolve()
 
+  async function ensureTeamSyncFileUnlocked(destination: string) {
+    const existing = await assertRegularDestinationFile(destination, 'TEAM_SYNC.md')
+    if (existing) return
+    await fs.mkdir(path.dirname(destination), { recursive: true })
+    try {
+      const handle = await fs.open(destination, 'wx', 0o600)
+      try {
+        await handle.writeFile('# TEAM_SYNC\n\n## Activity Log\n', 'utf-8')
+        await handle.sync()
+      } finally {
+        await handle.close()
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException | undefined)?.code !== 'EEXIST') throw error
+      await assertRegularDestinationFile(destination, 'TEAM_SYNC.md')
+    }
+  }
+
   async function ensureTeamSyncFile(filePath: string) {
-    await fs.mkdir(path.dirname(filePath), { recursive: true })
-    await fs.writeFile(filePath, '# TEAM_SYNC\n\n## Activity Log\n', { encoding: 'utf-8', flag: 'wx' }).catch((error: NodeJS.ErrnoException) => {
-      if (error.code !== 'EEXIST') throw error
-    })
+    const destination = path.resolve(filePath)
+    await withSerializedFileLock(destination, () => ensureTeamSyncFileUnlocked(destination))
   }
 
   function teamSyncMarkdown(params: TeamSyncSnapshotParams) {
@@ -105,15 +126,26 @@ export function createMissionTeamSyncService(options: MissionTeamSyncServiceOpti
     // a newer generation, including when missions share coordination targets.
     const pending = snapshotQueue.then(async () => {
       const targets = await snapshotTargetPaths(snapshot)
-      const results = await Promise.allSettled(targets.map(async (filePath) => {
-        await fs.mkdir(path.dirname(filePath), { recursive: true })
-        const temporary = `${filePath}.${randomUUID()}.tmp`
-        try {
-          await fs.writeFile(temporary, markdown, { encoding: 'utf-8', flag: 'wx' })
-          await fs.rename(temporary, filePath)
-        } finally {
-          await fs.rm(temporary, { force: true }).catch(() => undefined)
-        }
+      const results = await Promise.allSettled(targets.map((filePath) => {
+        const destination = path.resolve(filePath)
+        return withSerializedFileLock(destination, async () => {
+          await fs.mkdir(path.dirname(destination), { recursive: true })
+          const existing = await assertRegularDestinationFile(destination, 'TEAM_SYNC.md')
+          const temporary = path.join(path.dirname(destination), `.${path.basename(destination)}.${randomUUID()}.tmp`)
+          try {
+            const handle = await fs.open(temporary, 'wx', existing ? existing.mode & 0o777 : 0o600)
+            try {
+              await handle.writeFile(markdown, 'utf-8')
+              await handle.sync()
+            } finally {
+              await handle.close()
+            }
+            await assertRegularDestinationFile(destination, 'TEAM_SYNC.md')
+            await replaceFileAtomicallyWithLockRetry(temporary, destination)
+          } finally {
+            await fs.unlink(temporary).catch(() => undefined)
+          }
+        })
       }))
       const failed = results.find((result) => result.status === 'rejected')
       if (failed?.status === 'rejected') throw failed.reason

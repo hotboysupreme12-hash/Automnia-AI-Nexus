@@ -23,8 +23,14 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-pa
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-grid {
   grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
-  gap: 8px !important;
+  gap: 6px !important;
   padding: 7px 12px 9px !important;
+}
+
+@media (min-width: 960px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-grid {
+    width: 96%;
+  }
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot,

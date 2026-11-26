@@ -1,16 +1,131 @@
-/* The title-free shelf has one control group, anchored at its right edge. */
+/* Keep the workspace title and its status group inside the available width. */
 #automnia-main .dy-workspace-context[data-workspace] {
-  display: flex !important;
-  justify-content: flex-end !important;
+  box-sizing: border-box !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, min(100%, 760px)) !important;
+  align-items: center !important;
+  column-gap: clamp(16px, 2vw, 30px) !important;
+  row-gap: 10px !important;
+  min-width: 0 !important;
+}
+
+#automnia-main .dy-workspace-context[data-workspace] > .dy-workspace-context__copy {
+  min-width: 0 !important;
 }
 
 #automnia-main .dy-workspace-context[data-workspace] > .dy-workspace-context__meta {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  justify-items: stretch !important;
+  gap: 7px 10px !important;
+  width: 100% !important;
+  max-width: 760px !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+}
+
+#automnia-main .dy-workspace-context[data-workspace] .dy-status-grid {
+  display: grid !important;
+  grid-column: 1 / -1 !important;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  justify-self: end !important;
+  width: min(100%, 720px) !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  gap: 6px !important;
+  overflow: visible !important;
+}
+
+#automnia-main .dy-workspace-context[data-workspace] .badge.dy-status-chip {
   display: flex !important;
-  flex-direction: row !important;
-  flex-wrap: wrap !important;
-  flex: 0 1 auto !important;
-  width: auto !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 32px !important;
+  height: auto !important;
+  max-height: none !important;
+  gap: 8px !important;
+  padding: 6px 10px !important;
+  overflow: hidden !important;
+  border-radius: 7px !important;
+}
+
+#automnia-main .dy-workspace-context[data-workspace] .dy-status-label {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 10px !important;
+}
+
+#automnia-main .dy-workspace-context[data-workspace] .dy-status-value {
+  flex: 0 0 auto !important;
+  font-size: 12px !important;
+  white-space: nowrap !important;
+}
+
+#automnia-main .dy-workspace-context[data-workspace] .dy-workspace-context__state {
+  width: fit-content !important;
   max-width: 100% !important;
-  margin-left: auto !important;
-  justify-content: flex-end !important;
+  min-width: 0 !important;
+}
+
+#automnia-main .dy-workspace-context[data-workspace] .dy-workspace-context__meta > button {
+  justify-self: end !important;
+  white-space: nowrap !important;
+}
+
+#automnia-main .dy-workspace-context[data-workspace] > .dy-workspace-context__notice,
+#automnia-main .dy-workspace-context[data-workspace] > .dy-workspace-context__meta > .dy-workspace-context__notice {
+  grid-column: 1 / -1 !important;
+  min-width: 0 !important;
+}
+
+@media (max-width: 1200px) {
+  #automnia-main .dy-workspace-context[data-workspace] {
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-items: stretch !important;
+    row-gap: 10px !important;
+    padding: 12px 14px !important;
+  }
+
+  #automnia-main .dy-workspace-context[data-workspace] > .dy-workspace-context__meta {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    max-width: none !important;
+    margin: 0 !important;
+  }
+
+  #automnia-main .dy-workspace-context[data-workspace] .dy-status-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    justify-self: center !important;
+    width: min(100%, 760px) !important;
+  }
+}
+
+@media (max-width: 600px) {
+  #automnia-main .dy-workspace-context[data-workspace] {
+    padding: 10px !important;
+  }
+
+  #automnia-main .dy-workspace-context[data-workspace] .dy-status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    width: 100% !important;
+  }
+
+  #automnia-main .dy-workspace-context[data-workspace] .badge.dy-status-chip {
+    padding-inline: 8px !important;
+  }
+
+  #automnia-main .dy-workspace-context[data-workspace] .dy-workspace-context__state {
+    font-size: 10px !important;
+  }
+}
+
+@media (max-width: 360px) {
+  #automnia-main .dy-workspace-context[data-workspace] .dy-status-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
 }

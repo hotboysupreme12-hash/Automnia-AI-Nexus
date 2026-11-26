@@ -1300,7 +1300,9 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
         options.pushGatewayLog('lifecycle', message)
         lastLogAt = Date.now()
       }
-      await options.delayMs(Math.min(1_000, Math.max(1, deadline - Date.now())))
+      // Recheck promptly after the last agent turn completes so a queued
+      // settings restart starts without an extra one-second pause.
+      await options.delayMs(Math.min(250, Math.max(1, deadline - Date.now())))
       activeRuns = await readActiveRuns()
     }
 

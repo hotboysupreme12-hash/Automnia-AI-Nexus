@@ -1,7 +1,12 @@
 import type { Express } from 'express'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
-import { WorkboardServiceError, type WorkboardService } from '../services/workboardService'
+import {
+  MAX_WORKBOARD_LEASE_TTL_MS,
+  MIN_WORKBOARD_LEASE_TTL_MS,
+  WorkboardServiceError,
+  type WorkboardService,
+} from '../services/workboardService'
 
 type WorkboardRoutesOptions = {
   workboard: WorkboardService
@@ -21,6 +26,9 @@ const evidenceSchema = z.object({
   }, 'Evidence must be an HTTP(S) URL or an Automnia file link.'),
 })
 
+const claimedFilesSchema = z.array(z.string().trim().min(1).max(320)).max(50)
+const leaseTtlMsSchema = z.number().int().min(MIN_WORKBOARD_LEASE_TTL_MS).max(MAX_WORKBOARD_LEASE_TTL_MS)
+
 export function registerWorkboardRoutes(app: Express, options: WorkboardRoutesOptions) {
   app.get('/api/workboard/tasks', async (_req, res) => {
     try { return apiSuccess(res, { tasks: await options.workboard.listTasks() }) }
@@ -33,6 +41,9 @@ export function registerWorkboardRoutes(app: Express, options: WorkboardRoutesOp
       description: z.string().trim().max(4000).optional(),
       missionId: z.string().trim().min(1).max(160).nullable().optional(),
       assignedAgentId: z.string().trim().min(1).max(160).nullable().optional(),
+      leaseOwnerAgentId: z.string().trim().min(1).max(160).nullable().optional(),
+      leaseTtlMs: leaseTtlMsSchema.optional(),
+      claimedFiles: claimedFilesSchema.optional(),
     }).safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid workboard task.', parsed.error.flatten())
     const missionId = parsed.data.missionId || null
@@ -45,6 +56,12 @@ export function registerWorkboardRoutes(app: Express, options: WorkboardRoutesOp
     const parsed = z.object({
       status: z.enum(['open', 'in_progress', 'completed', 'cancelled']).optional(),
       assignedAgentId: z.string().trim().min(1).max(160).nullable().optional(),
+      leaseOwnerAgentId: z.string().trim().min(1).max(160).nullable().optional(),
+      leaseTtlMs: leaseTtlMsSchema.optional(),
+      heartbeat: z.boolean().optional(),
+      actorAgentId: z.string().trim().min(1).max(160).nullable().optional(),
+      forceTakeover: z.boolean().optional(),
+      claimedFiles: claimedFilesSchema.optional(),
       dependsOn: z.array(z.string().trim().min(1).max(160)).max(50).optional(),
     }).refine((value) => Object.keys(value).length > 0, 'At least one task field is required.').safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid workboard task update.', parsed.error.flatten())
@@ -55,10 +72,18 @@ export function registerWorkboardRoutes(app: Express, options: WorkboardRoutesOp
   app.post('/api/workboard/tasks/:taskId/comments', async (req, res) => {
     const parsed = z.object({
       body: z.string().trim().min(1).max(4000),
+      actor: z.string().trim().min(1).max(120).optional(),
       evidence: z.array(evidenceSchema).max(10).optional(),
     }).safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid workboard comment.', parsed.error.flatten())
-    try { return apiSuccess(res, { comment: await options.workboard.addComment(req.params.taskId, { ...parsed.data, actor: 'operator' }) }) }
+    try {
+      return apiSuccess(res, {
+        comment: await options.workboard.addComment(req.params.taskId, {
+          ...parsed.data,
+          actor: parsed.data.actor || 'operator',
+        }),
+      })
+    }
     catch (error) { return sendWorkboardError(res, error) }
   })
 }

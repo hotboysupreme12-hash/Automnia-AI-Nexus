@@ -1,6 +1,9 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { ControlFileConflict, controlFileRevision, writeAtomicControlFile } from './filesystem/atomicControlFile'
 import { isPathUnder as defaultIsPathUnder } from './filesystem/safePathService'
+
+export { ControlFileConflict, controlFileRevision }
 
 export const CONTROL_FILES = ['AGENTS.md', 'BOOTSTRAP.md', 'HEARTBEAT.md', 'IDENTITY.md', 'SOUL.md', 'USER.md', 'MEMORY.md'] as const
 
@@ -59,15 +62,22 @@ export function createControlFilesService(workspaceRoot: string, options: Contro
     files: CONTROL_FILES,
     isAllowedFile: isAllowedControlFile,
     resolveFilePath: resolveControlFilePath,
+    revision: controlFileRevision,
     async readFile(file: string) {
       const targetPath = resolveControlFilePath(file)
       await assertExistingControlFilePathInsideWorkspace(targetPath)
       return fs.readFile(targetPath, 'utf-8')
     },
-    async writeFile(file: string, content: string) {
+    async readFileWithRevision(file: string) {
       const targetPath = resolveControlFilePath(file)
       await assertExistingControlFilePathInsideWorkspace(targetPath)
-      await fs.writeFile(targetPath, content, 'utf-8')
+      const content = await fs.readFile(targetPath, 'utf-8')
+      return { content, revision: controlFileRevision(content) }
+    },
+    async writeFile(file: string, content: string, expectedRevision?: string) {
+      const targetPath = resolveControlFilePath(file)
+      await assertExistingControlFilePathInsideWorkspace(targetPath)
+      return writeAtomicControlFile(targetPath, content, expectedRevision)
     },
   }
 }

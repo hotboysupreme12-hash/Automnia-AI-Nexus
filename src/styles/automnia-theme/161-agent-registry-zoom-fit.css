@@ -1,0 +1,44 @@
+/* Keep desktop agent cards whole at every browser zoom level. */
+@media (min-width: 901px) {
+  html.dui-pro-overhaul .agent-registry-pane,
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-registry-pane {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  html.dui-pro-overhaul .agent-registry-pane > div,
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-registry-pane > div,
+  html.dui-pro-overhaul .agent-registry-pane [data-dui-panel="agent-registry"],
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-registry-pane [data-dui-panel="agent-registry"] {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  html.dui-pro-overhaul .agent-registry-pane [data-agent-registry-scroll],
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-registry-pane [data-agent-registry-scroll] {
+    flex: 0 1 auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: max(410px, min(78dvh, calc(100dvh - 210px))) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-registry-pane [data-agent-grid-mode]:not([data-agent-grid-mode="list"]) {
+    --agent-readable-width: clamp(220px, 16vw, 280px);
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--agent-readable-width)), 1fr)) !important;
+    align-items: stretch !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-registry-pane .agent-card-shell.agent-card-pro[data-agent-card="true"]:not([data-agent-display-mode="list"]) {
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: clamp(320px, 48dvh, 410px) !important;
+    max-height: none !important;
+  }
+}

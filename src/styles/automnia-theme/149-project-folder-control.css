@@ -221,12 +221,29 @@ html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control.is-compact .du
   max-width: calc(100vw - 32px);
   max-height: min(70vh, 560px);
   overflow: auto;
-  gap: 6px;
-  padding: 8px;
-  border: 1px solid rgba(224, 236, 229, .10);
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: 10px;
+  background: #202223;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .28);
+}
+
+/* Agent Chat renders the compact panel in a body portal so chat menus cannot
+   clip it. Keep the same solid card treatment on that detached panel. */
+html.dui-pro-overhaul.dui-cohesive-ui .dui-project-folder-control__panel.is-floating {
+  box-sizing: border-box;
+  display: grid;
+  width: min(320px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  max-height: min(70vh, 560px);
+  overflow: auto;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid rgba(224, 236, 229, .15);
   border-radius: 8px;
-  background: rgba(8, 11, 12, .98);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, .28);
+  background: #191b1c;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .34), inset 0 1px 0 rgba(255, 255, 255, .035);
 }
 
 /* The chat header keeps this control compact while preserving the same actions. */
@@ -352,99 +369,82 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] .dui-project-fold
   flex-wrap: initial;
   align-items: initial;
   gap: 6px;
-  padding: 8px;
-  border: 1px solid rgba(224, 236, 229, .10);
-  border-radius: 8px;
-  background: rgba(8, 11, 12, .98);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, .28);
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: 10px;
+  background: #202223;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .28);
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  min-height: 26px;
-  padding: 3px 4px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: #84938b;
+  gap: 6px;
+  min-height: 20px;
+  margin-right: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  color: #aebbb3;
+  box-shadow: none !important;
   cursor: pointer;
-  font-size: 9px;
-  font-weight: 650;
+  font-size: 10px;
+  font-weight: 600;
   letter-spacing: .02em;
-  transition: border-color .16s ease, background .16s ease, color .16s ease;
+  transition: color .16s ease;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle:hover {
-  border-color: rgba(139, 212, 170, .17);
-  background: rgba(139, 212, 170, .045);
-  color: #c3d5c9;
+  background: transparent !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  color: #e0e9e3;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle__orbit {
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle:focus-visible {
+  outline: 2px solid rgba(139, 212, 170, .7);
+  outline-offset: 3px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle__switch {
   position: relative;
-  display: grid;
-  width: 17px;
-  height: 17px;
-  place-items: center;
-  border: 1px solid rgba(197, 211, 202, .24);
-  border-radius: 50%;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle__orbit::before,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle__orbit::after {
-  position: absolute;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #809289;
-  content: '';
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle__orbit::before { top: -2px; right: 3px; }
-html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle__orbit::after { bottom: 0; left: 2px; }
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle__core {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #7d8a83;
-  box-shadow: 0 0 0 2px rgba(125, 138, 131, .07);
+  display: block;
+  width: 22px;
+  height: 13px;
+  flex: 0 0 22px;
+  border: 1px solid rgba(248, 113, 113, .62);
+  border-radius: 999px;
+  background: rgba(248, 113, 113, .12);
+  transition: border-color .16s ease, background-color .16s ease;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle[aria-checked="true"] {
-  border-color: rgba(139, 212, 170, .16);
-  background: rgba(139, 212, 170, .045);
-  color: #b7cbbd;
+  color: #c5ded0;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle[aria-checked="true"] .dy-chat-parallel-toggle__orbit {
-  border-color: rgba(139, 212, 170, .72);
-  animation: dui-parallel-orbit 2.2s linear infinite;
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f87171;
+  transition: background-color .16s ease, transform .16s ease;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle[aria-checked="true"] .dy-chat-parallel-toggle__orbit::before,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle[aria-checked="true"] .dy-chat-parallel-toggle__orbit::after,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle[aria-checked="true"] .dy-chat-parallel-toggle__core {
-  background: #8bd4aa;
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle[aria-checked="true"] .dy-chat-parallel-toggle__switch {
+  border-color: rgba(74, 222, 128, .72);
+  background: rgba(74, 222, 128, .15);
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle__state {
-  color: #819b89;
-  font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: .08em;
-}
-
-@keyframes dui-parallel-orbit {
-  to { transform: rotate(360deg); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle[aria-checked="true"] .dy-chat-parallel-toggle__orbit {
-    animation: none;
-  }
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-parallel-toggle[aria-checked="true"] .dy-chat-parallel-toggle__thumb {
+  background: #4ade80;
+  transform: translateX(10px);
 }
 
 @media (max-width: 1180px) {
@@ -579,9 +579,11 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-plus-menu .dui-project-folder-con
   max-width: calc(100vw - 32px);
   max-height: min(70vh, 560px);
   overflow: auto;
-  padding: 7px;
-  border-color: rgba(224, 236, 229, .10);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, .28);
+  padding: 12px;
+  border-color: rgba(255, 255, 255, .09);
+  border-radius: 10px;
+  background: #202223;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .28);
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-plus-menu .dui-project-folder-control__head strong {

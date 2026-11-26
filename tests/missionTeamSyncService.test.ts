@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
@@ -196,6 +196,42 @@ test('concurrent Team Sync initializers cannot erase existing activity', async (
     await writeFile(target, 'existing durable activity')
     await Promise.all(Array.from({ length: 20 }, () => harness.service.ensureTeamSyncFile(target)))
     assert.equal(await readFile(target, 'utf8'), 'existing durable activity')
+  } finally {
+    await rm(harness.root, { recursive: true, force: true })
+  }
+})
+
+test('writeTeamSyncSnapshot leaves zero temporary files and rejects non-regular destination collisions', async () => {
+  const harness = await createHarness({ canonicalDoctrineOnly: false })
+  try {
+    await harness.service.writeTeamSyncSnapshot({
+      missionId: 'clean-tmp',
+      title: 'Atomic Snapshot Cleanup',
+      mode: 'parallel',
+      status: 'running',
+      assignments: makeAssignments(),
+      activity: ['atomic write'],
+    })
+    const workspaceRootDir = path.join(harness.root, 'workspace-root')
+    assert.deepEqual(await readdir(workspaceRootDir), ['TEAM_SYNC.md'])
+
+    const badAgentWorkspace = harness.workspaces.get('agent-a')!
+    await rm(path.join(badAgentWorkspace, 'TEAM_SYNC.md'), { force: true })
+    await mkdir(path.join(badAgentWorkspace, 'TEAM_SYNC.md'), { recursive: true })
+
+    await assert.rejects(
+      harness.service.writeTeamSyncSnapshot({
+        missionId: 'collision',
+        title: 'Collision Check',
+        mode: 'parallel',
+        status: 'running',
+        assignments: makeAssignments(),
+        activity: [],
+      }),
+      /TEAM_SYNC\.md must be a regular file/,
+    )
+    const entries = await readdir(badAgentWorkspace)
+    assert.equal(entries.some((name) => name.endsWith('.tmp')), false)
   } finally {
     await rm(harness.root, { recursive: true, force: true })
   }

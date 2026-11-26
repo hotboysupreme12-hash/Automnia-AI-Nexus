@@ -195,7 +195,10 @@ function normalizeMissionCronJob(value: unknown, missionId: string): MissionCron
     completedRunCount: Math.max(0, Math.round(numberValue(record.completedRunCount) || 0)),
     failedRunCount: Math.max(0, Math.round(numberValue(record.failedRunCount) || 0)),
     lastRunAt: stringValue(record.lastRunAt),
-    lastRunStatus: record.lastRunStatus === 'completed' || record.lastRunStatus === 'failed' ? record.lastRunStatus : null,
+    lastRunStatus:
+      record.lastRunStatus === 'completed' || record.lastRunStatus === 'failed' || record.lastRunStatus === 'skipped'
+        ? record.lastRunStatus
+        : null,
   }
 }
 

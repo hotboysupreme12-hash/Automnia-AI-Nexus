@@ -55,10 +55,11 @@ const numberEnv = (key, fallback) => {
 const budgets = {
   entryJsBytes: numberEnv('AUTOMNIA_BUDGET_ENTRY_JS_BYTES', 525_000),
   entryJsGzipBytes: numberEnv('AUTOMNIA_BUDGET_ENTRY_JS_GZIP_BYTES', 165_000),
-  // Keep the measured production baseline inside the enforced budget while
-  // leaving a small amount of room for normal asset-hash and dependency drift.
-  entryCssBytes: numberEnv('AUTOMNIA_BUDGET_ENTRY_CSS_BYTES', 1_850_000),
-  entryCssGzipBytes: numberEnv('AUTOMNIA_BUDGET_ENTRY_CSS_GZIP_BYTES', 226_000),
+  // v1.0.31 adds the workspace graphite and responsive layout layers. Keep a
+  // firm ceiling close to their measured production output while leaving room
+  // for small implementation changes.
+  entryCssBytes: numberEnv('AUTOMNIA_BUDGET_ENTRY_CSS_BYTES', 2_000_000),
+  entryCssGzipBytes: numberEnv('AUTOMNIA_BUDGET_ENTRY_CSS_GZIP_BYTES', 250_000),
   // Keep the renderer ceiling close to the current feature set and ONNX runtime output.
   totalJsBytes: numberEnv('AUTOMNIA_BUDGET_TOTAL_JS_BYTES', 1_155_000),
   totalJsGzipBytes: numberEnv('AUTOMNIA_BUDGET_TOTAL_JS_GZIP_BYTES', 346_000),

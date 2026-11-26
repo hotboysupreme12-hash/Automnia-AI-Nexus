@@ -8,7 +8,7 @@
 
 Create one capable general agent or assemble a team of specialists. Give each agent a role, model, workspace, tools, and rules. Launch missions, schedule recurring work, and follow activity from a live operations view.
 
-<p><a href="#run-automnia-from-source">Quick start</a> · <a href="#whats-new-in-1030">What’s new in 1.0.30</a> · <a href="docs/USER_GUIDE.md">User guide</a> · <a href="docs/BETA_SUPPORT.md">Support</a></p>
+<p><a href="#run-automnia-from-source">Quick start</a> · <a href="#whats-new-in-1031">What’s new in 1.0.31</a> · <a href="docs/USER_GUIDE.md">User guide</a> · <a href="docs/BETA_SUPPORT.md">Support</a></p>
 
 </div>
 
@@ -39,16 +39,17 @@ The desktop app and control plane run locally. Agents can use local or hosted mo
 
 What an agent can do depends on the selected model, connected tools, workspace access, and the rules you configure.
 
-## What’s new in 1.0.30
+## What’s new in 1.0.31
 
-**Clean installs now start agents with the bundled runtime and route only through the tools they need.**
+**Coordinate agents with clearer controls and keep long-running workspaces more reliable.**
 
-- Keep hosted Gemini and other model routes available while Codex repair runs only for Codex-backed agents.
-- Treat a clean, verified Codex route report as healthy when recovery-copy inventory is partial.
-- Use the Node.js and npm already bundled with Automnia for first-run agent checks.
-- Rebuild stale Codex runtime bundles instead of accepting mismatched package contents.
+- Configure agent approval modes and tools with a clearer security setup.
+- Preserve mission, workboard, and Team Sync state through serialized and atomic updates.
+- Use more compact, responsive workspace, monitor, project folder, and plugin controls.
+- Receive a version-matched welcome email and secure v1.0.31 installer page after a successful Shopify order.
+- Keep clean release builds working with the current OpenClaw startup bundle.
 
-See the complete [1.0.30 changelog](CHANGELOG.md#1030---2026-11-21).
+See the complete [1.0.31 changelog](CHANGELOG.md#1031---2026-11-26).
 
 ## Explore the workspace
 
@@ -112,7 +113,7 @@ flowchart TD
 
 Run `npm run release:validate` to check a packaged release candidate, including its `distribution-signing.json` evidence when platform signing is required. When checksum-evidence signing is enabled, `npm run release:sign` can use `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE` for the signing key. Public release signing rules and the version-specific unsigned exceptions are documented in [Release Governance](docs/RELEASE_GOVERNANCE.md).
 
-Tagged customer releases ordinarily require Windows Authenticode and macOS Developer ID plus Apple notarization credentials. The guarded unsigned installer exceptions for v1.0.28, v1.0.29, and v1.0.30 require their matching repository variables, `AUTOMNIA_ALLOW_UNSIGNED_V1_0_28=true`, `AUTOMNIA_ALLOW_UNSIGNED_V1_0_29=true`, and `AUTOMNIA_ALLOW_UNSIGNED_V1_0_30=true`, and apply only to those tags. Both updater manifests remain signed; later releases require platform signing.
+Tagged customer releases ordinarily require Windows Authenticode and macOS Developer ID plus Apple notarization credentials. The guarded unsigned installer exceptions for v1.0.28, v1.0.29, v1.0.30, and v1.0.31 require their matching repository variables, `AUTOMNIA_ALLOW_UNSIGNED_V1_0_28=true`, `AUTOMNIA_ALLOW_UNSIGNED_V1_0_29=true`, `AUTOMNIA_ALLOW_UNSIGNED_V1_0_30=true`, and `AUTOMNIA_ALLOW_UNSIGNED_V1_0_31=true`, and apply only to those tags. Both updater manifests remain signed; later releases require platform signing.
 
 ## Documentation
 

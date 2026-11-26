@@ -1,0 +1,29 @@
+.dy-command-jump-latest {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  padding-inline: var(--space-3);
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-jump-latest .dy-command-jump-latest__button {
+  width: 34px !important;
+  min-width: 34px !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 !important;
+  border-color: transparent !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  color: var(--text-muted) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-jump-latest .dy-command-jump-latest__button:hover:not(:disabled) {
+  border-color: transparent !important;
+  background: rgb(255 255 255 / 6%) !important;
+  color: var(--text-primary) !important;
+}
+
+.dy-command-jump-latest__button svg {
+  width: 16px;
+  height: 16px;
+}

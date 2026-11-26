@@ -45,18 +45,19 @@ assert.match(publicReleaseSource, /publish-updates:\s*[\s\S]*?if:\s*\$\{\{\s*git
 const unsignedTag28 = "(github.ref == 'refs/tags/v1.0.28' && vars.AUTOMNIA_ALLOW_UNSIGNED_V1_0_28 == 'true')"
 const unsignedTag29 = "(github.ref == 'refs/tags/v1.0.29' && vars.AUTOMNIA_ALLOW_UNSIGNED_V1_0_29 == 'true')"
 const unsignedTag30 = "(github.ref == 'refs/tags/v1.0.30' && vars.AUTOMNIA_ALLOW_UNSIGNED_V1_0_30 == 'true')"
-const unsignedTagPair = `${unsignedTag28} || ${unsignedTag29} || ${unsignedTag30}`
+const unsignedTag31 = "(github.ref == 'refs/tags/v1.0.31' && vars.AUTOMNIA_ALLOW_UNSIGNED_V1_0_31 == 'true')"
+const unsignedTagPair = `${unsignedTag28} || ${unsignedTag29} || ${unsignedTag30} || ${unsignedTag31}`
 const publicReleaseLines = publicReleaseSource.split(/\r?\n/)
 const releaseSigningLine = publicReleaseLines.find((line) => line.includes('AUTOMNIA_RELEASE_REQUIRE_SIGNING:')) || ''
 const platformSigningLine = publicReleaseLines.find((line) => line.includes('AUTOMNIA_PLATFORM_SIGNING_REQUIRED:')) || ''
 const skipPlatformSigningLine = publicReleaseLines.find((line) => line.includes('AUTOMNIA_SKIP_PLATFORM_SIGNING:')) || ''
-assert.ok(releaseSigningLine.includes(`!(${unsignedTagPair})`), 'distribution-signing evidence may be skipped only for the explicitly enabled v1.0.28, v1.0.29, and v1.0.30 releases')
+assert.ok(releaseSigningLine.includes(`!(${unsignedTagPair})`), 'distribution-signing evidence may be skipped only for the explicitly enabled v1.0.28 through v1.0.31 releases')
 assert.ok(platformSigningLine.includes(`!(${unsignedTagPair})`), 'all other tagged platform builds must force signatures')
-assert.ok(skipPlatformSigningLine.includes(`|| (${unsignedTagPair})`), 'platform signing may be skipped only for manual candidates or the guarded v1.0.28, v1.0.29, and v1.0.30 tags')
+assert.ok(skipPlatformSigningLine.includes(`|| (${unsignedTagPair})`), 'platform signing may be skipped only for manual candidates or the guarded v1.0.28 through v1.0.31 tags')
 for (const stepName of ['Require Windows Authenticode credentials for tagged release', 'Require macOS signing and notarization credentials for tagged release']) {
   const stepIndex = publicReleaseLines.findIndex((line) => line.includes(`- name: ${stepName}`))
   const condition = publicReleaseLines.slice(stepIndex, stepIndex + 3).find((line) => line.trimStart().startsWith('if:')) || ''
-  assert.ok(condition.includes(`!(${unsignedTagPair})`), `${stepName} may be skipped only for the guarded v1.0.28, v1.0.29, and v1.0.30 tags`)
+  assert.ok(condition.includes(`!(${unsignedTagPair})`), `${stepName} may be skipped only for the guarded v1.0.28 through v1.0.31 tags`)
 }
 assert.match(packageDesktopSource, /platformSigningRequired && unsignedDirectoryPackage/, 'package script must reject conflicting required-signing and unsigned-build settings')
 assert.match(packageDesktopSource, /--config\.win\.forceCodeSigning=true/, 'tagged Windows builds must force Authenticode signing')
@@ -71,11 +72,11 @@ assert.match(packageDesktopSource, /spctl'[\s\S]*'--assess'/, 'repaired mac DMGs
 assert.match(readme, /npm run release:sign/, 'README must document release signing')
 assert.match(readme, /AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE/, 'README must document private-key file based signing')
 assert.match(readme, /Tagged customer releases ordinarily require Windows Authenticode and macOS Developer ID plus Apple notarization credentials/, 'README must document the normal customer-release signing requirement')
-assert.match(readme, /v1\.0\.28[\s\S]*v1\.0\.29[\s\S]*v1\.0\.30[\s\S]*AUTOMNIA_ALLOW_UNSIGNED_V1_0_30[\s\S]*updater manifests remain signed/, 'README must document the guarded v1.0.28, v1.0.29, and v1.0.30 unsigned exceptions and retained updater signing')
+assert.match(readme, /v1\.0\.28[\s\S]*v1\.0\.29[\s\S]*v1\.0\.30[\s\S]*v1\.0\.31[\s\S]*AUTOMNIA_ALLOW_UNSIGNED_V1_0_31[\s\S]*updater manifests remain signed/, 'README must document the guarded v1.0.28 through v1.0.31 unsigned exceptions and retained updater signing')
 assert.match(readme, /INSTALLER_SUPPORT\.md/, 'README must link the platform support and installer validation matrix')
 assert.match(governance, /Branch Protection/, 'release governance docs must define branch protection expectations')
 assert.match(governance, /AUTOMNIA_RELEASE_REQUIRE_SIGNING/, 'release governance docs must define mandatory release signing')
-assert.match(governance, /AUTOMNIA_ALLOW_UNSIGNED_V1_0_28[\s\S]*AUTOMNIA_ALLOW_UNSIGNED_V1_0_29[\s\S]*AUTOMNIA_ALLOW_UNSIGNED_V1_0_30[\s\S]*updater manifest remains signed/, 'release governance must constrain unsigned installers to v1.0.28, v1.0.29, and v1.0.30 and retain update signing')
+assert.match(governance, /AUTOMNIA_ALLOW_UNSIGNED_V1_0_28[\s\S]*AUTOMNIA_ALLOW_UNSIGNED_V1_0_29[\s\S]*AUTOMNIA_ALLOW_UNSIGNED_V1_0_30[\s\S]*AUTOMNIA_ALLOW_UNSIGNED_V1_0_31[\s\S]*updater manifest remains signed/, 'release governance must constrain unsigned installers to v1.0.28 through v1.0.31 and retain update signing')
 assert.match(governance, /MAC_CSC_LINK/, 'release governance docs must document Windows and Mac signing setup')
 assert.match(governance, /INSTALLER_SUPPORT\.md/, 'release governance docs must link the installer support matrix')
 assert.match(governance, /localhost API only/, 'release governance docs must document the local-only threat model')

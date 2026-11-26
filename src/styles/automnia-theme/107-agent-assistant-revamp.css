@@ -770,37 +770,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-body {
   line-height: 1.62 !important;
 }
 
-/* Long agent responses scroll in place under the pointer. This keeps the
-   surrounding console and application shell stationary while the operator
-   reads the rest of one response. */
-html.dui-pro-overhaul .dy-command-message-body[data-body-state="response"],
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-body[data-body-state="response"] {
-  max-block-size: min(46dvh, 30rem) !important;
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-  scrollbar-color: rgb(91 125 130 / .58) transparent;
-}
-
-html.dui-pro-overhaul .dy-command-message-body[data-body-state="response"]::-webkit-scrollbar,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-body[data-body-state="response"]::-webkit-scrollbar {
-  width: 7px;
-}
-
-html.dui-pro-overhaul .dy-command-message-body[data-body-state="response"]::-webkit-scrollbar-thumb,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-body[data-body-state="response"]::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
-  border-radius: 999px;
-  background: rgb(91 125 130 / .58);
-  background-clip: padding-box;
-}
-
-html.dui-pro-overhaul .dy-command-message-body[data-body-state="response"]:hover::-webkit-scrollbar-thumb,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-body[data-body-state="response"]:hover::-webkit-scrollbar-thumb {
-  background-color: rgb(132 183 180 / .78);
-}
-
 html.dui-pro-overhaul .dy-command-response-cta,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-response-cta {
   margin: 9px 0 0 !important;

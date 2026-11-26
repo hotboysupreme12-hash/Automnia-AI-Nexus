@@ -444,7 +444,7 @@ export function ModelPicker({
 
       {(!collapsible || isFallbacksOpen) ? (
         <div id={collapsible ? `${pickerId}-fallbacks-panel` : undefined} className={collapsible ? 'space-y-3' : undefined}>
-      {label && !collapsible ? <div className="flex items-center justify-between gap-3"><span className="text-sm font-bold text-slate-200">{label}</span><span className="text-xs text-slate-400">{groups.length} providers · {selectableModels.length} models</span></div> : null}
+      {label && !collapsible ? <div className="flex items-center justify-between gap-3"><span className="text-sm font-bold text-slate-200">{label}</span><span className="text-xs text-slate-400">{loading && !groups.length ? 'Loading model catalog…' : `${groups.length} providers · ${selectableModels.length} models`}</span></div> : null}
 
       {emptyOption ? (
         <button

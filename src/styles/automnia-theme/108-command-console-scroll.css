@@ -1,10 +1,9 @@
 /*
   Command Console scroll contract.
 
-  Keep the history list bounded by the console pane, and keep long individual
-  agent responses bounded by their own scroll surface. The two surfaces are
-  intentionally independent so reading one response never expands or moves
-  the surrounding shell.
+  Keep the history list bounded by the console pane. Individual agent
+  responses grow to their full content height, so the history list is the
+  only vertical scroll surface for conversation replies.
 */
 
 html.dui-pro-overhaul .dy-agent-console-pane,
@@ -63,53 +62,21 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-body-wrap {
   min-width: 0 !important;
 }
 
-/* Only the response text scrolls; metadata and actions remain visible. */
-html.dui-pro-overhaul .dy-command-message-body-scroll[data-body-state="response"],
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-body-scroll[data-body-state="response"] {
+/* Let each response grow naturally and push following messages down. */
+html.dui-pro-overhaul .dy-command-message-body-content[data-body-state="response"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-body-content[data-body-state="response"] {
   display: block !important;
   width: 100% !important;
   min-width: 0 !important;
-  max-height: clamp(11rem, 28dvh, 20rem) !important;
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  scrollbar-color: rgb(91 125 130 / .58) transparent;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
-}
-
-/* The wrapper owns scrolling. Avoid a nested scrollbar on the paragraph. */
-html.dui-pro-overhaul .dy-command-message-body-scroll[data-body-state="response"] > .dy-command-message-body,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-body-scroll[data-body-state="response"] > .dy-command-message-body {
+  height: auto !important;
   max-height: none !important;
   overflow: visible !important;
 }
 
-html.dui-pro-overhaul .dy-command-message-body-scroll[data-body-state="response"]::-webkit-scrollbar,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-body-scroll[data-body-state="response"]::-webkit-scrollbar {
-  width: 8px;
-}
-
-html.dui-pro-overhaul .dy-command-message-body-scroll[data-body-state="response"]::-webkit-scrollbar-thumb,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-body-scroll[data-body-state="response"]::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
-  border-radius: 999px;
-  background: rgb(91 125 130 / .58);
-  background-clip: padding-box;
-}
-
-html.dui-pro-overhaul .dy-command-message-body-scroll[data-body-state="response"]:hover::-webkit-scrollbar-thumb,
-html.dui-pro-overhaul .dy-command-message-body-scroll[data-body-state="response"]:focus-within::-webkit-scrollbar-thumb,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-body-scroll[data-body-state="response"]:hover::-webkit-scrollbar-thumb,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-body-scroll[data-body-state="response"]:focus-within::-webkit-scrollbar-thumb {
-  background-color: rgb(132 183 180 / .82);
-}
-
-@media (max-width: 600px) {
-  html.dui-pro-overhaul .dy-command-message-body-scroll[data-body-state="response"],
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-body-scroll[data-body-state="response"] {
-    max-height: clamp(9rem, 30dvh, 16rem) !important;
-  }
+html.dui-pro-overhaul .dy-command-message-body-content[data-body-state="response"] > .dy-command-message-body,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-body-content[data-body-state="response"] > .dy-command-message-body {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
 }

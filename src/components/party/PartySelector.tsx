@@ -566,8 +566,6 @@ export function PartySelector() {
             data-workspace-scroll="agent-registry"
             className="-m-2 min-h-0 overflow-y-auto overflow-x-hidden p-2"
             style={{
-              height: 'min(78vh, max(560px, calc(100vh - 260px)))',
-              maxHeight: 'min(78vh, max(560px, calc(100vh - 260px)))',
               scrollbarGutter: 'stable',
             }}
           >

@@ -35,6 +35,7 @@ export function AgentToolPicker({ agentId, allow, deny, onChange }: {
   }, [agentId, retry])
   const split = (value: string) => value.split(',').map(s => s.trim()).filter(Boolean)
   const allowed = split(allow), denied = split(deny)
+  const toolsLoading = status.startsWith('Loading available tools') || status.startsWith('The Gateway is still loading tools')
   const advanced = [...allowed, ...denied].some(id => id.includes(':') || (id.includes('*') && id !== '*'))
   const selected = (id: string) => (!allowed.length || allowed.includes('*') || allowed.includes(id)) && !denied.includes('*') && !denied.includes(id)
   const tools = [...new Map(groups.flatMap(group => group.tools).map(tool => [tool.id, tool])).values()]
@@ -43,13 +44,13 @@ export function AgentToolPicker({ agentId, allow, deny, onChange }: {
     <h3 className="text-sm font-bold">Tools available to this agent</h3>
     <p className="text-xs text-slate-400">Disable tools you do not need to reduce tool-definition tokens. Changes save automatically and apply to the next message, not an already-running request. Command approvals are separate. Plugins may still require setup.</p>
     <div className="flex gap-3 text-xs">
-      <button type="button" onClick={() => onChange('', '')}>Enable all available tools</button>
-      <button type="button" onClick={() => select([])}>Disable all tools</button>
-      <span>{advanced ? 'Advanced rules active' : `${tools.filter(t => selected(t.id)).length} / ${tools.length} selected`}</span>
+      <button type="button" disabled={toolsLoading || !tools.length} onClick={() => onChange('', '')}>Enable all available tools</button>
+      <button type="button" disabled={toolsLoading || !tools.length} onClick={() => select([])}>Disable all tools</button>
+      <span role="status">{toolsLoading ? 'Loading tools…' : status ? 'Tool catalog unavailable' : tools.length ? advanced ? 'Advanced rules active' : `${tools.filter(t => selected(t.id)).length} / ${tools.length} selected` : 'No tools available'}</span>
     </div>
     {advanced && <p className="text-xs text-amber-300">Group or wildcard rules are configured below. Choose Enable all or Disable all to switch to individual selection.</p>}
     <input aria-label="Search tools" placeholder="Search tools…" value={query} onChange={e => setQuery(e.target.value)} className="w-full rounded bg-slate-900 p-2 text-xs" />
-    {status && <p role="status" className="text-xs">{status} <button type="button" onClick={() => {setStatus('Loading available tools…');setRetry(v => v + 1)}}>Retry</button></p>}
+    {status && <p role="status" className="text-xs">{status} <button type="button" disabled={toolsLoading} onClick={() => {setStatus('Loading available tools…');setRetry(v => v + 1)}}>Retry</button></p>}
     <div className="max-h-80 space-y-3 overflow-y-auto">
       {groups.map(group => {
         const visible = group.tools.filter(t => `${t.id} ${t.label} ${t.description || ''}`.toLowerCase().includes(query.toLowerCase()))

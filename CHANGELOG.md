@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.31 - 2026-11-26
+
+### Agent coordination and workspace improvements
+
+- Adds clearer per-agent security and approval controls, with improved tool selection and configuration syncing.
+- Makes mission and workboard state updates more durable with serialized, atomic file writes and safer recovery.
+- Refines responsive workspace navigation, project folder controls, monitor tools, and plugin layouts.
+- Keeps the welcome email, private installer portal, and Shopify downloads page aligned on desktop release v1.0.31.
+- Verifies signed Shopify paid-order webhooks and one-time activation email delivery with the provisioner smoke suite.
+- Updates the OpenClaw startup compatibility patch for the current 2026.11.6 package bundle while retaining signed update manifests.
+- Publishes unsigned Windows and macOS installers only under the guarded v1.0.31 setting; the update channel remains cryptographically signed.
+
 ## 1.0.30 - 2026-11-21
 
 ### Reliable clean installs and first-run agent routing

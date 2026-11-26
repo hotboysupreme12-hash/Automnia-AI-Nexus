@@ -119,7 +119,6 @@ html.dui-pro-overhaul.dui-cohesive-ui {
 
   html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility) > .dui-button__label,
   html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility) > .dui-button__label {
-    display: block !important;
     min-width: 0 !important;
     flex: 1 1 auto !important;
     overflow: hidden !important;
@@ -129,7 +128,6 @@ html.dui-pro-overhaul.dui-cohesive-ui {
 
   html.dui-pro-overhaul .dy-human-nav .dy-human-nav-copy,
   html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav .dy-human-nav-copy {
-    display: block !important;
     min-width: 0 !important;
     max-width: 100% !important;
     overflow: hidden !important;

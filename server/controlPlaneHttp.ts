@@ -33,6 +33,7 @@ export type ApiErrorCode =
   | 'agent_retire_failed'
   | 'agent_session_operation_failed'
   | 'agent_turn_failed'
+  | 'agent_turn_still_running'
   | 'agent_config_sync_failed'
   | 'approval_service_unavailable'
   | 'avatar_preview_failed'
@@ -110,6 +111,8 @@ export type ApiErrorCode =
   | 'workboard_task_terminal'
   | 'workboard_capacity'
   | 'workboard_comment_capacity'
+  | 'workboard_lease_conflict'
+  | 'workboard_file_lock_conflict'
 
 type ControlPlaneHttpOptions = {
   authToken: string

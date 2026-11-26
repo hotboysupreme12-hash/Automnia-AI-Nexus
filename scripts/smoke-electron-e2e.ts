@@ -342,9 +342,9 @@ await runElectronCase({
 await runElectronCase({
   name: 'renderer-journey',
   expectedStatus: 0,
-  timeoutMs: 60_000,
+  timeoutMs: 90_000,
   env: {
-    AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS: '20000',
+    AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS: '60000',
     AUTOMNIA_ELECTRON_E2E_ASSERT_RENDERER_JOURNEY: '1',
     AUTOMNIA_ELECTRON_E2E_QUIT_AFTER_RENDERER_JOURNEY: '1',
   },

@@ -234,7 +234,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-head--lockup {
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-head--lockup .dy-human-rail-lockup {
-  display: block !important;
   width: min(100%, 196px) !important;
   height: auto !important;
   max-height: 82px !important;

@@ -106,34 +106,38 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-response-cta {
   margin-top: 7px !important;
 }
 
-/* Runtime notices use the same hierarchy as agent replies. They get room to
-   breathe when they are the only live update, then compact automatically once
-   an agent reply is present so the agent remains the visual focus. */
+/* Runtime notices share the flat conversation row layout and keep their teal
+   system accent so they remain easy to distinguish from agent replies. */
 html.dui-pro-overhaul .dy-command-console .dy-automnia-runtime-notifications,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-notifications {
-  padding: 11px 14px 13px !important;
-  border-bottom-color: rgba(126, 224, 210, .14) !important;
-  background:
-    linear-gradient(90deg, rgba(58, 185, 173, .06), transparent 42%),
-    rgba(5, 12, 14, .72) !important;
+  padding: 8px 14px 0 !important;
+  border-bottom-color: rgba(169, 197, 201, .08) !important;
+  background: transparent !important;
 }
 
 html.dui-pro-overhaul .dy-command-console .dy-automnia-runtime-notice,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-notice {
-  grid-template-columns: 34px minmax(0, 1fr) auto !important;
-  min-height: 72px !important;
-  padding: 13px 14px !important;
-  border: 1px solid rgba(126, 224, 210, .16) !important;
-  border-radius: 12px !important;
-  background: linear-gradient(135deg, rgba(22, 38, 41, .84), rgba(8, 17, 19, .82)) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 16px 30px -26px rgba(56, 212, 192, .7) !important;
+  grid-template-columns: 30px minmax(0, 1fr) auto !important;
+  min-height: 0 !important;
+  padding: 12px 2px 14px !important;
+  border: 0 !important;
+  border-left: 2px solid rgba(126, 224, 210, .62) !important;
+  border-bottom: 1px solid rgba(169, 197, 201, .08) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-automnia-runtime-notice:last-child,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-notice:last-child {
+  border-bottom-color: transparent !important;
 }
 
 html.dui-pro-overhaul .dy-command-console .dy-automnia-runtime-avatar,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-avatar {
-  width: 34px !important;
-  height: 34px !important;
-  border-radius: 9px !important;
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 8px !important;
 }
 
 html.dui-pro-overhaul .dy-command-console .dy-automnia-runtime-head strong,
@@ -162,39 +166,41 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-meta {
 
 html.dui-pro-overhaul .dy-command-console .dy-automnia-runtime-notifications[data-agent-reply-in-flight="true"],
 html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-notifications[data-agent-reply-in-flight="true"] {
-  padding: 7px 12px 8px !important;
-  background: rgba(5, 12, 14, .62) !important;
+  padding: 8px 14px 0 !important;
+  background: transparent !important;
 }
 
 html.dui-pro-overhaul .dy-command-console .dy-automnia-runtime-notifications[data-agent-reply-in-flight="true"] .dy-automnia-runtime-notice,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-notifications[data-agent-reply-in-flight="true"] .dy-automnia-runtime-notice {
-  grid-template-columns: 26px minmax(0, 1fr) auto !important;
+  grid-template-columns: 30px minmax(0, 1fr) auto !important;
   min-height: 0 !important;
-  padding: 7px 9px !important;
-  border-color: rgba(126, 224, 210, .10) !important;
-  border-radius: 9px !important;
-  background: rgba(255, 255, 255, .018) !important;
+  padding: 12px 2px 14px !important;
+  border: 0 !important;
+  border-left: 2px solid rgba(126, 224, 210, .62) !important;
+  border-bottom: 1px solid rgba(169, 197, 201, .08) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
   box-shadow: none !important;
 }
 
 html.dui-pro-overhaul .dy-command-console .dy-automnia-runtime-notifications[data-agent-reply-in-flight="true"] .dy-automnia-runtime-avatar,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-notifications[data-agent-reply-in-flight="true"] .dy-automnia-runtime-avatar {
-  width: 26px !important;
-  height: 26px !important;
-  border-radius: 7px !important;
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 8px !important;
 }
 
 html.dui-pro-overhaul .dy-command-console .dy-automnia-runtime-notifications[data-agent-reply-in-flight="true"] .dy-automnia-runtime-head strong,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-notifications[data-agent-reply-in-flight="true"] .dy-automnia-runtime-head strong {
-  font-size: 10px !important;
+  font-size: 12px !important;
 }
 
 html.dui-pro-overhaul .dy-command-console .dy-automnia-runtime-notifications[data-agent-reply-in-flight="true"] .dy-automnia-runtime-copy p,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-notifications[data-agent-reply-in-flight="true"] .dy-automnia-runtime-copy p {
-  margin: 3px 0 !important;
-  color: #a9bcbd !important;
-  font-size: 10px !important;
-  line-height: 1.38 !important;
+  margin: 6px 0 5px !important;
+  color: #c9d5d7 !important;
+  font-size: 12px !important;
+  line-height: 1.58 !important;
 }
 
 /* The profile chip is the single live-state signal: cyan means active work. */

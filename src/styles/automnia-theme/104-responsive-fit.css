@@ -76,11 +76,10 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recr
 }
 
 /*
-  Between a small laptop and a tablet, collapse the rail but retain a real
-  two-column workspace. The reduced Electron zoom makes this breakpoint feel
-  like the reference desktop composition without shrinking text by hand.
+  Between a small laptop and a tablet, use the centered icon rail and reserve
+  its exact width before sizing the workspace.
 */
-@media (min-width: 901px) and (max-width: 1200px) {
+@media (min-width: 861px) and (max-width: 1200px) {
   html.dui-pro-overhaul,
   html.dui-pro-overhaul.dui-cohesive-ui {
     --dui-rail: 82px;
@@ -89,30 +88,104 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recr
 
   html.dui-pro-overhaul .dy-human-rail,
   html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail {
+    box-sizing: border-box !important;
+    display: flex !important;
     width: var(--dui-rail) !important;
-    padding: 0 10px !important;
+    min-width: var(--dui-rail) !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 0 !important;
+  }
+
+  html.dui-pro-overhaul .dy-human-rail-head--lockup,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-head--lockup {
+    box-sizing: border-box !important;
+    display: grid !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 50px !important;
+    min-height: 50px !important;
+    flex: 0 0 50px !important;
+    place-items: center !important;
+    padding: 4px !important;
   }
 
   html.dui-pro-overhaul .dy-human-rail-lockup,
   html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-lockup {
-    width: 58px !important;
+    display: none !important;
+  }
+
+  html.dui-pro-overhaul .dy-human-rail-app-icon,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-app-icon {
+    display: block !important;
+    width: 32px !important;
+    height: 32px !important;
+    object-fit: contain !important;
+  }
+
+  html.dui-pro-overhaul .dy-human-rail-bottom,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-bottom {
+    padding-top: 6px !important;
+  }
+
+  html.dui-pro-overhaul .dy-human-nav,
+  html.dui-pro-overhaul .dy-human-nav--utility,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav--utility {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    gap: 8px !important;
+    padding: 8px 0 !important;
+  }
+
+  html.dui-pro-overhaul .dy-human-rail-navigation > .dy-human-nav,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-navigation > .dy-human-nav {
+    padding: 16px 0 8px !important;
   }
 
   html.dui-pro-overhaul .dy-human-nav-copy,
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-copy {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-copy,
+  html.dui-pro-overhaul .dy-human-nav .dui-button__label,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav .dui-button__label,
+  html.dui-pro-overhaul .dy-approvals-status,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-approvals-status {
     display: none !important;
   }
 
   html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility),
   html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility) {
+    box-sizing: border-box !important;
+    width: 44px !important;
+    min-width: 44px !important;
+    max-width: 44px !important;
+    height: 44px !important;
+    min-height: 44px !important;
+    flex: 0 0 44px !important;
+    align-self: center !important;
     justify-content: center !important;
+    gap: 0 !important;
     padding: 0 !important;
+    margin-inline: auto !important;
   }
 
   html.dui-pro-overhaul .app-bg > .dy-app-main,
   html.dui-pro-overhaul.dui-cohesive-ui .app-bg > .dy-app-main {
-    width: auto !important;
-    margin-left: var(--dui-rail) !important;
+    box-sizing: border-box !important;
+    width: calc(100% - var(--dui-rail)) !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    min-height: 100dvh !important;
+    margin: 0 0 0 var(--dui-rail) !important;
+    padding: 16px 12px 22px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg > .dy-app-main[data-workspace="chat"] {
+    height: 100dvh !important;
+  }
+
+  html.dui-pro-overhaul .dui-navigation-tooltip,
+  html.dui-pro-overhaul.dui-cohesive-ui .dui-navigation-tooltip {
+    display: none !important;
   }
 
   html.dui-pro-overhaul .dy-agents-workspace.is-console-visible,

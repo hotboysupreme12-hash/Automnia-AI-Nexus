@@ -6,6 +6,7 @@ import net from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildLicenseEmailHtml } from '../service/welcomeEmail.js'
+import { AUTOMNIA_DESKTOP_VERSION } from '../service/releaseMetadata.js'
 import {
   buildLicenseEmailMimeMessage,
   encodeGmailRawMessage,
@@ -15,7 +16,13 @@ import {
 const infraRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const serviceRoot = path.join(infraRoot, 'service')
 const welcomeEmail = await readFile(path.join(serviceRoot, 'welcomeEmail.js'), 'utf8')
+const welcomeEmailPreview = await readFile(path.join(serviceRoot, 'license-email-preview.html'), 'utf8')
 const provisionerService = await readFile(path.join(serviceRoot, 'server.js'), 'utf8')
+const shopifyDownloadPage = await readFile(path.join(infraRoot, 'shopify-theme', 'snippets', 'automnia-download-options.liquid'), 'utf8')
+const rootPackage = JSON.parse(await readFile(path.resolve(infraRoot, '..', '..', 'package.json'), 'utf8'))
+assert.equal(AUTOMNIA_DESKTOP_VERSION, rootPackage.version, 'The email and private installer portal release must match the desktop package version')
+assert.match(shopifyDownloadPage, new RegExp(`Desktop release v${AUTOMNIA_DESKTOP_VERSION.replaceAll('.', '\\.')}`))
+assert.match(shopifyDownloadPage, /automnia-public-downloads-98780848640\/releases\/current\//)
 assert.match(welcomeEmail, /AUTMNIA/)
 assert.match(welcomeEmail, /AI NEXUS/)
 assert.match(welcomeEmail, /automnia-ai-nexus-logo\.png/)
@@ -27,6 +34,16 @@ assert.match(welcomeEmail, /Get started in four steps/)
 assert.match(welcomeEmail, /Google sign-in is optional/)
 const newCustomerEmail = buildLicenseEmailHtml({ email: 'new@example.test', licenseKey: 'AUT-TEST-0001', tier: 'starter' })
 assert.match(newCustomerEmail, /Create or sign in with your Automnia password\. Google sign-in is optional\./)
+const welcomeEmailWithDownload = buildLicenseEmailHtml({
+  email: 'new@example.test',
+  licenseKey: 'AUT-TEST-0004',
+  tier: 'starter',
+  downloadAccessUrl: 'https://api.automnia.app/download?o=smoke-order&t=private-token',
+})
+assert.match(welcomeEmailWithDownload, new RegExp(`Your secure download · v${AUTOMNIA_DESKTOP_VERSION.replaceAll('.', '\\.')}`))
+assert.match(welcomeEmailWithDownload, new RegExp(`Download Automnia v${AUTOMNIA_DESKTOP_VERSION.replaceAll('.', '\\.')}`))
+assert.match(welcomeEmailWithDownload, /https:\/\/api\.automnia\.app\/download\?o=smoke-order&amp;t=private-token/)
+assert.match(welcomeEmailPreview, new RegExp(`Download Automnia v${AUTOMNIA_DESKTOP_VERSION.replaceAll('.', '\\.')}`))
 const upgradedCustomerEmail = buildLicenseEmailHtml(
   { email: 'existing@example.test', licenseKey: 'AUT-TEST-0002', tier: 'pro' },
   { isAccountUpdate: true, purchasePlan: 'Automnia Pro Monthly <script>' },
@@ -56,6 +73,7 @@ assert.match(provisionerService, /publishedInstallerPlatforms/)
 assert.match(provisionerService, /file\(objectName\)\.exists\(\)/)
 assert.match(provisionerService, /app\.get\('\/download\/installer'/)
 assert.match(provisionerService, /installerSignedUrlMinutes/)
+assert.match(provisionerService, /Desktop release v\$\{AUTOMNIA_DESKTOP_VERSION\}/)
 const mappings = JSON.parse(await readFile(path.join(infraRoot, 'shopify-plan-mappings.json'), 'utf8'))
 const expectedPlanMappingHash = execFileSync(process.execPath, [
   path.join(infraRoot, 'tools', 'plan-hash.mjs'),

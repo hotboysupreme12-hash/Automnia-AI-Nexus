@@ -484,6 +484,152 @@ test('recurring runtime reconciliation keeps failed lanes scheduled and exposes 
   assert.equal((mission.scheduler.lastError || '').includes('secret-token'), false)
 })
 
+test('recurring runtime reconciliation preserves active runs across duplicate-prevention skips and records completion once', async () => {
+  const { service, state, missions } = createHarness()
+  const mission = makeMission({
+    id: 'mission-runtime-skipped-overlap',
+    mode: 'continuous',
+    cadenceSeconds: 300,
+    party: ['agent-a'],
+    scheduler: missionSchedulerInitialState({ party: ['agent-a'], cadenceSeconds: 300 }),
+  })
+  missions.set(mission.id, mission)
+  await service.startRecurringMissionCronJobs(mission, makeAssignments(mission.party), [])
+  const job = mission.scheduler.jobs[0]
+
+  // 12:05 cycle starts running.
+  await service.reconcileRecurringMissionCronRuntime([{
+    cronId: job.cronId,
+    runningAt: '2026-06-30T12:05:00.000Z',
+    lastRunAt: null,
+    lastRunStatus: null,
+    lastError: null,
+    nextRunAt: '2026-06-30T12:10:00.000Z',
+  }])
+  assert.equal(job.status, 'running')
+  assert.equal(mission.scheduler.status, 'running')
+
+  // 12:10 overlapping cron tick is skipped while 12:05 run is still active.
+  await service.reconcileRecurringMissionCronRuntime([{
+    cronId: job.cronId,
+    runningAt: '2026-06-30T12:05:00.000Z',
+    lastRunAt: '2026-06-30T12:10:00.000Z',
+    lastRunStatus: 'skipped',
+    lastError: null,
+    nextRunAt: '2026-06-30T12:15:00.000Z',
+  }])
+  assert.equal(job.status, 'running')
+  assert.equal(job.lastRunStatus, 'skipped')
+  assert.equal(job.runCount || 0, 0)
+  assert.equal(job.failedRunCount || 0, 0)
+  assert.equal(mission.scheduler.status, 'running')
+  assert.equal(mission.scheduler.lastError, null)
+  assert.equal(state.events.some((event) => /Scheduled cycle skipped/.test(event.message)), true)
+
+  // Active 12:05 run completes (OpenClaw records run start timestamp 12:05 in lastRunAt).
+  const completedSnapshot = [{
+    cronId: job.cronId,
+    runningAt: null,
+    lastRunAt: '2026-06-30T12:05:00.000Z',
+    lastRunStatus: 'ok',
+    lastError: null,
+    nextRunAt: '2026-06-30T12:15:00.000Z',
+  }]
+  await service.reconcileRecurringMissionCronRuntime(completedSnapshot)
+  await service.reconcileRecurringMissionCronRuntime(completedSnapshot)
+
+  assert.equal(job.status, 'created')
+  assert.equal(job.lastRunStatus, 'completed')
+  assert.equal(job.runCount, 1)
+  assert.equal(job.completedRunCount, 1)
+  assert.equal(job.failedRunCount || 0, 0)
+  assert.equal(mission.scheduler.status, 'waiting')
+  assert.equal(mission.scheduler.round, 1)
+})
+
+test('recurring runtime reconciliation counts skipped-over run completion even when the next cycle starts before the next poll', async () => {
+  const { service, missions } = createHarness()
+  const mission = makeMission({
+    id: 'mission-runtime-skipped-then-immediate-next-run',
+    mode: 'continuous',
+    cadenceSeconds: 300,
+    party: ['agent-a'],
+    scheduler: missionSchedulerInitialState({ party: ['agent-a'], cadenceSeconds: 300 }),
+  })
+  missions.set(mission.id, mission)
+  await service.startRecurringMissionCronJobs(mission, makeAssignments(mission.party), [])
+  const job = mission.scheduler.jobs[0]
+
+  // 12:05 cycle starts, then 12:10 tick skips while 12:05 continues.
+  await service.reconcileRecurringMissionCronRuntime([{
+    cronId: job.cronId,
+    runningAt: '2026-06-30T12:05:00.000Z',
+    lastRunAt: null,
+    lastRunStatus: null,
+    lastError: null,
+    nextRunAt: '2026-06-30T12:10:00.000Z',
+  }])
+  await service.reconcileRecurringMissionCronRuntime([{
+    cronId: job.cronId,
+    runningAt: '2026-06-30T12:05:00.000Z',
+    lastRunAt: '2026-06-30T12:10:00.000Z',
+    lastRunStatus: 'skipped',
+    lastError: null,
+    nextRunAt: '2026-06-30T12:15:00.000Z',
+  }])
+
+  // 12:05 run finishes right before 12:15, and 12:15 starts before the next poll.
+  await service.reconcileRecurringMissionCronRuntime([{
+    cronId: job.cronId,
+    runningAt: '2026-06-30T12:15:00.000Z',
+    lastRunAt: '2026-06-30T12:05:00.000Z',
+    lastRunStatus: 'ok',
+    lastError: null,
+    nextRunAt: '2026-06-30T12:20:00.000Z',
+  }])
+
+  assert.equal(job.runCount, 1)
+  assert.equal(job.completedRunCount, 1)
+  assert.equal(job.failedRunCount || 0, 0)
+  assert.equal(job.status, 'running')
+  assert.equal(job.startedAt, '2026-06-30T12:15:00.000Z')
+  assert.equal(mission.scheduler.status, 'running')
+  assert.equal(mission.scheduler.round, 1)
+})
+
+test('recurring runtime reconciliation handles previous cycle completion and next cycle start in a single poll', async () => {
+  const { service, state, missions } = createHarness()
+  const mission = makeMission({
+    id: 'mission-runtime-finish-and-start',
+    mode: 'continuous',
+    cadenceSeconds: 300,
+    party: ['agent-a'],
+    scheduler: missionSchedulerInitialState({ party: ['agent-a'], cadenceSeconds: 300 }),
+  })
+  missions.set(mission.id, mission)
+  await service.startRecurringMissionCronJobs(mission, makeAssignments(mission.party), [])
+  const job = mission.scheduler.jobs[0]
+
+  await service.reconcileRecurringMissionCronRuntime([{
+    cronId: job.cronId,
+    runningAt: '2026-06-30T12:10:00.000Z',
+    lastRunAt: '2026-06-30T12:05:00.000Z',
+    lastRunStatus: 'ok',
+    lastError: null,
+    nextRunAt: '2026-06-30T12:15:00.000Z',
+  }])
+
+  assert.equal(job.runCount, 1)
+  assert.equal(job.completedRunCount, 1)
+  assert.equal(job.status, 'running')
+  assert.equal(job.startedAt, '2026-06-30T12:10:00.000Z')
+  assert.equal(job.endedAt, null)
+  assert.equal(mission.scheduler.status, 'running')
+  assert.equal(mission.scheduler.round, 1)
+  assert.equal(state.events.some((event) => /Scheduled cycle completed/.test(event.message)), true)
+  assert.equal(state.events.some((event) => /Scheduled cycle started/.test(event.message)), true)
+})
+
 test('recurring runtime reconciliation enforces the configured cycle limit', async () => {
   const { service, state, missions } = createHarness()
   const mission = makeMission({

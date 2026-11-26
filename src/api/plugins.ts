@@ -327,7 +327,7 @@ export function inspectOpenClawPluginRuntime(pluginId: string): Promise<PluginAp
 export function restartPluginGateway(): Promise<PluginApiPayload> {
   return pluginApiData<PluginApiPayload>(
     '/api/plugins/gateway/restart',
-    { method: 'POST', timeoutMs: 360_000 },
+    { method: 'POST', timeoutMs: 7_230_000 },
     'Gateway restart failed.',
   )
 }

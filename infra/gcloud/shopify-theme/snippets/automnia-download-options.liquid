@@ -1,0 +1,146 @@
+{% liquid
+  assign downloads_base_url = 'https://storage.googleapis.com/automnia-public-downloads-98780848640/releases/current/'
+%}
+
+<section class="automnia-downloads" aria-labelledby="AutomniaDownloadsHeading">
+  <div class="automnia-downloads__header">
+    <p class="automnia-downloads__eyebrow">Desktop release v1.0.31</p>
+    <h2 id="AutomniaDownloadsHeading">Choose your installer</h2>
+    <p>Automnia AI Nexus v1.0.31 is ready. Pick the installer that matches your computer.</p>
+    <div class="automnia-downloads__notice" role="note">
+      <strong>Before you install</strong>
+      <p>These installers are currently unsigned, so your computer may show a security warning. Download only from this page, confirm the file name matches the one below, and follow the steps for your operating system. You never need to turn off your computer’s security protections.</p>
+    </div>
+  </div>
+
+  <div class="automnia-downloads__grid">
+    <article class="automnia-downloads__card">
+      <div class="automnia-downloads__title">
+        <span class="automnia-downloads__platform">Windows</span>
+        <h3>Windows 64-bit</h3>
+      </div>
+      <div class="automnia-downloads__details">
+        <p>Installer for current Windows PCs.</p>
+        <details>
+          <summary>How to install on Windows</summary>
+          <ol>
+            <li>Download <code>Automnia-Setup-x64.exe</code>, then open it from your Downloads folder.</li>
+            <li>If Windows shows “Windows protected your PC,” select <strong>More info</strong>, verify the file name, then select <strong>Run anyway</strong>.</li>
+            <li>Select <strong>Yes</strong> if Windows asks whether Automnia can make changes to install the app, then follow the installer prompts.</li>
+          </ol>
+          <p class="automnia-downloads__safety">Do not disable Microsoft Defender or change Windows security settings. If the file name or download source is different, cancel the installation.</p>
+        </details>
+      </div>
+      <a href="{{ downloads_base_url }}Automnia-Setup-x64.exe" download>Download <span>.exe</span></a>
+    </article>
+
+    <article class="automnia-downloads__card">
+      <div class="automnia-downloads__title">
+        <span class="automnia-downloads__platform">macOS</span>
+        <h3>Apple silicon</h3>
+      </div>
+      <div class="automnia-downloads__details">
+        <p>For Macs with M-series chips.</p>
+        <details>
+          <summary>How to install on an Apple silicon Mac</summary>
+          <ol>
+            <li>Open <code>Automnia-AI-Nexus-arm64.dmg</code>, then drag Automnia AI Nexus into the <strong>Applications</strong> folder.</li>
+            <li>Open <strong>Applications</strong> in Finder, Control-click Automnia AI Nexus, choose <strong>Open</strong>, then choose <strong>Open</strong> again.</li>
+            <li>If macOS still blocks it, go to <strong>System Settings → Privacy &amp; Security</strong>, scroll to the Security section, and select <strong>Open Anyway</strong> for Automnia AI Nexus. Confirm only after checking the app name.</li>
+          </ol>
+          <p class="automnia-downloads__safety">You do not need to allow apps from anywhere or disable Gatekeeper. If Automnia later requests a privacy permission for a feature, enable only that specific permission in Privacy &amp; Security.</p>
+        </details>
+      </div>
+      <a href="{{ downloads_base_url }}Automnia-AI-Nexus-arm64.dmg" download>Download <span>.dmg</span></a>
+    </article>
+
+    <article class="automnia-downloads__card">
+      <div class="automnia-downloads__title">
+        <span class="automnia-downloads__platform">macOS</span>
+        <h3>Intel Mac</h3>
+      </div>
+      <div class="automnia-downloads__details">
+        <p>For Intel-based Mac computers.</p>
+        <details>
+          <summary>How to install on an Intel Mac</summary>
+          <ol>
+            <li>Open <code>Automnia-AI-Nexus-x64.dmg</code>, then drag Automnia AI Nexus into the <strong>Applications</strong> folder.</li>
+            <li>Open <strong>Applications</strong> in Finder, Control-click Automnia AI Nexus, choose <strong>Open</strong>, then choose <strong>Open</strong> again.</li>
+            <li>If macOS still blocks it, go to <strong>System Settings → Privacy &amp; Security</strong>, scroll to the Security section, and select <strong>Open Anyway</strong> for Automnia AI Nexus. Confirm only after checking the app name.</li>
+          </ol>
+          <p class="automnia-downloads__safety">You do not need to allow apps from anywhere or disable Gatekeeper. If Automnia later requests a privacy permission for a feature, enable only that specific permission in Privacy &amp; Security.</p>
+        </details>
+      </div>
+      <a href="{{ downloads_base_url }}Automnia-AI-Nexus-x64.dmg" download>Download <span>.dmg</span></a>
+    </article>
+
+    <article class="automnia-downloads__card">
+      <div class="automnia-downloads__title">
+        <span class="automnia-downloads__platform">Linux</span>
+        <h3>AppImage</h3>
+      </div>
+      <div class="automnia-downloads__details">
+        <p>A portable installer for most Linux distributions.</p>
+        <details>
+          <summary>How to install the AppImage</summary>
+          <ol>
+            <li>Download <code>Automnia-AI-Nexus-x86_64.AppImage</code>.</li>
+            <li>Right-click the file, open <strong>Properties → Permissions</strong>, and allow the file to run as a program.</li>
+            <li>Double-click the file to open Automnia. If your file manager does not offer that option, use <code>chmod +x Automnia-AI-Nexus-x86_64.AppImage</code> in a terminal, then open the file.</li>
+          </ol>
+          <p class="automnia-downloads__safety">If your Linux distribution warns that the file is untrusted, verify that its name and source match this page before continuing.</p>
+        </details>
+      </div>
+      <a href="{{ downloads_base_url }}Automnia-AI-Nexus-x86_64.AppImage" download>Download <span>AppImage</span></a>
+    </article>
+
+    <article class="automnia-downloads__card">
+      <div class="automnia-downloads__title">
+        <span class="automnia-downloads__platform">Linux</span>
+        <h3>Debian package</h3>
+      </div>
+      <div class="automnia-downloads__details">
+        <p>For Debian, Ubuntu, and compatible distributions.</p>
+        <details>
+          <summary>How to install the Debian package</summary>
+          <ol>
+            <li>Download <code>Automnia-AI-Nexus-x86_64.deb</code>.</li>
+            <li>Double-click the file and choose your system’s software installer, then select <strong>Install</strong>.</li>
+            <li>Enter your administrator password when prompted, then launch Automnia from your applications menu.</li>
+          </ol>
+          <p class="automnia-downloads__safety">If your package installer says the package is untrusted, verify the file name and source first. Do not bypass a warning for a file you did not download from this page.</p>
+        </details>
+      </div>
+      <a href="{{ downloads_base_url }}Automnia-AI-Nexus-x86_64.deb" download>Download <span>.deb</span></a>
+    </article>
+  </div>
+</section>
+
+<style>
+  .automnia-downloads { width: 100%; margin-top: 12px; padding: 28px; border: 1px solid #1d3950; border-radius: 18px; background: #f5f9fd; color: #132238; }
+  .automnia-downloads__header { max-width: 760px; padding-bottom: 24px; border-bottom: 1px solid #d8e3ee; }
+  .automnia-downloads__eyebrow { display: inline-block; margin: 0 0 12px; padding: 7px 11px; border: 1px solid rgba(11, 119, 114, .22); border-radius: 999px; background: rgba(46, 252, 230, .12); color: #0b7772; font-size: .72rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+  .automnia-downloads h2 { margin: 0; color: #132238; font-size: clamp(1.7rem, 3vw, 2.4rem); letter-spacing: -.035em; }
+  .automnia-downloads__header > p:last-child { margin: 10px 0 0; color: #52657c; line-height: 1.55; }
+  .automnia-downloads__notice { margin-top: 18px; padding: 14px 16px; border: 1px solid #a9d4f2; border-radius: 10px; background: #eef7ff; color: #52657c; }
+  .automnia-downloads__notice strong { color: #0b7772; font-size: .84rem; }
+  .automnia-downloads__notice p { margin: 5px 0 0; font-size: .89rem; line-height: 1.5; }
+  .automnia-downloads__grid { display: grid; gap: 12px; margin-top: 18px; }
+  .automnia-downloads__card { display: grid; grid-template-columns: minmax(190px, .9fr) minmax(0, 1.7fr) auto; align-items: start; gap: 24px; padding: 20px; border: 1px solid #a9d4f2; border-radius: 12px; background: #fff; }
+  .automnia-downloads__platform { display: block; margin-bottom: 5px; color: #0b7772; font-size: .7rem; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
+  .automnia-downloads h3 { margin: 0; color: #132238; font-size: 1.08rem; letter-spacing: -.015em; }
+  .automnia-downloads__card p { margin: 0; color: #52657c; line-height: 1.45; }
+  .automnia-downloads__details { display: grid; gap: 10px; }
+  .automnia-downloads__details details { color: #52657c; font-size: .88rem; }
+  .automnia-downloads__details summary { width: fit-content; cursor: pointer; color: #0b7772; font-weight: 700; }
+  .automnia-downloads__details summary:hover { color: #075d58; }
+  .automnia-downloads__details ol { margin: 10px 0 0; padding-left: 20px; }
+  .automnia-downloads__details li { margin: 0 0 7px; line-height: 1.5; }
+  .automnia-downloads__details code { padding: 1px 4px; border-radius: 3px; background: #07111e; color: #2efce6; font-size: .82em; overflow-wrap: anywhere; }
+  .automnia-downloads__safety { margin-top: 10px !important; color: #52657c !important; font-size: .82rem; }
+  .automnia-downloads__card a { display: inline-flex; align-items: center; justify-content: center; width: 158px; min-height: 44px; padding: 10px 16px; border: 1px solid #2b5d78; border-radius: 8px; background: #030913; color: #2efce6; font-size: .88rem; font-weight: 750; text-decoration: none; transition: background-color .18s ease, border-color .18s ease, transform .18s ease; }
+  .automnia-downloads__card a span { margin-left: 5px; color: #a7b5c8; font-size: .78rem; font-weight: 650; }
+  .automnia-downloads__card a:hover { border-color: #2efce6; background: #07111e; transform: translateY(-1px); }
+  .automnia-downloads__card a:focus-visible { outline: 3px solid #0b7772; outline-offset: 3px; }
+  @media (max-width: 749px) { .automnia-downloads { padding: 20px; } .automnia-downloads__card { grid-template-columns: 1fr; gap: 10px; padding: 18px; } .automnia-downloads__card a { width: 100%; margin-top: 5px; } }
+</style>

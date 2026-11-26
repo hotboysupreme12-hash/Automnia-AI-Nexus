@@ -4,6 +4,11 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
+import {
+  assertContainedRegularFilePath,
+  retryTransientFileLock,
+  withSerializedFileLock,
+} from '../services/filesystem/atomicControlFile'
 
 type OpenClawResultLike = {
   stdout: string
@@ -712,8 +717,9 @@ app.post('/api/party/agent-to-agent', async (req, res) => {
       '--json',
     ]),
     agentWorkTimeoutWrapperMs(fromEffectiveTimeoutSeconds),
-    { cwd: fromContext.doctrineWorkspace, envOverrides: fromEnv },
+    { cwd: runCwdForContext(fromContext), envOverrides: fromEnv },
   ).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
+  await cleanupDoctrineMirrorsAfterRun(fromAgent, fromContext.executionWorkspace)
 
   const fromReply = extractAgentReply(fromResult.stdout, fromResult.stderr)
   assignmentsState[0] = {
@@ -807,8 +813,9 @@ app.post('/api/party/agent-to-agent', async (req, res) => {
       '--json',
     ]),
     agentWorkTimeoutWrapperMs(toEffectiveTimeoutSeconds),
-    { cwd: toContext.doctrineWorkspace, envOverrides: toEnv },
+    { cwd: runCwdForContext(toContext), envOverrides: toEnv },
   ).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
+  await cleanupDoctrineMirrorsAfterRun(toAgent, toContext.executionWorkspace)
 
   const toReply = extractAgentReply(toResult.stdout, toResult.stderr)
   assignmentsState[1] = {
@@ -990,7 +997,18 @@ app.post('/api/team-sync/append', async (req, res) => {
       return apiFailure(res, 400, 'team_sync_failed', 'Only TEAM_SYNC.md is allowed for this endpoint')
     }
 
-    await ensureTeamSyncFile(targetPath)
+    let containedTargetPath: string
+    try {
+      containedTargetPath = await assertContainedRegularFilePath(targetPath, {
+        allowedRoots: [executionWorkspace],
+        allowedExactFiles: [sharedTeamSyncPath],
+        isPathUnder,
+        samePath,
+        label: 'TEAM_SYNC.md',
+      })
+    } catch (containmentError) {
+      return apiFailure(res, 400, 'team_sync_failed', containmentError instanceof Error ? containmentError.message : String(containmentError))
+    }
 
     const timestamp = new Date().toISOString()
     const normalizedRole = (role || 'agent').trim()
@@ -1009,7 +1027,25 @@ app.post('/api/team-sync/append', async (req, res) => {
 
     if (!appendLines.length) return apiFailure(res, 400, 'invalid_payload', 'note or line is required')
 
-    await fs.appendFile(targetPath, `${appendLines.join('\n')}\n`, 'utf-8')
+    await ensureTeamSyncFile(containedTargetPath)
+    await withSerializedFileLock(containedTargetPath, async () => {
+      const reverifiedTargetPath = await assertContainedRegularFilePath(targetPath, {
+        allowedRoots: [executionWorkspace],
+        allowedExactFiles: [sharedTeamSyncPath],
+        isPathUnder,
+        samePath,
+        label: 'TEAM_SYNC.md',
+      })
+      await retryTransientFileLock(async () => {
+        const handle = await fs.open(reverifiedTargetPath, 'a', 0o600)
+        try {
+          await handle.writeFile(`${appendLines.join('\n')}\n`, 'utf-8')
+          await handle.sync()
+        } finally {
+          await handle.close()
+        }
+      })
+    })
 
     return apiSuccess(res, {
       ok: true,

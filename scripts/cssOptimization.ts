@@ -1,5 +1,87 @@
 import type { Declaration, Plugin, Rule } from 'postcss'
 
+function scaleUiPixelTokens(value: string, scale: number): string {
+  let output = ''
+  let index = 0
+  let quote: string | null = null
+
+  while (index < value.length) {
+    const char = value[index]
+    if (quote) {
+      output += char
+      if (char === '\\' && index + 1 < value.length) output += value[++index]
+      else if (char === quote) quote = null
+      index += 1
+      continue
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char
+      output += char
+      index += 1
+      continue
+    }
+
+    if (value.slice(index, index + 4).toLowerCase() === 'url(') {
+      let depth = 0
+      let urlQuote: string | null = null
+      do {
+        const urlChar = value[index]
+        output += urlChar
+        if (urlQuote) {
+          if (urlChar === '\\' && index + 1 < value.length) output += value[++index]
+          else if (urlChar === urlQuote) urlQuote = null
+        } else if (urlChar === '"' || urlChar === "'") urlQuote = urlChar
+        else if (urlChar === '(') depth += 1
+        else if (urlChar === ')') depth -= 1
+        index += 1
+      } while (index < value.length && depth > 0)
+      continue
+    }
+
+    const match = value.slice(index).match(/^([+-]?(?:\d+(?:\.\d*)?|\.\d+))(px)\b/i)
+    const previous = index > 0 ? value[index - 1] : ''
+    if (match && !/[\w.-]/.test(previous)) {
+      const amount = Number(match[1])
+      const scaled = amount === 0 ? 0 : Number((amount * scale).toFixed(4))
+      output += `${scaled}${match[2]}`
+      index += match[0].length
+      continue
+    }
+
+    output += char
+    index += 1
+  }
+
+  return output
+}
+
+/** Apply compact sizing to fixed-pixel CSS values without changing browser zoom. */
+export function scaleUiCssDimensions(scale = 0.8): Plugin {
+  return {
+    postcssPlugin: 'automnia-scale-ui-css-dimensions',
+    Once(root) {
+      const marker = 'automnia-ui-size-scaled-once'
+      let alreadyScaled = false
+      root.walkComments((comment) => {
+        if (comment.text.trim() === marker) alreadyScaled = true
+      })
+      if (alreadyScaled) return
+
+      root.walkDecls((declaration) => {
+        if (declaration.prop === 'content' || declaration.prop === 'src') return
+        declaration.value = scaleUiPixelTokens(declaration.value, scale)
+      })
+      root.walkAtRules((rule) => {
+        if (rule.name === 'media' || rule.name === 'container') {
+          rule.params = scaleUiPixelTokens(rule.params, scale)
+        }
+      })
+      root.prepend({ type: 'comment', text: marker })
+    },
+  }
+}
+
 const length = '(?:0|(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:px|rem|em|%|vh|vw|vmin|vmax|ch|ex))'
 const lengths = new RegExp(`^${length}(?:\\s+${length}){0,3}$`, 'i')
 const sizing = new RegExp(`^(?:auto|${length})$`, 'i')

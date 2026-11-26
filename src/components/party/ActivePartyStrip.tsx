@@ -1,4 +1,5 @@
 import { AvatarFallback } from '../ui/AvatarFallback'
+import { Button } from '../ui/Button'
 import { useMemo, useState, type ReactNode } from 'react'
 import { useNexusStore } from '../../store/nexusStore'
 import type { OpenClawAgent } from '../../types/nexus'
@@ -97,25 +98,23 @@ export function ActivePartyStrip({ toolbar }: ActivePartyStripProps) {
         <div className="active-party-actions flex flex-wrap items-center gap-2">
           {toolbar && <div className="active-party-toolbar">{toolbar}</div>}
           <TeamPresets />
-          <button
-            type="button"
+          <Button
             onClick={clearAll}
             disabled={!activePartyIds.length || missionRunning}
             data-party-action="clear"
-            className="rounded-lg border border-red-400/25 bg-red-400/[0.06] px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-red-200/80 transition hover:bg-red-400/[0.14] hover:text-red-100 disabled:opacity-30"
+            className="active-party-action"
             title="Clear entire party and console"
           >
             Clear
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             onClick={confirmParty}
             disabled={!activePartyIds.length || missionRunning}
             data-party-action="confirm"
-            className="rounded-lg border border-cyan-400/30 bg-cyan-400/[0.08] px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-100 transition hover:bg-cyan-400/[0.14] disabled:opacity-40"
+            className="active-party-action"
           >
             {missionRunning ? 'Locked' : 'Confirm'}
-          </button>
+          </Button>
         </div>
       </div>
 
