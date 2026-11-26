@@ -142,5 +142,3 @@ test('control files service serializes atomic writes and rejects stale expectedR
   assert.equal(await service.readFile('MEMORY.md'), '# First atomic update\n')
   assert.deepEqual(await fs.readdir(workspaceRoot), ['MEMORY.md'])
 })
-
-\n

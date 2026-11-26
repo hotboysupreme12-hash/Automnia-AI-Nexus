@@ -148,5 +148,3 @@ test('tool-access waits briefly for active turns and returns 409 unless stopActi
     await new Promise<void>((resolve) => server.close(() => resolve()))
   }
 })
-
-\n
