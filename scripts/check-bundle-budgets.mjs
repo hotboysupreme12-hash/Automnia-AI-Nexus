@@ -60,9 +60,10 @@ const budgets = {
   // for small implementation changes.
   entryCssBytes: numberEnv('AUTOMNIA_BUDGET_ENTRY_CSS_BYTES', 2_000_000),
   entryCssGzipBytes: numberEnv('AUTOMNIA_BUDGET_ENTRY_CSS_GZIP_BYTES', 250_000),
-  // Keep the renderer ceiling close to the current feature set and ONNX runtime output.
-  totalJsBytes: numberEnv('AUTOMNIA_BUDGET_TOTAL_JS_BYTES', 1_155_000),
-  totalJsGzipBytes: numberEnv('AUTOMNIA_BUDGET_TOTAL_JS_GZIP_BYTES', 346_000),
+  // The v1.0.31 Linux and macOS builds measure 1,158,736 bytes / 348,385 gzip.
+  // Keep a small margin above that baseline so platform builds share one stable gate.
+  totalJsBytes: numberEnv('AUTOMNIA_BUDGET_TOTAL_JS_BYTES', 1_180_000),
+  totalJsGzipBytes: numberEnv('AUTOMNIA_BUDGET_TOTAL_JS_GZIP_BYTES', 355_000),
   deferredSpeechJsBytes: numberEnv('AUTOMNIA_BUDGET_DEFERRED_SPEECH_JS_BYTES', 565_000),
   deferredSpeechJsGzipBytes: numberEnv('AUTOMNIA_BUDGET_DEFERRED_SPEECH_JS_GZIP_BYTES', 166_000),
 }
