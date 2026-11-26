@@ -51,8 +51,8 @@ if ($PSCmdlet.ShouldProcess($installerBucket, 'create private customer-installer
   if ($bucket.ExitCode -ne 0) {
     Invoke-Gcloud -Arguments @('storage', 'buckets', 'create', "gs://$installerBucket", '--project', $ProjectId, '--location', $Region, '--uniform-bucket-level-access') | Out-Null
   }
-  Invoke-Gcloud -Arguments @('storage', 'buckets', 'update', "gs://$installerBucket", '--public-access-prevention') | Out-Null
-  Invoke-Gcloud -Arguments @('storage', 'buckets', 'add-iam-policy-binding', "gs://$installerBucket", '--member', "serviceAccount:$serviceAccountEmail", '--role', 'roles/storage.objectViewer') | Out-Null
+  Invoke-Gcloud -Arguments @('storage', 'buckets', 'update', "gs://$installerBucket", '--public-access-prevention', '--project', $ProjectId) | Out-Null
+  Invoke-Gcloud -Arguments @('storage', 'buckets', 'add-iam-policy-binding', "gs://$installerBucket", '--member', "serviceAccount:$serviceAccountEmail", '--role', 'roles/storage.objectViewer', '--project', $ProjectId) | Out-Null
 }
 # Cloud Storage V4 URLs use IAM signBlob when Cloud Run has no local key.
 if ($PSCmdlet.ShouldProcess($serviceAccountEmail, 'allow the runtime identity to sign its installer download URLs')) {

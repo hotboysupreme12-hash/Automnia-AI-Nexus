@@ -52,8 +52,11 @@ function Invoke-Gcloud {
       break
     }
   }
-  if (-not $projectId -and $Arguments.Count -ge 3 -and $Arguments[0] -eq 'projects' -and $Arguments[1] -eq 'describe') {
+  if (-not $projectId -and $Arguments.Count -ge 3 -and $Arguments[0] -eq 'projects' -and @('describe', 'add-iam-policy-binding', 'get-iam-policy', 'remove-iam-policy-binding') -contains $Arguments[1]) {
     $projectId = [string]$Arguments[2]
+  }
+  if (-not $projectId -and $Arguments.Count -ge 4 -and $Arguments[0] -eq 'billing' -and $Arguments[1] -eq 'projects' -and @('describe', 'link') -contains $Arguments[2]) {
+    $projectId = [string]$Arguments[3]
   }
   if ($projectId -and $env:AUTOMNIA_GCLOUD_PROJECT_ACCOUNT_OVERRIDES) {
     try {
