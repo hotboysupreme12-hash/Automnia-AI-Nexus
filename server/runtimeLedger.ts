@@ -67,10 +67,13 @@ type JsonlTailDiagnostic = {
 
 const optionalRequire = createRequire(typeof __filename === 'string' ? __filename : import.meta.url)
 const LEDGER_TAIL_MAX_BYTES = 512 * 1024
+const SQLITE_UNAVAILABLE_RETRY_MS = 1_000
+const SQLITE_MODULE_UNAVAILABLE_REASON = 'node:sqlite is not available in this runtime'
 
 let paths: LedgerPaths | null = null
 let database: SqliteDatabase | null = null
 let sqliteUnavailableReason = ''
+let sqliteUnavailableRetryAtMs = 0
 let sqliteWriteWarning = ''
 let legacyImportWarning = ''
 let jsonlTailDiagnostic: JsonlTailDiagnostic | null = null
@@ -96,6 +99,7 @@ export function configureRuntimeLedger(input: Omit<LedgerPaths, 'sqlite'> & { sq
   if (database && paths?.sqlite !== nextPaths.sqlite) closeRuntimeLedger()
   paths = nextPaths
   sqliteUnavailableReason = ''
+  sqliteUnavailableRetryAtMs = 0
   sqliteWriteWarning = ''
   legacyImportWarning = ''
   jsonlTailDiagnostic = null
@@ -270,15 +274,22 @@ async function readMissionJsonlLedgerTail<T>(ledger: string, filePath: string, l
   }
 }
 
-function openDatabase() {
+function openDatabase(options: { retryUnavailable?: boolean } = {}) {
   if (database) return database
-  if (sqliteUnavailableReason) return null
+  if (sqliteUnavailableReason) {
+    const moduleUnavailable = sqliteUnavailableReason === SQLITE_MODULE_UNAVAILABLE_REASON
+      || sqliteUnavailableRetryAtMs === Number.POSITIVE_INFINITY
+    if (moduleUnavailable || (!options.retryUnavailable && Date.now() < sqliteUnavailableRetryAtMs)) return null
+    sqliteUnavailableReason = ''
+    sqliteUnavailableRetryAtMs = 0
+  }
 
   const currentPaths = configuredPaths()
   try {
     const sqlite = optionalRequire('node:sqlite') as SqliteModule
     if (!sqlite?.DatabaseSync) {
-      sqliteUnavailableReason = 'node:sqlite is not available in this runtime'
+      sqliteUnavailableReason = SQLITE_MODULE_UNAVAILABLE_REASON
+      sqliteUnavailableRetryAtMs = Number.POSITIVE_INFINITY
       return null
     }
 
@@ -453,9 +464,15 @@ function openDatabase() {
       database.exec('ROLLBACK;')
       throw error
     }
+    sqliteUnavailableReason = ''
+    sqliteUnavailableRetryAtMs = 0
     return database
   } catch (error) {
     sqliteUnavailableReason = error instanceof Error && error.message ? error.message : String(error)
+    sqliteUnavailableRetryAtMs = /node:sqlite/i.test(sqliteUnavailableReason)
+      && /not available|not found|no such built-in module|cannot find/i.test(sqliteUnavailableReason)
+      ? Number.POSITIVE_INFINITY
+      : Date.now() + SQLITE_UNAVAILABLE_RETRY_MS
     try {
       database?.close?.()
     } catch {
@@ -754,15 +771,26 @@ export function writeControlCenterState(
   value: unknown,
   options: ControlCenterStateWriteOptions = {},
 ) {
-  const db = options.sqlite === false ? null : openDatabase()
-  if (!db) return false
+  if (options.sqlite === false) return false
+  let db = openDatabase({ retryUnavailable: true })
+  if (!db && sqliteUnavailableRetryAtMs !== Number.POSITIVE_INFINITY) {
+    db = openDatabase({ retryUnavailable: true })
+  }
+  if (!db) {
+    sqliteWriteWarning = `SQLite control-center state write unavailable: ${sqliteUnavailableReason || 'database could not be opened'}`
+    return false
+  }
   let payload = ''
   try {
     payload = JSON.stringify(value)
-  } catch {
+  } catch (error) {
+    sqliteWriteWarning = `SQLite control-center state serialization failed: ${error instanceof Error ? error.message : String(error)}`
     return false
   }
-  if (!payload) return false
+  if (!payload) {
+    sqliteWriteWarning = 'SQLite control-center state serialization produced an empty payload.'
+    return false
+  }
   try {
     const now = new Date()
     preparedStatement(db, `
@@ -782,8 +810,10 @@ export function writeControlCenterState(
       options.sourcePath || null,
       payload,
     )
+    sqliteWriteWarning = ''
     return true
-  } catch {
+  } catch (error) {
+    sqliteWriteWarning = `SQLite control-center state write failed: ${error instanceof Error ? error.message : String(error)}`
     return false
   }
 }
@@ -793,8 +823,15 @@ export function deleteControlCenterState(
   stateKey: string,
   options: LedgerReadOptions = {},
 ) {
-  const db = options.sqlite === false ? null : openDatabase()
-  if (!db) return false
+  if (options.sqlite === false) return false
+  let db = openDatabase({ retryUnavailable: true })
+  if (!db && sqliteUnavailableRetryAtMs !== Number.POSITIVE_INFINITY) {
+    db = openDatabase({ retryUnavailable: true })
+  }
+  if (!db) {
+    sqliteWriteWarning = `SQLite control-center state delete unavailable: ${sqliteUnavailableReason || 'database could not be opened'}`
+    return false
+  }
   try {
     preparedStatement(db, `
       DELETE FROM control_center_state
@@ -803,8 +840,10 @@ export function deleteControlCenterState(
       normalizedStateCoordinate(namespace, 'namespace'),
       normalizedStateCoordinate(stateKey, 'key'),
     )
+    sqliteWriteWarning = ''
     return true
-  } catch {
+  } catch (error) {
+    sqliteWriteWarning = `SQLite control-center state delete failed: ${error instanceof Error ? error.message : String(error)}`
     return false
   }
 }

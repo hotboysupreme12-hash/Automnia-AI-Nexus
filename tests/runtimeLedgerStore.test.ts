@@ -112,6 +112,29 @@ test('runtime ledger store owns control-center state namespace', async () => {
   })
 })
 
+test('runtime ledger retries critical state writes after a transient SQLite open failure', async () => {
+  await withRuntimeLedgerStore('ledger-state-retry', async (store) => {
+    await mkdir(path.dirname(store.paths.sqlite), { recursive: true })
+    await writeFile(store.paths.sqlite, 'temporary invalid sqlite file', 'utf-8')
+
+    const stateKey = CONTROL_CENTER_STATE_KEYS.licenseActivation
+    assert.equal(store.writeControlCenterState(stateKey, { active: true, licenseKey: 'AUT-RETRY-TEST' }), false)
+    assert.match(
+      String(store.status({ sqlite: false }).sqliteWriteWarning || ''),
+      /SQLite control-center state write unavailable:/,
+    )
+
+    await rm(store.paths.sqlite, { force: true })
+    await rm(`${store.paths.sqlite}-wal`, { force: true })
+    await rm(`${store.paths.sqlite}-shm`, { force: true })
+
+    const recoveredState = { active: true, licenseKey: 'AUT-RETRY-TEST' }
+    assert.equal(store.writeControlCenterState(stateKey, recoveredState), true)
+    assert.deepEqual(store.readControlCenterState(stateKey), recoveredState)
+    assert.equal(store.status({ sqlite: false }).sqliteWriteWarning, null)
+  })
+})
+
 test('runtime ledger store persists agency recruit templates as queryable rows', async () => {
   await withRuntimeLedgerStore('ledger-store-agency-templates', async (store) => {
     const status = store.status()
