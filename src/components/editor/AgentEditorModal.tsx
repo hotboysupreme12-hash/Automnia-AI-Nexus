@@ -1937,12 +1937,29 @@ export function AgentEditorModal() {
                         const mode = event.target.value
                         if (!agent || !mode) return
                         try { await flushPolicySave() } catch { return }
+                        const previousMode = toolAccess
                         setPs(true)
+                        setToolAccess(mode)
                         setPsStatus('Saving command permissions…')
-                        const result = await apiRequest(`/api/party/agent/${encodeURIComponent(agent.id)}/tool-access`, { method: 'POST', body: { mode }, timeoutMs: 20000 })
-                        if (result.ok) { agentConfigCache.delete(agent.id); await LdP(true) }
-                        setPsStatus(result.ok ? 'Command permissions saved.' : `Save failed: ${apiErrorMessage(result.error)}`)
-                        setPs(false)
+                        try {
+                          const result = await apiRequest(`/api/party/agent/${encodeURIComponent(agent.id)}/tool-access`, { method: 'POST', body: { mode }, timeoutMs: 15000 })
+                          if (result.ok) {
+                            agentConfigCache.delete(agent.id)
+                            setPsStatus('Command permissions saved. Refreshing agent settings…')
+                            // The tool-access endpoint is authoritative for this save. A follow-up
+                            // config read is only a UI refresh and must not make a successful save
+                            // appear stuck or failed when the Gateway is recovering.
+                            void LdP(true).catch(() => undefined)
+                          } else {
+                            setToolAccess(previousMode)
+                            setPsStatus(`Save failed: ${apiErrorMessage(result.error)}`)
+                          }
+                        } catch (error) {
+                          setToolAccess(previousMode)
+                          setPsStatus(`Save failed: ${errorMessage(error)}. Check Runtime Monitor and retry when Gateway is connected.`)
+                        } finally {
+                          setPs(false)
+                        }
                       }}>
                         <option value="" disabled>Use current configuration</option>
                         <option value="ask">Ask for approval</option>
