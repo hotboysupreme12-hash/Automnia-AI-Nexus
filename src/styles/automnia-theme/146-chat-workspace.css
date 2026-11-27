@@ -50,7 +50,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profiles {
   gap: 8px;
   min-width: 0;
   max-width: 100%;
-  padding: 8px 16px 10px;
+  padding: 4px 8px 5px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   border-bottom: 1px solid rgb(255 255 255 / .06);
@@ -93,6 +93,58 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profile__avatar img {
   height: 100%;
   border-radius: 50% !important;
   object-fit: cover;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profile[data-voice-phase]:not([data-voice-phase="idle"]) .dy-chat-profile__avatar {
+  border-color: rgb(116 236 211 / .9);
+  box-shadow: 0 0 0 3px rgb(116 236 211 / .16), 0 0 18px rgb(116 236 211 / .3);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profile__voice-waveform {
+  position: absolute;
+  z-index: 3;
+  inset: -2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  overflow: hidden;
+  border: 1px solid rgb(172 255 234 / .72);
+  border-radius: 50%;
+  background: rgb(8 22 24 / .38);
+  box-shadow: inset 0 0 12px rgb(116 236 211 / .18);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profile__voice-waveform > i {
+  width: 2px;
+  height: 5px;
+  border-radius: 2px;
+  background: #b7ffed;
+  box-shadow: 0 0 5px rgb(116 236 211 / .8);
+  animation: dy-profile-voice-wave 620ms ease-in-out infinite alternate;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profile__voice-waveform > i:nth-child(2),
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profile__voice-waveform > i:nth-child(4) {
+  animation-delay: 130ms;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profile__voice-waveform > i:nth-child(3) {
+  animation-delay: 260ms;
+}
+
+@keyframes dy-profile-voice-wave {
+  from { height: 4px; opacity: .62; }
+  to { height: 18px; opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profile__voice-waveform > i {
+    animation: none;
+    height: 10px;
+  }
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-profile[aria-pressed="true"] .dy-chat-profile__avatar {

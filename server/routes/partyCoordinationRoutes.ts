@@ -194,8 +194,8 @@ app.post('/api/party/dispatch', async (req, res) => {
     assignments: z
       .array(
         z.object({
-          agent: z.string().min(1),
-          message: z.string().min(1),
+          agent: z.string().trim().min(1),
+          message: z.string().trim().min(1),
           thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).default('medium'),
           timeoutSeconds: z.number().int().min(30).max(7200).optional(),
         }),
@@ -215,6 +215,30 @@ app.post('/api/party/dispatch', async (req, res) => {
     return apiFailure(res, 400, 'invalid_payload', `Invalid or retired agent id: ${invalidAssignmentAgent.agent}`)
   }
 
+  if (parsed.data.mode === 'parallel') {
+    const seenParallelAgents = new Set<string>()
+    const duplicateAgents = Array.from(
+      new Set(
+        parsed.data.assignments
+          .map((assignment) => assignment.agent)
+          .filter((agentId) => {
+            if (seenParallelAgents.has(agentId)) return true
+            seenParallelAgents.add(agentId)
+            return false
+          }),
+      ),
+    )
+    if (duplicateAgents.length) {
+      return apiFailure(
+        res,
+        400,
+        'invalid_payload',
+        `Parallel dispatch cannot launch duplicate concurrent runs for the same agent: ${duplicateAgents.join(', ')}`,
+        { agents: duplicateAgents },
+      )
+    }
+  }
+
   const party = await getPartyMembers()
   const partyById = new Map(party.map((agent) => [agent.id, agent]))
   const missingAgents = Array.from(new Set(parsed.data.assignments.map((assignment) => assignment.agent))).filter(
@@ -227,341 +251,396 @@ app.post('/api/party/dispatch', async (req, res) => {
   }
 
   const dispatchId = randomUUID()
+  const dispatchTitle = parsed.data.mode === 'sequential' ? 'Sequential Dispatch' : 'Parallel Dispatch'
   const activity: string[] = []
+  const initialTimestamp = new Date().toISOString()
   const assignmentsState: TeamSyncAssignment[] = parsed.data.assignments.map((assignment) => ({
     agentId: assignment.agent,
     task: assignment.message,
-    status: 'queued',
-    updatedAt: new Date().toISOString(),
+    status: parsed.data.mode === 'parallel' ? 'running' : 'queued',
+    updatedAt: initialTimestamp,
   }))
   const sharedWebsiteCollaboration = isSharedWebsiteCollaboration(parsed.data.assignments)
-  await writeTeamSyncSnapshot({
-    missionId: dispatchId,
-    title: 'Parallel Dispatch',
-    mode: parsed.data.mode,
-    status: 'running',
-    assignments: assignmentsState,
-    activity,
-  })
+  const publishRunningDispatchSnapshot = async () => {
+    await writeTeamSyncSnapshot({
+      missionId: dispatchId,
+      title: dispatchTitle,
+      mode: parsed.data.mode,
+      status: 'running',
+      assignments: assignmentsState,
+      activity,
+    })
+  }
+  const publishAssignmentProgressIfActive = async () => {
+    if (assignmentsState.some((item) => item.status === 'queued' || item.status === 'running')) {
+      await publishRunningDispatchSnapshot()
+    }
+  }
+  await publishRunningDispatchSnapshot()
 
   const runAssignment = async (assignment: (typeof parsed.data.assignments)[number], assignmentIndex: number) => {
-    const state = assignmentsState.find((item) => item.agentId === assignment.agent)
-    if (state) {
-      state.status = 'running'
-      state.updatedAt = new Date().toISOString()
-    }
-    const meta = partyById.get(assignment.agent)
-    const agentLabel = meta?.name || assignment.agent
-    const assignedTeamIds = parsed.data.assignments.map((entry) => entry.agent)
-    const context = await resolveAgentRunContext(assignment.agent)
-    const filenameResolution = await resolveFilenameHintsForMessage(assignment.message, context.executionWorkspace)
-    const effectiveAssignmentMessage = filenameResolution.message
-    const websiteContributionDirective = buildWebsiteContributionDirective({
-      active: sharedWebsiteCollaboration,
-      assignmentIndex,
-      totalAssignments: parsed.data.assignments.length,
-      message: assignment.message,
-      resolutionNotes: filenameResolution.notes,
-    })
-    const roleDirective = buildDispatchExecutionDirective({
-      id: assignment.agent,
-      name: meta?.name,
-      role: meta?.role,
-      className: meta?.className,
-    })
-    const hostAction = ENABLE_HOST_ACTION_SHORTCUTS ? detectHostActionRequest(assignment.message) : null
+    const assignmentStartedIso = new Date().toISOString()
+    const assignmentStartMs = Date.now()
+    const state = assignmentsState[assignmentIndex]
+    let resolvedContext: AgentRunContext | undefined
+    try {
+      if (state && state.status !== 'running') {
+        state.status = 'running'
+        state.updatedAt = new Date().toISOString()
+        await publishRunningDispatchSnapshot()
+      }
+      const meta = partyById.get(assignment.agent)
+      const agentLabel = meta?.name || assignment.agent
+      const assignedTeamIds = parsed.data.assignments.map((entry) => entry.agent)
+      const context = await resolveAgentRunContext(assignment.agent)
+      resolvedContext = context
+      const filenameResolution = await resolveFilenameHintsForMessage(assignment.message, context.executionWorkspace)
+      const effectiveAssignmentMessage = filenameResolution.message
+      const websiteContributionDirective = buildWebsiteContributionDirective({
+        active: sharedWebsiteCollaboration,
+        assignmentIndex,
+        totalAssignments: parsed.data.assignments.length,
+        message: assignment.message,
+        resolutionNotes: filenameResolution.notes,
+      })
+      const roleDirective = buildDispatchExecutionDirective({
+        id: assignment.agent,
+        name: meta?.name,
+        role: meta?.role,
+        className: meta?.className,
+      })
+      const hostAction = ENABLE_HOST_ACTION_SHORTCUTS ? detectHostActionRequest(assignment.message) : null
 
-    const assignmentBrowserIntent = await shouldRouteBrowserIntentThroughBrowserPlugin(assignment.message, hostAction)
-    if (assignmentBrowserIntent) {
-      const preflight = await checkBrowserPreflight(assignment.agent)
-      if (!preflight.ok) {
+      const assignmentBrowserIntent = await shouldRouteBrowserIntentThroughBrowserPlugin(assignment.message, hostAction)
+      if (assignmentBrowserIntent) {
+        const preflight = await checkBrowserPreflight(assignment.agent)
+        if (!preflight.ok) {
+          const startedAt = new Date().toISOString()
+          const endedAt = startedAt
+          const durationMs = 0
+          const failure = preflight.message
+          activity.unshift(`${new Date().toISOString()} | ${assignment.agent} | failed | ${trimTask(failure, 160)}`)
+          if (activity.length > 80) activity.length = 80
+          if (state) {
+            state.status = 'failed'
+            state.updatedAt = new Date().toISOString()
+            state.note = trimTask(preflight.reason, 90)
+          }
+          await publishAssignmentProgressIfActive()
+          await appendAgentDailyMemory(assignment.agent, `[dispatch:${dispatchId}] failed | ${trimTask(failure, 200)}`).catch(() => undefined)
+          return {
+            agent: assignment.agent,
+            ok: false,
+            stdout: '',
+            stderr: JSON.stringify({
+              status: 'error',
+              message: preflight.message,
+              reason: preflight.reason,
+              detail: preflight.detail,
+            }),
+            code: 1,
+            startedAt,
+            endedAt,
+            durationMs,
+          }
+        }
+      }
+
+      if (hostAction?.kind === 'launch-chrome') {
         const startedAt = new Date().toISOString()
-        const endedAt = startedAt
-        const durationMs = 0
-        const failure = preflight.message
-        activity.unshift(`${new Date().toISOString()} | ${assignment.agent} | failed | ${trimTask(failure, 160)}`)
+        const startMs = Date.now()
+        const launched = await launchChromeHost(hostAction.url)
+        const endedAt = new Date().toISOString()
+        const durationMs = Date.now() - startMs
+        const success = launched.ok
+        const hostMessage = success
+          ? `Host action executed: launched Google Chrome${hostAction.url ? ` (${hostAction.url})` : ''}.`
+          : `Host action failed: could not launch Google Chrome.`
+        activity.unshift(`${new Date().toISOString()} | ${assignment.agent} | ${success ? 'completed' : 'failed'} | ${hostMessage}`)
         if (activity.length > 80) activity.length = 80
         if (state) {
-          state.status = 'failed'
+          state.status = success ? 'completed' : 'failed'
           state.updatedAt = new Date().toISOString()
-          state.note = trimTask(preflight.reason, 90)
+          state.note = success ? 'host action completed' : trimTask(launched.detail || 'host action failed', 90)
         }
-        await appendAgentDailyMemory(assignment.agent, `[dispatch:${dispatchId}] failed | ${trimTask(failure, 200)}`)
+        await publishAssignmentProgressIfActive()
+        await appendAgentDailyMemory(
+          assignment.agent,
+          `[dispatch:${dispatchId}] host action ${success ? 'completed' : 'failed'} | ${hostMessage}`,
+        ).catch(() => undefined)
         return {
           agent: assignment.agent,
-          ok: false,
-          stdout: '',
-          stderr: JSON.stringify({
-            status: 'error',
-            message: preflight.message,
-            reason: preflight.reason,
-            detail: preflight.detail,
-          }),
-          code: 1,
+          ok: success,
+          stdout: success
+            ? JSON.stringify({
+                status: 'ok',
+                message: hostMessage,
+                command: launched.command,
+                detail: launched.detail,
+              })
+            : '',
+          stderr: success
+            ? ''
+            : JSON.stringify({
+                status: 'error',
+                message: hostMessage,
+                command: launched.command,
+                detail: launched.detail,
+              }),
+          code: success ? 0 : 1,
           startedAt,
           endedAt,
           durationMs,
         }
       }
-    }
-
-    if (hostAction?.kind === 'launch-chrome') {
-      const startedAt = new Date().toISOString()
-      const startMs = Date.now()
-      const launched = await launchChromeHost(hostAction.url)
-      const endedAt = new Date().toISOString()
-      const durationMs = Date.now() - startMs
-      const success = launched.ok
-      const hostMessage = success
-        ? `Host action executed: launched Google Chrome${hostAction.url ? ` (${hostAction.url})` : ''}.`
-        : `Host action failed: could not launch Google Chrome.`
-      activity.unshift(`${new Date().toISOString()} | ${assignment.agent} | ${success ? 'completed' : 'failed'} | ${hostMessage}`)
-      if (activity.length > 80) activity.length = 80
-      if (state) {
-        state.status = success ? 'completed' : 'failed'
-        state.updatedAt = new Date().toISOString()
-        state.note = success ? 'host action completed' : trimTask(launched.detail || 'host action failed', 90)
-      }
-      await appendAgentDailyMemory(
-        assignment.agent,
-        `[dispatch:${dispatchId}] host action ${success ? 'completed' : 'failed'} | ${hostMessage}`,
-      )
-      return {
-        agent: assignment.agent,
-        ok: success,
-        stdout: success
-          ? JSON.stringify({
-              status: 'ok',
-              message: hostMessage,
-              command: launched.command,
-              detail: launched.detail,
-            })
-          : '',
-        stderr: success
-          ? ''
-          : JSON.stringify({
-              status: 'error',
-              message: hostMessage,
-              command: launched.command,
-              detail: launched.detail,
-            }),
-        code: success ? 0 : 1,
-        startedAt,
-        endedAt,
-        durationMs,
-      }
-    }
-    const prompt = composeAgentDoctrinePrompt(
-      assignment.agent,
-      [
-      `/new You are ${agentLabel} (${assignment.agent}).`,
-      'Respond only as this specific agent.',
-      `Assigned team: ${assignedTeamIds.join(', ')}`,
-      'Do not answer for teammates unless explicitly asked to coordinate.',
-      'For direct format tasks, return only the requested format with no extra commentary.',
-      'Read TEAM_SYNC.md first for active teammate ownership and status.',
-      roleDirective,
-      websiteContributionDirective,
-      '',
-      'Your assignment:',
-      effectiveAssignmentMessage,
-      ].join('\n'),
-      context.executionWorkspace,
-      context.doctrineWorkspace,
-    )
-    const startedAt = new Date().toISOString()
-    const startMs = Date.now()
-    const sessionId = randomUUID()
-    const envOverrides = await getAgentAuthEnv(assignment.agent)
-    const runCwd = runCwdForContext(context)
-    const effectiveTimeoutSeconds = await resolveEffectiveAgentWorkTimeoutSeconds(assignment.agent, assignment.timeoutSeconds)
-    const effectiveThinking = assignment.thinking
-    await appendAgentPromptDump({
-      route: '/api/party/dispatch',
-      agent: assignment.agent,
-      sessionId,
-      thinking: effectiveThinking,
-      timeoutSeconds: effectiveTimeoutSeconds,
-      cwd: runCwd,
-      requestMessage: assignment.message,
-      intentMessage: assignment.message,
-      finalMessage: prompt,
-      note: 'dispatch assignment before OpenClaw runtime call',
-    })
-    let result = await runOpenClawWithGeminiToolWritePolicy(
-      assignment.agent,
-      effectiveAssignmentMessage,
-      context,
-      withAgentRuntimeFlags([
-        'agent',
-        '--agent',
-        assignment.agent,
-        '--session-id',
-        sessionId,
-        '--message',
-        prompt,
-        '--thinking',
-        effectiveThinking,
-        '--timeout',
-        String(effectiveTimeoutSeconds),
-        '--json',
-      ]),
-      agentWorkTimeoutWrapperMs(effectiveTimeoutSeconds),
-      { cwd: runCwd, envOverrides },
-    )
-
-    let assignmentReply = extractAgentReply(result.stdout, result.stderr)
-    if (result.code === 0 && assignmentBrowserIntent && isBrowserServiceReadyOnlyReply(assignmentReply)) {
-      const recoveryPrompt = composeAgentDoctrinePrompt(
+      const prompt = composeAgentDoctrinePrompt(
         assignment.agent,
         [
-          `/new You are ${agentLabel} (${assignment.agent}).`,
-          'Respond only as this specific agent.',
-          'Do not answer for teammates.',
-          'Read TEAM_SYNC.md first for active teammate ownership and status.',
-          '',
-          'Your assignment:',
-          buildBrowserRecoveryInstruction(assignment.message),
+        `/new You are ${agentLabel} (${assignment.agent}).`,
+        'Respond only as this specific agent.',
+        `Assigned team: ${assignedTeamIds.join(', ')}`,
+        'Do not answer for teammates unless explicitly asked to coordinate.',
+        'For direct format tasks, return only the requested format with no extra commentary.',
+        'Read TEAM_SYNC.md first for active teammate ownership and status.',
+        roleDirective,
+        websiteContributionDirective,
+        '',
+        'Your assignment:',
+        effectiveAssignmentMessage,
         ].join('\n'),
         context.executionWorkspace,
         context.doctrineWorkspace,
       )
+      const startedAt = new Date().toISOString()
+      const startMs = Date.now()
+      const sessionId = randomUUID()
+      const envOverrides = await getAgentAuthEnv(assignment.agent)
+      const runCwd = runCwdForContext(context)
+      const effectiveTimeoutSeconds = await resolveEffectiveAgentWorkTimeoutSeconds(assignment.agent, assignment.timeoutSeconds)
+      const effectiveThinking = assignment.thinking
+      await appendAgentPromptDump({
+        route: '/api/party/dispatch',
+        agent: assignment.agent,
+        sessionId,
+        thinking: effectiveThinking,
+        timeoutSeconds: effectiveTimeoutSeconds,
+        cwd: runCwd,
+        requestMessage: assignment.message,
+        intentMessage: assignment.message,
+        finalMessage: prompt,
+        note: 'dispatch assignment before OpenClaw runtime call',
+      }).catch(() => undefined)
+      let result: OpenClawResultLike
+      let assignmentReply = ''
+      try {
+        result = await runOpenClawWithGeminiToolWritePolicy(
+          assignment.agent,
+          effectiveAssignmentMessage,
+          context,
+          withAgentRuntimeFlags([
+            'agent',
+            '--agent',
+            assignment.agent,
+            '--session-id',
+            sessionId,
+            '--message',
+            prompt,
+            '--thinking',
+            effectiveThinking,
+            '--timeout',
+            String(effectiveTimeoutSeconds),
+            '--json',
+          ]),
+          agentWorkTimeoutWrapperMs(effectiveTimeoutSeconds),
+          { cwd: runCwd, envOverrides },
+        ).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
 
-      const retrySessionId = randomUUID()
-      const retry = await runOpenClawWithGeminiToolWritePolicy(
+        assignmentReply = extractAgentReply(result.stdout, result.stderr)
+        if (result.code === 0 && assignmentBrowserIntent && isBrowserServiceReadyOnlyReply(assignmentReply)) {
+          const recoveryPrompt = composeAgentDoctrinePrompt(
+            assignment.agent,
+            [
+              `/new You are ${agentLabel} (${assignment.agent}).`,
+              'Respond only as this specific agent.',
+              'Do not answer for teammates.',
+              'Read TEAM_SYNC.md first for active teammate ownership and status.',
+              '',
+              'Your assignment:',
+              buildBrowserRecoveryInstruction(assignment.message),
+            ].join('\n'),
+            context.executionWorkspace,
+            context.doctrineWorkspace,
+          )
+
+          const retrySessionId = randomUUID()
+          const retry = await runOpenClawWithGeminiToolWritePolicy(
+            assignment.agent,
+            effectiveAssignmentMessage,
+            context,
+            withAgentRuntimeFlags([
+              'agent',
+              '--agent',
+              assignment.agent,
+              '--session-id',
+              retrySessionId,
+              '--message',
+              recoveryPrompt,
+              '--thinking',
+              effectiveThinking,
+              '--timeout',
+              String(effectiveTimeoutSeconds),
+              '--json',
+            ]),
+            agentWorkTimeoutWrapperMs(effectiveTimeoutSeconds),
+            { cwd: runCwdForContext(context), envOverrides, retry: false },
+          ).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
+          result = retry
+          assignmentReply = extractAgentReply(retry.stdout, retry.stderr)
+        }
+
+        if (result.code === 0 && assignmentBrowserIntent && hasBrowserRelayPortConflict(result.stderr || '')) {
+          const released = await tryReleaseBrowserRelayPort()
+          if (released.released) {
+            const portRecoveryPrompt = composeAgentDoctrinePrompt(
+              assignment.agent,
+              [
+                `/new You are ${agentLabel} (${assignment.agent}).`,
+                'Browser relay was recovered after a transient port conflict.',
+                buildBrowserRecoveryInstruction(assignment.message),
+              ].join('\n'),
+              context.executionWorkspace,
+              context.doctrineWorkspace,
+            )
+            const retrySessionId = randomUUID()
+            const retry = await runOpenClawWithGeminiToolWritePolicy(
+              assignment.agent,
+              effectiveAssignmentMessage,
+              context,
+              withAgentRuntimeFlags([
+                'agent',
+                '--agent',
+                assignment.agent,
+                '--session-id',
+                retrySessionId,
+                '--message',
+                portRecoveryPrompt,
+                '--thinking',
+                effectiveThinking,
+                '--timeout',
+                String(effectiveTimeoutSeconds),
+                '--json',
+              ]),
+              agentWorkTimeoutWrapperMs(effectiveTimeoutSeconds),
+              { cwd: runCwdForContext(context), envOverrides, retry: false },
+            ).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
+            result = retry
+            assignmentReply = extractAgentReply(retry.stdout, retry.stderr)
+          }
+        }
+
+        if (result.code === 0 && assignmentBrowserIntent && hasBrowserRelayDisconnected(result.stderr || '')) {
+          const gateway = await tryRestartGatewayService({ reason: 'party coordination browser relay recovery' })
+          if (gateway.restarted) {
+            const gatewayRecoveryPrompt = composeAgentDoctrinePrompt(
+              assignment.agent,
+              [
+                `/new You are ${agentLabel} (${assignment.agent}).`,
+                'Browser relay gateway was restarted after a transient disconnect.',
+                buildBrowserRecoveryInstruction(assignment.message),
+              ].join('\n'),
+              context.executionWorkspace,
+              context.doctrineWorkspace,
+            )
+            const retrySessionId = randomUUID()
+            const retry = await runOpenClawWithGeminiToolWritePolicy(
+              assignment.agent,
+              effectiveAssignmentMessage,
+              context,
+              withAgentRuntimeFlags([
+                'agent',
+                '--agent',
+                assignment.agent,
+                '--session-id',
+                retrySessionId,
+                '--message',
+                gatewayRecoveryPrompt,
+                '--thinking',
+                effectiveThinking,
+                '--timeout',
+                String(effectiveTimeoutSeconds),
+                '--json',
+              ]),
+              agentWorkTimeoutWrapperMs(effectiveTimeoutSeconds),
+              { cwd: runCwdForContext(context), envOverrides, retry: false },
+            ).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
+            result = retry
+            assignmentReply = extractAgentReply(retry.stdout, retry.stderr)
+          }
+        }
+      } finally {
+        await cleanupDoctrineMirrorsAfterRun(assignment.agent, context.executionWorkspace).catch(() => undefined)
+        resolvedContext = undefined
+      }
+
+      const endedAt = new Date().toISOString()
+      const durationMs = Date.now() - startMs
+      const line = `${new Date().toISOString()} | ${assignment.agent} | ${result.code === 0 ? 'completed' : 'failed'} | ${trimTask(
+        result.code === 0 ? trimTask(assignmentReply || 'finished assigned task step', 160) : result.stderr || result.stdout || 'unknown error',
+        160,
+      )}`
+      activity.unshift(line)
+      if (activity.length > 80) activity.length = 80
+      if (state) {
+        state.status = result.code === 0 ? 'completed' : 'failed'
+        state.updatedAt = new Date().toISOString()
+        state.note = result.code === 0 ? 'completed current step' : trimTask(result.stderr || result.stdout || 'failed', 90)
+      }
+      await publishAssignmentProgressIfActive()
+      await appendAgentDailyMemory(
         assignment.agent,
-        effectiveAssignmentMessage,
-        context,
-        withAgentRuntimeFlags([
-          'agent',
-          '--agent',
-          assignment.agent,
-          '--session-id',
-          retrySessionId,
-          '--message',
-          recoveryPrompt,
-          '--thinking',
-          effectiveThinking,
-          '--timeout',
-          String(effectiveTimeoutSeconds),
-          '--json',
-        ]),
-        agentWorkTimeoutWrapperMs(effectiveTimeoutSeconds),
-        { cwd: runCwdForContext(context), envOverrides, retry: false },
-      ).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
-      result = retry
-      assignmentReply = extractAgentReply(retry.stdout, retry.stderr)
-    }
-
-    if (result.code === 0 && assignmentBrowserIntent && hasBrowserRelayPortConflict(result.stderr || '')) {
-      const released = await tryReleaseBrowserRelayPort()
-      if (released.released) {
-        const portRecoveryPrompt = composeAgentDoctrinePrompt(
-          assignment.agent,
-          [
-            `/new You are ${agentLabel} (${assignment.agent}).`,
-            'Browser relay was recovered after a transient port conflict.',
-            buildBrowserRecoveryInstruction(assignment.message),
-          ].join('\n'),
-          context.executionWorkspace,
-          context.doctrineWorkspace,
-        )
-        const retrySessionId = randomUUID()
-        const retry = await runOpenClawWithGeminiToolWritePolicy(
-          assignment.agent,
-          effectiveAssignmentMessage,
-          context,
-          withAgentRuntimeFlags([
-            'agent',
-            '--agent',
-            assignment.agent,
-            '--session-id',
-            retrySessionId,
-            '--message',
-            portRecoveryPrompt,
-            '--thinking',
-            effectiveThinking,
-            '--timeout',
-            String(effectiveTimeoutSeconds),
-            '--json',
-          ]),
-          agentWorkTimeoutWrapperMs(effectiveTimeoutSeconds),
-          { cwd: runCwdForContext(context), envOverrides, retry: false },
-        ).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
-        result = retry
-        assignmentReply = extractAgentReply(retry.stdout, retry.stderr)
+        `[dispatch:${dispatchId}] ${result.code === 0 ? 'completed' : 'failed'}${
+          filenameResolution.notes.length ? ` | resolved: ${trimTask(filenameResolution.notes.join('; '), 120)}` : ''
+        } | ${trimTask(result.code === 0 ? assignmentReply || 'finished assigned task step' : result.stderr || result.stdout || 'unknown error', 200)}`,
+      ).catch(() => undefined)
+      return {
+        agent: assignment.agent,
+        ok: result.code === 0,
+        stdout: result.stdout,
+        stderr: result.stderr,
+        code: result.code,
+        startedAt,
+        endedAt,
+        durationMs,
       }
-    }
-
-    if (result.code === 0 && assignmentBrowserIntent && hasBrowserRelayDisconnected(result.stderr || '')) {
-      const gateway = await tryRestartGatewayService({ reason: 'party coordination browser relay recovery' })
-      if (gateway.restarted) {
-        const gatewayRecoveryPrompt = composeAgentDoctrinePrompt(
-          assignment.agent,
-          [
-            `/new You are ${agentLabel} (${assignment.agent}).`,
-            'Browser relay gateway was restarted after a transient disconnect.',
-            buildBrowserRecoveryInstruction(assignment.message),
-          ].join('\n'),
-          context.executionWorkspace,
-          context.doctrineWorkspace,
-        )
-        const retrySessionId = randomUUID()
-        const retry = await runOpenClawWithGeminiToolWritePolicy(
-          assignment.agent,
-          effectiveAssignmentMessage,
-          context,
-          withAgentRuntimeFlags([
-            'agent',
-            '--agent',
-            assignment.agent,
-            '--session-id',
-            retrySessionId,
-            '--message',
-            gatewayRecoveryPrompt,
-            '--thinking',
-            effectiveThinking,
-            '--timeout',
-            String(effectiveTimeoutSeconds),
-            '--json',
-          ]),
-          agentWorkTimeoutWrapperMs(effectiveTimeoutSeconds),
-          { cwd: runCwdForContext(context), envOverrides, retry: false },
-        ).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
-        result = retry
-        assignmentReply = extractAgentReply(retry.stdout, retry.stderr)
+    } catch (assignmentError) {
+      if (resolvedContext) {
+        await cleanupDoctrineMirrorsAfterRun(assignment.agent, resolvedContext.executionWorkspace).catch(() => undefined)
       }
-    }
-
-    await cleanupDoctrineMirrorsAfterRun(assignment.agent, context.executionWorkspace)
-    const endedAt = new Date().toISOString()
-    const durationMs = Date.now() - startMs
-    const line = `${new Date().toISOString()} | ${assignment.agent} | ${result.code === 0 ? 'completed' : 'failed'} | ${trimTask(
-      result.code === 0 ? trimTask(assignmentReply || 'finished assigned task step', 160) : result.stderr || result.stdout || 'unknown error',
-      160,
-    )}`
-    activity.unshift(line)
-    if (activity.length > 80) activity.length = 80
-    if (state) {
-      state.status = result.code === 0 ? 'completed' : 'failed'
-      state.updatedAt = new Date().toISOString()
-      state.note = result.code === 0 ? 'completed current step' : trimTask(result.stderr || result.stdout || 'failed', 90)
-    }
-    await appendAgentDailyMemory(
-      assignment.agent,
-      `[dispatch:${dispatchId}] ${result.code === 0 ? 'completed' : 'failed'}${
-        filenameResolution.notes.length ? ` | resolved: ${trimTask(filenameResolution.notes.join('; '), 120)}` : ''
-      } | ${trimTask(result.code === 0 ? assignmentReply || 'finished assigned task step' : result.stderr || result.stdout || 'unknown error', 200)}`,
-    )
-    return {
-      agent: assignment.agent,
-      ok: result.code === 0,
-      stdout: result.stdout,
-      stderr: result.stderr,
-      code: result.code,
-      startedAt,
-      endedAt,
-      durationMs,
+      const endedAt = new Date().toISOString()
+      const durationMs = Date.now() - assignmentStartMs
+      const errorDetail = String(assignmentError)
+      activity.unshift(`${endedAt} | ${assignment.agent} | failed | ${trimTask(errorDetail, 160)}`)
+      if (activity.length > 80) activity.length = 80
+      if (state) {
+        state.status = 'failed'
+        state.updatedAt = endedAt
+        state.note = trimTask(errorDetail, 90)
+      }
+      await publishAssignmentProgressIfActive().catch(() => undefined)
+      await appendAgentDailyMemory(
+        assignment.agent,
+        `[dispatch:${dispatchId}] failed | ${trimTask(errorDetail, 200)}`,
+      ).catch(() => undefined)
+      return {
+        agent: assignment.agent,
+        ok: false,
+        stdout: '',
+        stderr: errorDetail,
+        code: 1,
+        startedAt: assignmentStartedIso,
+        endedAt,
+        durationMs,
+      }
     }
   }
 
@@ -577,7 +656,7 @@ app.post('/api/party/dispatch', async (req, res) => {
 
   await writeTeamSyncSnapshot({
     missionId: dispatchId,
-    title: 'Parallel Dispatch',
+    title: dispatchTitle,
     mode: parsed.data.mode,
     status: outputs.every((item) => item.ok) ? 'completed' : 'completed_with_errors',
     assignments: assignmentsState,
@@ -612,9 +691,9 @@ app.post('/api/party/dispatch', async (req, res) => {
 
 app.post('/api/party/agent-to-agent', async (req, res) => {
   const schema = z.object({
-    fromAgent: z.string().min(1),
-    toAgent: z.string().min(1),
-    instruction: z.string().min(1),
+    fromAgent: z.string().trim().min(1),
+    toAgent: z.string().trim().min(1),
+    instruction: z.string().trim().min(1),
     thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).default('low'),
     timeoutSeconds: z.number().int().min(30).max(7200).optional(),
   })
@@ -701,25 +780,29 @@ app.post('/api/party/agent-to-agent', async (req, res) => {
   )
 
   const fromSessionId = randomUUID()
-  const fromResult = await runOpenClaw(
-    withAgentRuntimeFlags([
-      'agent',
-      '--agent',
-      fromAgent,
-      '--session-id',
-      fromSessionId,
-      '--message',
-      `/new ${fromPrompt}`,
-      '--thinking',
-      thinking,
-      '--timeout',
-      String(fromEffectiveTimeoutSeconds),
-      '--json',
-    ]),
-    agentWorkTimeoutWrapperMs(fromEffectiveTimeoutSeconds),
-    { cwd: runCwdForContext(fromContext), envOverrides: fromEnv },
-  ).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
-  await cleanupDoctrineMirrorsAfterRun(fromAgent, fromContext.executionWorkspace)
+  let fromResult: OpenClawResultLike
+  try {
+    fromResult = await runOpenClaw(
+      withAgentRuntimeFlags([
+        'agent',
+        '--agent',
+        fromAgent,
+        '--session-id',
+        fromSessionId,
+        '--message',
+        `/new ${fromPrompt}`,
+        '--thinking',
+        thinking,
+        '--timeout',
+        String(fromEffectiveTimeoutSeconds),
+        '--json',
+      ]),
+      agentWorkTimeoutWrapperMs(fromEffectiveTimeoutSeconds),
+      { cwd: runCwdForContext(fromContext), envOverrides: fromEnv },
+    ).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
+  } finally {
+    await cleanupDoctrineMirrorsAfterRun(fromAgent, fromContext.executionWorkspace).catch(() => undefined)
+  }
 
   const fromReply = extractAgentReply(fromResult.stdout, fromResult.stderr)
   assignmentsState[0] = {
@@ -746,7 +829,9 @@ app.post('/api/party/agent-to-agent', async (req, res) => {
       activity,
     })
 
-    await appendAgentDailyMemory(fromAgent, `[handoff:${handoffId}] failed drafting directive for ${toAgent} | ${trimTask(fromReply, 180)}`)
+    await appendAgentDailyMemory(fromAgent, `[handoff:${handoffId}] failed drafting directive for ${toAgent} | ${trimTask(fromReply, 180)}`).catch(
+      () => undefined,
+    )
     return apiSuccess(res, {
       ok: false,
       handoffId,
@@ -775,47 +860,64 @@ app.post('/api/party/agent-to-agent', async (req, res) => {
     updatedAt: new Date().toISOString(),
     note: `executing directive from ${fromAgent}`,
   }
+  await writeTeamSyncSnapshot({
+    missionId: handoffId,
+    title: `Agent Handoff: ${fromAgent} -> ${toAgent}`,
+    mode: 'handoff',
+    status: 'running',
+    assignments: assignmentsState,
+    activity,
+  })
 
-  const toContext = await resolveAgentRunContext(toAgent)
-  const toEnv = await getAgentAuthEnv(toAgent)
-  const toEffectiveTimeoutSeconds = await resolveEffectiveAgentWorkTimeoutSeconds(toAgent, timeoutSeconds)
-  const toPrompt = composeAgentDoctrinePrompt(
-    toAgent,
-    [
-      `You received a directive from teammate ${fromAgent}.`,
-      'Execute it now in the execution workspace. Prefer concrete edits over planning-only output.',
-      'At end, report exactly what changed and where.',
-      '',
-      'Directive:',
-      fromReply,
-      '',
-      'Original user request:',
-      instruction,
-    ].join('\n'),
-    toContext.executionWorkspace,
-    toContext.doctrineWorkspace,
-  )
-
-  const toSessionId = randomUUID()
-  const toResult = await runOpenClaw(
-    withAgentRuntimeFlags([
-      'agent',
-      '--agent',
+  let toResult: OpenClawResultLike
+  let toContext: AgentRunContext | undefined
+  try {
+    toContext = await resolveAgentRunContext(toAgent)
+    const toEnv = await getAgentAuthEnv(toAgent)
+    const toEffectiveTimeoutSeconds = await resolveEffectiveAgentWorkTimeoutSeconds(toAgent, timeoutSeconds)
+    const toPrompt = composeAgentDoctrinePrompt(
       toAgent,
-      '--session-id',
-      toSessionId,
-      '--message',
-      `/new ${toPrompt}`,
-      '--thinking',
-      thinking,
-      '--timeout',
-      String(toEffectiveTimeoutSeconds),
-      '--json',
-    ]),
-    agentWorkTimeoutWrapperMs(toEffectiveTimeoutSeconds),
-    { cwd: runCwdForContext(toContext), envOverrides: toEnv },
-  ).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
-  await cleanupDoctrineMirrorsAfterRun(toAgent, toContext.executionWorkspace)
+      [
+        `You received a directive from teammate ${fromAgent}.`,
+        'Execute it now in the execution workspace. Prefer concrete edits over planning-only output.',
+        'At end, report exactly what changed and where.',
+        '',
+        'Directive:',
+        fromReply,
+        '',
+        'Original user request:',
+        instruction,
+      ].join('\n'),
+      toContext.executionWorkspace,
+      toContext.doctrineWorkspace,
+    )
+
+    const toSessionId = randomUUID()
+    toResult = await runOpenClaw(
+      withAgentRuntimeFlags([
+        'agent',
+        '--agent',
+        toAgent,
+        '--session-id',
+        toSessionId,
+        '--message',
+        `/new ${toPrompt}`,
+        '--thinking',
+        thinking,
+        '--timeout',
+        String(toEffectiveTimeoutSeconds),
+        '--json',
+      ]),
+      agentWorkTimeoutWrapperMs(toEffectiveTimeoutSeconds),
+      { cwd: runCwdForContext(toContext), envOverrides: toEnv },
+    ).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
+  } catch (downstreamSetupError) {
+    toResult = { stdout: '', stderr: String(downstreamSetupError), code: 1 }
+  } finally {
+    if (toContext) {
+      await cleanupDoctrineMirrorsAfterRun(toAgent, toContext.executionWorkspace).catch(() => undefined)
+    }
+  }
 
   const toReply = extractAgentReply(toResult.stdout, toResult.stderr)
   assignmentsState[1] = {
@@ -835,11 +937,11 @@ app.post('/api/party/agent-to-agent', async (req, res) => {
     activity,
   })
 
-  await appendAgentDailyMemory(fromAgent, `[handoff:${handoffId}] directed ${toAgent} | ${trimTask(instruction, 160)}`)
+  await appendAgentDailyMemory(fromAgent, `[handoff:${handoffId}] directed ${toAgent} | ${trimTask(instruction, 160)}`).catch(() => undefined)
   await appendAgentDailyMemory(
     toAgent,
     `[handoff:${handoffId}] received from ${fromAgent} | ${trimTask(toReply || toResult.stderr || toResult.stdout || 'no response', 180)}`,
-  )
+  ).catch(() => undefined)
 
   return apiSuccess(res, {
     ok: toResult.code === 0,
@@ -877,46 +979,114 @@ app.post('/api/party/parallel-health', async (req, res) => {
   if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
+    const requestedAgents = parsed.data.agents?.map((agentId) => agentId.trim())
+    if (requestedAgents?.length) {
+      const invalidAgent = requestedAgents.find(
+        (agentId) => !isValidAgentId(agentId) || isRetiredAgentId(agentId),
+      )
+      if (invalidAgent) {
+        return apiFailure(res, 400, 'invalid_payload', `Invalid or retired agent id: ${invalidAgent}`)
+      }
+      const seenRequested = new Set<string>()
+      const duplicateRequested = Array.from(
+        new Set(
+          requestedAgents.filter((agentId) => {
+            if (seenRequested.has(agentId)) return true
+            seenRequested.add(agentId)
+            return false
+          }),
+        ),
+      )
+      if (duplicateRequested.length) {
+        return apiFailure(
+          res,
+          400,
+          'invalid_payload',
+          `Parallel health check requires distinct agent ids: ${duplicateRequested.join(', ')}`,
+          { agents: duplicateRequested },
+        )
+      }
+    }
+
     const party = await getPartyMembers()
-    const pool = (parsed.data.agents?.length ? parsed.data.agents : party.slice(0, 3).map((entry) => entry.id)).filter(Boolean)
+    const partyById = new Map(party.map((entry) => [entry.id, entry]))
+    if (requestedAgents?.length) {
+      const missingAgents = requestedAgents.filter((agentId) => !partyById.has(agentId))
+      if (missingAgents.length) {
+        return apiFailure(res, 404, 'agent_not_found', 'Parallel health check includes agent ids that are not in the party.', {
+          agents: missingAgents,
+        })
+      }
+    }
+
+    const pool = (
+      requestedAgents?.length
+        ? requestedAgents
+        : Array.from(
+            new Set(
+              party
+                .map((entry) => entry.id)
+                .filter((agentId) => Boolean(agentId) && isValidAgentId(agentId) && !isRetiredAgentId(agentId)),
+            ),
+          ).slice(0, 3)
+    ).filter(Boolean)
     if (pool.length < 2) return apiFailure(res, 400, 'party_coordination_failed', 'Need at least 2 agents for parallel health check.')
 
     const runOne = async (agentId: string) => {
       const startedAt = new Date().toISOString()
       const startMs = Date.now()
-      const sessionId = randomUUID()
-      const context = await resolveAgentRunContext(agentId)
-      const envOverrides = await getAgentAuthEnv(agentId)
-      const effectiveTimeoutSeconds = await resolveEffectiveAgentWorkTimeoutSeconds(agentId, parsed.data.timeoutSeconds)
-      const result = await runOpenClaw(
-        withAgentRuntimeFlags([
-          'agent',
-          '--agent',
-          agentId,
-          '--session-id',
-          sessionId,
-          '--message',
-          composeAgentDoctrinePrompt(agentId, `Read TEAM_SYNC.md first. ${parsed.data.prompt}`, context.executionWorkspace, context.doctrineWorkspace),
-          '--thinking',
-          parsed.data.thinking,
-          '--timeout',
-          String(effectiveTimeoutSeconds),
-          '--json',
-        ]),
-        agentWorkTimeoutWrapperMs(effectiveTimeoutSeconds),
-        { cwd: runCwdForContext(context), envOverrides },
-      ).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
-      await cleanupDoctrineMirrorsAfterRun(agentId, context.executionWorkspace)
-      const endedAt = new Date().toISOString()
-      const durationMs = Date.now() - startMs
-      return {
-        agent: agentId,
-        ok: result.code === 0,
-        code: result.code,
-        reply: extractAgentReply(result.stdout, result.stderr),
-        startedAt,
-        endedAt,
-        durationMs,
+      let resolvedContext: AgentRunContext | undefined
+      try {
+        const sessionId = randomUUID()
+        const context = await resolveAgentRunContext(agentId)
+        resolvedContext = context
+        const envOverrides = await getAgentAuthEnv(agentId)
+        const effectiveTimeoutSeconds = await resolveEffectiveAgentWorkTimeoutSeconds(agentId, parsed.data.timeoutSeconds)
+        const result = await runOpenClaw(
+          withAgentRuntimeFlags([
+            'agent',
+            '--agent',
+            agentId,
+            '--session-id',
+            sessionId,
+            '--message',
+            composeAgentDoctrinePrompt(agentId, `Read TEAM_SYNC.md first. ${parsed.data.prompt}`, context.executionWorkspace, context.doctrineWorkspace),
+            '--thinking',
+            parsed.data.thinking,
+            '--timeout',
+            String(effectiveTimeoutSeconds),
+            '--json',
+          ]),
+          agentWorkTimeoutWrapperMs(effectiveTimeoutSeconds),
+          { cwd: runCwdForContext(context), envOverrides },
+        ).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
+        const endedAt = new Date().toISOString()
+        const durationMs = Date.now() - startMs
+        return {
+          agent: agentId,
+          ok: result.code === 0,
+          code: result.code,
+          reply: extractAgentReply(result.stdout, result.stderr),
+          startedAt,
+          endedAt,
+          durationMs,
+        }
+      } catch (probeError) {
+        const endedAt = new Date().toISOString()
+        const durationMs = Date.now() - startMs
+        return {
+          agent: agentId,
+          ok: false,
+          code: 1,
+          reply: String(probeError),
+          startedAt,
+          endedAt,
+          durationMs,
+        }
+      } finally {
+        if (resolvedContext) {
+          await cleanupDoctrineMirrorsAfterRun(agentId, resolvedContext.executionWorkspace).catch(() => undefined)
+        }
       }
     }
 
@@ -950,7 +1120,7 @@ app.post('/api/party/parallel-health', async (req, res) => {
 
 app.post('/api/team-sync/append', async (req, res) => {
   const schema = z.object({
-    agentId: z.string().min(1),
+    agentId: z.string().trim().min(1),
     role: z.string().min(1).max(40).optional(),
     runId: z.string().min(1).max(120).optional(),
     note: z.string().min(1).max(50000).optional(),
@@ -961,9 +1131,18 @@ app.post('/api/team-sync/append', async (req, res) => {
   if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   const { agentId, role, runId, note, line, filePath } = parsed.data
-  if (!isValidAgentId(agentId)) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id')
+  if (!isValidAgentId(agentId) || isRetiredAgentId(agentId)) {
+    return apiFailure(res, 400, 'invalid_payload', 'Invalid or retired agent id')
+  }
 
   try {
+    const party = await getPartyMembers()
+    if (!party.some((member) => member.id === agentId)) {
+      return apiFailure(res, 404, 'agent_not_found', 'TEAM_SYNC append requires an active party agent.', {
+        agentId,
+      })
+    }
+
     const requestedPath = filePath?.trim() ? path.resolve(filePath.trim()) : undefined
     if (CANONICAL_DOCTRINE_ONLY && requestedPath) {
       const normalizedRequestedPath = requestedPath.replace(/\\/g, '/').toLowerCase()

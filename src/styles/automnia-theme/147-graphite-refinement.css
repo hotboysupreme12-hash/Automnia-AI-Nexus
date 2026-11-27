@@ -112,22 +112,51 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"
   border-color: #262b30 !important;
 }
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-messages {
-  background: radial-gradient(ellipse at 50% 55%, #171b1f 0%, #0c0e10 58%) !important;
+  background: #181818 !important;
 }
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-idle-hint {
-  gap: 9px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 20px !important;
   width: 100% !important;
   max-width: none !important;
   align-self: stretch !important;
-  padding: 18px 12px !important;
+  padding: 0 12px !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  text-align: center !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-idle-hint__brand {
+  display: block !important;
+  width: min(180px, 42vw) !important;
+  height: auto !important;
+  max-height: 48px !important;
+  object-fit: contain !important;
+  opacity: .82 !important;
 }
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-idle-hint__title {
-  font-size: 20px !important;
-  font-weight: 650 !important;
+  margin: 0 !important;
+  color: #f1f1f1 !important;
+  font-size: clamp(24px, 3vw, 34px) !important;
+  font-weight: 400 !important;
+  letter-spacing: -.025em !important;
+  line-height: 1.25 !important;
 }
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-idle-hint__copy {
   max-width: 36rem !important;
   color: #a6aeb7 !important;
+}
+@media (max-width: 640px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-idle-hint {
+    gap: 16px !important;
+  }
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-idle-hint__brand {
+    width: min(154px, 48vw) !important;
+    max-height: 42px !important;
+  }
 }
 html.dui-pro-overhaul.dui-cohesive-ui .dy-chat-starters {
   display: grid;

@@ -2034,7 +2034,7 @@ export const LiveOperationMonitor = memo(function LiveOperationMonitor({
           ))}
           </div>
           <div className="dy-monitor-tools">
-            <Button disabled={doctorBusy} onClick={runDoctor} className="dy-monitor-tool-button" title="Run runtime doctor" size="compact" variant="secondary" loading={doctorBusy}>
+            <Button disabled={doctorBusy} onClick={runDoctor} className="dy-monitor-tool-button dy-monitor-doctor-button" title="Run runtime doctor" size="compact" variant="secondary" loading={doctorBusy}>
               {doctorBusy ? 'Doctor running' : 'Doctor'}
             </Button>
             <Button
@@ -2054,7 +2054,7 @@ export const LiveOperationMonitor = memo(function LiveOperationMonitor({
               size="compact"
               variant="secondary"
               loading={cleanSlateBusy}
-              className="dy-monitor-tool-button"
+              className="dy-monitor-tool-button dy-monitor-clean-slate-button"
               title="Clear local monitor cache, log tail snapshots, recent runtime calls, and stale session locks without stopping active Gateway runs."
             >
               {cleanSlateBusy ? 'Cleaning' : 'Clean Slate'}

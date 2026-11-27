@@ -1,3 +1,5 @@
+import { googleGeminiInputModalities, googleGeminiSupportsImageInput } from './googleGeminiModelPolicy'
+
 /**
  * Google Vertex Gemini model limits used by OpenClaw's context and compaction
  * planners.
@@ -41,6 +43,14 @@ export function applyGoogleVertexModelLimits(providerConfig: Record<string, unkn
     if (next.maxTokens !== safeMaxTokens) {
       next.maxTokens = safeMaxTokens
       changed = true
+    }
+
+    if (googleGeminiSupportsImageInput(entry.id)) {
+      const supportedInput = googleGeminiInputModalities(entry.id)
+      if (JSON.stringify(next.input) !== JSON.stringify(supportedInput)) {
+        next.input = supportedInput
+        changed = true
+      }
     }
 
     return next

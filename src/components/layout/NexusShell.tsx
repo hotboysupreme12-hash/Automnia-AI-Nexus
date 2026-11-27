@@ -4,7 +4,6 @@ import { ToolApprovals } from './ToolApprovals'
 import { FirstSuccessGuide } from './FirstSuccessGuide'
 import { NavigationTooltip } from './NavigationTooltip'
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AppTab } from '../../store/nexusStore'
 import { resolveAgentEditorId, type AgentEditorTab } from '../../store/nexusUiState'
@@ -88,7 +87,7 @@ function getAgentEditorModal() {
 const AgentEditorModal = lazy(getAgentEditorModal)
 const RecruitAgentModal = lazy(() => recoverableLazyImport('recruit-agent-modal', () => import('../recruit/RecruitAgentModal').then((module) => ({ default: module.RecruitAgentModal }))))
 const HelpAssistantPanel = lazy(() => recoverableLazyImport('help-assistant', () => import('../help/HelpAssistantPanel').then((module) => ({ default: module.HelpAssistantPanel }))))
-const CommandPalette = lazy(() => recoverableLazyImport('command-palette', () => import('./CommandPalette').then((module) => ({ default: module.CommandPalette }))))
+const QuickLinksMenu = lazy(() => recoverableLazyImport('quick-links-menu', () => import('./QuickLinksMenu').then((module) => ({ default: module.QuickLinksMenu }))))
 
 function prefetchWorkspace(tab: AppTab) {
   const load = {
@@ -123,9 +122,9 @@ function AgentEditorLoadingFallback() {
 
 const AUTOMNIA_LOCKUP_SRC = '/brand/automnia-ai-nexus-logo-transparent-cropped.png'
 const AUTOMNIA_BRAND_LABEL = 'Automnia AI Nexus'
-const RECRUIT_ICON_SRC = '/icons/nav-recruit-teal.png'
-const SETTINGS_ICON_SRC = '/icons/nav-settings-teal.png'
-const HELP_ICON_SRC = '/icons/nav-help-teal.png'
+const RECRUIT_ICON_SRC = '/icons/nav-flat/nav-recruit.png'
+const SETTINGS_ICON_SRC = '/icons/nav-flat/nav-settings.png'
+const HELP_ICON_SRC = '/icons/nav-flat/nav-help.png'
 const EMPTY_RUNTIME_CRON_JOBS: RuntimeCronJob[] = []
 type ShellNotice = { tone: 'success' | 'warning' | 'error' | 'neutral'; message: string }
 
@@ -140,26 +139,21 @@ function resolveCronCountBand(count: number): CronCountBand {
   return 'teal'
 }
 
-const WORKSPACE_META: Record<AppTab, { label: string; railMeta: string; iconSrc: string; tone: string }> = {
-  chat: { label: 'Workspace', railMeta: 'Chat', iconSrc: '/icons/nav-workspace.png', tone: 'chat' },
-  agents: { label: 'Agents', railMeta: 'Roster', iconSrc: '/icons/nav-agents-teal.png', tone: 'agents' },
-  missions: { label: 'Missions', railMeta: 'Launch', iconSrc: '/icons/nav-missions-teal.png', tone: 'missions' },
-  monitor: { label: 'Monitor', railMeta: 'Live ops', iconSrc: '/icons/nav-monitor-teal.png', tone: 'monitor' },
-  plugins: { label: 'Plugins', railMeta: 'Runtime', iconSrc: '/icons/nav-plugins-teal.png', tone: 'plugins' },
-  settings: { label: 'Settings', railMeta: 'System', iconSrc: SETTINGS_ICON_SRC, tone: 'settings' },
+const WORKSPACE_META: Record<AppTab, { label: string; iconSrc: string; tone: string }> = {
+  chat: { label: 'Workspace', iconSrc: '/icons/nav-flat/nav-workspace.png', tone: 'chat' },
+  agents: { label: 'Agents', iconSrc: '/icons/nav-flat/nav-agents.png', tone: 'agents' },
+  missions: { label: 'Missions', iconSrc: '/icons/nav-flat/nav-missions.png', tone: 'missions' },
+  monitor: { label: 'Monitor', iconSrc: '/icons/nav-flat/nav-monitor.png', tone: 'monitor' },
+  plugins: { label: 'Plugins', iconSrc: '/icons/nav-flat/nav-plugins.png', tone: 'plugins' },
+  settings: { label: 'Settings', iconSrc: SETTINGS_ICON_SRC, tone: 'settings' },
 }
 
-const PRIMARY_WORKSPACES: { id: PrimaryWorkspace; label: string; railMeta: string; iconSrc: string; tone: string }[] = [
-  { id: 'chat', label: 'Workspace', railMeta: 'Chat', iconSrc: '/icons/nav-workspace.png', tone: 'chat' },
-  { id: 'agents', label: 'Agents', railMeta: 'Roster', iconSrc: '/icons/nav-agents-teal.png', tone: 'agents' },
-  { id: 'monitor', label: 'Monitor', railMeta: 'Live ops', iconSrc: '/icons/nav-monitor-teal.png', tone: 'monitor' },
-  { id: 'plugins', label: 'Plugins', railMeta: 'Runtime', iconSrc: '/icons/nav-plugins-teal.png', tone: 'plugins' },
+const PRIMARY_WORKSPACES: { id: PrimaryWorkspace; label: string; iconSrc: string; tone: string }[] = [
+  { id: 'chat', label: 'Workspace', iconSrc: '/icons/nav-flat/nav-workspace.png', tone: 'chat' },
+  { id: 'agents', label: 'Agents', iconSrc: '/icons/nav-flat/nav-agents.png', tone: 'agents' },
+  { id: 'monitor', label: 'Monitor', iconSrc: '/icons/nav-flat/nav-monitor.png', tone: 'monitor' },
+  { id: 'plugins', label: 'Plugins', iconSrc: '/icons/nav-flat/nav-plugins.png', tone: 'plugins' },
 ]
-
-function navIconStyle(src: string): CSSProperties {
-  return { '--dy-nav-icon': `url("${src}")` } as CSSProperties
-}
-
 
 function PanelLoader({ workspace = 'console' }: { workspace?: AppTab | 'console' }) {
   const workspaceLabel = workspace === 'console' ? 'workspace' : `${WORKSPACE_META[workspace].label} workspace`
@@ -285,10 +279,10 @@ export function NexusShell() {
               ? 'Runtime offline'
               : 'Connecting to runtime'
         : tab === 'monitor'
-          ? gatewayOnline ? 'Runtime connected' : runtimeStatus ? 'Runtime offline' : 'Connecting to runtime'
+          ? gatewayOnline ? null : runtimeStatus ? 'Runtime offline' : 'Connecting to runtime'
           : tab === 'settings'
-            ? 'Settings ready'
-            : gatewayOnline ? 'Gateway connected · inspect extension status below' : runtimeStatus ? 'Gateway offline' : 'Checking gateway'
+            ? null
+            : gatewayOnline ? null : runtimeStatus ? 'Gateway offline' : 'Checking gateway'
   const workspaceStateTone = gatewayMigration
     ? 'active'
     : tab === 'agents' || tab === 'chat'
@@ -312,7 +306,8 @@ export function NexusShell() {
     : 'Loading cron jobs...'
   const [isRecruitOpen, setRecruitOpen] = useState(false)
   const [isHelpOpen, setHelpOpen] = useState(false)
-  const [isCommandPaletteOpen, setCommandPaletteOpen] = useState(false)
+  const [isQuickLinksOpen, setQuickLinksOpen] = useState(false)
+  const closeQuickLinks = useCallback(() => setQuickLinksOpen(false), [])
   const [storageWarning, setStorageWarning] = useState(false)
   const [clearFailure, setClearFailure] = useState<{ message: string; party: boolean } | null>(null)
   const [retryClearBusy, setRetryClearBusy] = useState(false)
@@ -481,7 +476,7 @@ export function NexusShell() {
       if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k' && !event.defaultPrevented) {
         if (document.querySelector('[aria-modal="true"]')) return
         event.preventDefault()
-        setCommandPaletteOpen(true)
+        setQuickLinksOpen((open) => !open)
         return
       }
       if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.defaultPrevented) return
@@ -539,7 +534,7 @@ export function NexusShell() {
         <div className="dy-human-rail-head dy-human-rail-head--lockup flex items-center" aria-label={AUTOMNIA_BRAND_LABEL}>
           <img
             className="dy-human-rail-app-icon"
-            src="/brand/automnia-ai-nexus-app-icon.png"
+            src="/brand/automnia-ai-nexus-emblem-v2.png"
             alt=""
             aria-hidden="true"
             draggable={false}
@@ -558,18 +553,15 @@ export function NexusShell() {
             variant="quiet"
             className="dy-human-nav-action flex items-center gap-3 text-left"
             data-tone="recruit"
-            data-nav-label="Recruit a new agent" aria-label="Recruit a new agent"
+            data-nav-label="Recruit" aria-label="Recruit"
             onClick={() => setRecruitOpen(true)}
             leadingIcon={(
-              <span className="dy-human-nav-icon" style={navIconStyle(RECRUIT_ICON_SRC)}>
+              <span className="dy-human-nav-icon">
                 <img className="dy-human-nav-icon-img" src={RECRUIT_ICON_SRC} alt="" />
               </span>
             )}
           >
-            <span className="dy-human-nav-copy">
-              <strong className="block">Recruit</strong>
-              <span className="block">Discover</span>
-            </span>
+            <span className="dy-human-nav-copy"><strong className="block">Recruit</strong></span>
           </Button>
           {PRIMARY_WORKSPACES.map((t) => (
             <Button
@@ -579,20 +571,17 @@ export function NexusShell() {
               onPointerEnter={() => prefetchWorkspace(t.id)}
               onFocus={() => prefetchWorkspace(t.id)}
               onClick={() => selectTab(t.id)}
-              data-nav-label={t.label} aria-label={`${t.label} ${t.railMeta}`}
+              data-nav-label={t.label} aria-label={t.label}
               aria-current={tab === t.id ? 'page' : undefined}
               data-tone={t.tone}
               className={`flex items-center gap-3 text-left ${tab === t.id ? 'is-active' : ''}`}
               leadingIcon={(
-                <span className="dy-human-nav-icon" style={navIconStyle(t.iconSrc)}>
+                <span className="dy-human-nav-icon">
                   <img className="dy-human-nav-icon-img" src={t.iconSrc} alt="" />
                 </span>
               )}
             >
-              <span className="dy-human-nav-copy">
-                <strong className="block">{t.label}</strong>
-                <span className="block">{t.railMeta}</span>
-              </span>
+              <span className="dy-human-nav-copy"><strong className="block">{t.label}</strong></span>
             </Button>
           ))}
           </nav>
@@ -751,20 +740,27 @@ export function NexusShell() {
                 />
               )}
             </div>
+            <div className="relative inline-flex" data-quick-links-root>
+              <Button
+                id="nexus-quick-links-trigger"
+                variant="quiet"
+                size="compact"
+                onClick={() => setQuickLinksOpen((open) => !open)}
+                aria-haspopup="dialog"
+                aria-expanded={isQuickLinksOpen}
+                aria-controls={isQuickLinksOpen ? 'quick-links-menu' : undefined}
+                aria-keyshortcuts="Control+k Meta+k"
+                title="Quick Links (Ctrl/⌘ K)"
+              >
+                Quick Links
+              </Button>
+              {isQuickLinksOpen && <Suspense fallback={null}><QuickLinksMenu onClose={closeQuickLinks} onNavigate={navigateFromHelp} /></Suspense>}
+            </div>
             {workspaceState && (
               <div className="dy-workspace-context__state" data-state={workspaceStateTone} role="status" aria-live="polite">
                 {workspaceState}
               </div>
             )}
-            <Button
-              variant="quiet"
-              size="compact"
-              onClick={() => setCommandPaletteOpen(true)}
-              aria-keyshortcuts="Control+k Meta+k"
-              title="Quick Links (Ctrl/⌘ K)"
-            >
-              Quick Links
-            </Button>
             {gatewayMigration ? (
               <ActionStatusBanner
                 className="dy-workspace-context__notice dy-gateway-migration-notice mt-3 w-full text-left text-[11px] leading-relaxed"
@@ -822,7 +818,10 @@ export function NexusShell() {
         >
           <div className="dy-chat-workspace" hidden={tab !== 'chat'}>
             <Suspense fallback={<PanelLoader workspace="chat" />}>
-              <AgentResponseConsole />
+              <AgentResponseConsole
+                quickLinksOpen={isQuickLinksOpen}
+                onToggleQuickLinks={() => setQuickLinksOpen((open) => !open)}
+              />
             </Suspense>
           </div>
 
@@ -865,7 +864,7 @@ export function NexusShell() {
       {isEditorOpen && <Suspense fallback={<AgentEditorLoadingFallback />}><AgentEditorModal /></Suspense>}
       {isRecruitOpen && <Suspense fallback={null}><RecruitAgentModal isOpen={isRecruitOpen} onClose={() => setRecruitOpen(false)} /></Suspense>}
       {isHelpOpen && <Suspense fallback={<PanelLoader />}><HelpAssistantPanel isOpen onClose={closeHelp} onNavigate={navigateFromHelp} /></Suspense>}
-      {isCommandPaletteOpen && <Suspense fallback={null}><CommandPalette onClose={() => setCommandPaletteOpen(false)} onNavigate={navigateFromHelp} /></Suspense>}
+      {tab === 'chat' && isQuickLinksOpen && <Suspense fallback={null}><QuickLinksMenu placement="anchored" anchorId="agent-chat-quick-links-trigger" onClose={closeQuickLinks} onNavigate={navigateFromHelp} /></Suspense>}
     </div>
   )
 }

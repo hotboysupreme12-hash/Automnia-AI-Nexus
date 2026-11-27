@@ -56,7 +56,7 @@ function scaleUiPixelTokens(value: string, scale: number): string {
   return output
 }
 
-/** Apply compact sizing to fixed-pixel CSS values without changing browser zoom. */
+/** Compact layout dimensions while keeping typography at its full readable size. */
 export function scaleUiCssDimensions(scale = 0.8): Plugin {
   return {
     postcssPlugin: 'automnia-scale-ui-css-dimensions',
@@ -69,7 +69,15 @@ export function scaleUiCssDimensions(scale = 0.8): Plugin {
       if (alreadyScaled) return
 
       root.walkDecls((declaration) => {
-        if (declaration.prop === 'content' || declaration.prop === 'src') return
+        const typographyToken = /^--(?:font-size(?:-|$)|dy-type-|dui-readable-)/i.test(declaration.prop)
+        if (
+          declaration.prop === 'content'
+          || declaration.prop === 'src'
+          || declaration.prop === 'font-size'
+          || declaration.prop === 'font'
+          || declaration.prop === 'line-height'
+          || typographyToken
+        ) return
         declaration.value = scaleUiPixelTokens(declaration.value, scale)
       })
       root.walkAtRules((rule) => {

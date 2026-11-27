@@ -381,6 +381,140 @@ const RECRUIT_WIZARD_STEPS: Array<{ id: RecruitWizardStep; number: string; label
   { id: 4, number: '04', label: 'Review', eyebrow: 'Step 4 of 4', title: 'Review and recruit.', copy: 'Check the operating files before adding the agent.' },
 ]
 
+type RecruitIntroPhase = 'default' | 'fade-out' | 'typing' | 'complete'
+
+function RecruitStepIntro({
+  step,
+  template,
+}: {
+  step: (typeof RECRUIT_WIZARD_STEPS)[number]
+  template: RecruitAgentTemplateSummary | null
+}) {
+  const hasTemplate = step.id === 1 && Boolean(template)
+  const templateTitle = template
+    ? `${template.emoji ? `${template.emoji} ` : ''}${template.name}`
+    : ''
+  const templateCopy = template?.description || template?.defaults.role || ''
+  const titleCharacters = Array.from(templateTitle)
+  const copyCharacters = Array.from(templateCopy)
+  const [phase, setPhase] = useState<RecruitIntroPhase>('default')
+  const [displayTitle, setDisplayTitle] = useState(step.title)
+  const [displayCopy, setDisplayCopy] = useState(step.copy)
+  const [displayTemplateId, setDisplayTemplateId] = useState('')
+  const [titleCharacterCount, setTitleCharacterCount] = useState(Array.from(step.title).length)
+  const [copyCharacterCount, setCopyCharacterCount] = useState(Array.from(step.copy).length)
+
+  useEffect(() => {
+    const timers: number[] = []
+    const schedule = (callback: () => void, delay: number) => {
+      timers.push(window.setTimeout(callback, delay))
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      if (!hasTemplate) {
+        setPhase('default')
+        setDisplayTitle(step.title)
+        setDisplayCopy(step.copy)
+        setDisplayTemplateId('')
+        setTitleCharacterCount(Array.from(step.title).length)
+        setCopyCharacterCount(Array.from(step.copy).length)
+        return
+      }
+
+      if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        setDisplayTitle(templateTitle)
+        setDisplayCopy(templateCopy)
+        setDisplayTemplateId(template?.id || '')
+        setTitleCharacterCount(titleCharacters.length)
+        setCopyCharacterCount(copyCharacters.length)
+        setPhase('complete')
+        return
+      }
+
+      setPhase('fade-out')
+      schedule(() => {
+        setDisplayTitle(templateTitle)
+        setDisplayCopy(templateCopy)
+        setDisplayTemplateId(template?.id || '')
+        setTitleCharacterCount(0)
+        setCopyCharacterCount(0)
+        setPhase('typing')
+
+        let titleIndex = 0
+        let copyIndex = 0
+        const revealCopy = () => {
+          const revealNextCopyCharacter = () => {
+            copyIndex += 1
+            setCopyCharacterCount(copyIndex)
+            if (copyIndex < copyCharacters.length) schedule(revealNextCopyCharacter, 12)
+            else setPhase('complete')
+          }
+
+          if (copyCharacters.length > 0) schedule(revealNextCopyCharacter, 180)
+          else setPhase('complete')
+        }
+
+        const revealNextTitleCharacter = () => {
+          titleIndex += 1
+          setTitleCharacterCount(titleIndex)
+          if (titleIndex < titleCharacters.length) schedule(revealNextTitleCharacter, 28)
+          else revealCopy()
+        }
+
+        if (titleCharacters.length > 0) schedule(revealNextTitleCharacter, 24)
+        else revealCopy()
+      }, 180)
+    })
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+      timers.forEach((timer) => window.clearTimeout(timer))
+    }
+  }, [copyCharacters.length, hasTemplate, step.copy, step.title, template?.id, templateCopy, templateTitle, titleCharacters.length])
+
+  const isChangingTemplate = hasTemplate && displayTemplateId !== template?.id
+  const visiblePhase = isChangingTemplate ? 'fade-out' : phase
+  const visibleTitle = hasTemplate
+    ? isChangingTemplate
+      ? displayTitle
+      : titleCharacters.slice(0, titleCharacterCount).join('')
+    : step.title
+  const visibleCopy = hasTemplate
+    ? isChangingTemplate
+      ? displayCopy
+      : copyCharacters.slice(0, copyCharacterCount).join('')
+    : step.copy
+  const titleIsTyping = hasTemplate && visiblePhase === 'typing' && titleCharacterCount < titleCharacters.length
+  const copyIsTyping = hasTemplate && visiblePhase === 'typing' && titleCharacterCount >= titleCharacters.length && copyCharacterCount < copyCharacters.length
+
+  return (
+    <div
+      className="dui-recruit-step-intro"
+      data-has-template={hasTemplate ? 'true' : 'false'}
+      data-template-phase={hasTemplate ? visiblePhase : 'default'}
+      data-template-copy-started={!hasTemplate || visiblePhase === 'fade-out' || copyCharacterCount > 0 ? 'true' : 'false'}
+    >
+      <span>{step.eyebrow}</span>
+      <h3 aria-label={hasTemplate ? templateTitle : undefined}>
+        {hasTemplate ? (
+          <>
+            <span aria-hidden="true">{visibleTitle}</span>
+            {titleIsTyping ? <span className="dui-recruit-intro-caret" aria-hidden="true" /> : null}
+          </>
+        ) : step.title}
+      </h3>
+      <p aria-label={hasTemplate ? templateCopy : undefined}>
+        {hasTemplate ? (
+          <>
+            <span aria-hidden="true">{visibleCopy}</span>
+            {copyIsTyping ? <span className="dui-recruit-intro-caret" aria-hidden="true" /> : null}
+          </>
+        ) : step.copy}
+      </p>
+    </div>
+  )
+}
+
 const CLASS_OPTIONS = Array.from(new Set(BEHAVIOR_OPTIONS.map((option) => option.className)))
 
 const personalityDepthOption = (value: number) =>
@@ -1107,6 +1241,10 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
   ].filter(Boolean).join(' ')
   const activeMarkdownTone = markdownFileTone(activeFile)
   const activeWizardStep = RECRUIT_WIZARD_STEPS[currentStep - 1]
+  const selectedTemplateIntro = selectedTemplateId
+    ? templates.find((template) => template.id === selectedTemplateId)
+      || (selectedTemplate?.id === selectedTemplateId ? selectedTemplate : null)
+    : null
 
   const readTextDrafts = useCallback(() => ({ name, agentId, role, newFileName }), [agentId, name, newFileName, role])
 
@@ -1850,11 +1988,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
               <div ref={recruitBodyRef} className="dui-recruit-body min-h-0 overflow-y-auto">
                 <div className="dui-recruit-wizard" data-step={currentStep}>
                   <div ref={recruitFormRef} className="dui-recruit-step-window" data-step={currentStep} key={currentStep}>
-                    <div className="dui-recruit-step-intro">
-                      <span>{activeWizardStep.eyebrow}</span>
-                      <h3>{activeWizardStep.title}</h3>
-                      <p>{activeWizardStep.copy}</p>
-                    </div>
+                    <RecruitStepIntro step={activeWizardStep} template={currentStep === 1 ? selectedTemplateIntro : null} />
 
                     {currentStep === 1 && (
                       <section className="dui-recruit-step-content dui-recruit-template-step" aria-label="Choose an agent template">
@@ -1906,7 +2040,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                           </div>
                         </div>
                         {selectedTemplate ? (
-                          <div className="dui-recruit-template-preview" style={{ '--category-color': selectedTemplateCategory?.color || selectedTemplate.color } as CSSProperties}>
+                          <div className="dui-recruit-template-preview" style={{ '--category-color': templates.find((template) => template.id === selectedTemplate.id)?.color || selectedTemplate.color } as CSSProperties}>
                             <div><strong>{selectedTemplate.emoji ? `${selectedTemplate.emoji} ` : ''}{selectedTemplate.name}</strong><p>{selectedTemplate.description}</p></div>
                             <span className="dui-recruit-template-meta"><span>{selectedTemplate.divisionLabel}</span><span>{(selectedTemplate.documents || []).length} files</span><span>{templateToolAccess.length} tools</span></span>
                           </div>

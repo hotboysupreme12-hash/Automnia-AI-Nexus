@@ -1,10 +1,84 @@
-/* Keep the active workspace clear without decorative marker glows. */
-html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"]) {
+/* Keep the rail quiet and let the selected row carry the navigation state. */
+html.dui-pro-overhaul .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility),
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility) {
+  border-color: transparent !important;
+  outline: 0 !important;
+  background: transparent !important;
   box-shadow: none !important;
+  color: #aeb6be !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"])::before {
+html.dui-pro-overhaul .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):hover,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):hover {
+  border-color: transparent !important;
+  outline: 0 !important;
+  background: #171a1d !important;
+  box-shadow: none !important;
+  color: #e5e8eb !important;
+}
+
+/* Recruit opens a dialog instead of selecting a workspace. Keep its hover
+   feedback in the label and icon so it cannot look like a second active tab. */
+html.dui-pro-overhaul .dy-human-rail .dy-human-nav > .dy-human-nav-action[data-tone="recruit"]:hover,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav > .dy-human-nav-action[data-tone="recruit"]:hover {
+  background: transparent !important;
+}
+
+html.dui-pro-overhaul .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):focus-visible,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):focus-visible {
+  outline: 2px solid rgba(183, 204, 195, .58) !important;
+  outline-offset: 2px !important;
+  background: #171a1d !important;
+  box-shadow: none !important;
+  color: #f1f4f2 !important;
+}
+
+html.dui-pro-overhaul .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"]),
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"]) {
+  border-color: transparent !important;
+  outline: 0 !important;
+  background: #1b1e21 !important;
+  box-shadow: none !important;
+  color: #f2f4f5 !important;
+}
+
+html.dui-pro-overhaul .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)::before,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)::before,
+html.dui-pro-overhaul .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)::after,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)::after {
   display: none !important;
   content: none !important;
   box-shadow: none !important;
+}
+
+/* Generated pictograms sit directly on the rail with no tile or glow. */
+html.dui-pro-overhaul .dy-human-rail .dy-human-nav .dy-human-nav-icon,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav .dy-human-nav-icon {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #b8cac3 !important;
+}
+
+html.dui-pro-overhaul .dy-human-rail .dy-human-nav .dy-human-nav-icon-img,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav .dy-human-nav-icon-img {
+  width: 22px !important;
+  height: 22px !important;
+  opacity: .92 !important;
+  filter: none !important;
+  transform: none !important;
+  transition: opacity 120ms ease-out !important;
+}
+
+html.dui-pro-overhaul .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(:hover, :focus-visible, .is-active, [aria-current="page"]) .dy-human-nav-icon-img,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(:hover, :focus-visible, .is-active, [aria-current="page"]) .dy-human-nav-icon-img {
+  opacity: 1 !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+html.dui-pro-overhaul .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(:hover, :focus-visible, .is-active, [aria-current="page"]) .dy-human-nav-copy > span,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(:hover, :focus-visible, .is-active, [aria-current="page"]) .dy-human-nav-copy > span {
+  color: #c5ccc9 !important;
 }

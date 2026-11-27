@@ -79,6 +79,10 @@ const RARITY_ORDER: Record<AgentRarity, number> = {
   common: 3,
 }
 
+function sameIds(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((id, index) => id === right[index])
+}
+
 function agentSearchText(agent: OpenClawAgent): string {
   return [
     agent.id,
@@ -218,10 +222,6 @@ export function PartySelector() {
   const selectedAgentSet = useMemo(() => new Set(selectedAgentIds), [selectedAgentIds])
   const pinnedAgentSet = useMemo(() => new Set(pinnedAgentIds), [pinnedAgentIds])
   const pinnedAgentCount = useMemo(() => agents.filter((agent) => pinnedAgentSet.has(agent.id)).length, [agents, pinnedAgentSet])
-  const validSelectedAgentCount = useMemo(
-    () => selectedAgentIds.filter((agentId) => agents.some((agent) => agent.id === agentId)).length,
-    [agents, selectedAgentIds],
-  )
   const busyAgentSet = useMemo(() => new Set([
     ...busyAgentIds,
     ...activeExternalChannelAgentIds(runtimeStatus),
@@ -307,24 +307,28 @@ export function PartySelector() {
   }, [displayMode, overlayPreset, pinnedAgentIds, rarityColorsEnabled, rarityFilter, sortKey])
 
   const togglePinnedAgent = useCallback((agentId: string) => {
-    const next = pinnedAgentSet.has(agentId)
-      ? pinnedAgentIds.filter((id) => id !== agentId)
-      : [...pinnedAgentIds, agentId]
-    setPinnedAgentIds(next)
-    saveRegistryPreferences({ displayMode, overlayPreset, rarityColorsEnabled, rarityFilter, sortKey, pinnedAgentIds: next })
-  }, [displayMode, overlayPreset, pinnedAgentIds, pinnedAgentSet, rarityColorsEnabled, rarityFilter, sortKey])
+    setPinnedAgentIds((current) => current.includes(agentId)
+      ? current.filter((id) => id !== agentId)
+      : [...current, agentId])
+  }, [])
 
   useEffect(() => {
     const syncPreferences = (event?: Event) => {
       const next = event instanceof CustomEvent
         ? event.detail as RegistryPreferences
         : readRegistryPreferences()
-      setDisplayMode(next.displayMode || DEFAULT_REGISTRY_PREFERENCES.displayMode)
-      setOverlayPreset(next.overlayPreset || DEFAULT_REGISTRY_PREFERENCES.overlayPreset)
-      setRarityColorsEnabled(next.rarityColorsEnabled ?? DEFAULT_REGISTRY_PREFERENCES.rarityColorsEnabled)
-      setRarityFilter(next.rarityFilter || DEFAULT_REGISTRY_PREFERENCES.rarityFilter)
-      setSortKey(next.sortKey || DEFAULT_REGISTRY_PREFERENCES.sortKey)
-      setPinnedAgentIds(next.pinnedAgentIds || [])
+      const displayMode = next.displayMode || DEFAULT_REGISTRY_PREFERENCES.displayMode
+      const overlayPreset = next.overlayPreset || DEFAULT_REGISTRY_PREFERENCES.overlayPreset
+      const rarityColorsEnabled = next.rarityColorsEnabled ?? DEFAULT_REGISTRY_PREFERENCES.rarityColorsEnabled
+      const rarityFilter = next.rarityFilter || DEFAULT_REGISTRY_PREFERENCES.rarityFilter
+      const sortKey = next.sortKey || DEFAULT_REGISTRY_PREFERENCES.sortKey
+      const pinnedAgentIds = next.pinnedAgentIds || []
+      setDisplayMode((current) => current === displayMode ? current : displayMode)
+      setOverlayPreset((current) => current === overlayPreset ? current : overlayPreset)
+      setRarityColorsEnabled((current) => current === rarityColorsEnabled ? current : rarityColorsEnabled)
+      setRarityFilter((current) => current === rarityFilter ? current : rarityFilter)
+      setSortKey((current) => current === sortKey ? current : sortKey)
+      setPinnedAgentIds((current) => sameIds(current, pinnedAgentIds) ? current : pinnedAgentIds)
     }
     window.addEventListener(REGISTRY_PREFS_CHANGED_EVENT, syncPreferences)
     window.addEventListener('storage', syncPreferences)
@@ -521,6 +525,12 @@ export function PartySelector() {
                   type="button"
                   title={mode.hint}
                   onClick={() => setDisplayMode(mode.id)}
+                  onPointerUp={(event) => {
+                    if (event.button === 0) setDisplayMode(mode.id)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') setDisplayMode(mode.id)
+                  }}
                   className={`px-2.5 py-1.5 text-[9px] font-black uppercase tracking-[0.10em] transition ${
                     displayMode === mode.id
                       ? 'text-cyan-100'
@@ -547,11 +557,6 @@ export function PartySelector() {
             </>
           )}
           {pinnedOnly && <span className="ml-2 text-amber-100/75">Pinned favorites</span>}
-          {validSelectedAgentCount > 0 && (
-            <span data-agent-selection-status className="ml-2 text-cyan-100/60">
-              {validSelectedAgentCount} selected for Agent Chat
-            </span>
-          )}
         </p>
 
         {/* Empty state */}

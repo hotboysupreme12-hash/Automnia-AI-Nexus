@@ -328,6 +328,34 @@ test('runTurn sends Gateway chat payloads and uses a visible terminal reply with
   assert.equal(events.some((entry) => entry.event === 'progress' && /Gateway agent event/.test(String(entry.data.text))), false)
 })
 
+test('tool stream forwards command input and output with its call identity', async () => {
+  const harness = createHarness({ suppressFinal: true })
+  const events: Array<{ event: string; data: Record<string, unknown> }> = []
+  const stream = harness.service.registerStreamObserver((event, data) => events.push({ event, data }))
+  const turn = harness.service.runTurn({
+    agentId: 'agent-tool-stream', agentName: 'Agent', message: 'inspect', sessionId: 'tool-stream',
+    timeoutMs: 1000, cwd: process.cwd(), streamObserverId: stream.observer.id,
+  })
+  await waitUntil(() => harness.requests.some((request) => request.method === 'chat.send'))
+  const send = harness.requests.find((request) => request.method === 'chat.send')
+  const runId = isRecord(send?.params) && typeof send.params.idempotencyKey === 'string' ? send.params.idempotencyKey : ''
+  harness.clientOptions?.onEvent?.({ event: 'agent', payload: { runId, stream: 'tool', data: {
+    phase: 'start', name: 'exec', toolCallId: 'call-1', args: { command: 'echo hello', token: 'secret-123' },
+  } } })
+  harness.clientOptions?.onEvent?.({ event: 'agent', payload: { runId, stream: 'tool', data: {
+    phase: 'result', name: 'exec', toolCallId: 'call-1', result: 'hello',
+  } } })
+  const steps = events.filter((entry) => entry.event === 'progress' && entry.data.toolId === 'call-1')
+  assert.equal(steps.length, 2)
+  assert.equal(steps[0].data.command, 'echo hello')
+  assert.match(String(steps[0].data.toolInput), /\[redacted\]/)
+  assert.equal(steps[1].data.toolOutput, 'hello')
+  assert.equal(harness.service.abortRun(runId, 'test complete'), true)
+  await assert.rejects(turn, /stopped by operator/)
+  stream.dispose()
+  harness.service.stopClient('test complete')
+})
+
 test('Gateway run_status protocol events never appear as agent progress text', async () => {
   const harness = createHarness({ suppressFinal: true })
   const events: Array<{ event: string; data: Record<string, unknown> }> = []

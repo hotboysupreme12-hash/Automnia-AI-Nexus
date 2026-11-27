@@ -50,16 +50,20 @@ test('startup failures receive full quit cleanup; second instances do not touch 
   for (const hasLock of [true, false]) {
     let prevented = false
     let cleanups = 0
+    let clipboardMonitorStops = 0
     const context = vm.createContext({
       appendDesktopDiagnostic() {}, gpuRecoveryRelaunchRequested: false,
       startupFailed: true, isQuitting: false, quitCleanupComplete: false,
       hasSingleInstanceLock: hasLock, ELECTRON_E2E: false,
+      stopQuickAgentHook() {}, stopQuickAgentClipboardImageMonitor: () => { clipboardMonitorStops++ }, hideQuickAgentWindow() {},
+      quickAgentPendingRequests: new Map(), clearTimeout() {},
       performQuitCleanup: () => { cleanups++; return Promise.resolve() },
       app: { on: (_event: string, handler: (event: unknown) => void) => handler({ preventDefault: () => { prevented = true } }), exit() {} },
     })
     vm.runInContext(section(main, "app.on('before-quit'", "app.on('window-all-closed'"), context)
     assert.equal(prevented, hasLock)
     assert.equal(cleanups, hasLock ? 1 : 0)
+    assert.equal(clipboardMonitorStops, 1)
   }
 })
 

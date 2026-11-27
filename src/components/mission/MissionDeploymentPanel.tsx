@@ -280,7 +280,7 @@ export function MissionDeploymentPanel() {
   return (
     <div className="dui-mission-wrap dui-missions-polished">
       <header className="dui-missions-page-head">
-        <div><span>Mission control</span><h2>Missions</h2><p>Define the outcome. Assemble your team. Put your agents to work.</p></div>
+        <div><h2>Missions</h2><p>Plan and launch agent work.</p></div>
         <div className="dui-missions-page-actions">
           <Button type="button" variant="secondary" size="compact" aria-expanded={showHistory} aria-controls={`${fieldId}-history`} onClick={() => setShowHistory((value) => !value)}>
             {showHistory ? 'Hide recent jobs' : 'Recent jobs'} ({missionHistory.length})

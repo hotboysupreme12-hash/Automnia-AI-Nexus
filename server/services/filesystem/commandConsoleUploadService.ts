@@ -18,7 +18,7 @@ async function readBounded(handle: FileHandle, limit: number) {
 
 export const COMMAND_CONSOLE_UPLOAD_LIMIT_BYTES = 25 * 1024 * 1024
 export const COMMAND_CONSOLE_GATEWAY_IMAGE_LIMIT_BYTES = 6 * 1024 * 1024
-export const COMMAND_CONSOLE_GATEWAY_ATTACHMENT_LIMIT_BYTES = 8 * 1024 * 1024
+export const COMMAND_CONSOLE_GATEWAY_ATTACHMENT_LIMIT_BYTES = 20 * 1024 * 1024
 export const COMMAND_CONSOLE_UPLOAD_TTL_MS = 7 * 24 * 60 * 60 * 1000
 const COMMAND_CONSOLE_UPLOAD_MANIFEST_VERSION = 2
 const DEFAULT_COMMAND_CONSOLE_UPLOAD_CLEANUP_DELETE_LIMIT = 200
@@ -26,16 +26,17 @@ const MAX_COMMAND_CONSOLE_UPLOAD_CLEANUP_SCAN_LIMIT = 10_000
 const MAX_COMMAND_CONSOLE_UPLOAD_CLEANUP_DELETE_LIMIT = 500
 
 const COMMAND_CONSOLE_UPLOAD_EXTENSIONS = new Set([
-  '.png', '.jpg', '.jpeg', '.webp', '.gif',
-  '.pdf', '.doc', '.docx', '.rtf', '.ppt', '.pptx', '.xls', '.xlsx',
+  '.png', '.jpg', '.jpeg', '.webp', '.gif', '.heic', '.heif',
+  '.pdf', '.doc', '.docx', '.docm', '.odt', '.rtf', '.ppt', '.pptx', '.pptm', '.odp', '.xls', '.xlsx', '.xlsm', '.ods', '.epub',
   '.txt', '.md', '.markdown', '.json', '.jsonl', '.csv', '.tsv', '.log', '.xml', '.yaml', '.yml',
   '.html', '.htm', '.css', '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs',
   '.py', '.ipynb', '.java', '.go', '.rs', '.c', '.cc', '.cpp', '.h', '.hpp', '.cs',
   '.php', '.rb', '.sh', '.bash', '.zsh', '.ps1', '.sql', '.toml', '.ini', '.env',
-  '.mp3', '.wav', '.m4a', '.aac', '.ogg', '.oga', '.flac', '.opus',
+  '.mp3', '.wav', '.m4a', '.aac', '.ogg', '.oga', '.flac', '.opus', '.aiff', '.aif', '.amr', '.caf',
+  '.mp4', '.m4v', '.mov', '.webm', '.mpeg', '.mpg', '.mpegps', '.avi', '.mkv', '.3gp', '.wmv', '.flv',
 ])
 
-const COMMAND_CONSOLE_IMAGE_ATTACHMENT_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'])
+const COMMAND_CONSOLE_IMAGE_ATTACHMENT_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif', 'image/heic', 'image/heif'])
 
 const COMMAND_CONSOLE_SIGNATURE_EXTENSIONS: Record<string, string> = {
   '.png': 'image/png',
@@ -43,6 +44,8 @@ const COMMAND_CONSOLE_SIGNATURE_EXTENSIONS: Record<string, string> = {
   '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
   '.gif': 'image/gif',
+  '.heic': 'image/heic',
+  '.heif': 'image/heif',
   '.pdf': 'application/pdf',
   '.mp3': 'audio/mpeg',
   '.wav': 'audio/wav',
@@ -60,15 +63,24 @@ const COMMAND_CONSOLE_UPLOAD_MIME_EXTENSIONS: Record<string, string> = {
   'image/jpg': '.jpg',
   'image/webp': '.webp',
   'image/gif': '.gif',
+  'image/heic': '.heic',
+  'image/heif': '.heif',
   'application/pdf': '.pdf',
   'application/msword': '.doc',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/vnd.ms-word.document.macroEnabled.12': '.docm',
+  'application/vnd.oasis.opendocument.text': '.odt',
   'application/rtf': '.rtf',
   'text/rtf': '.rtf',
   'application/vnd.ms-powerpoint': '.ppt',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+  'application/vnd.ms-powerpoint.presentation.macroEnabled.12': '.pptm',
+  'application/vnd.oasis.opendocument.presentation': '.odp',
   'application/vnd.ms-excel': '.xls',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+  'application/vnd.ms-excel.sheet.macroEnabled.12': '.xlsm',
+  'application/vnd.oasis.opendocument.spreadsheet': '.ods',
+  'application/epub+zip': '.epub',
   'application/json': '.json',
   'application/x-ndjson': '.jsonl',
   'text/csv': '.csv',
@@ -93,6 +105,23 @@ const COMMAND_CONSOLE_UPLOAD_MIME_EXTENSIONS: Record<string, string> = {
   'audio/ogg': '.ogg',
   'audio/flac': '.flac',
   'audio/opus': '.opus',
+  'audio/aiff': '.aiff',
+  'audio/x-aiff': '.aiff',
+  'audio/amr': '.amr',
+  'audio/x-caf': '.caf',
+  'audio/webm': '.webm',
+  'video/mp4': '.mp4',
+  'video/x-m4v': '.m4v',
+  'video/quicktime': '.mov',
+  'video/webm': '.webm',
+  'video/mpeg': '.mpeg',
+  'video/mpg': '.mpg',
+  'video/x-msvideo': '.avi',
+  'video/x-matroska': '.mkv',
+  'video/3gpp': '.3gp',
+  'video/x-ms-wmv': '.wmv',
+  'video/x-flv': '.flv',
+  'video/mpegps': '.mpegps',
 }
 
 const COMMAND_CONSOLE_SIGNATURE_MIME_TYPES = new Set(Object.values(COMMAND_CONSOLE_SIGNATURE_EXTENSIONS))
@@ -163,11 +192,18 @@ function contentTypeFromUploadName(filePath: string) {
   if (ext === '.pdf') return 'application/pdf'
   if (ext === '.doc') return 'application/msword'
   if (ext === '.docx') return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  if (ext === '.docm') return 'application/vnd.ms-word.document.macroEnabled.12'
+  if (ext === '.odt') return 'application/vnd.oasis.opendocument.text'
   if (ext === '.rtf') return 'application/rtf'
   if (ext === '.ppt') return 'application/vnd.ms-powerpoint'
   if (ext === '.pptx') return 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  if (ext === '.pptm') return 'application/vnd.ms-powerpoint.presentation.macroEnabled.12'
+  if (ext === '.odp') return 'application/vnd.oasis.opendocument.presentation'
   if (ext === '.xls') return 'application/vnd.ms-excel'
   if (ext === '.xlsx') return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  if (ext === '.xlsm') return 'application/vnd.ms-excel.sheet.macroEnabled.12'
+  if (ext === '.ods') return 'application/vnd.oasis.opendocument.spreadsheet'
+  if (ext === '.epub') return 'application/epub+zip'
   if (ext === '.mp3') return 'audio/mpeg'
   if (ext === '.wav') return 'audio/wav'
   if (ext === '.m4a') return 'audio/mp4'
@@ -175,10 +211,26 @@ function contentTypeFromUploadName(filePath: string) {
   if (ext === '.ogg' || ext === '.oga') return 'audio/ogg'
   if (ext === '.flac') return 'audio/flac'
   if (ext === '.opus') return 'audio/opus'
+  if (ext === '.aiff' || ext === '.aif') return 'audio/aiff'
+  if (ext === '.amr') return 'audio/amr'
+  if (ext === '.caf') return 'audio/x-caf'
   if (ext === '.png') return 'image/png'
   if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg'
   if (ext === '.webp') return 'image/webp'
   if (ext === '.gif') return 'image/gif'
+  if (ext === '.heic') return 'image/heic'
+  if (ext === '.heif') return 'image/heif'
+  if (ext === '.mp4') return 'video/mp4'
+  if (ext === '.m4v') return 'video/x-m4v'
+  if (ext === '.mov') return 'video/quicktime'
+  if (ext === '.webm') return 'video/webm'
+  if (ext === '.mpeg' || ext === '.mpg') return 'video/mpeg'
+  if (ext === '.mpegps') return 'video/mpegps'
+  if (ext === '.avi') return 'video/x-msvideo'
+  if (ext === '.mkv') return 'video/x-matroska'
+  if (ext === '.3gp') return 'video/3gpp'
+  if (ext === '.wmv') return 'video/x-ms-wmv'
+  if (ext === '.flv') return 'video/x-flv'
   return 'application/octet-stream'
 }
 
@@ -228,6 +280,8 @@ function commandConsoleSignatureMimeFromBytes(bytes: Buffer): string | null {
   if (bytes.length >= 12 && bytes.subarray(4, 8).toString('ascii') === 'ftyp') {
     const brand = bytes.subarray(8, 12).toString('ascii')
     if (brand === 'M4A ' || brand === 'isom' || brand === 'mp42' || brand === 'mp41') return 'audio/mp4'
+    if (['heic', 'heix', 'hevc', 'hevx'].includes(brand)) return 'image/heic'
+    if (['mif1', 'msf1'].includes(brand)) return 'image/heif'
   }
   return null
 }
@@ -236,7 +290,9 @@ function assertCommandConsoleUploadSignature(bytes: Buffer, safeName: string, re
   const extSignatureMimeType = COMMAND_CONSOLE_SIGNATURE_EXTENSIONS[path.extname(safeName).toLowerCase()] || null
   const mimeSignatureMimeType = canonicalSignatureMimeType(resolvedMimeType)
   const requiresMimeSignature = COMMAND_CONSOLE_SIGNATURE_MIME_TYPES.has(mimeSignatureMimeType)
-  if (requiresMimeSignature && extSignatureMimeType && extSignatureMimeType !== mimeSignatureMimeType) {
+  const compatibleHeifTypes = new Set(['image/heic', 'image/heif'])
+  const compatibleMimeTypes = (left: string, right: string) => left === right || (compatibleHeifTypes.has(left) && compatibleHeifTypes.has(right))
+  if (requiresMimeSignature && extSignatureMimeType && !compatibleMimeTypes(extSignatureMimeType, mimeSignatureMimeType)) {
     throw new Error('Upload file type does not match its extension.')
   }
   if (requiresMimeSignature && !extSignatureMimeType) {
@@ -245,7 +301,7 @@ function assertCommandConsoleUploadSignature(bytes: Buffer, safeName: string, re
   const expectedMimeType = extSignatureMimeType || (requiresMimeSignature ? mimeSignatureMimeType : null)
   if (!expectedMimeType) return
   const detectedMimeType = commandConsoleSignatureMimeFromBytes(bytes)
-  if (detectedMimeType !== expectedMimeType) {
+  if (!detectedMimeType || !compatibleMimeTypes(detectedMimeType, expectedMimeType)) {
     throw new Error('Upload file contents do not match the declared file type.')
   }
 }
@@ -257,11 +313,11 @@ export function commandConsoleUploadFileName(rawName: string | undefined, mimeTy
   const rawExtFromName = path.extname(cleanName)
   const extFromName = rawExtFromName.toLowerCase()
   if (extFromName && !COMMAND_CONSOLE_UPLOAD_EXTENSIONS.has(extFromName)) {
-    throw new Error('Choose a supported image, audio, PDF, Office document, spreadsheet, presentation, text, code, or data file.')
+    throw new Error('Choose a supported image, audio, PDF, video, Office or OpenDocument file, e-book, spreadsheet, presentation, text, code, or data file.')
   }
   const ext = extFromName || COMMAND_CONSOLE_UPLOAD_MIME_EXTENSIONS[mimeType] || ''
   if (!ext) {
-    throw new Error('Choose a supported image, audio, PDF, Office document, spreadsheet, presentation, text, code, or data file.')
+    throw new Error('Choose a supported image, audio, PDF, video, Office or OpenDocument file, e-book, spreadsheet, presentation, text, code, or data file.')
   }
   const stem = path.basename(cleanName, rawExtFromName || ext)
     .trim()
@@ -542,7 +598,7 @@ export function createCommandConsoleUploadService(options: CommandConsoleUploadS
         const stat = await handle.stat()
         if (!stat.isFile() || stat.size !== attachment.size) throw new Error(`Attachment ${attachment.name} changed on disk. Upload it again.`)
         if (stat.size > inlineLimit) continue
-        if (inlineBytes + stat.size > 24 * 1024 * 1024) throw new Error('These attachments exceed the combined 24 MB inline limit. Send them in separate messages.')
+        if (inlineBytes + stat.size > 20 * 1024 * 1024) throw new Error('These attachments exceed the combined 20 MB inline limit. Send them in separate messages.')
         // A bounded read also limits memory if another process grows the file after stat.
         bytes = await readBounded(handle, stat.size)
         if (bytes.length !== stat.size) throw new Error(`Attachment ${attachment.name} changed on disk. Upload it again.`)

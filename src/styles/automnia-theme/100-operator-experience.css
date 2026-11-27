@@ -744,13 +744,31 @@ html.dui-pro-overhaul .dy-command-voice-error,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-voice-error {
   margin: 0 12px 9px;
   padding: 8px 10px;
-  border: 1px solid rgb(240 141 145 / .28);
-  border-radius: 9px;
-  background: rgb(240 141 145 / .075);
+  border: 1px solid rgb(240 141 145 / .16);
+  border-radius: 7px;
+  background: rgb(240 141 145 / .035);
   color: #ffd9dc;
   font-size: 11px;
   font-weight: 630;
   line-height: 1.42;
+  transform-origin: bottom left;
+  animation: dy-command-voice-error-in 200ms cubic-bezier(.2, .7, .25, 1) both;
+}
+
+html.dui-pro-overhaul .dy-command-voice-error[data-exiting="true"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-voice-error[data-exiting="true"] {
+  animation: dy-command-voice-error-out 240ms cubic-bezier(.4, 0, .2, 1) both;
+  pointer-events: none;
+}
+
+@keyframes dy-command-voice-error-in {
+  from { opacity: 0; transform: translateY(3px) scale(.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes dy-command-voice-error-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(2px) scale(.99); }
 }
 
 html.dui-pro-overhaul .dy-command-composer,
@@ -2337,6 +2355,11 @@ html[data-dui-high-contrast="true"] :is(input, select, textarea, button) {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html.dui-pro-overhaul .dy-command-voice-error,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-voice-error {
+    animation: none !important;
+  }
+
   html.dui-pro-overhaul :is(.dui-button, .dy-command-composer button, .dy-monitor-toolbar button, .dui-template-tile, .dy-agent-editor-preset),
   html.dui-pro-overhaul.dui-cohesive-ui :is(.dui-button, .dy-command-composer button, .dy-monitor-toolbar button, .dui-template-tile, .dy-agent-editor-preset) {
     transform: none !important;

@@ -614,3 +614,117 @@ html[data-dui-high-contrast="true"] .dui-help-panel { border-color: rgb(210 238 
 html[data-dui-high-contrast="true"] .dui-help-message__content > p,
 html[data-dui-high-contrast="true"] .dui-help-suggestions button,
 html[data-dui-high-contrast="true"] .dui-help-composer { border-color: rgb(210 238 238 / .27); }
+
+/* Graphite surfaces and a spacious, aligned help workspace. */
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-overlay {
+  place-items: center;
+  padding: 18px;
+  background: rgb(13 16 18 / 72%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-panel {
+  --help-panel: #202428;
+  --help-panel-raised: #252a2e;
+  --help-line: #373e44;
+  width: min(960px, 100%);
+  height: min(760px, calc(100dvh - 36px));
+  min-height: 0;
+  margin: auto;
+  border: 1px solid #454b51;
+  border-radius: 4px;
+  background: #202428;
+  box-shadow: 0 18px 48px rgb(0 0 0 / 35%);
+  color: #e4e7e9;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-panel :is(.dui-help-panel__header, .dui-help-composer-dock) {
+  border-color: #373e44;
+  background: #1b1e21;
+  background-image: none;
+  box-shadow: none;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-panel__header { min-height: 72px; padding: 12px 18px; gap: 14px; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-panel__header::after { display: none; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-panel__title { min-width: 0; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-panel__title h2 { color: #f0f2f4; font-size: 19px; line-height: 1.25; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-panel__title p { color: #aeb6be; font-size: 12px; line-height: 1.4; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-panel__title > div > span,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-welcome__eyebrow { color: #aeb6be; letter-spacing: .04em; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-panel :is(.dui-help-panel__glyph, .dui-help-welcome__orb, .dui-help-welcome__orb > span, .dui-help-message__avatar) {
+  border: 1px solid #454b51;
+  border-radius: 3px;
+  background: #252a2e;
+  background-image: none;
+  color: #c4cbd0;
+  box-shadow: none;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-welcome__orb::before,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-welcome__orb::after { display: none; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-panel__actions button {
+  border-color: #454b51;
+  border-radius: 3px;
+  background: #252a2e;
+  color: #d5d9dc;
+  box-shadow: none;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-panel__actions button:hover:not(:disabled) {
+  border-color: #68737c;
+  background: #30363b;
+  color: #f0f2f4;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-panel__status { border-color: #454b51; border-radius: 3px; background: #252a2e; color: #c4cbd0; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-conversation { background: #202428; background-image: none; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-transcript { padding: 28px clamp(20px, 3vw, 36px); gap: 16px; scrollbar-color: #59626a #202428; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-welcome { width: 100%; max-width: none; margin: 0; padding: 0; text-align: left; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-welcome h3 { margin: 0 0 5px; color: #f0f2f4; font-size: 22px; font-weight: 620; line-height: 1.25; letter-spacing: -.02em; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-welcome > p { max-width: 78ch; margin: 0; color: #aeb6be; font-size: 13px; line-height: 1.5; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-suggestions { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 18px; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-suggestions button {
+  min-width: 0;
+  min-height: 58px;
+  grid-template-columns: 28px minmax(0, 1fr) 16px;
+  gap: 8px 11px;
+  padding: 10px 11px;
+  background-image: none;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-suggestions button {
+  border: 1px solid #373e44 !important;
+  border-radius: 3px !important;
+  background: #252a2e !important;
+  color: #e4e7e9 !important;
+  box-shadow: none !important;
+}
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-suggestions button::after { display: none; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-suggestions button:hover:not(:disabled) { border-color: #59666f !important; background: #30363b !important; color: #f0f2f4 !important; box-shadow: none !important; transform: none; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-suggestions button:focus-visible { outline: 2px solid rgb(141 164 181 / 38%) !important; outline-offset: 1px !important; border-color: #748692 !important; background: #30363b !important; box-shadow: none !important; transform: none; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-suggestions button > span { width: 28px; height: 28px; border: 1px solid #454b51; border-radius: 2px; background: #1b1e21; color: #a9bdcc; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-suggestions strong { color: #e4e7e9; font-size: 13px; font-weight: 620; line-height: 1.3; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-suggestions i { color: #99aab5; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-topics-toggle { margin: 11px 0 0; padding: 3px 0; border: 0 !important; border-radius: 0 !important; background: transparent !important; color: #a9bdcc !important; box-shadow: none !important; font: inherit; font-size: 12px; font-weight: 560; cursor: pointer; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-topics-toggle:hover { border-color: transparent !important; background: transparent !important; color: #d8e4ec !important; text-decoration: underline; text-underline-offset: 3px; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-topics-toggle:focus-visible { outline: 2px solid rgb(141 164 181 / 38%) !important; outline-offset: 3px !important; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-message { width: min(94%, 850px); }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-message__content > p { border-color: #373e44; border-radius: 3px; background: #252a2e; color: #e4e7e9; box-shadow: none; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-message--user .dui-help-message__content > p { border-color: #505960; background: #30363b; color: #f0f2f4; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-message__label,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-message--user .dui-help-message__label { color: #aeb6be; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-composer-dock { padding: 14px 22px 16px; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-composer { border: 1px solid #454b51; border-radius: 3px; background: #171a1d; box-shadow: none; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-composer:focus-within { border-color: #748692; box-shadow: none; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-composer textarea { color: #e4e7e9; font-size: 14px; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-composer textarea::placeholder { color: #9aa3aa; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-panel .dui-help-composer textarea { border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-panel .dui-help-composer textarea:focus,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-panel .dui-help-composer textarea:focus-visible { border: 0 !important; outline: 0 !important; background: transparent !important; box-shadow: none !important; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-composer button { border: 1px solid #505960; border-radius: 3px; background: #30363b; color: #f0f2f4; box-shadow: none; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-composer button:hover:not(:disabled) { background: #3a4248; transform: none; }
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-composer-meta,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-help-composer-meta__privacy { color: #aeb6be; font-size: 12px; }
+@media (max-width: 680px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .dui-help-overlay { padding: 0; }
+  html.dui-pro-overhaul.dui-cohesive-ui .dui-help-panel { width: 100%; height: 100%; border-radius: 0; }
+  html.dui-pro-overhaul.dui-cohesive-ui .dui-help-panel__header { padding: 12px 14px; }
+  html.dui-pro-overhaul.dui-cohesive-ui .dui-help-transcript { padding: 20px 14px; }
+  html.dui-pro-overhaul.dui-cohesive-ui .dui-help-suggestions { grid-template-columns: 1fr; }
+  html.dui-pro-overhaul.dui-cohesive-ui .dui-help-composer-dock { padding: 10px 12px 12px; }
+}

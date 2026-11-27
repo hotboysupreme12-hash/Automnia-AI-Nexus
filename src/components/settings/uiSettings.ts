@@ -2,12 +2,14 @@ import { readPreferenceValue, savePreferenceEntries } from './preferenceStorage'
 export type UiAccentMode = 'no-blue' | 'reference' | 'ember' | 'green'
 export type UiFormChrome = 'graphite' | 'obsidian' | 'warm'
 export type UiDensity = 'compact' | 'comfortable' | 'spacious'
+export type UiTextSize = 'standard' | 'large' | 'extra-large'
 export type UiMotion = 'standard' | 'reduced'
 
 export type AutomniaUiSettings = {
   accentMode: UiAccentMode
   formChrome: UiFormChrome
   density: UiDensity
+  textSize: UiTextSize
   motion: UiMotion
   highContrast: boolean
   reducedGlow: boolean
@@ -21,6 +23,7 @@ export const DEFAULT_UI_SETTINGS: AutomniaUiSettings = {
   accentMode: 'reference',
   formChrome: 'graphite',
   density: 'comfortable',
+  textSize: 'large',
   motion: 'standard',
   highContrast: false,
   reducedGlow: true,
@@ -31,6 +34,7 @@ export const DEFAULT_UI_SETTINGS: AutomniaUiSettings = {
 const ACCENT_MODES = new Set<UiAccentMode>(['no-blue', 'reference', 'ember', 'green'])
 const FORM_CHROMES = new Set<UiFormChrome>(['graphite', 'obsidian', 'warm'])
 const DENSITIES = new Set<UiDensity>(['compact', 'comfortable', 'spacious'])
+const TEXT_SIZES = new Set<UiTextSize>(['standard', 'large', 'extra-large'])
 const MOTION_MODES = new Set<UiMotion>(['standard', 'reduced'])
 
 function isBoolean(value: unknown): value is boolean {
@@ -49,6 +53,7 @@ export function readUiSettings(): AutomniaUiSettings {
       accentMode: parsed.accentMode && ACCENT_MODES.has(parsed.accentMode) ? parsed.accentMode : DEFAULT_UI_SETTINGS.accentMode,
       formChrome: parsed.formChrome && FORM_CHROMES.has(parsed.formChrome) ? parsed.formChrome : DEFAULT_UI_SETTINGS.formChrome,
       density: parsed.density && DENSITIES.has(parsed.density) ? parsed.density : DEFAULT_UI_SETTINGS.density,
+      textSize: parsed.textSize && TEXT_SIZES.has(parsed.textSize) ? parsed.textSize : DEFAULT_UI_SETTINGS.textSize,
       motion: parsed.motion && MOTION_MODES.has(parsed.motion) ? parsed.motion : DEFAULT_UI_SETTINGS.motion,
       highContrast: isBoolean(parsed.highContrast) ? parsed.highContrast : DEFAULT_UI_SETTINGS.highContrast,
       reducedGlow: isBoolean(parsed.reducedGlow) ? parsed.reducedGlow : !controlGlow,
@@ -71,6 +76,7 @@ export function applyUiSettings(settings: AutomniaUiSettings): void {
   root.dataset.duiAccentMode = settings.accentMode
   root.dataset.duiFormChrome = settings.formChrome
   root.dataset.duiDensity = settings.density
+  root.dataset.duiTextSize = settings.textSize
   root.dataset.duiMotion = settings.motion
   root.dataset.duiHighContrast = settings.highContrast ? 'true' : 'false'
   root.dataset.duiReducedGlow = settings.reducedGlow ? 'true' : 'false'

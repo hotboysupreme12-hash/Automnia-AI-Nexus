@@ -1238,20 +1238,27 @@ html.dui-pro-overhaul select.dy-chat-agent-picker {
   min-width: 132px !important;
   max-width: 210px !important;
   min-height: 30px !important;
-  padding: 0 26px 0 9px !important;
-  border: 1px solid rgb(142 176 184 / .18) !important;
+  padding: 0 32px 0 12px !important;
+  border: 1px solid rgb(255 255 255 / .12) !important;
   border-radius: 9px !important;
   outline: none !important;
-  background: #0a151b !important;
-  color: #e1eded !important;
+  appearance: none;
+  background: #242a28 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23b9c5bf' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center !important;
+  color: #e5ebe8 !important;
   font-size: 11px !important;
-  font-weight: 620 !important;
+  font-weight: 600 !important;
   text-overflow: ellipsis !important;
+  cursor: pointer;
+}
+
+html.dui-pro-overhaul select.dy-chat-agent-picker:hover {
+  border-color: rgb(255 255 255 / .23) !important;
+  background-color: #2c3430 !important;
 }
 
 html.dui-pro-overhaul select.dy-chat-agent-picker:focus-visible {
-  border-color: rgb(94 211 207 / .7) !important;
-  box-shadow: 0 0 0 3px rgb(94 211 207 / .13) !important;
+  border-color: rgb(74 222 128 / .7) !important;
+  box-shadow: 0 0 0 3px rgb(74 222 128 / .14) !important;
 }
 
 html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console.dy-command-console--fullscreen {

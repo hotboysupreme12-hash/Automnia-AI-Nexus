@@ -99,6 +99,7 @@
   "POST /api/openclaw/runtime/run/abort",
   "POST /api/openclaw/runtime/session/close",
   "POST /api/openclaw/runtime/shutdown",
+  "POST /api/openclaw/telegram/settings/apply",
   "POST /api/party/agent-to-agent",
   "POST /api/party/agent/:agentId/config",
   "POST /api/party/agent/:agentId/model",

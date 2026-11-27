@@ -61,6 +61,30 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-ga
   box-shadow: none !important;
 }
 
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-tools > .dy-monitor-doctor-button:hover:not(:disabled),
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-tools > .dy-monitor-doctor-button:focus-visible {
+  border-color: rgb(74 222 128 / .55) !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  --dui-button-bg-hover: transparent !important;
+  color: #4ade80 !important;
+  box-shadow: none !important;
+  text-shadow: 0 0 5px rgb(74 222 128 / .8), 0 0 12px rgb(74 222 128 / .45) !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-tools > :is(.dy-gateway-restart-button, .dy-monitor-clean-slate-button):hover:not(:disabled),
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-tools > :is(.dy-gateway-restart-button, .dy-monitor-clean-slate-button):focus-visible {
+  border-color: rgb(248 113 113 / .62) !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  --dui-button-bg-hover: transparent !important;
+  color: #f87171 !important;
+  box-shadow: none !important;
+  text-shadow: 0 0 5px rgb(248 113 113 / .8), 0 0 12px rgb(248 113 113 / .45) !important;
+}
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] :is(
   .dy-monitor-card,
   .dy-health-card,
@@ -444,6 +468,20 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="
   background: #252a2e !important;
   background-image: none !important;
   box-shadow: none !important;
+}
+
+/* Keep the paired Gateway panels clear of the bottom edge in either UI mode. */
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-gateway-layout {
+  margin-bottom: 15px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell :is(
+  .dy-channel-activity-card,
+  .dy-cron-jobs-card
+) {
+  height: calc(100% - 15px) !important;
+  align-self: start !important;
+  border-radius: 0 0 8px 8px !important;
 }
 
 /* Automated Jobs: lighter graphite layers, fewer nested boxes, and colored

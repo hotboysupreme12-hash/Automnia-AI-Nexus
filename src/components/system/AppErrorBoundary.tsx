@@ -40,6 +40,7 @@ interface AppErrorBoundaryState {
   guard: RendererCrashSnapshot
   componentStack?: string
   backgroundError?: SerializableRendererError | null
+  backgroundErrorFading?: boolean
 }
 
 const emptyGuard: RendererCrashSnapshot = {
@@ -170,6 +171,9 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
     guard: emptyGuard,
   }
 
+  private backgroundErrorDismissTimer: number | null = null
+  private backgroundErrorFadeTimer: number | null = null
+
   static getDerivedStateFromError(error: Error): Partial<AppErrorBoundaryState> {
     return {
       hasError: true,
@@ -191,6 +195,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
   }
 
   componentWillUnmount(): void {
+    this.clearBackgroundErrorTimers()
     window.removeEventListener(RENDERER_ERROR_EVENT, this.handleRecordedRendererError as EventListener)
   }
 
@@ -200,7 +205,35 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
 
     // An asynchronous task can fail while React is still usable. Keep the
     // workspace and its drafts mounted; only render failures replace the shell.
-    this.setState({ backgroundError: detail.error })
+    this.clearBackgroundErrorTimers()
+    this.setState({ backgroundError: detail.error, backgroundErrorFading: false }, this.scheduleBackgroundErrorDismiss)
+  }
+
+  private clearBackgroundErrorTimers = (): void => {
+    if (this.backgroundErrorDismissTimer !== null) window.clearTimeout(this.backgroundErrorDismissTimer)
+    if (this.backgroundErrorFadeTimer !== null) window.clearTimeout(this.backgroundErrorFadeTimer)
+    this.backgroundErrorDismissTimer = null
+    this.backgroundErrorFadeTimer = null
+  }
+
+  private scheduleBackgroundErrorDismiss = (): void => {
+    this.backgroundErrorDismissTimer = window.setTimeout(() => {
+      this.backgroundErrorDismissTimer = null
+      this.setState((state) => state.backgroundError ? { backgroundErrorFading: true } : null)
+      this.backgroundErrorFadeTimer = window.setTimeout(() => {
+        this.backgroundErrorFadeTimer = null
+        this.setState((state) => state.backgroundError ? { backgroundError: null, backgroundErrorFading: false } : null)
+      }, 240)
+    }, 8_500)
+  }
+
+  private pauseBackgroundErrorDismiss = (): void => {
+    this.clearBackgroundErrorTimers()
+  }
+
+  private dismissBackgroundError = (): void => {
+    this.clearBackgroundErrorTimers()
+    this.setState({ backgroundError: null, backgroundErrorFading: false })
   }
 
   private handleRetry = (): void => {
@@ -240,12 +273,20 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
 
   render(): ReactNode {
     if (!this.state.hasError) return <>
-      {this.state.backgroundError && <aside role="alert" className="fixed bottom-4 left-4 right-4 z-[1000] mx-auto max-w-2xl rounded-xl border border-amber-400/30 bg-slate-950 p-4 text-[13px] text-slate-100 shadow-xl">
-        <div className="flex items-start justify-between gap-3">
-          <p>A background action failed. Your workspace is still available. Retry the affected action when ready.</p>
-          <button type="button" className="shrink-0 rounded border border-white/20 px-3 py-2" onClick={() => this.setState({ backgroundError: null })}>Dismiss</button>
+      {this.state.backgroundError && <aside
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className={`dy-background-action-toast${this.state.backgroundErrorFading ? ' is-fading' : ''}`}
+        onMouseEnter={this.pauseBackgroundErrorDismiss}
+        onFocusCapture={this.pauseBackgroundErrorDismiss}
+      >
+        <div className="dy-background-action-toast__row">
+          <span className="dy-background-action-toast__dot" aria-hidden="true">●</span>
+          <p className="dy-background-action-toast__message">Action failed. Your workspace is still available.</p>
+          <button type="button" className="dy-background-action-toast__dismiss" onClick={this.dismissBackgroundError}>Dismiss</button>
         </div>
-        <details className="mt-2"><summary>Diagnostic details</summary><pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words">{trimmedErrorDetail(this.state.backgroundError.message)}</pre></details>
+        <details className="dy-background-action-toast__details"><summary>Details</summary><pre>{trimmedErrorDetail(this.state.backgroundError.message)}</pre></details>
       </aside>}
       {this.props.children}
     </>

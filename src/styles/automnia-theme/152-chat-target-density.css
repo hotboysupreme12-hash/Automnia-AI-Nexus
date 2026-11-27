@@ -3,9 +3,11 @@
 html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-chat .dy-chat-profiles {
   display: grid !important;
   grid-auto-flow: column !important;
-  grid-auto-columns: 114px !important;
-  gap: 4px !important;
+  grid-auto-columns: 92px !important;
+  align-self: stretch !important;
+  gap: 3px !important;
   width: 100% !important;
+  max-width: 100% !important;
   background-color: #17191b !important;
 }
 
@@ -15,8 +17,8 @@ html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-chat .dy-chat-profile {
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-chat .dy-chat-profile__avatar {
-  width: 32px !important;
-  height: 32px !important;
+  width: 48px !important;
+  height: 48px !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-chat .dy-chat-profile__name {

@@ -99,9 +99,9 @@ import {
   clearAllCommandConsoleDrafts,
   upsertCommandConsoleResponse,
   writeCommandConsoleQueueReceipt,
-  type CommandConsoleQueuedFollowup,
   type NexusCommandConsoleResponseState,
 } from './commandConsoleState'
+import type { PromptRunOptions, QueuedCommandConsoleFollowup } from './commandConsolePromptOptions'
 import {
   NEXUS_STORAGE_KEY,
   mergeNexusPersistedState,
@@ -703,9 +703,9 @@ interface NexusState extends NexusAgentConfigState, NexusMissionState, NexusUiSt
   deployMission: () => void
   steerMission: () => void
   stopMission: () => void
-  sendPromptToAgent: (agentId: string, prompt: string, attachments?: AgentTurnAttachment[]) => Promise<void>
-  sendPromptToSelectedAgents: (prompt: string, attachments?: AgentTurnAttachment[]) => Promise<void>
-  sendPromptToActiveParty: (prompt: string, attachments?: AgentTurnAttachment[]) => Promise<void>
+  sendPromptToAgent: (agentId: string, prompt: string, attachments?: AgentTurnAttachment[], userTurnId?: string) => Promise<void>
+  sendPromptToSelectedAgents: (prompt: string, attachments?: AgentTurnAttachment[], userTurnId?: string) => Promise<void>
+  sendPromptToActiveParty: (prompt: string, attachments?: AgentTurnAttachment[], userTurnId?: string, targetAgentIds?: string[]) => Promise<void>
   stopActiveAgentRuns: (agentIds?: string[]) => number
   cancelQueuedCommandConsoleFollowup: (responseId: string) => boolean
   editQueuedCommandConsoleFollowup: (responseId: string, prompt: string) => boolean
@@ -1133,21 +1133,6 @@ export const useNexusStore = create<NexusState>()(
         summary?: string
         status?: string
       }
-      type PromptRunOptions = {
-        displayPrompt?: string
-        includeRecentContext?: boolean
-        freshSession?: boolean
-        heartbeatTurn?: boolean
-        thinking?: ThinkingLevel
-        fastMode?: FastModeDefault
-        timeoutSeconds?: number
-        attachments?: AgentTurnAttachment[]
-        sessionKey?: string
-        forceOpenClawRuntime?: boolean
-        trackMissionCycle?: boolean
-        contextAgentIds?: string[]
-      }
-      type QueuedCommandConsoleFollowup = CommandConsoleQueuedFollowup<PromptRunOptions> & { userPrompt: string; rebuildPrompt: (prompt: string) => string }
       const reportAgentConfigSave: AgentConfigSaveReporter = (agentId, scope, entry) => {
         set((s) => ({
           agentConfigSaveStatus: updateAgentConfigSaveStatus(s.agentConfigSaveStatus, agentId, scope, entry),
@@ -1741,7 +1726,7 @@ export const useNexusStore = create<NexusState>()(
         const trimmed = prompt.trim(); if (!trimmed) return
         const runSessionGeneration = commandConsoleSessionGeneration
         if (get().busyAgentIds.includes(aid)) return
-        const liveResponseId = crypto.randomUUID()
+        const liveResponseId = options.responseId || crypto.randomUUID()
         setAgentBusy(aid, true)
         let turnSucceeded = false
         try {
@@ -1884,6 +1869,7 @@ export const useNexusStore = create<NexusState>()(
             )
             const next: AgentResponse = {
               id: liveResponseId,
+              ...(options.userTurnId ? { userTurnId: options.userTurnId } : existing?.userTurnId ? { userTurnId: existing.userTurnId } : {}),
               ...(missionId ? { missionId } : {}),
               agentId: aid,
               ...(liveSessionKey || existing?.sessionKey ? { sessionKey: liveSessionKey || existing?.sessionKey } : {}),
@@ -1952,7 +1938,7 @@ export const useNexusStore = create<NexusState>()(
               severity: options.severity,
               payload: options.payload,
               refresh: false,
-              dedupeKey: `${options.activityType || activityTypeForOperationalText(line)}:${line}`,
+              dedupeKey: `${options.activityType || activityTypeForOperationalText(line)}:${line}:${options.payload?.toolId || ''}:${options.payload?.toolInput || ''}:${options.payload?.toolOutput || ''}`,
             },
           )
           if (liveResponseCreated || options.refresh) {
@@ -1988,6 +1974,7 @@ export const useNexusStore = create<NexusState>()(
             const finalFailureKind = existing?.failureKind || failureKind
             const next: AgentResponse = {
               id: liveResponseId,
+              ...(options.userTurnId ? { userTurnId: options.userTurnId } : existing?.userTurnId ? { userTurnId: existing.userTurnId } : {}),
               ...(missionId ? { missionId } : {}),
               agentId: aid,
               ...(liveSessionKey || existing?.sessionKey ? { sessionKey: liveSessionKey || existing?.sessionKey } : {}),
@@ -2415,7 +2402,7 @@ export const useNexusStore = create<NexusState>()(
           // generic "Try request again." placeholder.
           const outputBase = extractOutput(payload) || (ok ? 'No response.' : 'Try request again.')
           const output = outputBase
-          if (turn.streamed) {
+          if (turn.streamed || liveResponseCreated) {
             liveResponseModelId = modelIdFromTurnPayload(payload) || liveResponseModelId
             liveTransport = transportFromTurnPayload(payload) || liveTransport
             liveBuffered = bufferedFromTurnPayload(payload) || liveBuffered
@@ -2657,7 +2644,7 @@ export const useNexusStore = create<NexusState>()(
             progressLines: ['Lane became free; queued turn started.'],
             progressUpdatedAt: releasedAt,
           })
-          void runAgentPrompt(agentId, queued.prompt, queued.options)
+          void runAgentPrompt(agentId, queued.prompt, { ...queued.options, responseId: queued.id })
             .catch(() => {
               setAgentBusy(agentId, false)
               const completedAt = new Date().toISOString()
@@ -2729,6 +2716,7 @@ export const useNexusStore = create<NexusState>()(
             queuePosition,
             sourceLabel,
           })
+          if (options.userTurnId) entry.userTurnId = options.userTurnId
           queue.push(queued)
           queuedCommandConsoleFollowups.set(agent.id, queue)
           writeCommandConsoleQueueReceipt({ id: queued.id, agentId: agent.id, queuedAt, status: 'queued' })
@@ -3426,7 +3414,7 @@ export const useNexusStore = create<NexusState>()(
           }))
         },
 
-        sendPromptToAgent: async (aid, prompt, attachments) => {
+        sendPromptToAgent: async (aid, prompt, attachments, userTurnId) => {
           if (consoleClearPromise) await consoleClearPromise
           const normalized = normalizeOperatorPrompt(prompt)
           if (!normalized || isRetiredAgentId(aid)) return
@@ -3440,6 +3428,7 @@ export const useNexusStore = create<NexusState>()(
           const contextAgentIds = partyIds.includes(aid) ? partyIds : [aid]
           const options: PromptRunOptions = {
             displayPrompt: normalized,
+            userTurnId,
             includeRecentContext: true,
             freshSession: explicitFreshSession,
             thinking: continuation ? MISSION_THINKING : undefined,
@@ -3455,7 +3444,7 @@ export const useNexusStore = create<NexusState>()(
           }
           await runAgentPrompt(aid, normalized, options)
         },
-        sendPromptToSelectedAgents: async (prompt, attachments) => {
+        sendPromptToSelectedAgents: async (prompt, attachments, userTurnId) => {
           if (consoleClearPromise) await consoleClearPromise
           const s = get(); const ids = s.selectedAgentIds.filter((id) => !isRetiredAgentId(id) && s.agents.some((a) => a.id === id)); if (!ids.length) return
           const normalized = normalizeOperatorPrompt(prompt); if (!normalized) return
@@ -3469,6 +3458,7 @@ export const useNexusStore = create<NexusState>()(
           const allContextAgentIds = allLaneAgents.map((agent) => agent.id)
           const selectedQueueOptions = (agent: OpenClawAgent): PromptRunOptions => ({
             displayPrompt: normalized,
+            userTurnId,
             includeRecentContext: true,
             freshSession: explicitFreshSession,
             thinking: continuation ? MISSION_THINKING : undefined,
@@ -3503,6 +3493,7 @@ export const useNexusStore = create<NexusState>()(
             await Promise.allSettled(laneAgents.map((agent, index) =>
               runAgentPrompt(agent.id, buildParallelLanePrompt(agent, normalized, laneAgents, index), {
                 displayPrompt: normalized,
+                userTurnId,
                 includeRecentContext: true,
                 freshSession: explicitFreshSession,
                 thinking: continuation ? MISSION_THINKING : undefined,
@@ -3517,6 +3508,7 @@ export const useNexusStore = create<NexusState>()(
             await dispatchAgentChat(laneAgents, readConsolePreferences().parallelAgentChat, (agent) =>
               runAgentPrompt(agent.id, normalized, {
                 displayPrompt: normalized,
+                userTurnId,
                 includeRecentContext: true,
                 freshSession: explicitFreshSession,
                 thinking: continuation ? MISSION_THINKING : undefined,
@@ -3531,9 +3523,9 @@ export const useNexusStore = create<NexusState>()(
           if (useCoordination) finishAdHocCoordination(adHoc?.id || null, `Ad hoc coordination completed for ${laneAgents.length} selected lanes`)
 
         },
-        sendPromptToActiveParty: async (prompt, attachments) => {
+        sendPromptToActiveParty: async (prompt, attachments, userTurnId, targetAgentIds) => {
           if (consoleClearPromise) await consoleClearPromise
-          const s = get(); const party = (s.confirmedPartyIds.length ? s.confirmedPartyIds : s.activePartyIds).filter((id) => !isRetiredAgentId(id)); if (!party.length) return
+          const s = get(); const party = (targetAgentIds?.length ? targetAgentIds : s.confirmedPartyIds.length ? s.confirmedPartyIds : s.activePartyIds).filter((id) => !isRetiredAgentId(id)); if (!party.length) return
           const normalized = normalizeOperatorPrompt(prompt); if (!normalized) return
           const allLaneAgents = party
             .map((id) => s.agents.find((a) => a.id === id))
@@ -3545,6 +3537,7 @@ export const useNexusStore = create<NexusState>()(
           const allContextAgentIds = allLaneAgents.map((agent) => agent.id)
           const partyQueueOptions = (agent: OpenClawAgent): PromptRunOptions => ({
             displayPrompt: normalized,
+            userTurnId,
             includeRecentContext: true,
             freshSession: explicitFreshSession,
             thinking: continuation ? MISSION_THINKING : undefined,
@@ -3579,6 +3572,7 @@ export const useNexusStore = create<NexusState>()(
             await Promise.allSettled(laneAgents.map((agent, index) =>
               runAgentPrompt(agent.id, buildParallelLanePrompt(agent, normalized, laneAgents, index), {
                 displayPrompt: normalized,
+                userTurnId,
                 includeRecentContext: true,
                 freshSession: explicitFreshSession,
                 thinking: continuation ? MISSION_THINKING : undefined,
@@ -3593,6 +3587,7 @@ export const useNexusStore = create<NexusState>()(
             await dispatchAgentChat(laneAgents, readConsolePreferences().parallelAgentChat, (agent) =>
               runAgentPrompt(agent.id, normalized, {
                 displayPrompt: normalized,
+                userTurnId,
                 includeRecentContext: true,
                 freshSession: explicitFreshSession,
                 thinking: continuation ? MISSION_THINKING : undefined,

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
+    <title>Automnia Quick Agent</title>
+    <link rel="stylesheet" href="quick-agent.css" />
+  </head>
+  <body>
+    <main id="quick-agent" class="quick-agent quick-agent--trail" aria-label="Automnia cursor agent">
+      <div class="quick-agent__trail" aria-hidden="true">
+        <span class="quick-agent__mark"><img id="automnia-mark" alt="" /></span>
+      </div>
+      <section class="quick-agent__bubble" aria-label="Quick agent message" hidden>
+        <header class="quick-agent__header">
+          <span class="quick-agent__header-mark"><img class="quick-agent__logo" alt="" /></span>
+          <span class="quick-agent__identity"><strong>Ask Automnia</strong><small id="agent-name">Quick agent</small></span>
+          <button class="quick-agent__close" type="button" aria-label="Close quick agent">×</button>
+        </header>
+        <div id="clipboard-context" class="quick-agent__context" hidden></div>
+        <div id="file-list" class="quick-agent__files" aria-live="polite"></div>
+        <form id="quick-agent-form">
+          <textarea id="prompt" rows="3" maxlength="16000" placeholder="Ask your agent about anything on screen…" aria-label="Message your selected agent"></textarea>
+          <footer class="quick-agent__footer">
+            <span class="quick-agent__hint">Enter to send · Shift+Enter for a new line</span>
+            <span class="quick-agent__actions">
+              <button class="quick-agent__add" type="button" aria-label="Attach files" title="Attach files">+</button>
+              <input id="file-input" type="file" multiple hidden />
+              <button id="send-button" class="quick-agent__send" type="submit">Send</button>
+            </span>
+          </footer>
+        </form>
+        <p id="quick-agent-status" class="quick-agent__status" role="status" hidden></p>
+      </section>
+    </main>
+    <script src="quick-agent.js"></script>
+  </body>
+</html>

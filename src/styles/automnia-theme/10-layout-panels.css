@@ -2677,8 +2677,8 @@ html.dui-pro-overhaul .dui-login-brand img {
 
 /* Active party reference treatment from the unpacked 0.0.5 build. */
 html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card] {
-  height: 112px !important;
-  min-height: 112px !important;
+  height: 128px !important;
+  min-height: 128px !important;
   box-sizing: border-box !important;
 }
 
@@ -2695,8 +2695,8 @@ html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled {
   isolation: isolate !important;
   align-items: stretch !important;
   justify-content: center !important;
-  height: 112px !important;
-  min-height: 112px !important;
+  height: 128px !important;
+  min-height: 128px !important;
   padding: 10px !important;
   border-width: 1px !important;
   border-radius: 10px !important;
@@ -2755,16 +2755,17 @@ html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled::
 html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled > [draggable="true"] {
   position: relative !important;
   z-index: 2 !important;
-  display: flex !important;
+  display: grid !important;
+  grid-template-columns: minmax(42px, 28%) 1px minmax(0, 1fr) !important;
   width: 100% !important;
   max-width: none !important;
   min-width: 0 !important;
-  height: 78px !important;
-  min-height: 78px !important;
+  height: 108px !important;
+  min-height: 108px !important;
   align-items: center !important;
-  gap: 10px !important;
+  gap: 8px !important;
   box-sizing: border-box !important;
-  padding: 11px 34px 11px 10px !important;
+  padding: 8px 28px 8px 9px !important;
   border: 1px solid rgba(var(--dy-party-rgb), .22) !important;
   border-radius: 8px !important;
   background:
@@ -2785,9 +2786,39 @@ html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled >
 
 html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled .active-party-avatar,
 html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled .active-party-avatar img {
-  width: 42px !important;
-  height: 42px !important;
-  border-radius: 8px !important;
+  width: 100% !important;
+  border-radius: 7px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled .active-party-avatar {
+  height: 86px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled .active-party-avatar img {
+  height: 100% !important;
+}
+
+@media (max-width: 900px) {
+  html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled > [draggable="true"] {
+    height: 106px !important;
+    min-height: 106px !important;
+    padding: 7px 25px 7px 8px !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled .active-party-avatar {
+    height: 82px !important;
+  }
+}
+
+@media (max-height: 820px) and (min-width: 901px) {
+  html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled > [draggable="true"] {
+    height: 100px !important;
+    min-height: 100px !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled .active-party-avatar {
+    height: 76px !important;
+  }
 }
 
 @media (max-width: 1180px) {

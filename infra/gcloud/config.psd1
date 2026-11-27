@@ -26,8 +26,9 @@
   RelayMaxMessageChars = 12000
   RelayMaxToolResultChars = 6000
   RelayMaxHistoryMessages = 8
-  RelayMaxInlineImages = 1
-  RelayMaxInlineImageChars = 400000
+  RelayMaxInlineImages = 8
+  RelayMaxInlineImageChars = 8500000
+  RelayMaxTotalInlineImageChars = 20000000
   ServiceName = 'automnia-shopify-provisioner'
   ServiceAccountName = 'automnia-provisioner'
   KnowledgeDataStoreId = 'automnia-knowledge'

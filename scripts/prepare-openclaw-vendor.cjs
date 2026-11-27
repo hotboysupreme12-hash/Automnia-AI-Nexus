@@ -485,29 +485,73 @@ function ensureGatewayManagedSidecarStartupGrace() {
       if (!/^server-startup-post-attach-[^/]+\.mjs$/.test(name)) return false
       return fs.readFileSync(path.join(distRoot, name), 'utf8').includes('sidecarStartup === "defer" ? new Promise((resolve) => globalThis.setTimeout(resolve, 5000))')
     })
-    if (alreadyPatched) return
-    throw new Error('[openclaw-vendor] Gateway post-attach sidecar startup marker changed')
-  }
-  const startupPath = path.join(distRoot, startupBundleName)
-  let source = fs.readFileSync(startupPath, 'utf8')
-  const marker = 'const startSidecars = () => params.minimalTestGateway ? startStartupLog().then(() => pluginRegistry) : setImmediate$1().then(async () => {'
-  const replacement = 'const startSidecars = () => params.minimalTestGateway ? startStartupLog().then(() => pluginRegistry) : (params.sidecarStartup === "defer" ? new Promise((resolve) => globalThis.setTimeout(resolve, 5000)) : Promise.resolve()).then(() => setImmediate$1()).then(async () => {'
-  if (source.includes(marker)) {
-    source = source.replace(marker, replacement)
+    if (!alreadyPatched) throw new Error('[openclaw-vendor] Gateway post-attach sidecar startup marker changed')
   } else {
-    const runLoopParam = source.match(/async function startGatewayPostAttachRuntime\(([A-Za-z_$][\w$]*)\) \{/u)?.[1]
-    const minifiedMarker = `const startSidecars = () => ${runLoopParam}.minimalTestGateway ? startStartupLog().then(() => {`
-    const markerIndex = runLoopParam ? source.indexOf(minifiedMarker) : -1
-    const continuation = ': setImmediate$1().then(async () => {'
-    const continuationIndex = markerIndex < 0 ? -1 : source.indexOf(continuation, markerIndex + minifiedMarker.length)
-    if (markerIndex < 0 || continuationIndex < 0) {
-      if (source.includes('sidecarStartup === "defer" ? new Promise((resolve) => globalThis.setTimeout(resolve, 5000))')) return
-      throw new Error('[openclaw-vendor] Gateway post-attach sidecar startup marker changed')
+    const startupPath = path.join(distRoot, startupBundleName)
+    let source = fs.readFileSync(startupPath, 'utf8')
+    const marker = 'const startSidecars = () => params.minimalTestGateway ? startStartupLog().then(() => pluginRegistry) : setImmediate$1().then(async () => {'
+    const replacement = 'const startSidecars = () => params.minimalTestGateway ? startStartupLog().then(() => pluginRegistry) : (params.sidecarStartup === "defer" ? new Promise((resolve) => globalThis.setTimeout(resolve, 5000)) : Promise.resolve()).then(() => setImmediate$1()).then(async () => {'
+    if (source.includes(marker)) {
+      source = source.replace(marker, replacement)
+    } else {
+      const runLoopParam = source.match(/async function startGatewayPostAttachRuntime\(([A-Za-z_$][\w$]*)\) \{/u)?.[1]
+      const minifiedMarker = `const startSidecars = () => ${runLoopParam}.minimalTestGateway ? startStartupLog().then(() => {`
+      const markerIndex = runLoopParam ? source.indexOf(minifiedMarker) : -1
+      const continuation = ': setImmediate$1().then(async () => {'
+      const continuationIndex = markerIndex < 0 ? -1 : source.indexOf(continuation, markerIndex + minifiedMarker.length)
+      if (markerIndex < 0 || continuationIndex < 0) {
+        if (!source.includes('sidecarStartup === "defer" ? new Promise((resolve) => globalThis.setTimeout(resolve, 5000))')) {
+          throw new Error('[openclaw-vendor] Gateway post-attach sidecar startup marker changed')
+        }
+      } else {
+        const deferredContinuation = `: (${runLoopParam}.sidecarStartup === "defer" ? new Promise((resolve) => globalThis.setTimeout(resolve, 5000)) : Promise.resolve()).then(() => setImmediate$1()).then(async () => {`
+        source = `${source.slice(0, continuationIndex)}${deferredContinuation}${source.slice(continuationIndex + continuation.length)}`
+      }
     }
-    const deferredContinuation = `: (${runLoopParam}.sidecarStartup === "defer" ? new Promise((resolve) => globalThis.setTimeout(resolve, 5000)) : Promise.resolve()).then(() => setImmediate$1()).then(async () => {`
-    source = `${source.slice(0, continuationIndex)}${deferredContinuation}${source.slice(continuationIndex + continuation.length)}`
+    fs.writeFileSync(startupPath, source)
   }
-  fs.writeFileSync(startupPath, source)
+
+  // The managed desktop may serve chat as soon as core dispatch is ready.
+  // Optional plugin and channel sidecars continue loading in the background
+  // and must not hold chat.send behind the Gateway-wide startup barrier.
+  const prewarmPath = path.join(distRoot, 'gateway-prewarm.js')
+  if (!fs.existsSync(prewarmPath)) throw new Error('[openclaw-vendor] Missing Gateway prewarm runtime for managed fast-start patch')
+  let prewarmSource = fs.readFileSync(prewarmPath, 'utf8')
+  const prewarmReplacements = [
+    [
+      'const isGatewayStartupPending = () => (!Ee.dispatchReady || !Ee.sidecarsReady || De.size > 0) && !Oe.closePreludeStarted;',
+      'const isGatewayStartupPending = () => (!Ee.dispatchReady || (Ne !== "defer" && !Ee.sidecarsReady) || De.size > 0) && !Oe.closePreludeStarted;',
+      'Gateway startup pending readiness gate',
+    ],
+    [
+      'areSidecarsReady: () => D.sidecarsReady,',
+      'areSidecarsReady: () => D.sidecarsReady || process.env.AUTOMNIA_MANAGED_GATEWAY_STARTUP === "defer",',
+      'Gateway fast-start readiness announcer',
+      'areSidecarsReady: () => D.sidecarsReady || Ne === "defer",',
+    ],
+  ]
+  for (const [marker, replacement, label, previousReplacement] of prewarmReplacements) {
+    if (prewarmSource.includes(replacement)) continue
+    if (previousReplacement && prewarmSource.includes(previousReplacement)) {
+      prewarmSource = prewarmSource.replace(previousReplacement, replacement)
+      continue
+    }
+    if (!prewarmSource.includes(marker)) throw new Error(`[openclaw-vendor] ${label} marker changed`)
+    prewarmSource = prewarmSource.replace(marker, replacement)
+  }
+  const dispatchReadyMarker = 'm.setDispatchReady(true);'
+  const dispatchReadyReplacement = 'm.setDispatchReady(true);\n\t\tif (G === "defer" && !r.updateCanary) m.unlockStartupMethods();'
+  const previousDispatchReadyReplacement = 'm.setDispatchReady(true);\n\t\tif (Ne === "defer" && !r.updateCanary) m.unlockStartupMethods();'
+  if (!prewarmSource.includes(dispatchReadyReplacement)) {
+    if (prewarmSource.includes(previousDispatchReadyReplacement)) {
+      prewarmSource = prewarmSource.replace(previousDispatchReadyReplacement, dispatchReadyReplacement)
+    } else {
+      const occurrences = prewarmSource.split(dispatchReadyMarker).length - 1
+      if (occurrences !== 1) throw new Error(`[openclaw-vendor] Expected one Gateway dispatch readiness callback, found ${occurrences}`)
+      prewarmSource = prewarmSource.replace(dispatchReadyMarker, dispatchReadyReplacement)
+    }
+  }
+  fs.writeFileSync(prewarmPath, prewarmSource)
 }
 
 function ensureAutomniaRelayThoughtSignatureSupport() {

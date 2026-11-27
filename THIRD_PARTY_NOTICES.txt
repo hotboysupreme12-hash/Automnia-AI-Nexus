@@ -5,7 +5,7 @@ This product includes third-party software. The applicable license files
 shipped with those packages remain controlling. This inventory is generated
 from package-lock.json and is intended to make review easier.
 
-Generated package count: 667
+Generated package count: 669
 
 @electron/get@3.1.0
   License: MIT
@@ -971,6 +971,8 @@ node_modules/node-addon-api@7.1.1
   License: MIT
 node_modules/node-api-version@0.2.1
   License: MIT
+node_modules/node-gyp-build@4.8.4
+  License: MIT
 node_modules/node-gyp@12.4.0
   License: MIT
 node_modules/node-int64@0.4.0
@@ -1255,6 +1257,8 @@ node_modules/typescript-eslint@8.73.0
   License: MIT
 node_modules/typescript@5.9.3
   License: Apache-2.0
+node_modules/uiohook-napi@1.5.5
+  License: MIT
 node_modules/undici-types@7.18.2
   License: MIT
 node_modules/undici@7.30.2

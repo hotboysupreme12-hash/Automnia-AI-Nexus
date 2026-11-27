@@ -7,6 +7,7 @@ import { LicenseProvider } from './context/LicenseContext'
 import { useAuth } from './context/useAuth'
 import { useLicense } from './context/useLicense'
 import { AppUpdateExperience } from './components/system/AppUpdateExperience'
+import { CursorAgentRuntime } from './components/settings/CursorAgentRuntime'
 
 const StableNexusShell = memo(NexusShell)
 
@@ -17,6 +18,7 @@ function AuthenticatedShell() {
   if (!isLicensed) return <LicenseActivationModal />
   return <>
     <StableNexusShell />
+    <CursorAgentRuntime />
     {licenseActivationRequested && <LicenseActivationModal onClose={dismissLicenseActivation} />}
   </>
 }

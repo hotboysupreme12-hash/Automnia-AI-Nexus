@@ -113,6 +113,7 @@ export type ApiErrorCode =
   | 'workboard_comment_capacity'
   | 'workboard_lease_conflict'
   | 'workboard_file_lock_conflict'
+  | 'workboard_handoff_conflict'
 
 type ControlPlaneHttpOptions = {
   authToken: string

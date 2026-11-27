@@ -1271,9 +1271,9 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-ac
 
 html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)[data-tone="monitor"],
 html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)[data-tone="monitor"] {
-  --horizon-nav-accent: #60d9cb;
-  --horizon-nav-accent-rgb: 96 217 203;
-  --horizon-nav-ink: #e1fffa;
+  --horizon-nav-accent: #75d991;
+  --horizon-nav-accent-rgb: 117 217 145;
+  --horizon-nav-ink: #e8fff0;
 }
 
 html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)[data-tone="plugins"],

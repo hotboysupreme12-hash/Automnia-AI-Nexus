@@ -62,7 +62,7 @@ assert(
 assert(server.includes('registerPartyCoordinationRoutes(app, {'), 'server should register party coordination routes')
 assert(!server.includes("app.post('/api/party/parallel-health'"), 'server should not inline parallel-health route')
 
-assert(commandBlock.includes('pluginCommandResult(args, result)'), 'OpenClaw command route should preserve command result evidence')
+assert(commandBlock.includes('pluginCommandResult(redactedArgs, result)'), 'OpenClaw command route should preserve sanitized command result evidence')
 assert(commandBlock.includes('ok: result.code === 0'), 'OpenClaw command route should preserve command success data')
 assert(commandBlock.includes('listPluginControls({ forceRefresh: true })'), 'OpenClaw command route should preserve optional plugin refresh')
 assert(server.includes('registerRuntimeRoutes(app, {'), 'OpenClaw command smoke should allow extracted runtime route registration')

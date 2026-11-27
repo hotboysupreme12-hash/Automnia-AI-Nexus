@@ -2119,17 +2119,6 @@ html.dui-pro-overhaul ::-webkit-scrollbar-thumb {
     padding: 12px 10px 28px !important;
   }
 
-  .dy-human-rail {
-    position: sticky !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: auto !important;
-    width: 100% !important;
-    border-width: 0 0 1px !important;
-    border-radius: 0 !important;
-  }
-
   .dy-human-rail-head {
     min-height: 54px;
     padding: 9px 12px;
@@ -2138,46 +2127,6 @@ html.dui-pro-overhaul ::-webkit-scrollbar-thumb {
   .dy-human-rail-head img {
     width: 30px;
     height: 30px;
-  }
-
-  .dy-human-nav {
-    display: grid !important;
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-    gap: 6px !important;
-    padding: 8px !important;
-  }
-
-  .dy-human-nav button {
-    min-height: 58px !important;
-    justify-content: center !important;
-    padding: 7px !important;
-    text-align: center !important;
-  }
-
-  .dy-human-nav-icon {
-    width: 28px;
-    height: 28px;
-  }
-
-  .dy-human-nav-icon-img {
-    width: 21px;
-    height: 21px;
-  }
-
-  .dy-human-nav-copy {
-    align-items: center;
-  }
-
-  .dy-human-nav-copy strong {
-    font-size: 11px;
-  }
-
-  .dy-human-nav-copy span {
-    display: none;
-  }
-
-  .dy-human-rail-bottom {
-    display: none;
   }
 
   html.dui-pro-overhaul header.relative.mb-7 {

@@ -2,7 +2,43 @@ import { apiRequest, type ApiResult } from './client'
 
 export type WorkboardTaskStatus = 'open' | 'in_progress' | 'completed' | 'cancelled'
 
+export type WorkboardExecutionState =
+  | 'queued'
+  | 'running'
+  | 'waiting_for_dependency'
+  | 'waiting_for_review'
+  | 'waiting_for_integration'
+  | 'blocked'
+  | 'break'
+  | 'checkpointing'
+  | 'recovering'
+  | 'completed'
+  | 'failed'
+
 export type WorkboardEvidence = { label: string; uri: string }
+
+export type WorkboardDependencyWait = {
+  dependencyTaskId: string
+  responsibleAgentId: string | null
+  deliverable: string
+  waitingSince: string
+  nextCheckAt: string | null
+  fallbackTask: string | null
+}
+
+export type WorkboardHandoff = {
+  fromAgentId: string
+  toAgentId: string
+  summary: string
+  filesModified: string[]
+  testsExecuted: string
+  knownFailures: string
+  nextAction: string
+  status: 'pending' | 'acknowledged'
+  createdAt: string
+  acknowledgedAt: string | null
+  acknowledgedBy: string | null
+}
 
 export type WorkboardComment = {
   id: string
@@ -17,6 +53,7 @@ export type WorkboardTask = {
   title: string
   description: string
   status: WorkboardTaskStatus
+  executionState?: WorkboardExecutionState
   missionId: string | null
   assignedAgentId: string | null
   leaseOwnerAgentId: string | null
@@ -24,6 +61,8 @@ export type WorkboardTask = {
   lastHeartbeatAt: string | null
   claimedFiles: string[]
   dependsOn: string[]
+  waitingDependency?: WorkboardDependencyWait | null
+  handoff?: WorkboardHandoff | null
   comments: WorkboardComment[]
   createdAt: string
   updatedAt: string
@@ -37,10 +76,20 @@ export type CreateWorkboardTaskPayload = {
   leaseOwnerAgentId?: string | null
   leaseTtlMs?: number
   claimedFiles?: string[]
+  dependsOn?: string[]
+  executionState?: WorkboardExecutionState
+  waitingDependency?: {
+    dependencyTaskId: string
+    responsibleAgentId?: string | null
+    deliverable: string
+    nextCheckAt?: string | null
+    fallbackTask?: string | null
+  } | null
 }
 
 export type UpdateWorkboardTaskPayload = {
   status?: WorkboardTaskStatus
+  executionState?: WorkboardExecutionState
   assignedAgentId?: string | null
   leaseOwnerAgentId?: string | null
   leaseTtlMs?: number
@@ -49,6 +98,23 @@ export type UpdateWorkboardTaskPayload = {
   forceTakeover?: boolean
   claimedFiles?: string[]
   dependsOn?: string[]
+  waitingDependency?: {
+    dependencyTaskId: string
+    responsibleAgentId?: string | null
+    deliverable: string
+    nextCheckAt?: string | null
+    fallbackTask?: string | null
+  } | null
+  handoff?: {
+    fromAgentId: string
+    toAgentId: string
+    summary: string
+    filesModified?: string[]
+    testsExecuted?: string
+    knownFailures?: string
+    nextAction: string
+  } | null
+  acknowledgeHandoff?: boolean
 }
 
 export function fetchWorkboardTasks(): Promise<ApiResult<{ tasks?: WorkboardTask[] }>> {

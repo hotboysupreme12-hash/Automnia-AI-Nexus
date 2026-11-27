@@ -6,6 +6,7 @@ import {
   isAutomniaCreditsModelId as isAutomniaCreditsModelPolicyId,
   isAutomniaRelayModelId as isAutomniaRelayModelPolicyId,
 } from '../license/creditsOnlyModelPolicy'
+import { googleGeminiInputModalities, googleGeminiSupportsImageInput } from './googleGeminiModelPolicy'
 
 export type ModelCatalogOpenClawConfig = {
   agents?: {
@@ -434,10 +435,20 @@ export function ensureConfiguredProviderModel(config: ModelCatalogOpenClawConfig
         ? 'medium'
         : undefined
     : undefined
+  const googleInputModalities = (provider === 'google' || provider === 'google-vertex') && googleGeminiSupportsImageInput(model)
+    ? googleGeminiInputModalities(model)
+    : undefined
   for (const [index, entry] of models.entries()) {
     if (typeof entry === 'string') {
       if (entry === model) {
-        if (providerApi) models[index] = { id: model, name: model, api: providerApi }
+        if (providerApi || googleInputModalities) {
+          models[index] = {
+            id: model,
+            name: model,
+            ...(providerApi ? { api: providerApi } : {}),
+            ...(googleInputModalities ? { input: googleInputModalities } : {}),
+          }
+        }
         return
       }
       continue
@@ -445,6 +456,7 @@ export function ensureConfiguredProviderModel(config: ModelCatalogOpenClawConfig
     if (entry?.id === model || entry?.model === model || entry?.name === model) {
       if (!entry.name) entry.name = model
       if (providerApi) entry.api = providerApi
+      if (googleInputModalities) (entry as Record<string, unknown>).input = googleInputModalities
       if (managedAutomniaThinking && entry && typeof entry === 'object') {
         const configured = entry as unknown as Record<string, unknown>
         const params = configured.params && typeof configured.params === 'object' && !Array.isArray(configured.params)
@@ -459,6 +471,7 @@ export function ensureConfiguredProviderModel(config: ModelCatalogOpenClawConfig
     id: model,
     name: model,
     ...(providerApi ? { api: providerApi } : {}),
+    ...(googleInputModalities ? { input: googleInputModalities } : {}),
     ...(managedAutomniaThinking ? { params: { thinking: managedAutomniaThinking } } : {}),
   })
 }

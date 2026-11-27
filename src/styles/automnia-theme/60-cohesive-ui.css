@@ -3387,8 +3387,8 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="
 /* Monitor accent restore: keep graphite surfaces, keep operational signals colored. */
 html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav button[data-tone="monitor"],
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus .dy-human-nav button[data-tone="monitor"] {
-  --dy-nav-accent: #a68cff !important;
-  --dy-nav-accent-rgb: 166, 140, 255 !important;
+  --dy-nav-accent: #75d991 !important;
+  --dy-nav-accent-rgb: 117, 217, 145 !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav button[data-tone="plugins"] {

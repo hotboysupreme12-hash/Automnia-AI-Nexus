@@ -70,7 +70,7 @@ assert(controlFilesService.includes('export const CONTROL_FILES'), 'control-file
 assert(controlFilesService.includes('isAllowedControlFile'), 'control-files service should own control-file validation')
 assert(controlFilesService.includes('function resolveControlFilePath'), 'control-files service should own control-file path resolution')
 assert(controlFilesService.includes('isPathUnder(resolvedWorkspaceRoot, targetPath)'), 'control-files service should enforce workspace containment before reads and writes')
-assert(controlFilesService.includes('fs.realpath(resolvedWorkspaceRoot)'), 'control-files service should realpath-check symlinked control files')
+assert(controlFilesService.includes('resolveRealPathThroughExistingAncestor'), 'control-files service should resolve workspace roots through their real path before checking symlinked control files')
 assert(controlFilesService.includes('async readFile'), 'control-files service should own control-file reads')
 assert(controlFilesService.includes('async writeFile'), 'control-files service should own control-file writes')
 assert(controlFilesTests.includes('control files service reads and writes allowed control files inside the workspace root'), 'controlFilesService.test.ts should cover allowed read/write behavior')

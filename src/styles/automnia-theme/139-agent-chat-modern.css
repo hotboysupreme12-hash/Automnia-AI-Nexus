@@ -24,7 +24,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__header-inner {
   display:flex !important;
   min-height:0 !important;
-  padding:20px !important;
+  padding:12px 16px 8px !important;
   gap:12px !important;
   align-items:center !important;
   justify-content:space-between !important;
@@ -138,10 +138,10 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__action,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__clear {
-  width:32px !important;
-  height:32px !important;
-  min-width:32px !important;
-  min-height:32px !important;
+  width:38px !important;
+  height:38px !important;
+  min-width:38px !important;
+  min-height:38px !important;
   border:0 !important;
   border-radius:8px !important;
   background:transparent !important;
@@ -151,8 +151,13 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__action svg,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__clear svg {
-  width:15px !important;
-  height:15px !important;
+  width:20px !important;
+  height:20px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] :is(.dy-command-console__action, .dy-command-console__clear) .dui-icon-button__glyph {
+  width:20px !important;
+  height:20px !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__action:hover:not(:disabled),
@@ -419,7 +424,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-composer__row {
   display:flex !important;
   flex-direction:column !important;
-  min-height:108px !important;
+  min-height:133px !important;
   gap:10px !important;
   padding:12px !important;
   border:1px solid #303034 !important;
@@ -439,7 +444,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-composer__field {
-  min-height:40px !important;
+  min-height:63px !important;
   width:100% !important;
   padding:0 !important;
   background:transparent !important;
@@ -454,7 +459,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] textarea.dy-command-textarea {
-  min-height:40px !important;
+  min-height:63px !important;
   padding:2px !important;
   font-size:14px !important;
   line-height:1.6 !important;
@@ -534,18 +539,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"
   box-shadow:none !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-chat-composer-hint {
-  margin:8px 0 0 !important;
-  font-size:10px !important;
-  line-height:1.5 !important;
-  color:#959fad !important;
-  text-align:center !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-chat-composer-hint span {
-  padding:0 5px !important;
-}
-
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-message {
   padding:16px 0 !important;
   border:0 !important;
@@ -600,6 +593,11 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"
   padding:4px 0 !important;
   cursor:pointer !important;
   list-style:revert !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-chat-response-details summary .dy-command-message-status {
+  margin-left:8px !important;
+  vertical-align:middle;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-message-meta {
@@ -729,7 +727,46 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"
   flex-shrink:0 !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-chat-composer-hint {
-  display:block !important;
-  flex-shrink:0 !important;
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__action-stack {
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:stretch !important;
+  gap:2px !important;
+  min-width:0 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__action-stack .dy-command-console__meta {
+  flex:0 0 auto !important;
+  align-self:stretch !important;
+  justify-content:flex-end !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__quick-links-row {
+  display:flex !important;
+  justify-content:flex-end !important;
+  width:100% !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__quick-links-button {
+  min-height:28px !important;
+  padding:4px 9px !important;
+  border:1px solid #ffffff14 !important;
+  border-radius:8px !important;
+  background:#18181a !important;
+  color:#aeb6c3 !important;
+  font-size:11px !important;
+  font-weight:500 !important;
+  line-height:1.2 !important;
+  box-shadow:none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-console__quick-links-button:hover {
+  border-color:#ffffff24 !important;
+  background:#222225 !important;
+  color:#f0f1f4 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"]:not(.dy-command-console--fullscreen) .dy-command-console__action-stack {
+  flex:1 1 100% !important;
+  width:100% !important;
 }

@@ -107,8 +107,29 @@ const platformSigningRequired = process.env.AUTOMNIA_PLATFORM_SIGNING_REQUIRED =
 const forwardedArgs = requestedArgs.filter((arg) => arg !== '--unsigned')
 const hasPublishMode = forwardedArgs.some((arg, index) => arg === '--publish' || arg.startsWith('--publish=') || forwardedArgs[index - 1] === '--publish')
 const publishArgs = hasPublishMode ? [] : ['--publish', 'never']
+const windowsStoreMsixTarget = process.platform === 'win32'
+  && forwardedArgs.some((arg, index) => arg === 'appx' && forwardedArgs[index - 1] === '--win')
+const windowsStoreMsixConfigArgs = (() => {
+  if (!windowsStoreMsixTarget) return []
+  const identityName = process.env.AUTOMNIA_MSIX_IDENTITY_NAME?.trim()
+  const publisher = process.env.AUTOMNIA_MSIX_PUBLISHER?.trim()
+  if (!identityName || !publisher) {
+    throw new Error('Microsoft Store MSIX builds require AUTOMNIA_MSIX_IDENTITY_NAME and AUTOMNIA_MSIX_PUBLISHER from Partner Center.')
+  }
+  if (/[\r\n]/u.test(identityName) || /[\r\n]/u.test(publisher)) {
+    throw new Error('Microsoft Store MSIX identity values must be single-line strings.')
+  }
+  return [
+    `--config.appx.identityName=${identityName}`,
+    `--config.appx.publisher=${publisher}`,
+    '--config.appx.publisherDisplayName=Automnia AI',
+    '--config.appx.displayName=Automnia AI Nexus',
+    '--config.appx.applicationId=AutomniaAINexus',
+    '--config.appx.artifactName=${productName}-Store-${version}-${arch}.msix',
+  ]
+})()
 const windowsInstallerOutputDirArgs = process.platform === 'win32' && forwardedArgs.includes('--win') && !forwardedArgs.includes('--dir')
-  ? ['--config.directories.output=release/win-installer']
+  ? [windowsStoreMsixTarget ? '--config.directories.output=release/win-msix' : '--config.directories.output=release/win-installer']
   : []
 if (platformSigningRequired && unsignedDirectoryPackage) {
   throw new Error('Platform signing is required, but this package build is configured to skip signing.')
@@ -474,7 +495,7 @@ if (unsignedDirectoryPackage) {
   }
 }
 
-const child = spawn(command, [electronBuilderCli, ...forwardedArgs, ...publishArgs, ...requiredSigningArgs, ...signingOverrideArgs, ...windowsInstallerOutputDirArgs], {
+const child = spawn(command, [electronBuilderCli, ...forwardedArgs, ...publishArgs, ...requiredSigningArgs, ...signingOverrideArgs, ...windowsInstallerOutputDirArgs, ...windowsStoreMsixConfigArgs], {
   cwd: root,
   stdio: 'inherit',
   shell: false,

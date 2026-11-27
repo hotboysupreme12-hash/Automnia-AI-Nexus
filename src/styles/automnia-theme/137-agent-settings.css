@@ -3,13 +3,13 @@
 /* Agent settings: scoped presentation only;
   shared model picker and save behavior stay intact. */
 html body [data-dui-modal="agent-editor"].agent-settings-refresh {
-  width: min(960px, 100%) !important;
-  max-width: 960px !important;
+  width: min(1120px, 100%) !important;
+  max-width: 1120px !important;
   height: min(820px, calc(100dvh - 48px)) !important;
   max-height: calc(100dvh - 48px) !important;
-  border: 1px solid #30363e !important;
-  border-radius: 16px !important;
-  background: #15181d !important;
+  border: 1px solid #373e44 !important;
+  border-radius: 4px !important;
+  background: #202428 !important;
   box-shadow: 0 24px 90px #0008 !important;
   color: #e6e9ed !important;
   color-scheme: dark !important;
@@ -17,8 +17,8 @@ html body [data-dui-modal="agent-editor"].agent-settings-refresh {
 
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-header] {
   padding: 22px 28px 0 !important;
-  background: #15181d !important;
-  border-bottom: 1px solid #30363e !important;
+  background: #202428 !important;
+  border-bottom: 1px solid #373e44 !important;
 }
 
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-header] > .flex {
@@ -41,14 +41,14 @@ html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-ey
   margin: 0 0 3px !important;
   font-size: 12px !important;
   font-weight: 500 !important;
-  color: #a2aab6 !important;
+  color: #b6bec5 !important;
   letter-spacing: 0 !important;
 }
 
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-avatar] {
   width: 42px !important;
   height: 42px !important;
-  border-radius: 10px !important;
+  border-radius: 3px !important;
   box-shadow: none !important;
 }
 
@@ -79,10 +79,10 @@ html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-au
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-action="done"] {
   min-height: 38px !important;
   padding: 8px 18px !important;
-  border: 1px solid #d8e3e3 !important;
-  border-radius: 7px !important;
-  background: #d8e3e3 !important;
-  color: #172224 !important;
+  border: 1px solid #59626a !important;
+  border-radius: 3px !important;
+  background: #30363b !important;
+  color: #f0f2f4 !important;
   font-size: 13px !important;
   font-weight: 600 !important;
   letter-spacing: 0 !important;
@@ -111,7 +111,7 @@ html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-ta
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
-  color: #a2aab6 !important;
+  color: #b6bec5 !important;
   font-size: 13px !important;
   font-weight: 500 !important;
   letter-spacing: 0 !important;
@@ -121,7 +121,7 @@ html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-ta
 
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-tab][data-active="true"] {
   background: transparent !important;
-  border-color: #aecfca !important;
+  border-color: #62d9d0 !important;
   color: #f0f5f4 !important;
   box-shadow: none !important;
 }
@@ -133,20 +133,20 @@ html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-ta
 
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-body] {
   min-height: 0 !important;
-  padding: 30px 36px 40px !important;
-  background: #111418 !important;
+  padding: 26px clamp(20px, 3vw, 36px) 36px !important;
+  background: #202428 !important;
   overscroll-behavior: contain !important;
   scrollbar-gutter: stable !important;
 }
 
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-content] {
   width: 100% !important;
-  max-width: 800px !important;
+  max-width: none !important;
   min-width: 0 !important;
 }
 
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-section-heading] {
-  margin-bottom: 26px !important;
+  margin-bottom: 20px !important;
 }
 
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-section-heading] h3 {
@@ -162,7 +162,7 @@ html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-se
   max-width: 62ch !important;
   font-size: 13px !important;
   line-height: 1.7 !important;
-  color: #a2aab6 !important;
+  color: #b6bec5 !important;
 }
 
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] {
@@ -203,9 +203,9 @@ html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-pa
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] > :is(.border, [data-editor-card]),
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] > .grid > label {
   padding: 20px !important;
-  border: 1px solid #30363e !important;
-  border-radius: 10px !important;
-  background: #191d23 !important;
+  border: 1px solid #373e44 !important;
+  border-radius: 3px !important;
+  background: #1b1e21 !important;
   background-image: none !important;
   box-shadow: none !important;
 }
@@ -221,10 +221,10 @@ html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-pa
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] :where(input:not([type="range"]):not([type="checkbox"]):not([type="file"]), select, textarea) {
   min-width: 0 !important;
   min-height: 42px !important;
-  border: 1px solid #3b434e !important;
-  border-radius: 7px !important;
+  border: 1px solid #454b51 !important;
+  border-radius: 3px !important;
   padding: 10px 12px !important;
-  background: #11151a !important;
+  background: #15181b !important;
   color: #e5e9ef !important;
   box-shadow: none !important;
   line-height: 1.5 !important;
@@ -236,7 +236,7 @@ html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-pa
 
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] button {
   min-height: 36px !important;
-  border-radius: 7px !important;
+  border-radius: 3px !important;
   box-shadow: none !important;
   transform: none !important;
 }
@@ -259,15 +259,15 @@ html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-to
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-portrait] {
   width: 80px !important;
   height: 80px !important;
-  border-radius: 12px !important;
+  border-radius: 4px !important;
   box-shadow: none !important;
 }
 
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-preset] {
   min-height: 38px !important;
   padding: 8px !important;
-  border: 1px solid #3b434e !important;
-  background: #1c2229 !important;
+  border: 1px solid #454b51 !important;
+  background: #252a2e !important;
   color: #bec6d1 !important;
 }
 
@@ -278,7 +278,7 @@ html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-pr
 }
 
 html body [data-dui-modal="agent-editor"].agent-settings-refresh .grid:has(> [data-editor-preset="reasoning"]) {
-  grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)) !important;
   gap: 6px !important;
 }
 
@@ -294,9 +294,9 @@ html body [data-dui-modal="agent-editor"].agent-settings-refresh .dy-agent-range
 
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel="files"] textarea {
   min-height: 330px !important;
-  background: #101318 !important;
+  background: #15181b !important;
   color: #dbe1ea !important;
-  border-color: #3b434e !important;
+  border-color: #454b51 !important;
   line-height: 1.75 !important;
 }
 
@@ -315,9 +315,9 @@ html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-model-pic
 }
 
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-model-picker] label > span:has(select) {
-  background: #11151a !important;
-  border-color: #3b434e !important;
-  border-radius: 7px !important;
+  background: #15181b !important;
+  border-color: #454b51 !important;
+  border-radius: 3px !important;
 }
 
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-model-picker] label > span > select {
@@ -328,7 +328,7 @@ html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-model-pic
 @media (max-width: 640px) {
 html body [data-dui-modal="agent-editor"].agent-settings-refresh { height: calc(100dvh - 16px) !important;
   max-height: calc(100dvh - 16px) !important;
-  border-radius: 12px !important;
+  border-radius: 4px !important;
   }
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-header] { padding: 16px 16px 0 !important;
   }
@@ -358,9 +358,9 @@ html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-ta
 }
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] > div:has(> h3) {
   padding: 20px !important;
-  border: 1px solid #30363e !important;
-  border-radius: 10px !important;
-  background: #191d23 !important;
+  border: 1px solid #373e44 !important;
+  border-radius: 3px !important;
+  background: #1b1e21 !important;
   box-shadow: none !important;
 }
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-model-picker] label {
@@ -369,6 +369,66 @@ html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-model-pic
 html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-autosave="global"] span {
   max-width: none !important;
   font-weight: 400 !important;
+}
+
+/* Graphite hierarchy with restrained color for the selected controls. */
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-content] {
+  margin-inline: 0 !important;
+}
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-tabs] {
+  gap: 4px !important;
+  margin-top: 16px !important;
+}
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-tab] {
+  min-width: 92px !important;
+  padding: 10px 14px !important;
+  text-align: center !important;
+}
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-tab][data-active="true"] {
+  background: #293237 !important;
+  border-bottom-color: #62d9d0 !important;
+  color: #d8f8f4 !important;
+}
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] > :is(.border, [data-editor-card]),
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] > div:has(> h3),
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] > .grid > label {
+  background: #1b1e21 !important;
+  border-color: #373e44 !important;
+  border-radius: 3px !important;
+}
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] :is(p, small) {
+  color: #b6bec5 !important;
+}
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] :is(input, select, textarea) {
+  color-scheme: dark !important;
+}
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-preset][data-selected="true"] {
+  border-color: #62bfb6 !important;
+  background: #273d3d !important;
+  color: #e4faf6 !important;
+  box-shadow: inset 0 -2px #62d9d0 !important;
+}
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-preset="reasoning"][data-selected="true"] {
+  border-color: #ac91df !important;
+  background: #353043 !important;
+  color: #eee6ff !important;
+  box-shadow: inset 0 -2px #ac91df !important;
+}
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-preset="timeout"][data-selected="true"] {
+  border-color: #cba66c !important;
+  background: #40382d !important;
+  color: #ffedcf !important;
+  box-shadow: inset 0 -2px #cba66c !important;
+}
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-action="done"]:hover {
+  border-color: #89939b !important;
+  background: #3a4248 !important;
+  color: #fff !important;
+}
+@media (max-width: 640px) {
+  html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-tabs] { gap: 2px !important; }
+  html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-tab] { min-width: 88px !important; padding-inline: 10px !important; }
+  html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] > .grid { gap: 12px !important; }
 }
 
 }

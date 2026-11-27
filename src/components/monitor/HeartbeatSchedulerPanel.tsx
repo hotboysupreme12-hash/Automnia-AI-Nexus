@@ -7,6 +7,14 @@ import { stopScheduledTaskBatch } from './schedulerBatch'
 import { createSerialSaveQueue } from './serialSaveQueue'
 import { useRememberedState } from '../../hooks/useRememberedState'
 import { scheduleRequestKey, settleScheduleRequest } from './scheduleRequestKey'
+import {
+  canRunShiftNow,
+  canStopShiftInControlCenter,
+  computeTeamStaggerPreview,
+  formatShiftScheduleSummary,
+  validateClientShiftSchedule,
+  type ShiftScheduleKind,
+} from './shiftScheduleHelpers'
 
 type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 type WakeMode = 'now' | 'next-heartbeat'
@@ -40,7 +48,8 @@ type ShiftSummary = {
   startedAt: string
   endsAt?: string | null
   nextRunAt?: string | null
-  source?: 'control-center' | 'openclaw'
+  source?: 'control-center' | 'openclaw' | 'system-cron'
+  systemOwned?: boolean
   status?: string
   scheduleKind?: string
   scheduleLabel?: string
@@ -96,6 +105,15 @@ const runDurationUnits: Array<{ label: string; value: ShiftDurationUnit }> = [
   { label: 'Days', value: 'days' },
   { label: 'Weeks', value: 'weeks' },
 ]
+
+const scheduleModeOptions: Array<{ label: string; value: ShiftScheduleKind }> = [
+  { label: 'Interval (every)', value: 'every' },
+  { label: 'Cron expression', value: 'cron' },
+  { label: 'One-shot (at)', value: 'at' },
+]
+
+const cronQuickPresets = ['0,20,40 * * * *', '0 */2 * * *', '@hourly', '@daily']
+const atQuickPresets = ['+15m', '+1h', '+4h']
 
 const defaultInstruction =
   'Read TEAM_SYNC.md. Execute your owned cron task slice, then update TEAM_SYNC.md with status, evidence, and blockers.'
@@ -156,25 +174,55 @@ export function HeartbeatSchedulerPanel() {
   const defaultsSaveQueueRef = useRef(createSerialSaveQueue())
   const defaultsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const [scheduleKind, setScheduleKind] = useState<ShiftScheduleKind>('every')
   const [cadenceValue, setCadenceValue] = useState(30)
   const [cadenceUnit, setCadenceUnit] = useState<DurationUnit>('minutes')
+  const [cronExpression, setCronExpression] = useState('0,20,40 * * * *')
+  const [atSchedule, setAtSchedule] = useState('+15m')
   const [durationValue, setDurationValue] = useState(3)
   const [durationUnit, setDurationUnit] = useState<ShiftDurationUnit>('hours')
   const [instruction, setInstruction] = useState(defaultInstruction)
   const [shiftName, setShiftName] = useState('Cron')
   const [planFile, setPlanFile] = useState('TEAM_SYNC.md')
+  const [teamLeadAgentId, setTeamLeadAgentId] = useState('')
   const [workerAgentIds, setWorkerAgentIds] = useState<string[]>([])
-  const [leadCadenceValue, setLeadCadenceValue] = useState(5)
+  const [leadCadenceValue, setLeadCadenceValue] = useState(20)
   const [leadCadenceUnit, setLeadCadenceUnit] = useState<DurationUnit>('minutes')
-  const [workerCadenceValue, setWorkerCadenceValue] = useState(1)
+  const [workerCadenceValue, setWorkerCadenceValue] = useState(20)
   const [workerCadenceUnit, setWorkerCadenceUnit] = useState<DurationUnit>('minutes')
+  const [staggerTeamCron, setStaggerTeamCron] = useState(true)
+  const [staggerMinutesInput, setStaggerMinutesInput] = useState('')
   const [shifts, setShifts] = useState<ShiftSummary[]>([])
   const [status, setStatus] = useState('')
   const [stopConfirmShifts, setStopConfirmShifts] = useState<ShiftSummary[]>([])
   const [busy, setBusy] = useState(false)
+  const [runningShiftId, setRunningShiftId] = useState<string | null>(null)
   const [failedStopShifts, setFailedStopShifts] = useState<ShiftSummary[]>([])
   const [teamRetry, setTeamRetry] = useRememberedState<Array<{ agentId: string; payload: Record<string, unknown> }>>('schedule-team-retry', [])
   const [loadedDefaultsScope, setLoadedDefaultsScope] = useState('')
+
+  const clearPendingDefaultsAutosave = useCallback(() => {
+    if (defaultsSaveTimerRef.current) {
+      clearTimeout(defaultsSaveTimerRef.current)
+      defaultsSaveTimerRef.current = null
+    }
+    defaultsDirtyRef.current = false
+    defaultsRevisionRef.current += 1
+  }, [])
+
+  const handleScopeChange = useCallback((nextScope: 'global' | 'agent') => {
+    if (nextScope === scope) return
+    clearPendingDefaultsAutosave()
+    setLoadedDefaultsScope('')
+    setScope(nextScope)
+  }, [clearPendingDefaultsAutosave, scope])
+
+  const handleAgentScopeChange = useCallback((nextAgentId: string) => {
+    if (nextAgentId === agentId) return
+    clearPendingDefaultsAutosave()
+    setLoadedDefaultsScope('')
+    setAgentId(nextAgentId)
+  }, [agentId, clearPendingDefaultsAutosave])
 
   const resolveScopeAgent = useCallback(() => {
     if (scope !== 'agent') return undefined
@@ -187,6 +235,58 @@ export function HeartbeatSchedulerPanel() {
     [stopConfirmShifts],
   )
   const statusIsError = /\b(failed|error|could not|invalid)\b/i.test(status)
+
+  const rawSingleScheduleInput = useMemo(() => {
+    if (scheduleKind === 'cron') return cronExpression
+    if (scheduleKind === 'at') return atSchedule
+    return `${Math.max(1, cadenceValue)}${cadenceUnits.find((u) => u.value === cadenceUnit)?.suffix || 'm'}`
+  }, [atSchedule, cadenceUnit, cadenceValue, cronExpression, scheduleKind])
+
+  const singleScheduleValidation = useMemo(
+    () => validateClientShiftSchedule(scheduleKind, rawSingleScheduleInput),
+    [rawSingleScheduleInput, scheduleKind],
+  )
+
+  const effectiveTeamLeadId = useMemo(() => {
+    if (teamLeadAgentId && partyAgents.some((agent) => agent.id === teamLeadAgentId)) {
+      return teamLeadAgentId
+    }
+    if (defaults.leadAgent && partyAgents.some((agent) => agent.id === defaults.leadAgent)) {
+      return defaults.leadAgent
+    }
+    return partyAgents[0]?.id || ''
+  }, [defaults.leadAgent, partyAgents, teamLeadAgentId])
+
+  const parsedStaggerMinutes = useMemo(() => {
+    const trimmed = staggerMinutesInput.trim()
+    if (!trimmed) return undefined
+    const numeric = Number.parseInt(trimmed, 10)
+    if (!Number.isFinite(numeric) || numeric < 1 || numeric > 59) return undefined
+    return numeric
+  }, [staggerMinutesInput])
+
+  const staggerMinutesInvalid = staggerTeamCron && staggerMinutesInput.trim() !== '' && parsedStaggerMinutes === undefined
+
+  const leadEveryInterval = `${Math.max(1, leadCadenceValue)}${cadenceSuffixByUnit[leadCadenceUnit]}`
+  const workerEveryInterval = `${Math.max(1, workerCadenceValue)}${cadenceSuffixByUnit[workerCadenceUnit]}`
+
+  const selectedTeamAgentIds = useMemo(() => {
+    if (!effectiveTeamLeadId) return []
+    return [effectiveTeamLeadId, ...workerAgentIds.filter((id) => id !== effectiveTeamLeadId)]
+  }, [effectiveTeamLeadId, workerAgentIds])
+
+  const teamSchedulePreview = useMemo(
+    () =>
+      computeTeamStaggerPreview({
+        agentIds: selectedTeamAgentIds,
+        leadAgent: effectiveTeamLeadId,
+        leadEvery: leadEveryInterval,
+        workerEvery: workerEveryInterval,
+        stagger: staggerTeamCron,
+        staggerMinutes: parsedStaggerMinutes,
+      }),
+    [effectiveTeamLeadId, leadEveryInterval, parsedStaggerMinutes, selectedTeamAgentIds, staggerTeamCron, workerEveryInterval],
+  )
 
   const patchDefaults = useCallback((patch: Partial<HeartbeatDefaults>) => {
     defaultsDirtyRef.current = true
@@ -233,24 +333,43 @@ export function HeartbeatSchedulerPanel() {
 
   useEffect(() => {
     if (!partyAgents.length) return
-    const nextLead = partyAgents[0].id
+    if (!teamLeadAgentId || !partyAgents.some((agent) => agent.id === teamLeadAgentId)) {
+      const preferredLead =
+        defaults.leadAgent && partyAgents.some((agent) => agent.id === defaults.leadAgent)
+          ? defaults.leadAgent
+          : partyAgents[0].id
+      setTeamLeadAgentId(preferredLead)
+      return
+    }
 
-    const validWorkers = workerAgentIds.filter((id) => id !== nextLead && partyAgents.some((agent) => agent.id === id))
+    const validWorkers = workerAgentIds.filter((id) => id !== teamLeadAgentId && partyAgents.some((agent) => agent.id === id))
     if (validWorkers.length !== workerAgentIds.length) {
       setWorkerAgentIds(validWorkers)
       return
     }
 
     if (!workerAgentIds.length && partyAgents.length > 1) {
-      setWorkerAgentIds(partyAgents.filter((agent) => agent.id !== nextLead).map((agent) => agent.id))
+      setWorkerAgentIds(partyAgents.filter((agent) => agent.id !== teamLeadAgentId).map((agent) => agent.id))
     }
-  }, [partyAgents, workerAgentIds])
+  }, [defaults.leadAgent, partyAgents, teamLeadAgentId, workerAgentIds])
 
   useEffect(() => {
     void loadDefaults()
     void refreshShifts().catch((error) => setStatus(`Load failed: ${schedulerErrorMessage(error)}`))
     return () => { defaultsLoadRequestRef.current += 1 }
   }, [loadDefaults, refreshShifts])
+
+  const handleTeamLeadChange = useCallback((nextLeadId: string) => {
+    const previousLeadId = effectiveTeamLeadId
+    setTeamLeadAgentId(nextLeadId)
+    setWorkerAgentIds((prev) => {
+      const withoutNewLead = prev.filter((id) => id !== nextLeadId)
+      if (previousLeadId && previousLeadId !== nextLeadId && partyAgents.some((agent) => agent.id === previousLeadId)) {
+        return Array.from(new Set([...withoutNewLead, previousLeadId]))
+      }
+      return withoutNewLead
+    })
+  }, [effectiveTeamLeadId, partyAgents])
 
   const saveDefaults = useCallback(async (options?: { silent?: boolean }) => {
     if (!defaultsReady) return
@@ -299,15 +418,21 @@ export function HeartbeatSchedulerPanel() {
   }, [defaults, defaultsReady, saveDefaults])
 
   const startShift = async () => {
+    if (!singleScheduleValidation.valid) {
+      setStatus(`Invalid schedule: ${singleScheduleValidation.error}`)
+      return
+    }
     setBusy(true)
     setStatus('Starting cron shift...')
     try {
       const scopedAgent = resolveScopeAgent()
-      const cadence = `${Math.max(1, cadenceValue)}${cadenceUnits.find((u) => u.value === cadenceUnit)?.suffix || 'm'}`
+      const normalizedSchedule = singleScheduleValidation.normalized
       const payload = {
         name: shiftName.trim() || 'Cron',
         ...(scopedAgent ? { agent: scopedAgent } : {}),
-        every: cadence,
+        ...(scheduleKind === 'every'
+          ? { every: normalizedSchedule, scheduleKind: 'every' as const, schedule: normalizedSchedule }
+          : { scheduleKind, schedule: normalizedSchedule }),
         durationValue: Math.max(1, durationValue),
         durationUnit,
         message: instruction.trim() || defaultInstruction,
@@ -336,18 +461,22 @@ export function HeartbeatSchedulerPanel() {
   }
 
   const startTeamWorkflow = async () => {
+    if (staggerMinutesInvalid) {
+      setStatus('Invalid stagger offset: enter 1–59 minutes or leave blank for automatic spacing.')
+      return
+    }
     setBusy(true)
     setStatus('Starting team cron workflow...')
     try {
-    const effectiveLead = partyAgents[0]?.id
+      const effectiveLead = effectiveTeamLeadId
       if (!effectiveLead) throw new Error('No lead agent selected')
 
-      const allAgents = [effectiveLead, ...workerAgentIds.filter((id) => id !== effectiveLead)]
+      const allAgents = selectedTeamAgentIds
       if (!allAgents.length) throw new Error('No agents selected for team workflow')
 
       const cadence = `${Math.max(1, cadenceValue)}${cadenceUnits.find((u) => u.value === cadenceUnit)?.suffix || 'm'}`
-      const leadEvery = `${Math.max(1, leadCadenceValue)}${cadenceSuffixByUnit[leadCadenceUnit]}`
-      const workerEvery = `${Math.max(1, workerCadenceValue)}${cadenceSuffixByUnit[workerCadenceUnit]}`
+      const leadEvery = leadEveryInterval
+      const workerEvery = workerEveryInterval
       const planPath = planFile.trim() || 'TEAM_SYNC.md'
       const leadMessage = [
         `Act as workflow lead. Update ${planPath} with a concrete, prioritized execution plan and owner assignments.`,
@@ -365,6 +494,8 @@ export function HeartbeatSchedulerPanel() {
         every: cadence,
         leadEvery,
         workerEvery,
+        stagger: staggerTeamCron,
+        ...(staggerTeamCron && parsedStaggerMinutes !== undefined ? { staggerMinutes: parsedStaggerMinutes } : {}),
         durationValue: Math.max(1, durationValue),
         durationUnit,
         message: instruction.trim() || defaultInstruction,
@@ -378,6 +509,7 @@ export function HeartbeatSchedulerPanel() {
         announce: defaults.announce,
       }
 
+      const previewByAgent = new Map(teamSchedulePreview.map((slot) => [slot.agentId, slot]))
       const requestKey = await scheduleRequestKey('team', payload)
       const out = await schedulerApiData<ShiftBatchStartResponse>('/api/shifts/start-batch', {
         method: 'POST',
@@ -385,18 +517,32 @@ export function HeartbeatSchedulerPanel() {
         timeoutMs: 120_000,
       }, 'Failed to start team workflow.')
       if (out.outcome !== 'partial') settleScheduleRequest(requestKey)
-      setTeamRetry((out.unstartedAgentIds || []).map((agentId) => ({
-        agentId,
-        payload: {
-          idempotencyKey: `${requestKey}:${agentId}`,
-          name: `${payload.namePrefix}-${agentId}`.slice(0, 80), agent: agentId,
-          every: agentId === effectiveLead ? leadEvery : workerEvery,
-          durationValue: payload.durationValue, durationUnit: payload.durationUnit,
-          message: agentId === effectiveLead ? leadMessage : workerMessage,
-          model: payload.model, thinking: payload.thinking, timeoutSeconds: payload.timeoutSeconds,
-          wake: payload.wake, session: agentId === effectiveLead ? payload.session : 'isolated', announce: payload.announce,
-        },
-      })))
+      setTeamRetry((out.unstartedAgentIds || []).map((unstartedId) => {
+        const slot = previewByAgent.get(unstartedId)
+        const fallbackEvery = unstartedId === effectiveLead ? leadEvery : workerEvery
+        const schedulePatch =
+          slot && slot.scheduleKind === 'cron'
+            ? { scheduleKind: 'cron' as const, schedule: slot.schedule }
+            : { every: slot?.schedule || fallbackEvery, scheduleKind: 'every' as const, schedule: slot?.schedule || fallbackEvery }
+        return {
+          agentId: unstartedId,
+          payload: {
+            idempotencyKey: `${requestKey}:${unstartedId}`,
+            name: `${payload.namePrefix}-${unstartedId}`.slice(0, 80),
+            agent: unstartedId,
+            ...schedulePatch,
+            durationValue: payload.durationValue,
+            durationUnit: payload.durationUnit,
+            message: unstartedId === effectiveLead ? leadMessage : workerMessage,
+            model: payload.model,
+            thinking: payload.thinking,
+            timeoutSeconds: payload.timeoutSeconds,
+            wake: payload.wake,
+            session: unstartedId === effectiveLead ? payload.session : 'isolated',
+            announce: payload.announce,
+          },
+        }
+      }))
       setStatus([
         `Started ${out.startedCount || 0} scheduled job(s); ${out.failedCount || 0} failed.`,
         out.unstartedAgentIds?.length ? `Unstarted agents: ${out.unstartedAgentIds.join(', ')}. Retry only these agents to avoid duplicate jobs.` : '',
@@ -432,6 +578,27 @@ export function HeartbeatSchedulerPanel() {
       ].filter(Boolean).join(' '))
       try { await refreshShifts() } catch { setStatus((current) => `${current} Job list refresh failed; refresh Runtime Monitor to check the latest jobs.`) }
     } finally { setBusy(false) }
+  }
+
+  const runShiftImmediately = async (shift: ShiftSummary) => {
+    if (busy || !canRunShiftNow(shift)) return
+    setBusy(true)
+    setRunningShiftId(shift.id)
+    setStatus(`Running cron job ${shift.name} (${shift.agent})...`)
+    try {
+      await schedulerApiData<{ shiftId: string; cronId: string; status: string }>('/api/shifts/run', {
+        method: 'POST',
+        body: { shiftId: shift.id },
+        timeoutMs: 125_000,
+      }, 'Failed to run cron job.')
+      setStatus(`Completed immediate run for ${shift.name} (${shift.agent}).`)
+      await refreshShifts()
+    } catch (error) {
+      setStatus(`Run failed: ${schedulerErrorMessage(error)}`)
+    } finally {
+      setRunningShiftId(null)
+      setBusy(false)
+    }
   }
 
   const stopShift = async (shiftId: string) => {
@@ -516,7 +683,7 @@ export function HeartbeatSchedulerPanel() {
     <section className="rounded-2xl border border-white/10 bg-gradient-to-b from-slate-900/80 to-slate-950/75 p-6 shadow-frame">
       <div className="mb-3">
         <h2 className="font-heading text-2xl text-slate-100">Cron Scheduler</h2>
-        <p className="text-xs text-cyan-100/90">Configure cron cadence, run window, model, and scheduled instructions per agent or globally.</p>
+        <p className="text-xs text-cyan-100/90">Configure cron cadence, staggered multi-agent slots, run window, model, and scheduled instructions.</p>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
@@ -524,7 +691,7 @@ export function HeartbeatSchedulerPanel() {
           Scope
           <select
             value={scope}
-            onChange={(event) => setScope(event.target.value as 'global' | 'agent')}
+            onChange={(event) => handleScopeChange(event.target.value as 'global' | 'agent')}
             className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950/70 px-2 py-2 text-sm text-slate-100"
           >
             <option value="global">Global defaults</option>
@@ -537,7 +704,7 @@ export function HeartbeatSchedulerPanel() {
             Agent
             <select
               value={agentId}
-              onChange={(event) => setAgentId(event.target.value)}
+              onChange={(event) => handleAgentScopeChange(event.target.value)}
               className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950/70 px-2 py-2 text-sm text-slate-100"
             >
               {partyAgents.map((agent) => (
@@ -642,7 +809,28 @@ export function HeartbeatSchedulerPanel() {
       </div>
 
       <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/45 p-3">
-        <p className="mb-2 text-xs uppercase tracking-[0.2em] text-cyan-100/80">Schedule</p>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs uppercase tracking-[0.2em] text-cyan-100/80">Schedule</p>
+          <div className="inline-flex rounded-lg border border-white/15 bg-slate-950/80 p-0.5" role="group" aria-label="Schedule mode">
+            {scheduleModeOptions.map((option) => {
+              const active = scheduleKind === option.value
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setScheduleKind(option.value)}
+                  className={`rounded-md px-2.5 py-1 text-[11px] transition ${
+                    active ? 'bg-cyan-500/20 text-cyan-100' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
         <div className="grid gap-3 md:grid-cols-4">
           <label className="text-xs text-slate-300">
             Shift name
@@ -653,31 +841,55 @@ export function HeartbeatSchedulerPanel() {
             />
           </label>
 
-          <label className="text-xs text-slate-300">
-            Run every
-            <input
-              type="number"
-              min={1}
-              value={cadenceValue}
-              onChange={(event) => setCadenceValue(Math.max(1, Number(event.target.value) || 1))}
-              className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950/70 px-2 py-2 text-sm text-slate-100"
-            />
-          </label>
+          {scheduleKind === 'every' ? (
+            <>
+              <label className="text-xs text-slate-300">
+                Run every
+                <input
+                  type="number"
+                  min={1}
+                  value={cadenceValue}
+                  onChange={(event) => setCadenceValue(Math.max(1, Number(event.target.value) || 1))}
+                  className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950/70 px-2 py-2 text-sm text-slate-100"
+                />
+              </label>
 
-          <label className="text-xs text-slate-300">
-            Cadence unit
-            <select
-              value={cadenceUnit}
-              onChange={(event) => setCadenceUnit(event.target.value as DurationUnit)}
-              className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950/70 px-2 py-2 text-sm text-slate-100"
-            >
-              {cadenceUnits.map((unit) => (
-                <option key={unit.value} value={unit.value}>
-                  {unit.label}
-                </option>
-              ))}
-            </select>
-          </label>
+              <label className="text-xs text-slate-300">
+                Cadence unit
+                <select
+                  value={cadenceUnit}
+                  onChange={(event) => setCadenceUnit(event.target.value as DurationUnit)}
+                  className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950/70 px-2 py-2 text-sm text-slate-100"
+                >
+                  {cadenceUnits.map((unit) => (
+                    <option key={unit.value} value={unit.value}>
+                      {unit.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          ) : scheduleKind === 'cron' ? (
+            <label className="text-xs text-slate-300 md:col-span-2">
+              Cron expression (5- or 6-field or @macro)
+              <input
+                value={cronExpression}
+                onChange={(event) => setCronExpression(event.target.value)}
+                placeholder="0,20,40 * * * *"
+                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950/70 px-2 py-2 font-mono text-sm text-slate-100"
+              />
+            </label>
+          ) : (
+            <label className="text-xs text-slate-300 md:col-span-2">
+              Run once at (+offset or ISO-8601 timestamp)
+              <input
+                value={atSchedule}
+                onChange={(event) => setAtSchedule(event.target.value)}
+                placeholder="+15m or 2026-11-27T04:00:00Z"
+                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950/70 px-2 py-2 font-mono text-sm text-slate-100"
+              />
+            </label>
+          )}
 
           <label className="text-xs text-slate-300">
             Run for
@@ -690,6 +902,29 @@ export function HeartbeatSchedulerPanel() {
             />
           </label>
         </div>
+
+        {scheduleKind !== 'every' && (
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-slate-400">Presets:</span>
+              {(scheduleKind === 'cron' ? cronQuickPresets : atQuickPresets).map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => (scheduleKind === 'cron' ? setCronExpression(preset) : setAtSchedule(preset))}
+                  className="rounded border border-white/15 bg-slate-900/60 px-2 py-0.5 font-mono text-slate-200 hover:border-cyan-300/40"
+                >
+                  {preset}
+                </button>
+              ))}
+            </div>
+            <span className={singleScheduleValidation.valid ? 'text-emerald-200/90' : 'text-rose-200'}>
+              {singleScheduleValidation.valid
+                ? `Normalized: ${singleScheduleValidation.normalized}`
+                : singleScheduleValidation.error}
+            </span>
+          </div>
+        )}
 
         <label className="mt-3 block text-xs text-slate-300">
           Run duration unit
@@ -723,9 +958,9 @@ export function HeartbeatSchedulerPanel() {
           <label className="text-xs text-slate-300">
             Lead agent
             <select
-              value={partyAgents[0]?.id || ''}
-              disabled
-              onChange={() => undefined}
+              value={effectiveTeamLeadId}
+              disabled={!partyAgents.length}
+              onChange={(event) => handleTeamLeadChange(event.target.value)}
               className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950/70 px-2 py-2 text-sm text-slate-100"
             >
               {partyAgents.map((agent) => (
@@ -800,11 +1035,39 @@ export function HeartbeatSchedulerPanel() {
           </label>
         </div>
 
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-900/35 px-3 py-2">
+          <label className="flex items-center gap-2 text-xs text-slate-200">
+            <input
+              type="checkbox"
+              checked={staggerTeamCron}
+              onChange={(event) => setStaggerTeamCron(event.target.checked)}
+            />
+            <span>Stagger multi-agent cron triggers to prevent file-lock collisions</span>
+          </label>
+          {staggerTeamCron && (
+            <label className="flex items-center gap-2 text-xs text-slate-300">
+              <span>Offset (min, optional)</span>
+              <input
+                type="number"
+                min={1}
+                max={59}
+                value={staggerMinutesInput}
+                onChange={(event) => setStaggerMinutesInput(event.target.value)}
+                placeholder="Auto"
+                className="w-20 rounded border border-white/15 bg-slate-950/80 px-2 py-1 text-xs text-slate-100"
+              />
+            </label>
+          )}
+        </div>
+        {staggerMinutesInvalid && (
+          <p className="mt-1 text-[11px] text-rose-200">Stagger offset must be between 1 and 59 minutes (or blank for automatic spacing).</p>
+        )}
+
         <div className="mt-3 text-xs text-slate-300">
           <p className="mb-1">Worker agents</p>
           <div className="grid gap-1 md:grid-cols-2">
             {partyAgents
-              .filter((agent) => agent.id !== (partyAgents[0]?.id || ''))
+              .filter((agent) => agent.id !== effectiveTeamLeadId)
               .map((agent) => {
                 const checked = workerAgentIds.includes(agent.id)
                 return (
@@ -828,6 +1091,27 @@ export function HeartbeatSchedulerPanel() {
               })}
           </div>
         </div>
+
+        {teamSchedulePreview.length > 0 && (
+          <div className="mt-3 rounded-lg border border-white/10 bg-slate-900/35 p-2.5 text-[11px] text-slate-300">
+            <p className="mb-1.5 uppercase tracking-[0.14em] text-cyan-100/75">Computed Team Schedule Slots</p>
+            <div className="grid gap-1.5 md:grid-cols-3">
+              {teamSchedulePreview.map((slot) => (
+                <div key={slot.agentId} className="rounded border border-white/10 bg-slate-950/60 px-2 py-1.5">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="truncate font-medium text-slate-100">{slot.agentId}</span>
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] uppercase ${slot.isLead ? 'bg-violet-500/20 text-violet-100' : 'bg-slate-700/50 text-slate-300'}`}>
+                      {slot.isLead ? 'Lead' : 'Worker'}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 font-mono text-cyan-100/90">
+                    {slot.scheduleKind === 'cron' ? `Cron: ${slot.schedule}` : `Every: ${slot.schedule}`}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -841,7 +1125,7 @@ export function HeartbeatSchedulerPanel() {
         </button>
         <button
           type="button"
-          disabled={busy || !instruction.trim()}
+          disabled={busy || !instruction.trim() || !singleScheduleValidation.valid}
           onClick={() => void startShift()}
           className="rounded-md border border-emerald-300/40 bg-emerald-900/30 px-3 py-2 text-xs uppercase tracking-[0.16em] text-emerald-100"
         >
@@ -849,7 +1133,7 @@ export function HeartbeatSchedulerPanel() {
         </button>
         <button
           type="button"
-          disabled={busy || !partyAgents.length || teamRetry.length > 0}
+          disabled={busy || !partyAgents.length || teamRetry.length > 0 || staggerMinutesInvalid}
           onClick={() => void startTeamWorkflow()}
           className="rounded-md border border-violet-300/40 bg-violet-900/30 px-3 py-2 text-xs uppercase tracking-[0.16em] text-violet-100"
         >
@@ -907,18 +1191,36 @@ export function HeartbeatSchedulerPanel() {
               <div key={shift.id} className="rounded-lg border border-white/10 bg-slate-900/50 p-2 text-xs text-slate-200">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="font-semibold text-slate-100">{shift.name}</p>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void stopShift(shift.id)}
-                    className="rounded border border-rose-300/40 bg-rose-900/25 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-rose-100"
-                  >
-                    Stop
-                  </button>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {canRunShiftNow(shift) && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void runShiftImmediately(shift)}
+                        className="rounded border border-cyan-300/40 bg-cyan-900/25 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-cyan-100"
+                      >
+                        {runningShiftId === shift.id ? 'Running...' : 'Run Now'}
+                      </button>
+                    )}
+                    {canStopShiftInControlCenter(shift) ? (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void stopShift(shift.id)}
+                        className="rounded border border-rose-300/40 bg-rose-900/25 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-rose-100"
+                      >
+                        Stop
+                      </button>
+                    ) : (
+                      <span className="rounded border border-white/15 bg-slate-950/70 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-slate-400">
+                        Read-only OS crontab
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <p>Agent: {shift.agent}</p>
                 <p>
-                  Every: {shift.every} | {shiftTimingLabel(shift)}: {formatShiftTime(shiftTimingValue(shift))} | Model: {shift.model || 'default'}
+                  {formatShiftScheduleSummary(shift)} | {shiftTimingLabel(shift)}: {formatShiftTime(shiftTimingValue(shift))} | Model: {shift.model || 'default'}
                 </p>
                 <p>Source: {shift.source || 'openclaw'} | Status: {shift.status || 'active'}</p>
                 <p className="truncate">Instruction: {shift.message}</p>
