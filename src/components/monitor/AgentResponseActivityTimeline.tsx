@@ -1,3 +1,4 @@
+import '../../styles/automnia-theme/162-agent-response-activity.css'
 import { memo, type CSSProperties } from 'react'
 import type { AgentActivityEvent } from '../../types/nexus'
 

@@ -1,3 +1,4 @@
+import '../../styles/automnia-theme/165-settings-graphite.css'
 import { NotificationSettings } from './NotificationSettings'
 import { WorkspaceProfiles } from './WorkspaceProfilesPanel'
 import { SettingsSearchMatches } from './SettingsSearchMatches'

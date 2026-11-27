@@ -60,10 +60,11 @@ const budgets = {
   // for small implementation changes.
   entryCssBytes: numberEnv('AUTOMNIA_BUDGET_ENTRY_CSS_BYTES', 2_000_000),
   entryCssGzipBytes: numberEnv('AUTOMNIA_BUDGET_ENTRY_CSS_GZIP_BYTES', 250_000),
-  // The v1.0.31 Linux and macOS builds measure 1,158,736 bytes / 348,385 gzip.
-  // Keep a small margin above that baseline so platform builds share one stable gate.
-  totalJsBytes: numberEnv('AUTOMNIA_BUDGET_TOTAL_JS_BYTES', 1_180_000),
-  totalJsGzipBytes: numberEnv('AUTOMNIA_BUDGET_TOTAL_JS_GZIP_BYTES', 355_000),
+  // The full workspace update adds deferred settings, chat activity, and
+  // scheduling surfaces. Allow a small shared margin above the new ~1.181 MB
+  // / ~355.7 KB measurement while keeping the interactive bundle bounded.
+  totalJsBytes: numberEnv('AUTOMNIA_BUDGET_TOTAL_JS_BYTES', 1_190_000),
+  totalJsGzipBytes: numberEnv('AUTOMNIA_BUDGET_TOTAL_JS_GZIP_BYTES', 365_000),
   deferredSpeechJsBytes: numberEnv('AUTOMNIA_BUDGET_DEFERRED_SPEECH_JS_BYTES', 565_000),
   deferredSpeechJsGzipBytes: numberEnv('AUTOMNIA_BUDGET_DEFERRED_SPEECH_JS_GZIP_BYTES', 166_000),
 }

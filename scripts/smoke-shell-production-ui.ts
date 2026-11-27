@@ -15,6 +15,7 @@ const commandConsole = read('src/components/monitor/AgentResponseConsole.tsx')
 const agentEditorModal = read('src/components/editor/AgentEditorModal.tsx')
 const dialogFocus = read('src/components/ui/Dialog.tsx')
 const commandConsoleCss = read('src/styles/automnia-theme/107-agent-assistant-revamp.css')
+const responseActivityTimeline = read('src/components/monitor/AgentResponseActivityTimeline.tsx')
 const pluginsPanel = read('src/components/plugins/PluginsPanel.tsx')
 const recruitModal = read('src/components/recruit/RecruitAgentModal.tsx')
 const accessibility = read('src/styles/accessibility.css')
@@ -205,11 +206,7 @@ assert.deepEqual(layersAfterTypography, [
   { order: 158, name: 'workspace-graphite-surfaces' },
   { order: 159, name: 'plugin-loading-state' },
   { order: 161, name: 'agent-registry-zoom-fit' },
-  { order: 162, name: 'agent-response-activity' },
-  { order: 163, name: 'user-profile-picture' },
   { order: 164, name: 'readable-ui' },
-  { order: 165, name: 'settings-graphite' },
-  { order: 166, name: 'recruit-graphite' },
 ], 'global automnia theme layers should remain in the reviewed cascade order')
 assert.doesNotMatch(theme, /99-mission-quiet-redesign/, 'mission quiet redesign should no longer be a global late layer')
 assert.ok(
@@ -230,7 +227,12 @@ assert.ok(theme.indexOf(agentCardThemesImport) < theme.indexOf(settingsSystemImp
 assert.ok(theme.indexOf(settingsSystemImport) < theme.indexOf(cronJobsSystemImport), 'Settings System must load before the scoped Cron Jobs System')
 assert.ok(theme.indexOf(monitorLogsImport) < theme.indexOf(monitorReadableImport), 'Monitor Logs must load before Monitor Readability')
 assert.ok(theme.includes(obsidianAgentCardsImport), 'Obsidian agent card constraints must remain in the cascade')
-assert.ok(theme.trimEnd().endsWith("@import './styles/automnia-theme/166-recruit-graphite.css';"), 'Recruit Graphite must remain the final shared theme layer')
+assert.ok(theme.trimEnd().endsWith("@import './styles/automnia-theme/164-readable-ui.css';"), 'Readable UI must remain the final shared theme layer')
+assert.doesNotMatch(theme, /@import '\.\/styles\/automnia-theme\/(?:162-agent-response-activity|163-user-profile-picture|165-settings-graphite|166-recruit-graphite)\.css';/, 'feature-specific activity, profile, settings, and Recruit styles should stay out of the critical global theme bundle')
+assert.match(responseActivityTimeline, /import ['"]\.\.\/\.\.\/styles\/automnia-theme\/162-agent-response-activity\.css['"]/, 'agent activity styles should load with the deferred chat timeline')
+assert.match(settingsPanel, /import ['"]\.\.\/\.\.\/styles\/automnia-theme\/165-settings-graphite\.css['"]/, 'settings graphite styles should load with the lazy settings workspace')
+assert.match(read('src/components/settings/UserProfilePictureSettings.tsx'), /import ['"]\.\.\/\.\.\/styles\/automnia-theme\/163-user-profile-picture\.css['"]/, 'profile picture styles should load with its settings control')
+assert.match(recruitModal, /import ['"]\.\.\/\.\.\/styles\/automnia-theme\/166-recruit-graphite\.css['"]/, 'Recruit modal styles should load with the lazy Recruit workflow')
 assert.doesNotMatch(read('src/styles/automnia-theme/136-product-usability.css'), /\.dy-agent-card/, 'Shared affordances must preserve the final agent card artwork')
 assert.match(operatorExperience, /\.dui-recruit-code-editor:focus-within[\s\S]*#071012 !important/, 'focused recruit Markdown editing must retain its dedicated contrast treatment')
 assert.match(horizonCommandCenter, /Each destination has a dedicated hue/, 'navigation selection should document the workspace identity system')

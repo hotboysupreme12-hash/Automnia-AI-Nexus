@@ -1,3 +1,4 @@
+import '../../styles/automnia-theme/163-user-profile-picture.css'
 import { useRef, useState } from 'react'
 import { useUserProfileAvatar } from '../../hooks/useUserProfileAvatar'
 import { encodeUserProfileImage } from '../../utils/userProfileAvatar'
