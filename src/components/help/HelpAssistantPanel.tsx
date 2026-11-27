@@ -370,6 +370,7 @@ export function HelpAssistantPanel({ isOpen, onClose, onNavigate }: HelpAssistan
   const dialogPanelRef = useRef<HTMLElement>(null)
   const [messages, setMessages] = useRememberedState<ChatMessage[]>('help-messages', [])
   const [draft, setDraft] = useRememberedState('help-draft', '')
+  const [showAllTopics, setShowAllTopics] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [sessionName, setSessionName] = useRememberedState<string | null>('help-session', null)
@@ -396,6 +397,7 @@ export function HelpAssistantPanel({ isOpen, onClose, onNavigate }: HelpAssistan
   const resetConversation = () => {
     setMessages([])
     setDraft('')
+    setShowAllTopics(false)
     setError('')
     setFailedQuestion('')
     setSessionName(null)
@@ -477,26 +479,26 @@ export function HelpAssistantPanel({ isOpen, onClose, onNavigate }: HelpAssistan
             <div ref={transcriptRef} className="dui-help-transcript" aria-live="polite" aria-label="Automnia Assistant conversation">
               {!hasConversation && (
                 <section className="dui-help-welcome" aria-label="Start a help conversation">
-                  <div className="dui-help-welcome__orb" aria-hidden="true">
-                    <span>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 3.25 13.45 8a4 4 0 0 0 2.65 2.65L20.75 12l-4.65 1.35a4 4 0 0 0-2.65 2.65L12 20.75 10.55 16a4 4 0 0 0-2.65-2.65L3.25 12l4.65-1.35A4 4 0 0 0 10.55 8L12 3.25Z" />
-                      </svg>
-                    </span>
-                  </div>
-                  <span className="dui-help-welcome__eyebrow">Automnia capability playbook</span>
-                  <h3>What should your agent do next?</h3>
-                  <p>Pick a playbook or ask in your own words. I’ll recommend the skills and plugins, give you a ready-to-paste agent prompt, then show the exact Automnia controls and safe test.</p>
-                  <div className="dui-help-suggestions" aria-label="Suggested questions">
-                    {HELP_TOPICS.map((topic) => (
+                  <h3>How can we help?</h3>
+                  <p>Choose a topic or ask your own question.</p>
+                  <div id="help-topic-list" className="dui-help-suggestions" aria-label="Suggested questions">
+                    {(showAllTopics ? HELP_TOPICS : HELP_TOPICS.slice(0, 4)).map((topic) => (
                       <button key={topic.question} type="button" onClick={() => void askQuestion(topic.question)} disabled={busy}>
                         <span><TopicIcon name={topic.icon} /></span>
                         <strong>{topic.title}</strong>
-                        <small>{topic.question}</small>
                         <i aria-hidden="true">↗</i>
                       </button>
                     ))}
                   </div>
+                  <button
+                    type="button"
+                    className="dui-help-topics-toggle"
+                    onClick={() => setShowAllTopics((expanded) => !expanded)}
+                    aria-expanded={showAllTopics}
+                    aria-controls="help-topic-list"
+                  >
+                    {showAllTopics ? 'Show fewer topics' : `View all ${HELP_TOPICS.length} topics`}
+                  </button>
                 </section>
               )}
 

@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import {
   createMissionReportService,
+  normalizeMissionRecordSnapshot,
   type BackendMissionReport,
 } from '../server/services/missions/missionReportService'
 import {
@@ -322,4 +323,164 @@ test('recorded reports retain early evidence after the live feed has rotated and
   restarted.persistedEvents.push(...events)
   const after = await restarted.service.recordMissionReport(mission)
   assert.deepEqual(after?.evidence, before?.evidence)
+})
+
+test('buildMissionReport ignores negated failure phrases and successful cron completion summaries', () => {
+  const { missionFeed, service } = createHarness()
+  const mission = createMission({ id: 'mission-clean-completion', party: ['agent-a'] })
+  mission.scheduler.jobs.push({
+    id: 'job-clean',
+    cronId: 'cron-clean',
+    missionId: mission.id,
+    agentId: 'agent-a',
+    role: 'worker',
+    round: 1,
+    name: 'mission-job-clean',
+    status: 'completed',
+    createdAt: '2026-06-30T12:00:02.000Z',
+    startedAt: '2026-06-30T12:00:05.000Z',
+    endedAt: '2026-06-30T12:01:05.000Z',
+    summary: 'Fixed test failure and verified build with 0 errors',
+    runtimeRunId: 'runtime-clean',
+    cronRunId: 'cron-run-clean',
+    sessionId: 'session-clean',
+    sessionKey: 'session-key-clean',
+    runCount: 1,
+    completedRunCount: 1,
+    failedRunCount: 0,
+  })
+  missionFeed.push(
+    {
+      id: 'ev-create',
+      missionId: mission.id,
+      at: '2026-06-30T12:00:02.000Z',
+      type: 'agent_assigned',
+      agentId: 'agent-a',
+      message: 'Cron job created: worker round 1 (cron-clean) model=gateway-default',
+    },
+    {
+      id: 'ev-complete',
+      missionId: mission.id,
+      at: '2026-06-30T12:01:05.000Z',
+      type: 'agent_update',
+      agentId: 'agent-a',
+      message: 'agent-a cron worker round 1 completed: Fixed test failure and verified build with 0 errors',
+    },
+    {
+      id: 'ev-verify-zero',
+      missionId: mission.id,
+      at: '2026-06-30T12:01:06.000Z',
+      type: 'agent_update',
+      agentId: 'agent-a',
+      message: 'Verification passed with zero test failures and without command errors.',
+    },
+  )
+
+  const report = service.buildMissionReport(mission)
+
+  assert.equal(report.evidence.verificationFailures, 0)
+  assert.equal(report.evidence.commandFailures, 0)
+  assert.equal(report.evidence.timedOutRuns, 0)
+  assert.equal(report.evidence.toolFailures, 0)
+  assert.equal(report.errors, 0)
+  assert.equal(report.efficiencyRating, 100)
+  assert.equal(report.runtimeEfficiency, 100)
+  assert.equal(report.evidence.queueDelayMs, 3_000)
+})
+
+test('buildMissionReport tracks timedOutRuns, toolFailures, and per-job queueDelayMs without recurring multi-cycle skew', () => {
+  const { missionFeed, service } = createHarness()
+  const mission = createMission({
+    id: 'mission-timeout-tool-telemetry',
+    mode: 'continuous',
+    party: ['agent-a', 'agent-b'],
+    createdAt: '2026-06-30T12:00:00.000Z',
+    startAt: '2026-06-30T12:00:00.000Z',
+    completedAt: '2026-06-30T12:20:00.000Z',
+  })
+  mission.scheduler.jobs.push(
+    {
+      id: 'job-recurring-multi',
+      cronId: 'cron-rec-1',
+      missionId: mission.id,
+      agentId: 'agent-a',
+      role: 'leader',
+      round: 3,
+      name: 'recurring-leader',
+      status: 'completed',
+      scheduleKind: 'recurring',
+      createdAt: '2026-06-30T12:00:00.000Z',
+      startedAt: '2026-06-30T12:15:00.000Z',
+      endedAt: '2026-06-30T12:16:00.000Z',
+      summary: 'Scheduled cron cycle completed.',
+      runtimeRunId: 'run-rec-1',
+      cronRunId: null,
+      sessionId: null,
+      sessionKey: null,
+      runCount: 3,
+      completedRunCount: 3,
+      failedRunCount: 0,
+    },
+    {
+      id: 'job-round2-timeout',
+      cronId: 'cron-r2-timeout',
+      missionId: mission.id,
+      agentId: 'agent-b',
+      role: 'worker',
+      round: 2,
+      name: 'worker-r2',
+      status: 'failed',
+      scheduleKind: 'one-shot',
+      createdAt: '2026-06-30T12:10:00.000Z',
+      startedAt: '2026-06-30T12:10:04.000Z',
+      endedAt: '2026-06-30T12:11:04.000Z',
+      summary: 'Execution timed out after 60s; the same tool call failed 3 times.',
+      runtimeRunId: 'run-r2',
+      cronRunId: null,
+      sessionId: null,
+      sessionKey: null,
+      runCount: 1,
+      completedRunCount: 0,
+      failedRunCount: 1,
+    },
+  )
+  missionFeed.push({
+    id: 'ev-created-only',
+    missionId: mission.id,
+    at: '2026-06-30T12:10:00.000Z',
+    type: 'agent_update',
+    agentId: 'agent-b',
+    message: 'Cron job created: worker round 2 (cron-r2-timeout) model=gateway-default',
+  })
+
+  const report = service.buildMissionReport(mission)
+
+  assert.equal(report.evidence.completedRuns, 3)
+  assert.equal(report.evidence.failedRuns, 1)
+  assert.equal(report.evidence.startedRuns, 4)
+  assert.equal(report.evidence.timedOutRuns, 1)
+  assert.equal(report.evidence.toolFailures, 1)
+  assert.equal(report.evidence.queueDelayMs, 4_000)
+  assert.equal(report.errors, 2)
+})
+
+test('normalizeMissionRecordSnapshot trims whitespace-padded agentCadenceSeconds keys', () => {
+  const normalized = normalizeMissionRecordSnapshot({
+    id: 'mission-cadence-trim',
+    title: 'Cadence snapshot',
+    brief: 'Normalize per-agent cadences on load.',
+    mode: 'continuous',
+    status: 'active',
+    party: ['agent-a', 'agent-b'],
+    agentCadenceSeconds: {
+      ' agent-a ': 180,
+      'agent-b': 5,
+    },
+  })
+
+  assert.ok(normalized)
+  assert.deepEqual(normalized.agentCadenceSeconds, {
+    'agent-a': 180,
+    'agent-b': 15,
+  })
 })

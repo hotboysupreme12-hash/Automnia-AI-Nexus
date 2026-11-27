@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { safeMarkdownUrl } from '../../utils/markdownUrl'
 
@@ -79,4 +79,72 @@ export const ResponseMarkdown = memo(function ResponseMarkdown({ text }: { text:
     index += 1
   }
   return <div className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">{blocks}</div>
+})
+
+export const StreamedResponseMarkdown = memo(function StreamedResponseMarkdown({
+  text,
+  animate,
+  streaming,
+}: {
+  text: string
+  animate: boolean
+  streaming: boolean
+}) {
+  const [visibleText, setVisibleText] = useState(() => animate ? '' : text)
+  const visibleTextRef = useRef(visibleText)
+  const shouldAnimateRef = useRef(animate)
+
+  useEffect(() => {
+    shouldAnimateRef.current = shouldAnimateRef.current || animate
+    if (!shouldAnimateRef.current) {
+      visibleTextRef.current = text
+      const frame = window.requestAnimationFrame(() => setVisibleText(text))
+      return () => window.cancelAnimationFrame(frame)
+    }
+    if (typeof window === 'undefined' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      visibleTextRef.current = text
+      const frame = window.requestAnimationFrame(() => setVisibleText(text))
+      return () => window.cancelAnimationFrame(frame)
+    }
+    if (!text.startsWith(visibleTextRef.current)) {
+      visibleTextRef.current = text
+      const frame = window.requestAnimationFrame(() => setVisibleText(text))
+      return () => window.cancelAnimationFrame(frame)
+    }
+    if (visibleTextRef.current === text) return
+
+    let frame = 0
+    let lastFrameAt = performance.now()
+    const revealNext = (now: number) => {
+      const current = visibleTextRef.current
+      const remaining = text.length - current.length
+      if (remaining <= 0) return
+
+      // Keep normal streamed chunks feeling immediate. If a buffered response
+      // arrives all at once, accelerate the reveal so long answers do not stall.
+      const charactersPerSecond = Math.min(800, Math.max(90, remaining * 0.7))
+      const frameDelta = Math.max(1, now - lastFrameAt)
+      let end = Math.min(text.length, current.length + Math.max(1, Math.floor(frameDelta * charactersPerSecond / 1000)))
+      const lastIncluded = text.charCodeAt(end - 1)
+      const nextCodePoint = text.charCodeAt(end)
+      if (lastIncluded >= 0xD800 && lastIncluded <= 0xDBFF && nextCodePoint >= 0xDC00 && nextCodePoint <= 0xDFFF) end += 1
+
+      const next = text.slice(0, end)
+      visibleTextRef.current = next
+      setVisibleText(next)
+      lastFrameAt = now
+      if (end < text.length) frame = window.requestAnimationFrame(revealNext)
+    }
+
+    frame = window.requestAnimationFrame(revealNext)
+    return () => window.cancelAnimationFrame(frame)
+  }, [animate, text])
+
+  const revealing = visibleText !== text
+  return (
+    <div className="dy-command-response-markdown" data-typing={revealing ? 'true' : 'false'}>
+      <ResponseMarkdown text={visibleText} />
+      {(streaming || revealing) && <span className="dy-command-response-caret" aria-hidden="true" />}
+    </div>
+  )
 })

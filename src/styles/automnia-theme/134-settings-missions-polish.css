@@ -206,7 +206,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="settings"].dui-settings-p
     background: transparent !important;
   }
 
-  & .dui-settings-section { max-width: 1000px !important; }
+  & .dui-settings-section { width: 100% !important; max-width: none !important; margin-inline: 0 !important; }
   & .dui-settings-content > div + div { margin-top: 36px !important; }
 
   & .dui-settings-section__head {

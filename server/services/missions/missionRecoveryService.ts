@@ -1,8 +1,10 @@
 import type {
   Mission,
+  MissionCronCleanupSummary,
   MissionCronJob,
   MissionFeedEvent,
   MissionRecordSnapshot,
+  MissionStatus,
   TeamSyncAssignment,
 } from './missionStateService'
 import { normalizeMissionRecordSnapshot } from './missionReportService'
@@ -65,8 +67,16 @@ type GatewayClientState = {
 }
 
 export type MissionRecoveryServiceOptions = {
+  cleanupMissionCronJobs?: (mission: Mission) => Promise<MissionCronCleanupSummary>
   clearMissionController: (missionId: string) => void
   clearShiftRuntimeStateForCronId: (cronId: string) => void
+  completeCronMission?: (
+    mission: Mission,
+    status: MissionStatus,
+    note: string,
+    assignments: TeamSyncAssignment[],
+    activity: string[],
+  ) => Promise<void>
   controlCenterStartedAtMs: number
   ensureGatewayClient: (signal?: AbortSignal) => Promise<GatewayClientState>
   getRuntimeRunStatus: (runId: string | null | undefined) => MissionRuntimeReconciliationStatus
@@ -113,6 +123,7 @@ function statusCounterName(status: MissionRuntimeReconciliationStatus) {
 export function createMissionRecoveryService(options: MissionRecoveryServiceOptions) {
   const now = () => options.now?.() || new Date()
   const isoNow = () => now().toISOString()
+  const pendingRecoveryReports = new Map<string, Promise<unknown>>()
 
   function missionAssignmentsFromRecord(mission: Mission): TeamSyncAssignment[] {
     const terminalStatus = mission.status === 'completed' ? 'completed' : mission.status === 'cancelled' ? 'cancelled' : 'queued'
@@ -129,6 +140,132 @@ export function createMissionRecoveryService(options: MissionRecoveryServiceOpti
     return options.redactSensitiveText(options.trimTask(String(value || ''), maxLength))
   }
 
+  function missionRecoveryCleanupFailureSummary(error: unknown, jobs: MissionCronJob[] = []): MissionCronCleanupSummary {
+    const detail = redactedRecoveryDetail(error, 500)
+    if (!jobs.length) {
+      return {
+        attempted: 0,
+        removed: 0,
+        disabled: 0,
+        failed: 1,
+        results: [{
+          jobId: 'unknown',
+          cronId: 'unknown',
+          agentId: 'unknown',
+          previousStatus: 'failed',
+          status: 'failed',
+          ok: false,
+          action: 'unchanged',
+          detail,
+        }],
+      }
+    }
+    return {
+      attempted: jobs.length,
+      removed: 0,
+      disabled: 0,
+      failed: jobs.length,
+      results: jobs.map((job) => ({
+        jobId: job.id,
+        cronId: job.cronId,
+        agentId: job.agentId,
+        previousStatus: job.status,
+        status: job.status,
+        ok: false,
+        action: 'unchanged' as const,
+        detail,
+      })),
+    }
+  }
+
+  function isMissionDeadlineElapsed(mission: Mission) {
+    if (typeof mission.endAt !== 'string' || !mission.endAt.trim()) return false
+    const endAtMs = Date.parse(mission.endAt)
+    return Number.isFinite(endAtMs) && endAtMs <= now().getTime()
+  }
+
+  async function completeExpiredRehydratedMission(
+    mission: Mission,
+    cronState: MissionCronReconciliationSnapshot,
+    activity: string[],
+  ) {
+    const endedAt = isoNow()
+    const hasExternalCleanup = Boolean(options.completeCronMission || options.cleanupMissionCronJobs)
+    if (cronState.available) {
+      for (const job of mission.scheduler.jobs) {
+        if (!options.missionCronJobNeedsRecovery(job)) continue
+        if (!cronState.knownCronIds.has(job.cronId)) {
+          job.status = 'removed'
+          job.endedAt ||= endedAt
+          job.summary ||= 'OpenClaw cron job auto-expired before restart recovery.'
+          options.clearShiftRuntimeStateForCronId(job.cronId)
+          continue
+        }
+        if (!hasExternalCleanup) {
+          job.status = cronState.disabledCronIds.has(job.cronId) ? 'disabled' : 'removed'
+          job.endedAt ||= endedAt
+          job.summary ||= 'OpenClaw cron job finalized after shift deadline elapsed.'
+          options.clearShiftRuntimeStateForCronId(job.cronId)
+        }
+      }
+    } else if (!hasExternalCleanup) {
+      for (const job of mission.scheduler.jobs) {
+        if (!options.missionCronJobNeedsRecovery(job)) continue
+        options.clearShiftRuntimeStateForCronId(job.cronId)
+      }
+    }
+
+    const note = `Mission completed during restart recovery: ${mission.title}`
+    const completedAssignments: TeamSyncAssignment[] = mission.party.map((agentId) => ({
+      agentId,
+      task: mission.brief,
+      status: 'completed',
+      updatedAt: endedAt,
+      note,
+    }))
+
+    if (options.completeCronMission) {
+      await options.completeCronMission(mission, 'completed', note, completedAssignments, activity)
+      return
+    }
+
+    options.clearMissionController(mission.id)
+    mission.status = 'completed'
+    mission.completedAt = endedAt
+    mission.endAt ||= endedAt
+    mission.scheduler.status = 'completed'
+    mission.scheduler.nextRoundAt = null
+    mission.scheduler.activeJobId = null
+    const pendingJobs = mission.scheduler.jobs.filter(options.missionCronJobNeedsRecovery)
+    const cleanup = options.cleanupMissionCronJobs
+      ? await options.cleanupMissionCronJobs(mission).catch((error) => missionRecoveryCleanupFailureSummary(error, pendingJobs))
+      : undefined
+    if (cleanup && cleanup.failed > 0) {
+      mission.scheduler.status = 'failed'
+      mission.scheduler.lastError = `Mission cron cleanup failed for ${cleanup.failed} job(s).`
+      options.pushMissionEvent({
+        missionId: mission.id,
+        type: 'agent_update',
+        message: mission.scheduler.lastError,
+        actor: 'recovery',
+        evidence: { cleanup },
+      })
+    }
+    options.transitionMissionState(mission, 'completed', 'mission_completed', note, {
+      actor: 'recovery',
+      idempotencyKey: `${mission.id}:deadline-completed:${options.controlCenterStartedAtMs}`,
+      evidence: {
+        round: mission.scheduler.round,
+        jobs: mission.scheduler.jobs.length,
+        failedJobs: mission.scheduler.jobs.filter((job) => job.status === 'failed').length,
+        ...(cleanup ? { cleanup } : {}),
+      },
+    })
+    await Promise.resolve(options.recordMissionReport(mission)).catch((error) => {
+      options.pushGatewayLog('stderr', `mission recovery report write failed for ${mission.id}: ${redactedRecoveryDetail(error)}`)
+    })
+  }
+
   function failRehydratedMissionScheduler(
     mission: Mission,
     reason: string,
@@ -136,6 +273,7 @@ export function createMissionRecoveryService(options: MissionRecoveryServiceOpti
       missingCronIds: string[]
       disabledCronIds: string[]
       affectedJobIds: string[]
+      survivingCronIds?: string[]
     },
   ) {
     const completedAt = isoNow()
@@ -152,7 +290,65 @@ export function createMissionRecoveryService(options: MissionRecoveryServiceOpti
       idempotencyKey: `${mission.id}:cron-reconciliation-failed:${options.controlCenterStartedAtMs}`,
       evidence,
     })
-    options.recordMissionReport(mission)
+    const reportPromise = Promise.resolve(options.recordMissionReport(mission))
+      .catch((error) => {
+        options.pushGatewayLog('stderr', `mission recovery report write failed for ${mission.id}: ${redactedRecoveryDetail(error)}`)
+      })
+      .finally(() => {
+        if (pendingRecoveryReports.get(mission.id) === reportPromise) {
+          pendingRecoveryReports.delete(mission.id)
+        }
+      })
+    pendingRecoveryReports.set(mission.id, reportPromise)
+  }
+
+  async function cleanupSurvivingMissionCronJobs(mission: Mission): Promise<MissionCronCleanupSummary | null> {
+    const survivingJobs = mission.scheduler.jobs.filter(options.missionCronJobNeedsRecovery)
+    if (!survivingJobs.length) return null
+    const survivingCronIds = survivingJobs.map((job) => job.cronId)
+
+    if (!options.cleanupMissionCronJobs) {
+      for (const job of survivingJobs) {
+        options.clearShiftRuntimeStateForCronId(job.cronId)
+      }
+      return null
+    }
+
+    const cleanup = await options.cleanupMissionCronJobs(mission).catch((error) =>
+      missionRecoveryCleanupFailureSummary(error, survivingJobs))
+    const endedAt = isoNow()
+    for (const job of survivingJobs) {
+      if (job.status === 'removed' || job.status === 'disabled') {
+        job.endedAt ||= endedAt
+        job.summary ||= 'OpenClaw cron job removed after partial scheduler recovery failure.'
+      }
+    }
+    if (cleanup.failed > 0) {
+      const cleanupDetail = `orphan cron cleanup failed for ${cleanup.failed} surviving job(s)`
+      mission.scheduler.lastError = mission.scheduler.lastError
+        ? `${mission.scheduler.lastError}; ${cleanupDetail}`
+        : cleanupDetail
+    }
+    options.pushMissionEvent({
+      missionId: mission.id,
+      type: 'agent_update',
+      message: cleanup.failed > 0
+        ? `Orphan cron cleanup failed for ${cleanup.failed} surviving job(s) on ${mission.title}.`
+        : `Cleaned up ${survivingCronIds.length} surviving OpenClaw cron job(s) after partial scheduler recovery failure on ${mission.title}.`,
+      actor: 'recovery',
+      previousState: mission.lifecycleState,
+      nextState: mission.lifecycleState,
+      idempotencyKey: `${mission.id}:orphan-cron-cleanup:${options.controlCenterStartedAtMs}`,
+      evidence: {
+        survivingCronIds,
+        cleanup,
+      },
+    })
+    options.persistMissionRecord(mission, 'orphan-cron-cleanup')
+    await Promise.resolve(options.recordMissionReport(mission)).catch((error) => {
+      options.pushGatewayLog('stderr', `mission recovery report refresh failed for ${mission.id}: ${redactedRecoveryDetail(error)}`)
+    })
+    return cleanup
   }
 
   function reconcileRehydratedMissionCronJobs(mission: Mission, cronState: MissionCronReconciliationSnapshot) {
@@ -168,10 +364,14 @@ export function createMissionRecoveryService(options: MissionRecoveryServiceOpti
     const missingCronIds: string[] = []
     const disabledCronIds: string[] = []
     const affectedJobIds: string[] = []
+    const survivingCronIds: string[] = []
     const endedAt = isoNow()
 
     for (const job of pendingJobs) {
-      if (cronState.activeCronIds.has(job.cronId)) continue
+      if (cronState.activeCronIds.has(job.cronId)) {
+        survivingCronIds.push(job.cronId)
+        continue
+      }
       affectedJobIds.push(job.id)
       if (cronState.disabledCronIds.has(job.cronId)) {
         disabledCronIds.push(job.cronId)
@@ -196,6 +396,7 @@ export function createMissionRecoveryService(options: MissionRecoveryServiceOpti
       missingCronIds,
       disabledCronIds,
       affectedJobIds,
+      ...(survivingCronIds.length ? { survivingCronIds } : {}),
     })
     return false
   }
@@ -389,44 +590,56 @@ export function createMissionRecoveryService(options: MissionRecoveryServiceOpti
       options.missions.set(mission.id, mission)
       restored += 1
       if (mission.status === 'active') {
-        activeRestored += 1
-        const assignments = missionAssignmentsFromRecord(mission)
-        const activity = [`${isoNow()} | mission rehydrated from durable record`]
-        const schedulerRecovered = reconcileRehydratedMissionCronJobs(mission, cronState)
-        if (!schedulerRecovered) continue
-        const gatewaySessionReconciliation = await reconcileMissionGatewaySessions(mission)
-        if (shouldRecordMissionGatewaySessionReconciliation(gatewaySessionReconciliation)) {
+        try {
+          const activity = [`${isoNow()} | mission rehydrated from durable record`]
+          if (isMissionDeadlineElapsed(mission)) {
+            await completeExpiredRehydratedMission(mission, cronState, activity)
+            continue
+          }
+          const assignments = missionAssignmentsFromRecord(mission)
+          const schedulerRecovered = reconcileRehydratedMissionCronJobs(mission, cronState)
+          if (!schedulerRecovered) {
+            await pendingRecoveryReports.get(mission.id)
+            await cleanupSurvivingMissionCronJobs(mission)
+            continue
+          }
+          activeRestored += 1
+          const gatewaySessionReconciliation = await reconcileMissionGatewaySessions(mission)
+          if (shouldRecordMissionGatewaySessionReconciliation(gatewaySessionReconciliation)) {
+            options.pushMissionEvent({
+              missionId: mission.id,
+              type: 'agent_update',
+              message: missionGatewaySessionReconciliationMessage(mission, gatewaySessionReconciliation),
+              actor: 'recovery',
+              previousState: mission.lifecycleState,
+              nextState: mission.lifecycleState,
+              idempotencyKey: `${mission.id}:gateway-session-reconciled:${options.controlCenterStartedAtMs}`,
+              evidence: {
+                gatewaySessionReconciliation,
+              },
+            })
+            options.persistMissionRecord(mission, 'gateway-session-reconciled')
+          }
+          options.rehydrateRecurringMissionShifts(mission, cronState)
+          options.armRehydratedMissionTimer(mission, assignments, activity)
           options.pushMissionEvent({
             missionId: mission.id,
             type: 'agent_update',
-            message: missionGatewaySessionReconciliationMessage(mission, gatewaySessionReconciliation),
+            message: `Mission rehydrated from durable record: ${mission.title}`,
             actor: 'recovery',
             previousState: mission.lifecycleState,
             nextState: mission.lifecycleState,
-            idempotencyKey: `${mission.id}:gateway-session-reconciled:${options.controlCenterStartedAtMs}`,
+            idempotencyKey: `${mission.id}:rehydrated:${options.controlCenterStartedAtMs}`,
             evidence: {
-              gatewaySessionReconciliation,
+              schedulerStatus: mission.scheduler.status,
+              jobs: mission.scheduler.jobs.length,
+              cronReconciliation: cronState.available ? 'verified' : 'unavailable',
+              ...(cronState.error ? { cronReconciliationError: redactedRecoveryDetail(cronState.error) } : {}),
             },
           })
-          options.persistMissionRecord(mission, 'gateway-session-reconciled')
+        } catch (error) {
+          options.pushGatewayLog('stderr', `mission recovery failed for ${mission.id}: ${redactedRecoveryDetail(error)}`)
         }
-        options.rehydrateRecurringMissionShifts(mission, cronState)
-        options.armRehydratedMissionTimer(mission, assignments, activity)
-        options.pushMissionEvent({
-          missionId: mission.id,
-          type: 'agent_update',
-          message: `Mission rehydrated from durable record: ${mission.title}`,
-          actor: 'recovery',
-          previousState: mission.lifecycleState,
-          nextState: mission.lifecycleState,
-          idempotencyKey: `${mission.id}:rehydrated:${options.controlCenterStartedAtMs}`,
-          evidence: {
-            schedulerStatus: mission.scheduler.status,
-            jobs: mission.scheduler.jobs.length,
-            cronReconciliation: cronState.available ? 'verified' : 'unavailable',
-            ...(cronState.error ? { cronReconciliationError: redactedRecoveryDetail(cronState.error) } : {}),
-          },
-        })
       }
     }
     if (restored) {
@@ -435,8 +648,11 @@ export function createMissionRecoveryService(options: MissionRecoveryServiceOpti
   }
 
   return {
+    cleanupSurvivingMissionCronJobs,
+    completeExpiredRehydratedMission,
     failRehydratedMissionScheduler,
     hydrateMissionRecordsFromLedger,
+    isMissionDeadlineElapsed,
     missionAssignmentsFromRecord,
     missionGatewaySessionReconciliationMessage,
     reconcileMissionGatewaySessions,

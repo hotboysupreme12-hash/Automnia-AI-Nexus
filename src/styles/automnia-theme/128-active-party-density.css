@@ -1,6 +1,6 @@
-/* Active party density ---------------------------------------------------------
-   Keep the roster rail compact while giving each slot enough room for the
-   portrait, name, role, and rarity badge to read as a real card. */
+/* Active party ---------------------------------------------------------------
+   Give each occupied slot enough room for a readable portrait and a compact
+   agent profile. Rarity stays in the fine lines, portrait frame, and badge. */
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-head {
   min-height: 48px !important;
@@ -23,20 +23,20 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-pa
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-grid {
   grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
-  gap: 6px !important;
-  padding: 7px 12px 9px !important;
+  gap: 8px !important;
+  padding: 9px 12px 11px !important;
 }
 
 @media (min-width: 960px) {
   html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-grid {
-    width: 96%;
+    width: 100%;
   }
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot,
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card] {
-  height: 96px !important;
-  min-height: 96px !important;
+  height: 128px !important;
+  min-height: 128px !important;
   padding: 8px !important;
 }
 
@@ -46,38 +46,159 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-slot-content {
+  display: grid !important;
+  grid-template-columns: minmax(42px, 28%) 1px minmax(0, 1fr) !important;
   height: 100% !important;
-  min-height: 78px !important;
-  gap: 11px !important;
-  padding: 8px 28px 8px 10px !important;
+  min-height: 108px !important;
+  align-items: center !important;
+  gap: 8px !important;
+  box-sizing: border-box !important;
+  padding: 8px 28px 8px 9px !important;
+  border: 1px solid rgba(var(--dy-party-rgb, 148, 163, 184), .20) !important;
+  border-radius: 9px !important;
+  background:
+    radial-gradient(circle at 6% 0%, rgba(var(--dy-party-rgb, 148, 163, 184), .075), transparent 48%),
+    linear-gradient(135deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .008) 64%),
+    rgba(10, 11, 12, .34) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .045) !important;
+  animation: party-agent-arrive 420ms cubic-bezier(.2, .75, .25, 1) both;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-avatar,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-avatar {
+  width: 100% !important;
+  height: 86px !important;
+  min-width: 0 !important;
+  border: 1px solid rgba(var(--dy-party-rgb, 148, 163, 184), .30) !important;
+  border-radius: 7px !important;
+  background: rgba(8, 11, 14, .86) !important;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, .035),
+    0 10px 24px -18px rgba(var(--dy-party-rgb, 148, 163, 184), .62) !important;
+  animation: party-agent-portrait 520ms 80ms cubic-bezier(.2, .75, .25, 1) both;
+}
+
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-avatar img {
-  width: 54px !important;
-  height: 54px !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  filter: saturate(1.04) contrast(1.04) !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-slot-content p:first-child {
-  font-size: 13px !important;
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-agent-divider {
+  display: block !important;
+  width: 1px !important;
+  height: 78% !important;
+  border-radius: 1px !important;
+  background: linear-gradient(180deg, transparent, rgba(var(--dy-party-rgb, 148, 163, 184), .52) 22%, rgba(255, 255, 255, .16) 50%, rgba(var(--dy-party-rgb, 148, 163, 184), .40) 78%, transparent) !important;
+  transform-origin: center;
+  animation: party-agent-divider 420ms 120ms cubic-bezier(.2, .75, .25, 1) both;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-agent-info {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  min-width: 0 !important;
+  gap: 3px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-agent-kicker {
+  display: block !important;
+  overflow: hidden !important;
+  color: rgba(184, 198, 207, .66) !important;
+  font-size: 7px !important;
+  font-weight: 800 !important;
   line-height: 1.1 !important;
+  letter-spacing: .11em !important;
+  text-transform: uppercase !important;
+  animation: party-agent-copy-in 350ms 130ms ease-out both;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-slot-content p:nth-child(2) {
-  margin-top: 2px !important;
-  font-size: 10px !important;
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-agent-name {
+  display: block !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  color: #f3f6f7 !important;
+  font-size: 13px !important;
+  font-weight: 760 !important;
   line-height: 1.15 !important;
+  letter-spacing: -.015em !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  clip-path: inset(0 100% 0 0);
+  animation: party-agent-type 780ms 190ms steps(22, end) forwards;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-agent-role,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-agent-model {
+  display: block !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-agent-role {
+  color: rgba(207, 216, 221, .80) !important;
+  font-size: 9px !important;
+  font-weight: 600 !important;
+  line-height: 1.15 !important;
+  animation: party-agent-copy-in 360ms 330ms ease-out both;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-agent-model {
+  color: rgba(153, 169, 178, .67) !important;
+  font-size: 7px !important;
+  font-weight: 550 !important;
+  line-height: 1.15 !important;
+  animation: party-agent-copy-in 360ms 400ms ease-out both;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-agent-footer {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 4px !important;
+  min-width: 0 !important;
+  margin-top: 2px !important;
+  animation: party-agent-copy-in 360ms 470ms ease-out both;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-rarity-badge {
-  margin-top: 4px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: fit-content !important;
+  max-width: 58% !important;
   min-height: 15px !important;
-  padding: 2px 7px !important;
-  font-size: 11px !important;
-  line-height: 1.1 !important;
+  margin: 0 !important;
+  padding: 2px 6px !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(var(--dy-party-rgb, 148, 163, 184), .38) !important;
+  border-radius: 999px !important;
+  background: linear-gradient(180deg, rgba(var(--dy-party-rgb, 148, 163, 184), .14), rgba(var(--dy-party-rgb, 148, 163, 184), .055)) !important;
+  color: color-mix(in srgb, rgb(var(--dy-party-rgb, 148, 163, 184)) 70%, #f8fbff) !important;
+  font-size: 7px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-agent-level {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  color: rgba(153, 169, 178, .68) !important;
+  font-size: 7px !important;
+  font-weight: 650 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-slot-remove {
+  z-index: 6 !important;
   opacity: 1 !important;
   pointer-events: auto !important;
 }
@@ -124,8 +245,9 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-
 
 @media (pointer: coarse) {
   html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot:has(.party-slot-position) {
-    min-height: 104px !important;
+    min-height: 128px !important;
   }
+
   html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] :is(.party-slot-remove, .party-slot-position) {
     min-width: 44px !important;
     min-height: 44px !important;
@@ -144,27 +266,26 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-
     flex-wrap: nowrap !important;
     gap: 8px !important;
     overflow-x: auto !important;
-    padding: 7px 10px 9px !important;
+    padding: 9px 10px 11px !important;
   }
 
   html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot,
   html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card] {
-    flex: 0 0 clamp(184px, 56vw, 240px) !important;
+    flex: 0 0 clamp(205px, 58vw, 258px) !important;
     width: auto !important;
-    height: 84px !important;
-    min-height: 84px !important;
+    height: 122px !important;
+    min-height: 122px !important;
   }
 
   html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-slot-content {
-    min-height: 66px !important;
+    min-height: 102px !important;
+    grid-template-columns: minmax(42px, 27%) 1px minmax(0, 1fr) !important;
     gap: 9px !important;
-    padding: 7px 24px 7px 8px !important;
+    padding: 7px 25px 7px 8px !important;
   }
 
-  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-avatar,
-  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-avatar img {
-    width: 46px !important;
-    height: 46px !important;
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-avatar {
+    height: 82px !important;
   }
 }
 
@@ -176,24 +297,61 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-
 
   html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-grid {
     gap: 7px !important;
-    padding: 6px 10px 8px !important;
+    padding: 7px 10px 9px !important;
   }
 
   html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot,
   html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card] {
-    height: 84px !important;
-    min-height: 84px !important;
+    height: 116px !important;
+    min-height: 116px !important;
   }
 
   html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-slot-content {
-    min-height: 68px !important;
-    gap: 9px !important;
-    padding: 7px 26px 7px 8px !important;
+    min-height: 96px !important;
   }
 
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-avatar {
+    height: 76px !important;
+  }
+}
+
+@keyframes party-agent-arrive {
+  from { opacity: 0; transform: translateY(7px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes party-agent-portrait {
+  from { opacity: 0; transform: translateX(-5px) scale(.96); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes party-agent-divider {
+  from { opacity: 0; transform: scaleY(.12); }
+  to { opacity: 1; transform: scaleY(1); }
+}
+
+@keyframes party-agent-copy-in {
+  from { opacity: 0; transform: translateX(5px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes party-agent-type {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-slot-content,
   html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-avatar,
-  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-avatar img {
-    width: 48px !important;
-    height: 48px !important;
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-agent-divider,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-agent-kicker,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-agent-name,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-agent-role,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-agent-model,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-agent-footer {
+    animation: none !important;
+    clip-path: none !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
 }

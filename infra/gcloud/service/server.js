@@ -128,7 +128,11 @@ const hostedResponseCache = new Map();
 const hostedResponseCacheTtlMs = Math.max(60_000, Math.min(30 * 60_000, Number(process.env.AUTOMNIA_RELAY_RESPONSE_CACHE_TTL_MS || 10 * 60_000) || 10 * 60_000));
 const hostedResponseCacheMaxEntries = Math.max(32, Math.min(1_024, Number(process.env.AUTOMNIA_RELAY_RESPONSE_CACHE_MAX_ENTRIES || 256) || 256));
 
-app.use(['/api', '/v1'], express.json({ limit: '4mb' }));
+app.use('/api', express.json({ limit: '4mb' }));
+// OpenAI-compatible requests can contain base64 images. The hosted relay
+// validates and budgets those images after parsing, so the JSON parser must
+// allow their encoded size while staying below Cloud Run's request ceiling.
+app.use('/v1', express.json({ limit: '30mb' }));
 
 function generateLicenseKey(tierPrefix = 'AUT-NEXUS') {
   const segment = () => crypto.randomBytes(2).toString('hex').toUpperCase();
@@ -2263,7 +2267,11 @@ function vertexInlineImagePart(part) {
   if (!part || typeof part !== 'object') return null;
   let mimeType = '';
   let data = '';
-  const imageUrl = part.image_url && typeof part.image_url === 'object' ? part.image_url.url : undefined;
+  const imageUrl = typeof part.image_url === 'string'
+    ? part.image_url
+    : part.image_url && typeof part.image_url === 'object'
+      ? part.image_url.url
+      : undefined;
   const source = part.source && typeof part.source === 'object' ? part.source : undefined;
   if (typeof imageUrl === 'string' && imageUrl.startsWith('data:')) {
     const match = imageUrl.match(/^data:([^;,]+);base64,(.+)$/s);
@@ -2278,8 +2286,25 @@ function vertexInlineImagePart(part) {
     mimeType = typeof part.mime_type === 'string' ? part.mime_type : typeof part.mimeType === 'string' ? part.mimeType : '';
     data = part.data;
   }
-  if (!mimeType || !data || !/^image\/(?:png|jpe?g|webp|gif)$/i.test(mimeType)) return null;
-  return { inlineData: { mimeType, data } };
+  if (!mimeType && !data && !imageUrl && !source && part.type !== 'input_image' && part.type !== 'image_url') return null;
+  const normalizedMimeType = mimeType.trim().toLowerCase() === 'image/jpg' ? 'image/jpeg' : mimeType.trim().toLowerCase();
+  if (!normalizedMimeType || !data || !/^image\/(?:png|jpeg|webp|gif|heic|heif)$/.test(normalizedMimeType)) {
+    throw Object.assign(new Error('This image format or image URL is not supported by the hosted relay. Reattach the image as a PNG, JPEG, WebP, HEIC, or HEIF file.'), {
+      status: 400,
+      publicMessage: 'This image format or image URL is not supported by the hosted relay. Reattach the image as a PNG, JPEG, WebP, HEIC, or HEIF file.',
+      publicType: 'invalid_request_error',
+      publicCode: 'unsupported_image_format',
+    });
+  }
+  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(data)) {
+    throw Object.assign(new Error('An image attachment has invalid base64 data. Reattach the image and retry.'), {
+      status: 400,
+      publicMessage: 'An image attachment has invalid base64 data. Reattach the image and retry.',
+      publicType: 'invalid_request_error',
+      publicCode: 'invalid_image_data',
+    });
+  }
+  return { inlineData: { mimeType: normalizedMimeType, data } };
 }
 
 function vertexPartsFromOpenAiContent(content) {
@@ -4041,4 +4066,18 @@ app.post('/admin/email-delivery/retry', express.json({ limit: '32kb' }), require
 });
 
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
+app.use((error, req, res, next) => {
+  if (res.headersSent) return next(error);
+  if (error?.type === 'entity.too.large') {
+    if (req.path.startsWith('/v1/')) {
+      return openAiError(res, 413, 'The request is too large. Reduce the number or size of attachments and retry.', 'invalid_request_error', 'request_too_large');
+    }
+    return res.status(413).json({ error: 'The request body is too large.' });
+  }
+  if (error?.type === 'entity.parse.failed') {
+    if (req.path.startsWith('/v1/')) return openAiError(res, 400, 'The request body is not valid JSON.', 'invalid_request_error', 'invalid_json');
+    return res.status(400).json({ error: 'The request body is not valid JSON.' });
+  }
+  return next(error);
+});
 app.listen(port, () => console.log(`Listening on ${port}`));

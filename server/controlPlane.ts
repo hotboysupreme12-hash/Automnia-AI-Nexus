@@ -2777,8 +2777,11 @@ const activeOpenClawRuns = new Map<string, OpenClawRunRecord>()
 const recentOpenClawRuns: OpenClawRunRecord[] = []
 
 const missionRecoveryService = createMissionRecoveryService({
+  cleanupMissionCronJobs: (mission) => missionSchedulerService.cleanupMissionCronJobs(mission),
   clearMissionController: (missionId) => missionSchedulerService.clearMissionController(missionId),
   clearShiftRuntimeStateForCronId,
+  completeCronMission: (mission, status, note, assignments, activity) =>
+    missionSchedulerService.completeCronMission(mission, status, note, assignments, activity),
   controlCenterStartedAtMs: CONTROL_CENTER_STARTED_AT_MS,
   ensureGatewayClient: ensureControlCenterGatewayClient,
   getRuntimeRunStatus: (id) => {
@@ -4783,6 +4786,20 @@ function handleControlCenterShutdown(signalName: 'SIGTERM' | 'SIGINT' | 'SIGHUP'
 
 process.on('SIGTERM', () => handleControlCenterShutdown('SIGTERM'))
 process.on('SIGINT', () => handleControlCenterShutdown('SIGINT'))
+
+// Gateway reconnects can reject a fire-and-forget request while its WebSocket
+// is being intentionally restarted. Keep that expected transport closure from
+// taking down the whole Control Center; unrelated unhandled rejections retain
+// Node's normal fatal behavior.
+process.on('unhandledRejection', (reason: unknown) => {
+  const message = reason instanceof Error ? reason.message.trim() : String(reason).trim()
+  if (/^gateway client disconnected: (?:service restart|gateway-shutdown)$/iu.test(message)) {
+    console.warn('[gateway] ignored an unhandled request rejection during Gateway reconnect')
+    return
+  }
+  throw reason
+})
+
 process.on('SIGHUP', () => handleControlCenterShutdown('SIGHUP'))
 process.on('exit', () => {
   handleControlCenterShutdown('process exit')
@@ -13190,6 +13207,205 @@ function gatewayConfigGetPayload(value: unknown): { config: OpenClawConfigFile |
   }
 }
 
+type TelegramSettingPatchField = {
+  path: string
+  encode: (value: unknown) => unknown
+}
+
+const TELEGRAM_SETTING_PATCH_FIELDS: Record<string, TelegramSettingPatchField> = {
+  nativeCommands: { path: 'channels.telegram.commands.native', encode: (value) => telegramNativeCommandValue(value, 'nativeCommands') },
+  nativeSkills: { path: 'channels.telegram.commands.nativeSkills', encode: (value) => telegramNativeCommandValue(value, 'nativeSkills') },
+  streamingMode: { path: 'channels.telegram.streaming.mode', encode: (value) => telegramEnumValue(value, 'streamingMode', ['off', 'partial', 'block', 'progress']) },
+  streamChunkMode: { path: 'channels.telegram.streaming.chunkMode', encode: (value) => telegramEnumValue(value, 'streamChunkMode', ['length', 'newline']) },
+  toolProgress: { path: 'channels.telegram.streaming.preview.toolProgress', encode: (value) => telegramBooleanValue(value, 'toolProgress') },
+  linkPreview: { path: 'channels.telegram.linkPreview', encode: (value) => telegramBooleanValue(value, 'linkPreview') },
+  replyToMode: { path: 'channels.telegram.replyToMode', encode: (value) => telegramEnumValue(value, 'replyToMode', ['off', 'first', 'all']) },
+  inlineButtons: { path: 'channels.telegram.capabilities.inlineButtons', encode: (value) => telegramEnumValue(value, 'inlineButtons', ['off', 'dm', 'group', 'all', 'allowlist']) },
+  richMessages: { path: 'channels.telegram.richMessages', encode: (value) => telegramBooleanValue(value, 'richMessages') },
+  widgets: { path: 'channels.telegram.widgets', encode: (value) => telegramBooleanValue(value, 'widgets') },
+  markdownTableMode: { path: 'channels.telegram.markdown.tables', encode: (value) => telegramEnumValue(value, 'markdownTableMode', ['off', 'bullets', 'code', 'block']) },
+  responsePrefix: { path: 'channels.telegram.responsePrefix', encode: (value) => telegramTextValue(value, 'responsePrefix', 200) },
+  dmPolicy: { path: 'channels.telegram.dmPolicy', encode: (value) => telegramEnumValue(value, 'dmPolicy', ['pairing', 'allowlist', 'open', 'disabled']) },
+  groupPolicy: { path: 'channels.telegram.groupPolicy', encode: (value) => telegramEnumValue(value, 'groupPolicy', ['open', 'allowlist', 'disabled']) },
+  historyLimit: { path: 'channels.telegram.historyLimit', encode: (value) => telegramIntegerValue(value, 'historyLimit', 0, 200) },
+  dmHistoryLimit: { path: 'channels.telegram.dmHistoryLimit', encode: (value) => telegramIntegerValue(value, 'dmHistoryLimit', 0, 200) },
+  textChunkLimit: { path: 'channels.telegram.textChunkLimit', encode: (value) => telegramIntegerValue(value, 'textChunkLimit', 100, 4096) },
+  mediaMaxMb: { path: 'channels.telegram.mediaMaxMb', encode: (value) => telegramIntegerValue(value, 'mediaMaxMb', 1, 2000) },
+  errorPolicy: { path: 'channels.telegram.errorPolicy', encode: (value) => telegramEnumValue(value, 'errorPolicy', ['always', 'once', 'silent']) },
+  silentErrorReplies: { path: 'channels.telegram.silentErrorReplies', encode: (value) => telegramBooleanValue(value, 'silentErrorReplies') },
+  configWrites: { path: 'channels.telegram.configWrites', encode: (value) => telegramBooleanValue(value, 'configWrites') },
+  sendMessage: { path: 'channels.telegram.actions.sendMessage', encode: (value) => telegramBooleanValue(value, 'sendMessage') },
+  editMessage: { path: 'channels.telegram.actions.editMessage', encode: (value) => telegramBooleanValue(value, 'editMessage') },
+  deleteMessage: { path: 'channels.telegram.actions.deleteMessage', encode: (value) => telegramBooleanValue(value, 'deleteMessage') },
+  reactions: { path: 'channels.telegram.actions.reactions', encode: (value) => telegramBooleanValue(value, 'reactions') },
+  sticker: { path: 'channels.telegram.actions.sticker', encode: (value) => telegramBooleanValue(value, 'sticker') },
+  poll: { path: 'channels.telegram.actions.poll', encode: (value) => telegramBooleanValue(value, 'poll') },
+  createForumTopic: { path: 'channels.telegram.actions.createForumTopic', encode: (value) => telegramBooleanValue(value, 'createForumTopic') },
+  editForumTopic: { path: 'channels.telegram.actions.editForumTopic', encode: (value) => telegramBooleanValue(value, 'editForumTopic') },
+  joinIntro: { path: 'channels.telegram.joinIntro', encode: (value) => telegramBooleanValue(value, 'joinIntro') },
+  autoTopicLabel: { path: 'channels.telegram.autoTopicLabel', encode: (value) => telegramBooleanValue(value, 'autoTopicLabel') },
+  networkAutoSelectFamily: { path: 'channels.telegram.network.autoSelectFamily', encode: (value) => value === 'on' || value === 'off' ? value === 'on' : telegramInvalidSettingValue('networkAutoSelectFamily') },
+  networkDnsResultOrder: { path: 'channels.telegram.network.dnsResultOrder', encode: (value) => telegramEnumValue(value, 'networkDnsResultOrder', ['auto', 'ipv4first', 'verbatim']) },
+  reactionNotifications: { path: 'channels.telegram.reactionNotifications', encode: (value) => telegramEnumValue(value, 'reactionNotifications', ['off', 'own', 'all']) },
+  reactionLevel: { path: 'channels.telegram.reactionLevel', encode: (value) => telegramEnumValue(value, 'reactionLevel', ['off', 'ack', 'minimal', 'extensive']) },
+  ackReactionScope: { path: 'messages.ackReactionScope', encode: (value) => telegramEnumValue(value, 'ackReactionScope', ['off', 'direct', 'all', 'group-all', 'group-mentions']) },
+}
+
+function telegramInvalidSettingValue(key: string): never {
+  throw new Error(`Invalid Telegram setting value for ${key}. Refresh the settings and try again.`)
+}
+
+function telegramEnumValue(value: unknown, key: string, choices: readonly string[]): string {
+  if (typeof value === 'string' && choices.includes(value)) return value
+  return telegramInvalidSettingValue(key)
+}
+
+function telegramBooleanValue(value: unknown, key: string): boolean {
+  if (typeof value === 'boolean') return value
+  return telegramInvalidSettingValue(key)
+}
+
+function telegramIntegerValue(value: unknown, key: string, minimum: number, maximum: number): number {
+  if (typeof value === 'number' && Number.isInteger(value) && value >= minimum && value <= maximum) return value
+  return telegramInvalidSettingValue(key)
+}
+
+function telegramTextValue(value: unknown, key: string, maximum: number): string {
+  // eslint-disable-next-line no-control-regex -- Reject ASCII and C1 control characters in settings text.
+  if (typeof value === 'string' && value.length <= maximum && !/[\u0000-\u001f\u007f-\u009f]/u.test(value)) return value
+  return telegramInvalidSettingValue(key)
+}
+
+function telegramNativeCommandValue(value: unknown, key: string): boolean | 'auto' {
+  if (value === 'auto') return 'auto'
+  if (value === 'on') return true
+  if (value === 'off') return false
+  return telegramInvalidSettingValue(key)
+}
+
+function setTelegramConfigPatchPath(patch: Record<string, unknown>, dottedPath: string, value: unknown) {
+  const segments = dottedPath.split('.')
+  let current = patch
+  for (const [index, segment] of segments.entries()) {
+    if (index === segments.length - 1) {
+      current[segment] = value
+      return
+    }
+    if (!isLooseRecord(current[segment])) current[segment] = {}
+    current = current[segment] as Record<string, unknown>
+  }
+}
+
+function telegramSettingsConfigPayload(settings: Record<string, unknown>, changedKeys: string[]) {
+  const keys = Array.from(new Set(changedKeys))
+  if (!keys.length || keys.length > Object.keys(TELEGRAM_SETTING_PATCH_FIELDS).length) {
+    throw new Error('Choose at least one valid Telegram setting to save.')
+  }
+  const patch: Record<string, unknown> = {}
+  const batch: Array<{ path: string; value: unknown }> = []
+  for (const key of keys) {
+    const field = TELEGRAM_SETTING_PATCH_FIELDS[key]
+    if (!field) throw new Error(`Unsupported Telegram setting: ${key}`)
+    const value = field.encode(settings[key])
+    setTelegramConfigPatchPath(patch, field.path, value)
+    batch.push({ path: field.path, value })
+  }
+  const replacePaths: string[] = []
+  if (keys.includes('dmPolicy') && settings.dmPolicy === 'open') {
+    setTelegramConfigPatchPath(patch, 'channels.telegram.allowFrom', ['*'])
+    batch.push({ path: 'channels.telegram.allowFrom', value: ['*'] })
+    replacePaths.push('channels.telegram.allowFrom')
+  }
+  return { patch, batch, replacePaths }
+}
+
+const TELEGRAM_SETTINGS_GATEWAY_TIMEOUT_MS = 90_000
+
+/**
+ * Let OpenClaw's config reload planner choose the smallest safe runtime scope.
+ * Telegram option changes can reload the Telegram channel while the Gateway
+ * process stays up; message policy changes may publish without a reconnect.
+ * Only use a managed Gateway restart when no live Gateway is available or the
+ * Gateway confirms that the committed write could not be applied in place.
+ */
+async function applyTelegramSettingsViaGateway(
+  settings: Record<string, unknown>,
+  changedKeys: string[],
+): Promise<{ ok: boolean; detail: string; elapsedMs: number; restartPending?: boolean }> {
+  const startedAt = Date.now()
+  try {
+    const { patch, batch, replacePaths } = telegramSettingsConfigPayload(settings, changedKeys)
+
+    if (!(await isGatewayHealthy().catch(() => false))) {
+      pushGatewayLog('lifecycle', `Saving ${new Set(changedKeys).size} Telegram setting(s) through OpenClaw's offline config writer.`)
+      const offlineWrite = await runOpenClaw(
+        ['config', 'set', '--batch-json', JSON.stringify(batch)],
+        30_000,
+      )
+      if (offlineWrite.code !== 0) {
+        throw new Error(compactOpenClawCommandOutput(offlineWrite, 'OpenClaw could not save Telegram settings while the Gateway was unavailable.'))
+      }
+      openclawConfigCache = null
+      invalidateRuntimeStatusCache()
+      const restart = schedulePluginGatewayRestart()
+      pushGatewayLog('lifecycle', `Telegram settings were saved while the Gateway was unavailable; ${restart.detail}.`)
+      return {
+        ok: true,
+        restartPending: true,
+        detail: 'OpenClaw saved the settings while the Gateway was unavailable. A managed Gateway restart was queued to apply them.',
+        elapsedMs: Date.now() - startedAt,
+      }
+    }
+
+    pushGatewayLog('lifecycle', `Applying ${new Set(changedKeys).size} Telegram setting(s) through the managed Gateway config reload.`)
+    const timeoutSignal = () => AbortSignal.timeout(TELEGRAM_SETTINGS_GATEWAY_TIMEOUT_MS)
+    const state = await ensureControlCenterGatewayClient(timeoutSignal())
+    const current = await state.client.request('config.get', {}, {
+      timeoutMs: TELEGRAM_SETTINGS_GATEWAY_TIMEOUT_MS,
+      signal: timeoutSignal(),
+    })
+    const { hash } = gatewayConfigGetPayload(current)
+    if (!hash) throw new Error('OpenClaw did not return a config revision. Refresh Telegram settings and try again.')
+
+    const payload = await state.client.request('config.patch', {
+      raw: JSON.stringify(patch),
+      baseHash: hash,
+      ...(replacePaths.length ? { replacePaths } : {}),
+      note: 'Automnia Telegram settings',
+    }, {
+      timeoutMs: TELEGRAM_SETTINGS_GATEWAY_TIMEOUT_MS,
+      signal: timeoutSignal(),
+    })
+
+    openclawConfigCache = null
+    invalidateRuntimeStatusCache()
+    const restartPending = isLooseRecord(payload) && payload.restartPending === true
+    const detail = restartPending
+      ? 'OpenClaw accepted the Telegram settings and scheduled the Gateway restart required to apply them.'
+      : 'OpenClaw applied the Telegram settings through its managed config reload.'
+    pushGatewayLog('lifecycle', `${detail} (${Date.now() - startedAt}ms).`)
+    return { ok: true, restartPending, detail, elapsedMs: Date.now() - startedAt }
+  } catch (error) {
+    const record = isLooseRecord(error) ? error : {}
+    const details = isLooseRecord(record.details) ? record.details : null
+    const persistedConfig = details && isLooseRecord(details.persistedConfig)
+    if (persistedConfig) {
+      openclawConfigCache = null
+      invalidateRuntimeStatusCache()
+      const restart = schedulePluginGatewayRestart()
+      const detail = `OpenClaw saved the Telegram settings but could not finish the hot reload. ${restart.detail}; the managed Gateway will apply the committed settings after active work drains.`
+      pushGatewayLog('lifecycle', detail, 'warning')
+      return { ok: true, restartPending: true, detail, elapsedMs: Date.now() - startedAt }
+    }
+
+    const code = typeof record.gatewayCode === 'string' ? `${record.gatewayCode}: ` : ''
+    const message = error instanceof Error ? error.message : String(error)
+    const detail = redactSensitiveText(`${code}${message}`)
+    pushGatewayLog('stderr', `Telegram settings config reload failed: ${detail}`)
+    return { ok: false, detail, elapsedMs: Date.now() - startedAt }
+  }
+}
+
 function billingRouteModelSnapshot(config: OpenClawConfigFile | null | undefined) {
   return JSON.stringify({
     providerConfigured: Boolean(config?.models?.providers?.[AUTOMNIA_OPENCLAW_PROVIDER_ID]),
@@ -18777,6 +18993,7 @@ registerCommandConsoleFileRoutes(app, {
 })
 
 registerOpenClawCommandRoutes(app, {
+  applyTelegramSettings: applyTelegramSettingsViaGateway,
   activeShifts: () => Array.from(activeShifts.values()),
   getPartyMembers,
   invalidateRuntimeStatusCache,
@@ -20421,16 +20638,21 @@ controlServer = app.listen(PORT, '127.0.0.1', () => {
   // resume in the background once the local desktop API is available.
   scheduleLegacyRuntimeLedgerImport()
   void (async () => {
-    await hydrateRecentOpenClawRunsFromLedger()
-    await hydrateMissionRecordsFromLedger()
-    rehydrateControlCenterShiftRuntimeStateFromCronDb()
-  })().catch((error) => {
-    console.warn('[startup-recovery] runtime, mission, or shift hydration skipped:', error)
-  })
+    try {
+      await hydrateRecentOpenClawRunsFromLedger()
+      await hydrateMissionRecordsFromLedger()
+      rehydrateControlCenterShiftRuntimeStateFromCronDb()
+    } catch (error) {
+      console.warn('[startup-recovery] runtime, mission, or shift hydration skipped:', error)
+    } finally {
+      if (controlServer && !controlServerClosing) {
+        startMissionCronExpirySweep()
+      }
+    }
+  })()
   void sweepOpenClawSessionLocks('app startup', { minIntervalMs: 0, minAgeMs: 0 }).catch((error) => {
     console.warn('[session-lock] startup cleanup skipped:', error)
   })
-  startMissionCronExpirySweep()
   void ensureLocalAuthStoreLoaded()
     .then(async (store) => {
       if (!STARTUP_AUTH_PROFILE_SYNC) {

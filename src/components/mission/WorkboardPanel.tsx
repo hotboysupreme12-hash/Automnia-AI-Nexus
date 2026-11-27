@@ -4,6 +4,7 @@ import {
   createWorkboardTask,
   fetchWorkboardTasks,
   updateWorkboardTask,
+  type WorkboardExecutionState,
   type WorkboardTask,
   type WorkboardTaskStatus,
 } from '../../api/workboard'
@@ -16,6 +17,17 @@ const statusLabel: Record<WorkboardTaskStatus, string> = {
   in_progress: 'In progress',
   completed: 'Completed',
   cancelled: 'Cancelled',
+}
+
+const executionStateBadgeLabel: Partial<Record<WorkboardExecutionState, string>> = {
+  waiting_for_dependency: 'Waiting for dependency',
+  waiting_for_review: 'Awaiting review',
+  waiting_for_integration: 'Ready for integration',
+  blocked: 'Blocked',
+  break: 'On break',
+  checkpointing: 'Checkpointing',
+  recovering: 'Recovering',
+  failed: 'Failed',
 }
 
 function leaseStatusSummary(task: WorkboardTask): { label: string; expired: boolean } | null {
@@ -116,11 +128,20 @@ export function WorkboardPanel({ missions }: WorkboardPanelProps) {
     )
   }
 
+  const acknowledgeHandoff = (task: WorkboardTask) => {
+    if (!task.handoff || task.handoff.status !== 'pending') return
+    const receiver = task.handoff.toAgentId
+    void runMutation(
+      () => updateWorkboardTask(task.id, { acknowledgeHandoff: true, actorAgentId: receiver }),
+      `Handoff acknowledged by ${receiver}.`,
+    )
+  }
+
   const addClaimedFile = (task: WorkboardTask) => {
     const draft = (fileClaimDrafts[task.id] || '').trim()
     if (!draft) return
     const nextFiles = Array.from(new Set([...(task.claimedFiles || []), draft]))
-    const actorAgentId = activeLeaseActor(task)
+    const actorAgentId = activeLeaseActor(task) || task.assignedAgentId || 'operator'
     void runMutation(() => updateWorkboardTask(task.id, { claimedFiles: nextFiles, actorAgentId }), 'Exclusive file lock claimed.')
       .then((saved) => { if (saved) setFileClaimDrafts((current) => ({ ...current, [task.id]: '' })) })
   }
@@ -164,14 +185,28 @@ export function WorkboardPanel({ missions }: WorkboardPanelProps) {
           const leaseInfo = leaseStatusSummary(task)
           const claimedFiles = task.claimedFiles || []
           const isTerminal = task.status === 'completed' || task.status === 'cancelled'
+          const execBadge = task.executionState ? executionStateBadgeLabel[task.executionState] : undefined
           return <li key={task.id} className="rounded-xl border border-white/[0.08] bg-black/20 p-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <h4 className="break-words font-semibold text-slate-100">{task.title}</h4>
-                <p className="mt-1 text-xs text-slate-400">{task.missionId ? `Mission: ${missionNames.get(task.missionId) || task.missionId}` : 'Unlinked task'} · {statusLabel[task.status]}</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  {task.missionId ? `Mission: ${missionNames.get(task.missionId) || task.missionId}` : 'Unlinked task'} · {statusLabel[task.status]}
+                  {execBadge ? ` · ${execBadge}` : ''}
+                </p>
                 {leaseInfo && (
                   <p className={`mt-1 text-[11px] font-medium ${leaseInfo.expired ? 'text-amber-300' : 'text-cyan-200/90'}`}>
                     {leaseInfo.label}
+                  </p>
+                )}
+                {task.waitingDependency && (
+                  <p className="mt-1 text-[11px] text-amber-200">
+                    Waiting on {task.waitingDependency.dependencyTaskId}: {task.waitingDependency.deliverable}
+                  </p>
+                )}
+                {task.handoff && (
+                  <p className="mt-1 text-[11px] text-indigo-200">
+                    Handoff {task.handoff.fromAgentId} → {task.handoff.toAgentId} ({task.handoff.status}): {task.handoff.nextAction}
                   </p>
                 )}
                 {task.description && <p className="mt-2 whitespace-pre-wrap text-sm text-slate-300">{task.description}</p>}
@@ -204,6 +239,9 @@ export function WorkboardPanel({ missions }: WorkboardPanelProps) {
             <div className="mt-3 flex flex-wrap gap-2">
               {task.status === 'open' && <button type="button" disabled={busy || blockedBy.length > 0} onClick={() => setStatus(task, 'in_progress')} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-slate-200 disabled:opacity-40">Start</button>}
               {task.status === 'in_progress' && <button type="button" disabled={busy || blockedBy.length > 0} onClick={() => setStatus(task, 'completed')} className="rounded-lg border border-emerald-200/20 px-2.5 py-1.5 text-xs text-emerald-100 disabled:opacity-40">Complete</button>}
+              {!isTerminal && task.handoff?.status === 'pending' && (
+                <button type="button" disabled={busy} onClick={() => acknowledgeHandoff(task)} className="rounded-lg border border-indigo-200/25 px-2.5 py-1.5 text-xs text-indigo-100 disabled:opacity-40">Acknowledge handoff</button>
+              )}
               {!isTerminal && (task.leaseOwnerAgentId || task.assignedAgentId) && (
                 <button type="button" disabled={busy} onClick={() => renewHeartbeat(task)} className="rounded-lg border border-cyan-200/20 px-2.5 py-1.5 text-xs text-cyan-100 disabled:opacity-40">Renew lease</button>
               )}

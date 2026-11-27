@@ -36,9 +36,27 @@ const SAFE_DIAGNOSTIC_PAYLOAD_KEYS = new Set([
   'toolName',
   'toolAction',
   'toolInput',
+  'toolInputTruncated',
   'toolOutput',
+  'toolOutputTruncated',
+  'commandTruncated',
+  'commandOutputTruncated',
   'transport',
 ])
+
+const ACTIVITY_PAYLOAD_TEXT_LIMITS: Record<string, number> = {
+  command: 2_000,
+  commandOutput: 8_000,
+  toolInput: 4_000,
+  toolOutput: 8_000,
+}
+
+const ACTIVITY_PAYLOAD_TRUNCATION_FLAGS: Record<string, string> = {
+  command: 'commandTruncated',
+  commandOutput: 'commandOutputTruncated',
+  toolInput: 'toolInputTruncated',
+  toolOutput: 'toolOutputTruncated',
+}
 
 export function compactDiagnosticText(value: string, max = 140): string {
   const clean = value.replace(/\s+/g, ' ').trim()
@@ -91,7 +109,16 @@ export function safeDiagnosticPayload(raw: Record<string, unknown> = {}): Record
   const payload: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(raw)) {
     if (!SAFE_DIAGNOSTIC_PAYLOAD_KEYS.has(key)) continue
-    if (typeof value === 'string') payload[key] = redactDiagnosticText(value, 180)
+    if (typeof value === 'string') {
+      const limit = ACTIVITY_PAYLOAD_TEXT_LIMITS[key]
+      if (limit) {
+        const redacted = applyDiagnosticRedactions(value)
+        const truncated = redacted.length > limit
+        payload[key] = truncated ? redacted.slice(0, limit) : redacted
+        const truncationFlag = ACTIVITY_PAYLOAD_TRUNCATION_FLAGS[key]
+        if (truncated && truncationFlag) payload[truncationFlag] = true
+      } else payload[key] = redactDiagnosticText(value, 180)
+    }
     else if (typeof value === 'number' || typeof value === 'boolean' || value === null) payload[key] = value
   }
   return Object.keys(payload).length ? payload : undefined

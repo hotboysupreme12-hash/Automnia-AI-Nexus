@@ -4,6 +4,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { useNexusStore } from '../../store/nexusStore'
 import type { OpenClawAgent } from '../../types/nexus'
 import { agentPortraitSrc } from '../../utils/portrait'
+import { describeAgentModel } from '../../utils/agentModelDisplay'
 import { TeamPresets } from './TeamPresets'
 
 const PARTY_SLOT_COUNT = 6
@@ -88,7 +89,7 @@ export function ActivePartyStrip({ toolbar }: ActivePartyStripProps) {
       className="overflow-hidden rounded-xl border border-white/[0.08] bg-[linear-gradient(180deg,rgba(15,23,42,0.72),rgba(2,6,23,0.92))] shadow-2xl shadow-black/25"
     >
       <p className="sr-only" role="status" aria-live="polite">{partyAnnouncement}</p>
-      <div className="active-party-head flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] bg-white/[0.02] px-4 py-3">
+      <div className="active-party-head flex flex-wrap items-center justify-between gap-3 bg-white/[0.02] px-4 py-3">
         <div>
           <h3 className="text-[13px] font-bold tracking-[-0.01em] text-slate-100">Active Party</h3>
           <p className="mt-0.5 text-[10px] font-medium text-slate-500/80">
@@ -125,6 +126,7 @@ export function ActivePartyStrip({ toolbar }: ActivePartyStripProps) {
           const portraitSrc = agent ? portraitSrcForAgent(agent) : ''
           const portraitKey = agent && portraitSrc ? `${agent.id}::${portraitSrc}` : ''
           const portraitFailed = portraitKey ? failedPortraitKeys.has(portraitKey) : false
+          const modelDetails = agent ? describeAgentModel(agent.effectiveModel?.primary || agent.model?.primary) : null
 
           return (
             <div
@@ -211,7 +213,8 @@ export function ActivePartyStrip({ toolbar }: ActivePartyStripProps) {
 
               {agent ? (
                 <div
-                  className="party-slot-content pointer-events-auto flex w-full items-center gap-3 rounded-lg px-3 py-2.5 ring-1 ring-white/[0.06]"
+                  key={agent.id}
+                  className="party-slot-content pointer-events-auto relative z-[2] grid w-full min-w-0 grid-cols-[minmax(0,28%)_1px_minmax(0,1fr)] items-center gap-2.5 rounded-lg"
                   draggable={!missionRunning}
                   onDragStart={(event) => {
                     event.dataTransfer.setData('text/party-index', String(slot))
@@ -219,7 +222,7 @@ export function ActivePartyStrip({ toolbar }: ActivePartyStripProps) {
                     event.dataTransfer.effectAllowed = 'move'
                   }}
                 >
-                  <div className={`active-party-avatar relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-slate-900 ring-1 ${rs?.ring ?? 'ring-white/10'}`}>
+                  <div className={`active-party-avatar relative min-w-0 overflow-hidden rounded-lg bg-slate-900 ring-1 ${rs?.ring ?? 'ring-white/10'}`}>
                     {portraitSrc && !portraitFailed ? (
                       <img
                         src={portraitSrc}
@@ -239,14 +242,27 @@ export function ActivePartyStrip({ toolbar }: ActivePartyStripProps) {
                       <AvatarFallback name={agent.name} />
                     )}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="party-agent-name truncate text-[12px] font-bold tracking-[-0.01em] text-slate-100">{agent.name}</p>
-                    <p className="truncate text-[9px] font-medium text-slate-400" title={agent.role} aria-label={`Role: ${agent.role}`}>{agent.role}</p>
-                    {agent.rarity && (
-                      <span className={`party-rarity-badge mt-0.5 inline-block rounded-full border px-1.5 py-px text-[7px] font-bold uppercase tracking-[0.10em] ${rarityClass}`}>
-                        {agent.rarity === 'legendary' ? '★ ' : ''}{agent.rarity}{agent.rarity === 'legendary' ? ' ★' : ''}
+                  <span className="party-agent-divider" aria-hidden="true" />
+                  <div className="party-agent-info min-w-0">
+                    <span className="party-agent-kicker truncate" title={`${agent.behaviorProfile} · ${agent.className}`}>
+                      {agent.behaviorProfile} · {agent.className}
+                    </span>
+                    <p className="party-agent-name truncate" title={agent.name}>{agent.name}</p>
+                    <p className="party-agent-role truncate" title={agent.role} aria-label={`Role: ${agent.role}`}>{agent.role}</p>
+                    <p className="party-agent-model truncate" title={modelDetails?.title || 'Model not configured'}>
+                      {modelDetails?.cardLabel || 'Model not configured'}
+                    </p>
+                    <div className="party-agent-footer">
+                      {agent.rarity && (
+                        <span className={`party-rarity-badge ${rarityClass}`}>
+                          {agent.rarity === 'legendary' ? '★ ' : ''}{agent.rarity}{agent.rarity === 'legendary' ? ' ★' : ''}
+                        </span>
+                      )}
+                      <span className="party-agent-level">Lv {agent.level} · {agent.unlockedSkills.length} skills</span>
+                      <span className="party-agent-slot-number" aria-label={`Party slot ${slot + 1}`} title={`Party slot ${slot + 1}`}>
+                        {slot + 1}
                       </span>
-                    )}
+                    </div>
                   </div>
                 </div>
               ) : (

@@ -2599,8 +2599,7 @@ html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager,
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn,
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-count,
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-registry-scroll],
-html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-status],
-html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-grid-mode] > * {
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-status] {
   background: #08090c !important;
   background-image: none !important;
   border-color: rgba(184, 188, 190, .20) !important;
@@ -2643,9 +2642,7 @@ html.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager-cou
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-registry-scroll],
 html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-registry-scroll],
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-status],
-html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-status],
-html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-grid-mode] > *,
-html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-grid-mode] > * {
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-status] {
   background: #08090c !important;
   background-color: #08090c !important;
   background-image: none !important;

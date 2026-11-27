@@ -1,0 +1,300 @@
+/* Shared type scale for workspace text, labels, and controls. */
+:root {
+  --dui-readable-caption: 16px;
+  --dui-readable-control: 17px;
+  --dui-readable-body: 18px;
+  --dy-type-micro: var(--dui-readable-caption);
+}
+
+html.dui-pro-overhaul[data-dui-text-size="standard"] {
+  --dui-readable-caption: 15px;
+  --dui-readable-control: 16px;
+  --dui-readable-body: 17px;
+  --dy-type-micro: var(--dui-readable-caption);
+}
+
+html.dui-pro-overhaul[data-dui-text-size="large"] {
+  --dui-readable-caption: 16px;
+  --dui-readable-control: 17px;
+  --dui-readable-body: 18px;
+  --dy-type-micro: var(--dui-readable-caption);
+}
+
+html.dui-pro-overhaul[data-dui-text-size="extra-large"] {
+  --dui-readable-caption: 17px;
+  --dui-readable-control: 18px;
+  --dui-readable-body: 19px;
+  --dy-type-micro: var(--dui-readable-caption);
+}
+
+html.dui-pro-overhaul .app-bg {
+  font-size: var(--dui-readable-body);
+}
+
+html.dui-pro-overhaul .app-bg :is(p, li, dd, blockquote) {
+  font-size: var(--dui-readable-body) !important;
+  line-height: 1.55;
+}
+
+html.dui-pro-overhaul .app-bg .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-response-markdown {
+  font-size: calc(var(--dui-readable-body) - 1px) !important;
+}
+
+html.dui-pro-overhaul .app-bg .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-response-markdown :is(p, li, dd, blockquote) {
+  font-size: calc(var(--dui-readable-body) - 1px) !important;
+  line-height: 1.55;
+}
+
+html.dui-pro-overhaul .app-bg :is(small, dt, time, figcaption, [class*="meta"], [class*="eyebrow"], [class*="caption"], [class*="kicker"], [class*="micro"], [class*="badge"], [class*="chip"], [class*="result-count"], [role="tab"], [role="option"]) {
+  font-size: var(--dui-readable-caption) !important;
+  line-height: 1.4;
+}
+
+html.dui-pro-overhaul .app-bg :is([class*="meta"], [class*="eyebrow"], [class*="caption"], [class*="kicker"], [class*="micro"], [class*="label"]) {
+  letter-spacing: normal !important;
+  text-transform: none !important;
+}
+
+html.dui-pro-overhaul .app-bg :is(button:not([aria-label]), input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea, [role="option"]) {
+  font-size: var(--dui-readable-control) !important;
+}
+
+html.dui-pro-overhaul .app-bg button:not([aria-label]) {
+  min-height: 32px;
+}
+
+html.dui-pro-overhaul .app-bg .dy-human-nav-copy strong {
+  font-size: var(--dui-readable-control) !important;
+}
+
+html.dui-pro-overhaul .app-bg :is([class*="text-[7px]"], [class*="text-[7.5px]"], [class*="text-[8px]"], [class*="text-[8.5px]"], [class*="text-[9px]"], [class*="text-[9.5px]"], [class*="text-[10px]"], [class*="text-[10.5px]"], [class*="text-[11px]"], [class*="text-[12px]"], [class*="text-[13px]"], [class~="text-xs"], [class~="text-sm"]):not(button):not(input):not(select):not(textarea) {
+  font-size: var(--dui-readable-caption) !important;
+  line-height: 1.4;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugins-title-row > span,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugins-registry-label,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugins-overview-cell > span,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugins-overview-cell > small,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-card-meta,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-card-meta code,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-card-stat > span,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-state-badge,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-results-count {
+  font-size: var(--dui-readable-caption) !important;
+  line-height: 1.4;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-card-description,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-card-signal,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-clawtalk-ops__head > div > span {
+  font-size: var(--dui-readable-body) !important;
+  line-height: 1.5;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-card-title-line h3 {
+  font-size: clamp(17px, 1.15vw, 19px) !important;
+  line-height: 1.25;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-card-stat > strong,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-clawtalk-ops__grid dd {
+  font-size: var(--dui-readable-control) !important;
+  line-height: 1.4;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="plugins"].dy-plugins-panel :is(.dy-plugin-row-action, .dy-plugin-card-detail-actions button, .dy-plugin-search-button, .dy-plugin-filter-button, .dy-plugin-pin-toggle, .dy-plugins-update-all) {
+  min-height: 34px;
+  padding-inline: 11px;
+  font-size: var(--dui-readable-control) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-search-input {
+  font-size: var(--dui-readable-control) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="settings"][data-ui-revision="settings-v2"] :is(.dui-settings-topbar p, .dui-settings-section__head p) {
+  font-size: var(--dui-readable-body) !important;
+  line-height: 1.5;
+}
+
+html.dui-pro-overhaul [data-dui-panel="settings"][data-ui-revision="settings-v2"] .dui-settings-topbar {
+  min-height: 88px;
+  padding-block: 18px;
+}
+
+html.dui-pro-overhaul [data-dui-panel="settings"][data-ui-revision="settings-v2"] .dui-settings-nav > button {
+  min-height: 44px;
+}
+
+html.dui-pro-overhaul [data-dui-panel="settings"][data-ui-revision="settings-v2"] :is(.dui-settings-nav > button strong, .dui-settings-card__head strong, .dui-settings-field > span strong, .dui-settings-toggle > span strong) {
+  font-size: var(--dui-readable-control) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="settings"][data-ui-revision="settings-v2"] :is(.dui-settings-card__head small, .dui-settings-field > span small, .dui-settings-toggle > span small) {
+  font-size: var(--dui-readable-caption) !important;
+  line-height: 1.45;
+}
+
+html.dui-pro-overhaul [data-dui-panel="settings"][data-ui-revision="settings-v2"] :is(.dui-settings-control, .dui-settings-inline) > :is(input:not([type="checkbox"]), select, textarea),
+html.dui-pro-overhaul [data-dui-panel="settings"][data-ui-revision="settings-v2"] .dui-settings-field > .dui-settings-control > :is(input, select, textarea),
+html.dui-pro-overhaul [data-dui-panel="settings"][data-ui-revision="settings-v2"] .dui-settings-segmented button {
+  font-size: var(--dui-readable-control) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="settings"][data-ui-revision="settings-v2"] :is(.dui-settings-actions, .dui-settings-recovery, .dui-settings-empty) button:not([aria-label]) {
+  min-height: 34px;
+  font-size: var(--dui-readable-control) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="settings"][data-ui-revision="settings-v2"] :is(
+  .dui-settings-account-hero span,
+  .dui-settings-account-password__intro > span,
+  .dui-settings-account-actions__head span,
+  .dui-settings-targeting__head > div:first-child span,
+  .dui-settings-metrics > div > span,
+  .dui-settings-results span,
+  .dui-settings-empty > span,
+  .dui-settings-job__head > div > span,
+  .dui-settings-job__meta dt,
+  .dui-activity-log__hero-status small,
+  .dui-activity-log__filters b,
+  .dui-activity-log__identity > span,
+  .dui-activity-log__identity em,
+  .dui-activity-log__meta span,
+  .dui-activity-log__empty > span
+) {
+  font-size: var(--dui-readable-caption) !important;
+  line-height: 1.4;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+html.dui-pro-overhaul [data-dui-panel="settings"][data-ui-revision="settings-v2"] :is(
+  .dui-settings-account-hero strong,
+  .dui-settings-account-password__field,
+  .dui-settings-account-password__field span,
+  .dui-settings-account-actions__head strong,
+  .dui-settings-account-action strong,
+  .dui-settings-account-action em,
+  .dui-settings-voice-mode strong,
+  .dui-settings-targeting__head > div:first-child strong,
+  .dui-settings-recovery strong,
+  .dui-settings-results strong,
+  .dui-settings-empty > strong,
+  .dui-settings-jobs__toolbar strong,
+  .dui-settings-jobs__empty strong,
+  .dui-settings-job__head strong,
+  .dui-settings-job__head b,
+  .dui-settings-job__meta dd,
+  .dui-activity-log__hero-status strong,
+  .dui-activity-log__identity strong,
+  .dui-activity-log__identity .dui-activity-log__origin,
+  .dui-activity-log__row-head time,
+  .dui-activity-log__empty strong
+) {
+  font-size: var(--dui-readable-control) !important;
+  line-height: 1.4;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+html.dui-pro-overhaul [data-dui-panel="settings"][data-ui-revision="settings-v2"] :is(
+  .dui-settings-account-hero small,
+  .dui-settings-account-password__intro p,
+  .dui-settings-account-password__field input,
+  .dui-settings-jobs__toolbar small,
+  .dui-settings-jobs__notice,
+  .dui-settings-jobs__empty > span,
+  .dui-activity-log__hero-status strong,
+  .dui-activity-log__body > p
+) {
+  font-size: var(--dui-readable-body) !important;
+  line-height: 1.5;
+}
+
+html.dui-pro-overhaul [data-dui-panel="settings"][data-ui-revision="settings-v2"] .dui-activity-log__body > p {
+  -webkit-line-clamp: 3;
+}
+
+html.dui-pro-overhaul [data-dui-panel="settings"][data-ui-revision="settings-v2"] .dui-settings-job__meta dd {
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+html.dui-pro-overhaul [data-dui-panel="settings"][data-ui-revision="settings-v2"] .dui-settings-account-password__field input {
+  font-size: var(--dui-readable-control) !important;
+}
+
+html.dui-pro-overhaul .app-bg :is(
+  .dy-response-activity__header,
+  .dy-response-activity__toggle,
+  .dy-response-activity__kind,
+  .dy-response-activity__preview,
+  .dy-response-activity__status,
+  .dy-response-activity__step > summary time,
+  .dy-response-activity__value h4,
+  .dy-response-activity__limit,
+  .dy-response-activity__empty,
+  .dy-code-changes__title small,
+  .dy-code-changes__counts,
+  .dy-code-changes__view,
+  .dy-code-changes-popover__header span,
+  .dy-code-changes-file > header code,
+  .dy-code-changes-file > header span,
+  .dy-code-changes-file__empty,
+  .dui-user-profile-picture__content > small
+) {
+  font-size: var(--dui-readable-caption) !important;
+  line-height: 1.4;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+html.dui-pro-overhaul .app-bg :is(
+  .dy-response-activity__label,
+  .dy-code-changes-popover__header strong,
+  .dui-user-profile-picture__content > strong
+) {
+  font-size: var(--dui-readable-body) !important;
+  line-height: 1.5;
+}
+
+html.dui-pro-overhaul .app-bg :is(
+  .dy-response-activity__value pre,
+  .dy-code-changes-file pre,
+  .dy-code-block-header
+) {
+  font-size: var(--dui-readable-caption) !important;
+  line-height: 1.5;
+}
+
+html.dui-pro-overhaul .app-bg :is(
+  .dy-code-changes__title strong,
+  .dy-code-block-header .dy-copy-btn
+) {
+  font-size: var(--dui-readable-control) !important;
+}
+
+html.dui-pro-overhaul .app-bg .dy-response-activity__marker {
+  width: 22px;
+  height: 22px;
+  font-size: 13px !important;
+  line-height: 1;
+}
+
+html.dui-pro-overhaul .app-bg .dy-code-changes-file > header {
+  min-height: 36px;
+}
+
+@media (max-width: 620px) {
+  html.dui-pro-overhaul .app-bg .dy-response-activity__step > summary {
+    grid-template-columns: 24px minmax(46px, auto) minmax(0, 1fr) auto 10px;
+  }
+}
+

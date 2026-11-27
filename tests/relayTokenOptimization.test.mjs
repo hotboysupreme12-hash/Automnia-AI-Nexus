@@ -96,7 +96,12 @@ test('hosted relay compacts history, tool output, and repeated inline images whi
   const huge = 'x'.repeat(30_000)
   const messages = [
     { role: 'system', content: 'System rules '.repeat(2_000) },
-    ...Array.from({ length: 18 }, (_, index) => ({ role: index % 2 ? 'assistant' : 'user', content: `history-${index} ${huge}` })),
+    ...Array.from({ length: 18 }, (_, index) => ({
+      role: index % 2 ? 'assistant' : 'user',
+      content: index === 16
+        ? [{ type: 'text', text: `history-${index} ${huge}` }, ...Array.from({ length: 7 }, (_, image) => ({ type: 'input_image', image_url: `https://example.test/history-${image}.png` }))]
+        : `history-${index} ${huge}`,
+    })),
     {
       role: 'assistant',
       content: '',
@@ -209,12 +214,15 @@ test('hosted relay keeps every required argument even when optional schema field
   assert.equal(schema.properties.optional_0, undefined)
 })
 
-test('hosted relay replaces an oversized base64 image with an actionable marker', () => {
-  const compacted = compactOpenAiMessages([
-    { role: 'user', content: [{ type: 'input_image', source: { type: 'base64', media_type: 'image/png', data: 'a'.repeat(1_600_000) } }] },
-  ])
-  assert.equal(compacted.stats.oversizedImages, 1)
-  assert.match(JSON.stringify(compacted.messages), /large inline image omitted/)
+test('hosted relay rejects an oversized image in the current turn with actionable guidance', () => {
+  assert.throws(() => compactOpenAiMessages([
+    { role: 'user', content: [{ type: 'input_image', source: { type: 'base64', media_type: 'image/png', data: 'a'.repeat(1_000_001) } }] },
+  ], { maxInlineImageChars: 1_000_000 }), (error) => {
+    assert.equal(error.status, 413)
+    assert.equal(error.publicCode, 'image_too_large')
+    assert.match(error.message, /attach a smaller image/)
+    return true
+  })
 })
 
 test('hosted relay enforces the aggregate input budget after system and current-turn compaction', () => {

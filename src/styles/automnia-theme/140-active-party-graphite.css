@@ -12,7 +12,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] {
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-head {
   background:
     #111112 !important;
-  border-bottom-color: rgba(190, 198, 204, .12) !important;
+  border-bottom: 0 !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-grid {
@@ -77,4 +77,118 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-pa
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-actions :is(button, .dy-console-toggle):hover:not(:disabled) {
   background: #242426 !important;
   border-color: rgba(255, 255, 255, .22) !important;
+}
+
+/* Profile ribbon: make the portrait own the full left rail, with readable
+   identity details on the right. The specificity also clears the older compact
+   responsive sizing rules for these same elements. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled > [draggable="true"].party-slot-content {
+  display: grid !important;
+  grid-template-columns: minmax(54px, 28%) 1px minmax(0, 1fr) !important;
+  height: 100% !important;
+  min-height: 100px !important;
+  gap: 9px !important;
+  overflow: hidden !important;
+  padding: 0 28px 0 0 !important;
+  border: 1px solid rgba(var(--dy-party-rgb, 148, 163, 184), .20) !important;
+  border-radius: 9px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled > [draggable="true"].party-slot-content .active-party-avatar {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100px !important;
+  align-self: stretch !important;
+  border: 0 !important;
+  border-radius: 8px 4px 4px 8px !important;
+  background:
+    linear-gradient(90deg, rgba(var(--dy-party-rgb, 148, 163, 184), .10), transparent 72%),
+    #0d0f10 !important;
+  box-shadow: inset 2px 0 0 rgba(var(--dy-party-rgb, 148, 163, 184), .58) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled > [draggable="true"].party-slot-content .active-party-avatar img {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100px !important;
+  object-fit: cover !important;
+  border-radius: inherit !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled > [draggable="true"].party-slot-content .party-agent-divider {
+  width: 1px !important;
+  height: 76% !important;
+  background: linear-gradient(180deg, transparent, rgba(var(--dy-party-rgb, 148, 163, 184), .52) 24%, rgba(255, 255, 255, .14) 50%, rgba(var(--dy-party-rgb, 148, 163, 184), .40) 76%, transparent) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled > [draggable="true"].party-slot-content .party-agent-info {
+  min-width: 0 !important;
+  padding: 8px 5px 8px 1px !important;
+  gap: 4px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled .party-agent-kicker {
+  font-size: 7.5px !important;
+  letter-spacing: .09em !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled .party-agent-name {
+  font-size: 14px !important;
+  line-height: 1.16 !important;
+  font-weight: 780 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled .party-agent-role {
+  font-size: 10px !important;
+  line-height: 1.2 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled .party-agent-model,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled .party-agent-level {
+  font-size: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled > [draggable="true"].party-slot-content .party-rarity-badge {
+  max-width: 60% !important;
+  min-height: 16px !important;
+  font-size: 7.5px !important;
+}
+
+/* The slot number now belongs to the profile footer, not a floating badge. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled::before {
+  display: none !important;
+  content: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled .party-agent-slot-number {
+  display: inline-flex !important;
+  flex: 0 0 auto !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 10px !important;
+  margin-left: auto !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: rgba(204, 216, 222, .76) !important;
+  font-size: 9px !important;
+  font-weight: 760 !important;
+  line-height: 1 !important;
+  text-shadow: 0 0 8px rgba(var(--dy-party-rgb, 148, 163, 184), .20) !important;
+}
+
+@media (max-width: 900px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled > [draggable="true"].party-slot-content {
+    min-height: 98px !important;
+    grid-template-columns: minmax(54px, 28%) 1px minmax(0, 1fr) !important;
+    padding-right: 26px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled > [draggable="true"].party-slot-content .active-party-avatar,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled > [draggable="true"].party-slot-content .active-party-avatar img {
+    min-height: 98px !important;
+  }
 }

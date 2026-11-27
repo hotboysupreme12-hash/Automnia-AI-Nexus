@@ -48,6 +48,7 @@ for (const code of ['party_dispatch_failed', 'party_handoff_failed', 'party_coor
 
 const dispatchBlock = routeBlock(partyCoordinationRoutes, "app.post('/api/party/dispatch'")
 const handoffBlock = routeBlock(partyCoordinationRoutes, "app.post('/api/party/agent-to-agent'")
+const parallelHealthBlock = routeBlock(partyCoordinationRoutes, "app.post('/api/party/parallel-health'")
 const delegationCompatibilityBlock = sliceBetween(
   agentTurnRoutes,
   "const handoffResponse: { ok: boolean; status: number; json: () => Promise<unknown> } = await fetch(`http://127.0.0.1:${PORT}/api/party/agent-to-agent`",
@@ -64,10 +65,13 @@ assert(!server.includes("app.post('/api/party/agent-to-agent'"), 'server should 
 
 assertCanonicalRoute('/api/party/dispatch', dispatchBlock)
 assertCanonicalRoute('/api/party/agent-to-agent', handoffBlock)
+assertCanonicalRoute('/api/party/parallel-health', parallelHealthBlock)
 
 assert(dispatchBlock.includes("'party_dispatch_failed'"), 'dispatch route should use a typed dispatch infrastructure error')
 assert(dispatchBlock.includes("'agent_not_found'"), 'dispatch route should reject missing party agents before running')
 assert(dispatchBlock.includes('Invalid or retired agent id'), 'dispatch route should reject invalid or retired assignment agents')
+assert(dispatchBlock.includes('Parallel dispatch cannot launch duplicate concurrent runs for the same agent'), 'dispatch route should prevent duplicate concurrent runs of the same agent')
+assert(dispatchBlock.includes('assignmentsState[assignmentIndex]'), 'dispatch route should track sequential multi-step assignments by index')
 assert(dispatchBlock.includes('outputs.every((item) => item.ok)'), 'dispatch route should preserve execution success evidence in data.ok')
 assert(dispatchBlock.includes('parallelEfficiency'), 'dispatch route should preserve parallel timing telemetry')
 assert(dispatchBlock.includes('writeTeamSyncSnapshot'), 'dispatch route should keep TEAM_SYNC state updates')
@@ -75,9 +79,14 @@ assert(dispatchBlock.includes('writeTeamSyncSnapshot'), 'dispatch route should k
 assert(handoffBlock.includes("'party_handoff_failed'"), 'handoff route should use a typed handoff infrastructure/policy error')
 assert(handoffBlock.includes("'agent_not_found'"), 'handoff route should reject missing party agents canonically')
 assert(handoffBlock.includes('Agent-to-agent policy denies this route'), 'handoff route should preserve policy denial detail')
+assert(handoffBlock.includes('executing directive from'), 'handoff route should record downstream execution state before launching receiver')
 assert(handoffBlock.includes('ok: false'), 'handoff route should preserve failed handoff execution as data')
 assert(handoffBlock.includes('from:'), 'handoff route should preserve upstream agent evidence')
 assert(handoffBlock.includes('to:'), 'handoff route should preserve downstream agent evidence')
+
+assert(parallelHealthBlock.includes('Invalid or retired agent id'), 'parallel-health route should reject invalid or retired agent ids')
+assert(parallelHealthBlock.includes('Parallel health check requires distinct agent ids'), 'parallel-health route should reject duplicate agent ids')
+assert(parallelHealthBlock.includes("'agent_not_found'"), 'parallel-health route should reject unknown party agent ids')
 
 assert(server.includes('function unwrapCanonicalApiPayload'), 'server should include canonical payload unwrapping for internal compatibility callers')
 assert(delegationCompatibilityBlock.includes('unwrapCanonicalApiPayload(rawPayload)'), 'agent-turn delegation should unwrap canonical handoff data')

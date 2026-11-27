@@ -118,6 +118,101 @@ type SkillRoutesOptions = {
 }
 
 const CLAWHUB_SKILL_REFERENCE_PATTERN = /^(?:@?[a-z0-9][a-z0-9._-]{0,63}\/)?[a-z0-9][a-z0-9._-]{0,127}$/i
+export const SAFE_SKILL_AGENT_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/
+export const SAFE_SKILL_VERSION_PATTERN = /^[a-z0-9][a-z0-9._+-]{0,79}$/i
+const MAX_CLAWHUB_SEARCH_QUERY_LENGTH = 200
+
+function hasControlCharacters(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code <= 31 || code === 127) return true
+  }
+  return false
+}
+
+export function parseOptionalSkillAgentId(value: unknown): { ok: true; agentId?: string } | { ok: false } {
+  if (value === undefined || value === null) return { ok: true }
+  if (typeof value !== 'string') return { ok: false }
+  if (hasControlCharacters(value)) return { ok: false }
+  const trimmed = value.trim()
+  if (!trimmed) return { ok: true }
+  if (!SAFE_SKILL_AGENT_ID_PATTERN.test(trimmed)) return { ok: false }
+  return { ok: true, agentId: trimmed }
+}
+
+export function isSafeSkillInfoIdentifier(value: string): boolean {
+  if (!value || hasControlCharacters(value)) return false
+  const trimmed = value.trim()
+  if (!trimmed || trimmed.startsWith('-') || trimmed.includes('..') || trimmed.includes('\\')) return false
+  return SKILL_ID_PATTERN.test(trimmed) || CLAWHUB_SKILL_REFERENCE_PATTERN.test(trimmed)
+}
+
+export function validateClawHubSearchQuery(value: unknown): { ok: true; query: string } | { ok: false; message: string } {
+  if (value === undefined || value === null) return { ok: true, query: '' }
+  if (typeof value !== 'string') return { ok: false, message: 'ClawHub search query must be a string.' }
+  if (hasControlCharacters(value)) return { ok: false, message: 'ClawHub search query contains unsupported control characters.' }
+  const trimmed = value.trim()
+  if (!trimmed) return { ok: true, query: '' }
+  if (trimmed.length > MAX_CLAWHUB_SEARCH_QUERY_LENGTH) {
+    return { ok: false, message: `ClawHub search query exceeds ${MAX_CLAWHUB_SEARCH_QUERY_LENGTH} characters.` }
+  }
+  if (trimmed.startsWith('-')) {
+    return { ok: false, message: 'ClawHub search query must not start with a CLI flag hyphen.' }
+  }
+  return { ok: true, query: trimmed }
+}
+
+export function redactSkillOutputText(value: string): string {
+  if (!value) return ''
+  return value
+    .replace(/\bAuthorization\s*:\s*Bearer\s+[A-Za-z0-9._~+/-]+=*/gi, 'Authorization: Bearer [redacted]')
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, 'Bearer [redacted]')
+    .replace(/\b(?:Cookie|Set-Cookie)\s*:\s*[^\r\n]+/gi, 'Cookie: [redacted]')
+    .replace(/\b(token|api[-_\s]?key|password|passphrase|secret|authorization|cookie)\s*[:=]\s*["']?[^"',\s\r\n]+/gi, '$1=[redacted]')
+    .replace(/\b(?:sk|rk|pk|xox[baprs]?|gh[pousr])[-_][A-Za-z0-9_-]{12,}\b/g, '[redacted-secret]')
+}
+
+export function redactSkillErrorDetail(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error ?? '')
+  return redactSkillOutputText(stripAnsi(raw))
+    .replace(/\b(?:[A-Za-z]:\\Users\\)[^\\\s]+/g, '%USERPROFILE%')
+    .replace(/\/Users\/[^/\s]+/g, '/Users/[redacted]')
+    .replace(/\/home\/[^/\s]+/g, '/home/[redacted]')
+    .trim()
+}
+
+export function sanitizeClawHubDetailsUrl(rawUrl: string | undefined): string | undefined {
+  if (!rawUrl || hasControlCharacters(rawUrl)) return undefined
+  try {
+    const parsed = new URL(rawUrl.trim())
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return undefined
+    if (parsed.username || parsed.password) return undefined
+    return parsed.toString()
+  } catch {
+    return undefined
+  }
+}
+
+export function parseClawHubJsonStdout(stdout: string): unknown {
+  const cleaned = stripAnsi(stdout || '').replace(/^\uFEFF/, '').trim()
+  if (!cleaned) return { results: [] }
+  try {
+    return JSON.parse(cleaned)
+  } catch {
+    // Fall back to scanning line-anchored JSON when OpenClaw prefixes warnings ahead of JSON output.
+  }
+  for (let index = 0; index < cleaned.length; index += 1) {
+    const ch = cleaned[index]
+    if (ch !== '{' && ch !== '[') continue
+    if (index > 0 && cleaned[index - 1] !== '\n' && cleaned[index - 1] !== '\r') continue
+    try {
+      return JSON.parse(cleaned.slice(index).trim())
+    } catch {
+      // Continue scanning subsequent lines.
+    }
+  }
+  return null
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
@@ -151,8 +246,7 @@ function clawHubResultReference(value: unknown) {
 }
 
 function resolveSearchVersion(output: string, expectedSkillRef: string) {
-  let parsed: unknown
-  try { parsed = JSON.parse(output || '{}') } catch { return '' }
+  const parsed = parseClawHubJsonStdout(output || '{}')
   const payload = asRecord(parsed)
   const results = Array.isArray(payload?.results) ? payload.results : []
   const expected = resolveClawHubSkillReference({ skillRef: expectedSkillRef })
@@ -161,7 +255,8 @@ function resolveSearchVersion(output: string, expectedSkillRef: string) {
   const version = typeof result?.version === 'string' ? result.version
     : typeof result?.latestVersion === 'string' ? result.latestVersion
       : ''
-  return version.trim().slice(0, 80)
+  const trimmed = version.trim().slice(0, 80)
+  return SAFE_SKILL_VERSION_PATTERN.test(trimmed) ? trimmed : ''
 }
 
 function skillPreviewChanges(beforeFiles: SkillPreviewFile[], afterFiles: SkillPreviewFile[]): SkillPreviewChange[] {
@@ -236,10 +331,6 @@ function normalizeClawHubSearchResult(value: unknown) {
   }
 }
 
-function queryAgentId(value: unknown) {
-  return typeof value === 'string' ? value : undefined
-}
-
 function resolveClawHubSkillReference(value: { skillRef?: string; slug?: string }) {
   const reference = (value.skillRef || value.slug || '').trim()
   if (!CLAWHUB_SKILL_REFERENCE_PATTERN.test(reference)) return ''
@@ -285,16 +376,17 @@ function parseClawHubSecurityReview(text: string, fallbackSkillRef: string, fall
   const summary = overviewLines.join(' ').replace(/\s+/g, ' ').trim()
   const reportedReference = normalized.match(/(?:^|\n)\s*[│|]\s*(@?[a-z0-9][a-z0-9._-]{0,63}\/[a-z0-9][a-z0-9._-]{0,127}(?:@[^\s│|]+)?)\s*[│|]/i)?.[1]
   const skillRef = reportedReference?.replace(/@([^/]+\/[^@\s│|]+)@[^@\s│|]+$/, '@$1') || fallbackSkillRef
-  const version = fallbackVersion || reportedReference?.match(/@([^/]+\/[^@\s│|]+)@([^\s│|]+)/)?.[2]
+  const rawVersion = fallbackVersion || reportedReference?.match(/@([^/]+\/[^@\s│|]+)@([^\s│|]+)/)?.[2]
+  const version = rawVersion && SAFE_SKILL_VERSION_PATTERN.test(rawVersion) ? rawVersion : undefined
   const publisher = skillRef.match(/^@?([^/]+)\//)?.[1]
-  const detailsUrl = normalized.match(/\[[^\]]*\]\((https?:\/\/[^)]+)\)/i)?.[1]
+  const detailsUrl = sanitizeClawHubDetailsUrl(normalized.match(/\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/i)?.[1])
 
   return {
     skillRef,
     ...(version ? { version } : {}),
-    outcome,
+    outcome: redactSkillOutputText(outcome),
     ...(publisher ? { publisher } : {}),
-    summary: summary || 'ClawHub marked this skill for security review before installation.',
+    summary: redactSkillOutputText(summary) || 'ClawHub marked this skill for security review before installation.',
     ...(detailsUrl ? { detailsUrl } : {}),
   }
 }
@@ -496,7 +588,7 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
   }
 
   const prunePendingOperations = () => {
-    const now = Date.now()
+    const now = currentTime()
     for (const [confirmationId, operation] of pendingClawHubOperations) {
       if (operation.expiresAt <= now) pendingClawHubOperations.delete(confirmationId)
     }
@@ -520,7 +612,7 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
       ...(params.version ? { version: params.version } : {}),
       force: Boolean(params.force),
       all: Boolean(params.all),
-      expiresAt: Date.now() + pendingOperationTtlMs,
+      expiresAt: currentTime() + pendingOperationTtlMs,
     })
     return { confirmationId, ...review }
   }
@@ -579,58 +671,70 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
   }
 
   app.get('/api/skills/check', async (req, res) => {
+    const parsedAgent = parseOptionalSkillAgentId(req.query.agentId)
+    if (!parsedAgent.ok) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id')
     try {
-      const agentId = queryAgentId(req.query.agentId)
+      const { agentId } = parsedAgent
       await preflightSkillRoots(agentId)
       const context = await options.resolveSkillsCommandContext(agentId)
       const result = await options.runOpenClaw(['skills', 'check'], 90000, context)
-      const data = { agentId: agentId || null, output: result.stdout, code: result.code }
+      const data = { agentId: agentId || null, output: redactSkillOutputText(result.stdout), code: result.code }
       if (result.code !== 0) {
-        return apiFailure(res, 500, 'skill_command_failed', 'Skill check failed', { ...data, error: result.stderr })
+        return apiFailure(res, 500, 'skill_command_failed', 'Skill check failed', { ...data, error: redactSkillErrorDetail(result.stderr) })
       }
       return apiSuccess(res, data)
     } catch (error) {
-      return apiFailure(res, 500, 'skill_operation_failed', 'Failed to check skills', String(error))
+      return apiFailure(res, 500, 'skill_operation_failed', 'Failed to check skills', redactSkillErrorDetail(error))
     }
   })
 
   app.get('/api/skills/list', async (req, res) => {
+    const parsedAgent = parseOptionalSkillAgentId(req.query.agentId)
+    if (!parsedAgent.ok) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id')
     try {
-      const agentId = queryAgentId(req.query.agentId)
+      const { agentId } = parsedAgent
       await preflightSkillRoots(agentId)
       const context = await options.resolveSkillsCommandContext(agentId)
       const result = await options.runOpenClaw(['skills', 'list'], 90000, context)
-      const data = { agentId: agentId || null, output: result.stdout, code: result.code }
+      const data = { agentId: agentId || null, output: redactSkillOutputText(result.stdout), code: result.code }
       if (result.code !== 0) {
-        return apiFailure(res, 500, 'skill_command_failed', 'Skill list failed', { ...data, error: result.stderr })
+        return apiFailure(res, 500, 'skill_command_failed', 'Skill list failed', { ...data, error: redactSkillErrorDetail(result.stderr) })
       }
       return apiSuccess(res, data)
     } catch (error) {
-      return apiFailure(res, 500, 'skill_operation_failed', 'Failed to list skills', String(error))
+      return apiFailure(res, 500, 'skill_operation_failed', 'Failed to list skills', redactSkillErrorDetail(error))
     }
   })
 
   app.get('/api/skills/info/:skillName', async (req, res) => {
+    const rawSkillName = typeof req.params.skillName === 'string' ? req.params.skillName : ''
+    const skillName = rawSkillName.trim()
+    if (!skillName) return apiFailure(res, 400, 'invalid_payload', 'Skill name is required')
+    if (hasControlCharacters(rawSkillName) || !isSafeSkillInfoIdentifier(skillName)) {
+      return apiFailure(res, 400, 'invalid_payload', 'Skill name is invalid')
+    }
+    const parsedAgent = parseOptionalSkillAgentId(req.query.agentId)
+    if (!parsedAgent.ok) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id')
     try {
-      const skillName = req.params.skillName?.trim()
-      if (!skillName) return apiFailure(res, 400, 'invalid_payload', 'Skill name is required')
-      const agentId = queryAgentId(req.query.agentId)
+      const { agentId } = parsedAgent
       await preflightSkillRoots(agentId)
       const context = await options.resolveSkillsCommandContext(agentId)
       const result = await options.runOpenClaw(['skills', 'info', skillName], 90000, context)
-      const data = { agentId: agentId || null, skillName, output: result.stdout, code: result.code }
+      const data = { agentId: agentId || null, skillName, output: redactSkillOutputText(result.stdout), code: result.code }
       if (result.code !== 0) {
-        return apiFailure(res, 500, 'skill_command_failed', 'Skill info failed', { ...data, error: result.stderr })
+        return apiFailure(res, 500, 'skill_command_failed', 'Skill info failed', { ...data, error: redactSkillErrorDetail(result.stderr) })
       }
       return apiSuccess(res, data)
     } catch (error) {
-      return apiFailure(res, 500, 'skill_operation_failed', 'Failed to read skill info', String(error))
+      return apiFailure(res, 500, 'skill_operation_failed', 'Failed to read skill info', redactSkillErrorDetail(error))
     }
   })
 
   app.get('/api/skills/library', async (req, res) => {
+    const parsedAgent = parseOptionalSkillAgentId(req.query.agentId)
+    if (!parsedAgent.ok) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id')
     try {
-      const agentId = queryAgentId(req.query.agentId)
+      const { agentId } = parsedAgent
       await preflightSkillRoots(agentId, false)
       if (req.query.refresh === '1') options.invalidateSkillLibraryCache()
       const { shared, agent, agentSkillsRoot } = await options.readAgentSkillLibrary(agentId)
@@ -650,12 +754,18 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
   })
 
   app.get('/api/skills/library/:skillId/integrity', async (req, res) => {
+    const parsedAgent = parseOptionalSkillAgentId(req.query.agentId)
+    if (!parsedAgent.ok) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id')
+    const rawSkillId = typeof req.params.skillId === 'string' ? req.params.skillId : ''
+    if (hasControlCharacters(rawSkillId) || rawSkillId.includes('/') || rawSkillId.includes('\\') || rawSkillId.includes('..')) {
+      return apiFailure(res, 400, 'invalid_payload', 'Skill id is invalid')
+    }
     try {
-      const skillId = options.slugifySkillId(req.params.skillId?.trim() || '')
-      if (!/^[a-z0-9][a-z0-9._-]{0,127}$/i.test(skillId)) {
+      const skillId = options.slugifySkillId(rawSkillId.trim())
+      if (!SKILL_ID_PATTERN.test(skillId)) {
         return apiFailure(res, 400, 'invalid_payload', 'Skill id is invalid')
       }
-      const agentId = queryAgentId(req.query.agentId)
+      const { agentId } = parsedAgent
       await preflightSkillRoots(agentId, false)
       const library = await options.readAgentSkillLibrary(agentId)
       const findEntry = (entries: unknown[]) => entries.find((value) => {
@@ -691,10 +801,14 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
   })
 
   app.post('/api/skills/library/:skillId/verify', async (req, res) => {
-    const parsed = z.object({ source: z.enum(['library', 'agent']).default('library'), agentId: z.string().regex(/^[a-z0-9-]+$/).optional() }).safeParse(req.body || {})
+    const parsed = z.object({ source: z.enum(['library', 'agent']).default('library'), agentId: z.string().trim().regex(SAFE_SKILL_AGENT_ID_PATTERN).optional() }).safeParse(req.body || {})
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid skill verification request', parsed.error.flatten())
+    const rawSkillId = typeof req.params.skillId === 'string' ? req.params.skillId : ''
+    if (hasControlCharacters(rawSkillId) || rawSkillId.includes('/') || rawSkillId.includes('\\') || rawSkillId.includes('..')) {
+      return apiFailure(res, 400, 'invalid_payload', 'Skill id is invalid')
+    }
     try {
-      const skillId = options.slugifySkillId(req.params.skillId?.trim() || '')
+      const skillId = options.slugifySkillId(rawSkillId.trim())
       if (!SKILL_ID_PATTERN.test(skillId)) return apiFailure(res, 400, 'invalid_payload', 'Skill id is invalid')
       await preflightSkillRoots(parsed.data.agentId, false)
       const root = await resolveSkillRoot(parsed.data.source, parsed.data.agentId)
@@ -707,10 +821,14 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
   })
 
   app.post('/api/skills/library/:skillId/rollback', async (req, res) => {
-    const parsed = z.object({ source: z.enum(['library', 'agent']).default('library'), agentId: z.string().regex(/^[a-z0-9-]+$/).optional() }).safeParse(req.body || {})
+    const parsed = z.object({ source: z.enum(['library', 'agent']).default('library'), agentId: z.string().trim().regex(SAFE_SKILL_AGENT_ID_PATTERN).optional() }).safeParse(req.body || {})
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid skill rollback request', parsed.error.flatten())
+    const rawSkillId = typeof req.params.skillId === 'string' ? req.params.skillId : ''
+    if (hasControlCharacters(rawSkillId) || rawSkillId.includes('/') || rawSkillId.includes('\\') || rawSkillId.includes('..')) {
+      return apiFailure(res, 400, 'invalid_payload', 'Skill id is invalid')
+    }
     try {
-      const skillId = options.slugifySkillId(req.params.skillId?.trim() || '')
+      const skillId = options.slugifySkillId(rawSkillId.trim())
       if (!SKILL_ID_PATTERN.test(skillId)) return apiFailure(res, 400, 'invalid_payload', 'Skill id is invalid')
       await preflightSkillRoots(parsed.data.agentId, false)
       const root = await resolveSkillRoot(parsed.data.source, parsed.data.agentId)
@@ -723,10 +841,14 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
   })
 
   app.post('/api/skills/library/:skillId/quarantine', async (req, res) => {
-    const parsed = z.object({ source: z.enum(['library', 'agent']).default('library'), agentId: z.string().regex(/^[a-z0-9-]+$/).optional(), reason: z.string().trim().max(200).default('Quarantined by the operator.') }).safeParse(req.body || {})
+    const parsed = z.object({ source: z.enum(['library', 'agent']).default('library'), agentId: z.string().trim().regex(SAFE_SKILL_AGENT_ID_PATTERN).optional(), reason: z.string().trim().max(200).default('Quarantined by the operator.') }).safeParse(req.body || {})
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid skill quarantine request', parsed.error.flatten())
+    const rawSkillId = typeof req.params.skillId === 'string' ? req.params.skillId : ''
+    if (hasControlCharacters(rawSkillId) || rawSkillId.includes('/') || rawSkillId.includes('\\') || rawSkillId.includes('..')) {
+      return apiFailure(res, 400, 'invalid_payload', 'Skill id is invalid')
+    }
     try {
-      const skillId = options.slugifySkillId(req.params.skillId?.trim() || '')
+      const skillId = options.slugifySkillId(rawSkillId.trim())
       if (!SKILL_ID_PATTERN.test(skillId)) return apiFailure(res, 400, 'invalid_payload', 'Skill id is invalid')
       await preflightSkillRoots(parsed.data.agentId, false)
       const root = await resolveSkillRoot(parsed.data.source, parsed.data.agentId)
@@ -739,19 +861,24 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
   })
 
   app.get('/api/skills/quarantine', async (req, res) => {
+    const parsedAgent = parseOptionalSkillAgentId(req.query.agentId)
+    if (!parsedAgent.ok) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id')
     try {
-      const agentId = queryAgentId(req.query.agentId)
-      return apiSuccess(res, { skills: await skillWorkshop.listQuarantined(undefined, agentId) })
+      return apiSuccess(res, { skills: await skillWorkshop.listQuarantined(undefined, parsedAgent.agentId) })
     } catch (error) {
       return skillWorkshopFailure(res, error)
     }
   })
 
   app.post('/api/skills/quarantine/:skillId/restore', async (req, res) => {
-    const parsed = z.object({ source: z.enum(['library', 'agent']), agentId: z.string().regex(/^[a-z0-9-]+$/).optional() }).safeParse(req.body || {})
+    const parsed = z.object({ source: z.enum(['library', 'agent']), agentId: z.string().trim().regex(SAFE_SKILL_AGENT_ID_PATTERN).optional() }).safeParse(req.body || {})
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid skill restore request', parsed.error.flatten())
+    const rawSkillId = typeof req.params.skillId === 'string' ? req.params.skillId : ''
+    if (hasControlCharacters(rawSkillId) || rawSkillId.includes('/') || rawSkillId.includes('\\') || rawSkillId.includes('..')) {
+      return apiFailure(res, 400, 'invalid_payload', 'Skill id is invalid')
+    }
     try {
-      const skillId = options.slugifySkillId(req.params.skillId?.trim() || '')
+      const skillId = options.slugifySkillId(rawSkillId.trim())
       if (!SKILL_ID_PATTERN.test(skillId)) return apiFailure(res, 400, 'invalid_payload', 'Skill id is invalid')
       const root = await resolveSkillRoot(parsed.data.source, parsed.data.agentId)
       const result = await skillWorkshop.restore(root, skillId, parsed.data.source, parsed.data.agentId)
@@ -763,21 +890,35 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
   })
 
   app.get('/api/skills/library/:skillId', async (req, res) => {
+    const parsedAgent = parseOptionalSkillAgentId(req.query.agentId)
+    if (!parsedAgent.ok) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id')
+    const rawSkillId = typeof req.params.skillId === 'string' ? req.params.skillId : ''
+    const skillId = rawSkillId.trim()
+    if (!skillId) return apiFailure(res, 400, 'invalid_payload', 'Skill id is required')
+    if (
+      hasControlCharacters(rawSkillId) ||
+      skillId.startsWith('-') ||
+      skillId.includes('/') ||
+      skillId.includes('\\') ||
+      skillId.includes('..') ||
+      !SKILL_ID_PATTERN.test(options.slugifySkillId(skillId))
+    ) {
+      return apiFailure(res, 400, 'invalid_payload', 'Skill id is invalid')
+    }
     try {
-      const skillId = req.params.skillId?.trim()
-      if (!skillId) return apiFailure(res, 400, 'invalid_payload', 'Skill id is required')
-      const agentId = queryAgentId(req.query.agentId)
-      const result = await options.findSkillContent(skillId, agentId)
+      await preflightSkillRoots(parsedAgent.agentId, false)
+      const result = await options.findSkillContent(skillId, parsedAgent.agentId)
       if (!result) return apiFailure(res, 404, 'skill_not_found', 'Skill not found')
       return apiSuccess(res, result)
     } catch (error) {
-      return apiFailure(res, 500, 'skill_operation_failed', 'Failed to read skill content', String(error))
+      if (error instanceof SkillWorkshopError) return skillWorkshopFailure(res, error)
+      return apiFailure(res, 500, 'skill_operation_failed', 'Failed to read skill content', redactSkillErrorDetail(error))
     }
   })
 
   app.post('/api/skills/learn', async (req, res) => {
     const schema = z.object({
-      agentId: z.string().regex(/^[a-z0-9-]+$/),
+      agentId: z.string().trim().regex(SAFE_SKILL_AGENT_ID_PATTERN),
       name: z.string().min(1).max(120),
       description: z.string().min(1).max(1200),
       body: z.string().max(60000).default(''),
@@ -791,13 +932,17 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
       const skill = await options.writeLearnedSkill(parsed.data)
       return apiSuccess(res, { skill })
     } catch (error) {
-      return apiFailure(res, 500, 'skill_operation_failed', 'Failed to save learned skill', String(error))
+      return apiFailure(res, 500, 'skill_operation_failed', 'Failed to save learned skill', redactSkillErrorDetail(error))
     }
   })
 
   app.get('/api/skills/clawhub/search', async (req, res) => {
+    const validatedQuery = validateClawHubSearchQuery(req.query.q)
+    if (!validatedQuery.ok) {
+      return apiFailure(res, 400, 'invalid_payload', validatedQuery.message)
+    }
     try {
-      const query = typeof req.query.q === 'string' ? req.query.q.trim() : ''
+      const { query } = validatedQuery
       const rawLimit = typeof req.query.limit === 'string' ? Number.parseInt(req.query.limit, 10) : 12
       const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(30, rawLimit)) : 12
       const args = ['skills', 'search']
@@ -810,14 +955,24 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
           502,
           'skill_command_failed',
           'ClawHub search failed',
-          { output: result.stdout, error: result.stderr, code: result.code },
+          { output: redactSkillOutputText(result.stdout), error: redactSkillErrorDetail(result.stderr), code: result.code },
         )
       }
-      const parsed = JSON.parse(result.stdout || '{"results":[]}') as { results?: unknown[] }
-      const results = Array.isArray(parsed.results) ? parsed.results.map(normalizeClawHubSearchResult) : []
+      const parsed = parseClawHubJsonStdout(result.stdout)
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return apiFailure(
+          res,
+          502,
+          'skill_command_failed',
+          'ClawHub search returned malformed JSON output.',
+          { output: redactSkillOutputText(result.stdout).slice(0, 1000), code: result.code },
+        )
+      }
+      const payload = parsed as { results?: unknown[] }
+      const results = Array.isArray(payload.results) ? payload.results.map(normalizeClawHubSearchResult) : []
       return apiSuccess(res, { results })
     } catch (error) {
-      return apiFailure(res, 500, 'skill_operation_failed', 'Failed to search ClawHub', String(error))
+      return apiFailure(res, 500, 'skill_operation_failed', 'Failed to search ClawHub', redactSkillErrorDetail(error))
     }
   })
 
@@ -825,7 +980,7 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
     const schema = z.object({
       operation: z.enum(['install', 'update']),
       skillRef: z.string().trim().min(1).max(196),
-      version: z.string().trim().min(1).max(80).optional(),
+      version: z.string().trim().regex(SAFE_SKILL_VERSION_PATTERN).optional(),
     })
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid skill preview request', parsed.error.flatten())
@@ -851,7 +1006,7 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
       skillRef: z.string().trim().min(1).max(196).optional(),
       // Keep the legacy field for existing clients, but prefer the owner-qualified ref.
       slug: z.string().trim().min(1).max(196).optional(),
-      version: z.string().min(1).max(80).optional(),
+      version: z.string().trim().regex(SAFE_SKILL_VERSION_PATTERN).optional(),
       force: z.boolean().default(false),
       confirmReview: z.boolean().default(false),
       confirmationId: z.string().uuid().optional(),
@@ -885,7 +1040,7 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
       confirmationId: parsed.data.confirmationId,
       operation: 'install',
       skillRef,
-      version: parsed.data.version,
+      version: effectiveVersion,
       force: parsed.data.force,
       all: false,
     })) {
@@ -922,8 +1077,9 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
       const quarantined = await preflightSkillRoots()
       options.invalidateSkillLibraryCache(options.sharedSkillsRoot)
       const skill = await options.readSkillEntryFromDir(options.sharedSkillsRoot, options.slugifySkillId(skillSlug), 'library')
+      const redactedOutput = redactSkillOutputText(result.stdout)
       const data = {
-        output: result.stdout,
+        output: redactedOutput,
         code: result.code,
         retried: install.retried,
         cleanup: install.cleanup,
@@ -943,19 +1099,19 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
           })
           if (confirmation) {
             return apiFailure(res, 409, 'skill_install_confirmation_required', 'ClawHub flagged this skill for review. Confirm the displayed risks to install it anyway.', {
-              output: result.stdout,
+              output: redactedOutput,
               code: result.code,
               retried: install.retried,
               confirmation,
             })
           }
         }
-        return apiFailure(res, 500, 'skill_command_failed', 'ClawHub skill install failed', { ...data, error: result.stderr })
+        return apiFailure(res, 500, 'skill_command_failed', 'ClawHub skill install failed', { ...data, error: redactSkillErrorDetail(result.stderr) })
       }
       if (preview) await discardSkillPreview(preview.previewId)
       return apiSuccess(res, data)
     } catch (error) {
-      return apiFailure(res, 500, 'skill_operation_failed', 'Failed to install ClawHub skill', String(error))
+      return apiFailure(res, 500, 'skill_operation_failed', 'Failed to install ClawHub skill', redactSkillErrorDetail(error))
     }
   })
 
@@ -964,7 +1120,7 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
       skillRef: z.string().trim().min(1).max(196).optional(),
       // Keep accepting slug while clients migrate to owner-qualified refs.
       slug: z.string().trim().min(1).max(196).optional(),
-      version: z.string().trim().min(1).max(80).optional(),
+      version: z.string().trim().regex(SAFE_SKILL_VERSION_PATTERN).optional(),
       all: z.boolean().default(false),
       confirmReview: z.boolean().default(false),
       confirmationId: z.string().uuid().optional(),
@@ -1000,7 +1156,7 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
       confirmationId: parsed.data.confirmationId,
       operation: 'update',
       skillRef: updateSkillRef,
-      version: parsed.data.version,
+      version: effectiveVersion,
       force: false,
       all: parsed.data.all,
     })) {
@@ -1022,8 +1178,9 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
       const quarantined = await preflightSkillRoots()
       options.invalidateSkillLibraryCache(options.sharedSkillsRoot)
       const shared = await options.listSkillsFromRoot(options.sharedSkillsRoot, 'library')
+      const redactedOutput = redactSkillOutputText(result.stdout)
       const data = {
-        output: result.stdout,
+        output: redactedOutput,
         code: result.code,
         ...(skillRef ? { skillRef } : {}),
         ...(quarantined.length ? { quarantined } : {}),
@@ -1041,18 +1198,18 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
           })
           if (confirmation) {
             return apiFailure(res, 409, 'skill_install_confirmation_required', 'ClawHub flagged this update for review. Confirm the displayed risks to continue anyway.', {
-              output: result.stdout,
+              output: redactedOutput,
               code: result.code,
               confirmation,
             })
           }
         }
-        return apiFailure(res, 500, 'skill_command_failed', 'ClawHub skill update failed', { ...data, error: result.stderr })
+        return apiFailure(res, 500, 'skill_command_failed', 'ClawHub skill update failed', { ...data, error: redactSkillErrorDetail(result.stderr) })
       }
       if (preview) await discardSkillPreview(preview.previewId)
       return apiSuccess(res, data)
     } catch (error) {
-      return apiFailure(res, 500, 'skill_operation_failed', 'Failed to update ClawHub skill', String(error))
+      return apiFailure(res, 500, 'skill_operation_failed', 'Failed to update ClawHub skill', redactSkillErrorDetail(error))
     }
   })
 }

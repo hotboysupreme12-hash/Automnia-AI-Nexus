@@ -124,7 +124,7 @@ assertIncludes(openclawVendorPrep, 'Math.min(4, Math.max(1, getHistoryLimitFromS
 assertIncludes(server, 'removeGeneratedHostedToolAllowlist', 'Automnia credits should normalize generated hosted tool policy')
 assertIncludes(server, 'providers[AUTOMNIA_CREDITS_PROVIDER_ID]', 'Automnia credits tool policy should be provider-scoped')
 assertIncludes(server, 'AUTOMNIA_CREDITS_COMPACT_TOOL_RESULT_MAX_CHARS', 'Automnia credits should cap live tool results')
-assertIncludes(relayTokenOptimization, 'for (let pass = 0; JSON.stringify(compacted).length > inputLimitChars', 'relay compaction should enforce the aggregate input budget iteratively')
+assertIncludes(relayTokenOptimization, 'for (let pass = 0; inputBudgetChars(compacted) > inputLimitChars', 'relay compaction should enforce the aggregate input budget iteratively')
 assertIncludes(relayTokenOptimization, 'const optionalLimit = Math.max(0, maxSchemaProperties - requiredNames.length)', 'relay schema compaction should preserve required fields before optional fields')
 assertIncludes(server, 'DIRECT_PROVIDER_REQUEST_TIMEOUT_MS', 'direct provider requests should have a bounded deadline')
 assertIncludes(server, 'Automnia credits compact runtime context:', 'Automnia command turns should use compact identity context')

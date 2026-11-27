@@ -3468,8 +3468,7 @@ html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager,
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn,
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-count,
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-registry-scroll],
-html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-status],
-html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-grid-mode] > * {
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-status] {
   background: #08090c !important;
   background-image: none !important;
   border-color: rgba(184, 188, 190, .14) !important;
@@ -3537,9 +3536,7 @@ html.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager-cou
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-registry-scroll],
 html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-registry-scroll],
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-status],
-html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-status],
-html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-grid-mode] > *,
-html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-grid-mode] > * {
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-status] {
   background: #08090c !important;
   background-color: #08090c !important;
   background-image: none !important;
@@ -4452,9 +4449,9 @@ html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-filter-contr
 }
 
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-switch] {
-  min-height: 38px !important;
+  min-height: 44px !important;
   align-items: center !important;
-  gap: 2px !important;
+  gap: 4px !important;
   border: 0 !important;
   outline: 0 !important;
   background: transparent !important;
@@ -4462,8 +4459,13 @@ html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-switch]
 }
 
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-choice] {
-  min-height: 34px !important;
-  min-width: 48px !important;
+  min-height: 40px !important;
+  min-width: 56px !important;
+  flex: 0 0 auto !important;
+  position: relative !important;
+  z-index: 1 !important;
+  cursor: pointer !important;
+  touch-action: manipulation !important;
   border: 1px solid transparent !important;
   border-radius: 7px !important;
   outline: 0 !important;

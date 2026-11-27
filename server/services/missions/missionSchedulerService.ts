@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto'
+import os from 'node:os'
 import path from 'node:path'
+import { assertContainedRegularFilePath } from '../filesystem/atomicControlFile'
 import { readSessionLinesReverse } from './sessionEvidenceService'
 import { missionTimerDelayMs } from './missionStateService'
 import type {
@@ -84,6 +86,8 @@ export type MissionSchedulerServiceOptions = {
   ensureTeamSyncFile: (filePath: string) => Promise<unknown>
   extractAgentReply: (stdout: string, stderr: string) => string
   getAgentAuthEnv: (agentId: string) => Promise<Record<string, string>>
+  maxConcurrentCronRuns?: number
+  maxConcurrentCronSetups?: number
   missionAgentTimeoutSeconds: number
   missionLoopTimers: Map<string, NodeJS.Timeout>
   missionRunControllers: Map<string, AbortController>
@@ -419,13 +423,133 @@ function recurringRoleForAgent(mission: Mission, agentId: string): MissionCronRo
     : 'worker'
 }
 
+function createMissionAbortError(message = 'Mission cron operation aborted') {
+  const error = new Error(message)
+  error.name = 'AbortError'
+  return error
+}
+
+function resolveResourceAwareConcurrency(
+  explicitLimit: number | undefined,
+  envValue: string | undefined,
+  defaults: { min: number; max: number; memBytesPerSlot: number },
+): number {
+  if (typeof explicitLimit === 'number' && Number.isFinite(explicitLimit) && explicitLimit >= 1) {
+    return Math.max(1, Math.min(32, Math.floor(explicitLimit)))
+  }
+  const parsedEnv = envValue ? Number(envValue) : NaN
+  if (Number.isFinite(parsedEnv) && parsedEnv >= 1) {
+    return Math.max(1, Math.min(32, Math.floor(parsedEnv)))
+  }
+  const cpuCount = typeof os.availableParallelism === 'function'
+    ? os.availableParallelism()
+    : (os.cpus()?.length || 4)
+  const memSlots = Math.max(1, Math.floor(os.totalmem() / defaults.memBytesPerSlot))
+  return Math.max(defaults.min, Math.min(defaults.max, Math.min(cpuCount, memSlots)))
+}
+
+function createCancellableSemaphore(maxConcurrency: number) {
+  const capacity = Math.max(1, Math.floor(maxConcurrency))
+  let activeCount = 0
+  type QueueWaiter = {
+    grant: () => void
+  }
+  const waiters: QueueWaiter[] = []
+
+  const release = () => {
+    while (waiters.length > 0) {
+      const next = waiters.shift()
+      if (next) {
+        next.grant()
+        return
+      }
+    }
+    activeCount = Math.max(0, activeCount - 1)
+  }
+
+  async function run<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    if (signal?.aborted) throw createMissionAbortError()
+    if (activeCount < capacity) {
+      activeCount += 1
+    } else {
+      await new Promise<void>((resolve, reject) => {
+        const onAbort = () => {
+          const index = waiters.indexOf(waiter)
+          if (index >= 0) waiters.splice(index, 1)
+          reject(createMissionAbortError())
+        }
+        const waiter: QueueWaiter = {
+          grant: () => {
+            signal?.removeEventListener('abort', onAbort)
+            resolve()
+          },
+        }
+        if (signal) {
+          signal.addEventListener('abort', onAbort, { once: true })
+          if (signal.aborted) {
+            signal.removeEventListener('abort', onAbort)
+            reject(createMissionAbortError())
+            return
+          }
+        }
+        waiters.push(waiter)
+      })
+    }
+    if (signal?.aborted) {
+      release()
+      throw createMissionAbortError()
+    }
+    try {
+      return await operation()
+    } finally {
+      release()
+    }
+  }
+
+  return {
+    run,
+    capacity,
+    get active() {
+      return activeCount
+    },
+    get pending() {
+      return waiters.length
+    },
+  }
+}
+
+function mergeRuntimeSnapshotsIntoMap(
+  target: Map<string, MissionCronRuntimeSnapshot>,
+  incoming: MissionCronRuntimeSnapshot[],
+) {
+  for (const snapshot of incoming) {
+    if (snapshot?.cronId) target.set(snapshot.cronId, snapshot)
+  }
+  return target
+}
+
 export function createMissionSchedulerService(options: MissionSchedulerServiceOptions) {
   const now = () => options.now?.() || new Date()
   const nowMs = () => now().getTime()
   const isoNow = () => now().toISOString()
   const randomId = () => options.randomId?.() || randomUUID()
   const safeError = (error: unknown, maxLength = 220) => options.redactSensitiveText(options.trimTask(String(error), maxLength))
+  const setupSemaphore = createCancellableSemaphore(
+    resolveResourceAwareConcurrency(
+      options.maxConcurrentCronSetups,
+      process.env.CONTROL_CENTER_MISSION_MAX_CONCURRENT_SETUPS,
+      { min: 3, max: 6, memBytesPerSlot: Math.round(1.5 * 1024 * 1024 * 1024) },
+    ),
+  )
+  const runSemaphore = createCancellableSemaphore(
+    resolveResourceAwareConcurrency(
+      options.maxConcurrentCronRuns,
+      process.env.CONTROL_CENTER_MISSION_MAX_CONCURRENT_RUNS,
+      { min: 3, max: 4, memBytesPerSlot: 2 * 1024 * 1024 * 1024 },
+    ),
+  )
   let runtimeReconciliationInFlight: Promise<void> | null = null
+  let queuedRuntimeSnapshots: Map<string, MissionCronRuntimeSnapshot> | null = null
 
   function missionRemainingDurationMinutes(mission: Pick<Mission, 'endAt'>) {
     if (!mission.endAt) return 0
@@ -627,11 +751,21 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
     const evidence = { finalReply: '', progress: '', timestamp: null as string | null }
     const startedMs = startedAt ? Date.parse(startedAt) : NaN
     // A nearby file or undated answer is not proof of this invocation. Also
-    // constrain runtime-supplied identifiers before resolving filesystem paths.
-    if (!/^[a-z0-9][a-z0-9_-]{0,160}$/i.test(sessionId) || !Number.isFinite(startedMs)) return evidence
+    // constrain runtime-supplied identifiers and enforce regular-file containment
+    // under openClawAgentsRoot before reading session evidence.
+    if (
+      !/^[a-z0-9][a-z0-9_-]{0,120}$/i.test(agentId)
+      || !/^[a-z0-9][a-z0-9_-]{0,160}$/i.test(sessionId)
+      || !Number.isFinite(startedMs)
+    ) {
+      return evidence
+    }
     const file = path.join(options.openClawAgentsRoot, agentId, 'sessions', `${sessionId}.jsonl`)
     try {
-      for await (const line of readSessionLinesReverse(file)) {
+      const safeFile = await assertContainedRegularFilePath(file, {
+        allowedRoots: [options.openClawAgentsRoot],
+      })
+      for await (const line of readSessionLinesReverse(safeFile)) {
         try {
           const parsed = JSON.parse(line) as { type?: unknown; timestamp?: unknown; message?: { role?: unknown; content?: unknown; isError?: unknown; timestamp?: unknown } }
           const message = parsed.message
@@ -709,12 +843,20 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
       '--no-deliver',
       '--json',
     ]
-    await options.ensureGatewayReadyForCronMission()
-    const created = await options.runOpenClaw(cronArgs, 90000, {
-      cwd: options.runCwdForContext(context),
-      envOverrides: await options.getAgentAuthEnv(agentId),
-      signal: params.signal,
-    })
+    const isMissionInactive = () =>
+      mission.status !== 'active'
+      || (options.missions.has(mission.id) && options.missions.get(mission.id)?.status !== 'active')
+    const created = await setupSemaphore.run(async () => {
+      if (params.signal?.aborted || isMissionInactive()) {
+        throw createMissionAbortError('Mission stopped before cron job creation')
+      }
+      await options.ensureGatewayReadyForCronMission()
+      return options.runOpenClaw(cronArgs, 90000, {
+        cwd: options.runCwdForContext(context),
+        envOverrides: await options.getAgentAuthEnv(agentId),
+        signal: params.signal,
+      })
+    }, params.signal)
     if (created.code !== 0) throw new Error(created.stderr || created.stdout || 'Failed to create mission cron job')
     const cronId = parseCronIdFromOutput(created.stdout)
     if (!cronId) throw new Error(`Mission cron job created but id was not parsed: ${created.stdout}`)
@@ -744,6 +886,11 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
     }
     mission.scheduler.jobs.unshift(job)
     if (mission.scheduler.jobs.length > 160) mission.scheduler.jobs.length = 160
+    if (params.signal?.aborted || isMissionInactive()) {
+      await removeMissionCronJob(job).catch(() => undefined)
+      options.persistMissionRecord(mission, `cron-job-aborted-during-create:${job.id}`)
+      throw createMissionAbortError('Mission stopped during cron job creation')
+    }
     options.persistMissionRecord(mission, `cron-job-created:${job.id}`)
     options.pushMissionEvent({
       missionId: mission.id,
@@ -808,12 +955,20 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
       '--no-deliver',
       '--json',
     ]
-    await options.ensureGatewayReadyForCronMission()
-    const created = await options.runOpenClaw(cronArgs, 90000, {
-      cwd: options.runCwdForContext(context),
-      envOverrides: await options.getAgentAuthEnv(agentId),
-      signal: params.signal,
-    })
+    const isMissionInactive = () =>
+      mission.status !== 'active'
+      || (options.missions.has(mission.id) && options.missions.get(mission.id)?.status !== 'active')
+    const created = await setupSemaphore.run(async () => {
+      if (params.signal?.aborted || isMissionInactive()) {
+        throw createMissionAbortError('Recurring mission setup aborted before cron job creation')
+      }
+      await options.ensureGatewayReadyForCronMission()
+      return options.runOpenClaw(cronArgs, 90000, {
+        cwd: options.runCwdForContext(context),
+        envOverrides: await options.getAgentAuthEnv(agentId),
+        signal: params.signal,
+      })
+    }, params.signal)
     if (created.code !== 0) throw new Error(created.stderr || created.stdout || 'Failed to create recurring mission cron job')
     const cronId = parseCronIdFromOutput(created.stdout)
     if (!cronId) throw new Error(`Recurring mission cron job created but id was not parsed: ${created.stdout}`)
@@ -844,6 +999,11 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
     }
     mission.scheduler.jobs.unshift(job)
     if (mission.scheduler.jobs.length > 160) mission.scheduler.jobs.length = 160
+    if (params.signal?.aborted || isMissionInactive()) {
+      await removeMissionCronJob(job).catch(() => undefined)
+      options.persistMissionRecord(mission, `recurring-cron-job-aborted-during-create:${job.id}`)
+      throw createMissionAbortError('Recurring mission setup aborted during cron job creation')
+    }
     options.persistMissionRecord(mission, `recurring-cron-job-created:${job.id}`)
     options.setActiveShift(`mission:${job.id}`, {
       id: `mission:${job.id}`,
@@ -902,7 +1062,8 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
 
   async function removeMissionCronJob(job: MissionCronJob, signal?: AbortSignal): Promise<MissionCronCleanupResult> {
     const previousStatus = job.status
-    const remove = await options.runOpenClaw(['cron', 'rm', job.cronId, '--json'], 45000, { signal }).catch((error) => ({
+    const cleanupSignal = signal && !signal.aborted ? signal : undefined
+    const remove = await options.runOpenClaw(['cron', 'rm', job.cronId, '--json'], 45000, { signal: cleanupSignal }).catch((error) => ({
       stdout: '',
       stderr: String(error),
       code: 1,
@@ -912,7 +1073,7 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
       options.clearShiftRuntimeStateForCronId(job.cronId)
       return missionCronCleanupResult(job, previousStatus, true, 'removed')
     }
-    const disable = await options.runOpenClaw(['cron', 'disable', job.cronId], 45000, { signal }).catch((error) => ({
+    const disable = await options.runOpenClaw(['cron', 'disable', job.cronId], 45000, { signal: cleanupSignal }).catch((error) => ({
       stdout: '',
       stderr: String(error),
       code: 1,
@@ -935,30 +1096,55 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
     runOptions: { preserveRecurringSchedule?: boolean; trigger?: 'immediate-kickoff' | 'scheduled-round' } = {},
   ) {
     const mission = options.missions.get(job.missionId)
-    if (!mission || mission.status !== 'active') return { ok: false, summary: 'mission is not active' }
+    if (!mission || mission.status !== 'active') {
+      if (!runOptions.preserveRecurringSchedule) {
+        await removeMissionCronJob(job).catch(() => undefined)
+      }
+      return { ok: false, summary: 'mission is not active' }
+    }
     const runtime = await options.resolveMissionCronRuntimeDefaultsForAgent(job.agentId)
     const context = await options.resolveAgentRunContext(job.agentId)
     const envOverrides = await options.getAgentAuthEnv(job.agentId)
     const waitTimeout = `${Math.max(60, runtime.timeoutSeconds + 60)}s`
-    await options.ensureGatewayReadyForCronMission()
-    job.status = 'running'
-    job.startedAt = isoNow()
-    mission.scheduler.activeJobId = job.id
-    options.persistMissionRecord(mission, `cron-job-running:${job.id}`)
-    options.pushMissionEvent({
-      missionId: mission.id,
-      type: 'agent_update',
-      agentId: job.agentId,
-      message: runOptions.trigger === 'immediate-kickoff'
-        ? `Immediate kickoff started: ${job.agentId} (${job.role}).`
-        : `Cron ${job.role} round ${job.round} started`,
-    })
+    let startedExecution = false
+    let result: MissionSchedulerOpenClawResult
+    try {
+      result = await runSemaphore.run(async () => {
+        const currentMission = options.missions.get(job.missionId)
+        if (!currentMission || currentMission.status !== 'active' || signal?.aborted) {
+          throw createMissionAbortError('mission is not active')
+        }
+        await options.ensureGatewayReadyForCronMission()
+        startedExecution = true
+        job.status = 'running'
+        job.startedAt = isoNow()
+        currentMission.scheduler.activeJobId = job.id
+        options.persistMissionRecord(currentMission, `cron-job-running:${job.id}`)
+        options.pushMissionEvent({
+          missionId: currentMission.id,
+          type: 'agent_update',
+          agentId: job.agentId,
+          message: runOptions.trigger === 'immediate-kickoff'
+            ? `Immediate kickoff started: ${job.agentId} (${job.role}).`
+            : `Cron ${job.role} round ${job.round} started`,
+        })
 
-    const result = await options.runOpenClaw(
-      ['cron', 'run', job.cronId, '--wait', '--expect-final', '--wait-timeout', waitTimeout, '--timeout', String((runtime.timeoutSeconds + 90) * 1000)],
-      (runtime.timeoutSeconds + 120) * 1000,
-      { cwd: options.runCwdForContext(context), envOverrides, signal },
-    ).catch(options.openClawErrorResult)
+        return options.runOpenClaw(
+          ['cron', 'run', job.cronId, '--wait', '--expect-final', '--wait-timeout', waitTimeout, '--timeout', String((runtime.timeoutSeconds + 90) * 1000)],
+          (runtime.timeoutSeconds + 120) * 1000,
+          { cwd: options.runCwdForContext(context), envOverrides, signal },
+        ).catch(options.openClawErrorResult)
+      }, signal)
+    } catch (error) {
+      if (!startedExecution) {
+        const currentMission = options.missions.get(job.missionId)
+        if (!runOptions.preserveRecurringSchedule || !currentMission || currentMission.status !== 'active') {
+          await removeMissionCronJob(job).catch(() => undefined)
+        }
+        return { ok: false, summary: safeError(error), stdout: '', stderr: safeError(error), code: 1 }
+      }
+      result = options.openClawErrorResult(error)
+    }
     await options.clearDisallowedAutoModelOverridesForAgent(job.agentId).catch(() => undefined)
     const exitOk = result.code === 0
     const rawExtractedReply = options.extractAgentReply(result.stdout, result.stderr)
@@ -981,7 +1167,8 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
     const combinedOutput = options.stripAnsi(`${result.stderr || ''}\n${result.stdout || ''}`).trim()
     const lowSignalReply = /^(error|failed)$/i.test((extractedReply || '').trim())
     const diagnosticSummary = extractAgentRunDiagnostic(options.stripAnsi, result.stdout, result.stderr)
-    const summary = options.trimTask(progressEvidence || (extractedReply && !lowSignalReply ? extractedReply : diagnosticSummary || combinedOutput) || extractedReply || (ok ? 'completed' : 'failed'), 220)
+    const rawSummary = options.trimTask(progressEvidence || (extractedReply && !lowSignalReply ? extractedReply : diagnosticSummary || combinedOutput) || extractedReply || (ok ? 'completed' : 'failed'), 220)
+    const summary = options.redactSensitiveText(rawSummary)
     const terminalStatus = ok ? 'completed' : 'failed'
     job.status = terminalStatus
     job.endedAt = isoNow()
@@ -1018,12 +1205,13 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
         message: `Agent run finished, but daily memory could not be updated: ${safeError(error, 140)}`,
       })
     })
-    if (runOptions.preserveRecurringSchedule && mission.status === 'active') {
+    const activeAfterRun = options.missions.get(mission.id)?.status === 'active'
+    if (runOptions.preserveRecurringSchedule && activeAfterRun) {
       job.status = 'created'
       options.persistMissionRecord(mission, `recurring-cron-kickoff-${terminalStatus}:${job.id}`)
     } else {
       options.persistMissionRecord(mission, `cron-job-${terminalStatus}:${job.id}`)
-      await removeMissionCronJob(job, signal).catch(() => undefined)
+      await removeMissionCronJob(job).catch(() => undefined)
     }
     return { ok, summary, stdout: result.stdout, stderr: result.stderr, code: result.code }
   }
@@ -1095,10 +1283,16 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
     mission.scheduler.nextRoundAt = new Date(nowMs() + mission.scheduler.cycleIntervalMs).toISOString()
     mission.scheduler.lastError = null
 
+    const setupController = new AbortController()
     try {
       const setupResults = await Promise.allSettled(mission.party.map(async (agentId) => {
         const role = recurringRoleForAgent(mission, agentId)
-        await createRecurringMissionCronJob({ mission, agentId, role })
+        try {
+          await createRecurringMissionCronJob({ mission, agentId, role, signal: setupController.signal })
+        } catch (error) {
+          setupController.abort()
+          throw error
+        }
         const state = assignments.find((entry) => entry.agentId === agentId)
         if (state) {
           state.status = 'queued'
@@ -1311,6 +1505,7 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
   }
 
   async function completeCronMission(mission: Mission, status: MissionStatus, note: string, assignments: TeamSyncAssignment[], activity: string[]) {
+    const safeNote = options.redactSensitiveText(note)
     clearMissionController(mission.id)
     mission.status = status
     mission.completedAt = isoNow()
@@ -1330,7 +1525,7 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
         evidence: { cleanup },
       })
     }
-    options.transitionMissionState(mission, status === 'completed' ? 'completed' : 'cancelled', status === 'completed' ? 'mission_completed' : 'mission_cancelled', note, {
+    options.transitionMissionState(mission, status === 'completed' ? 'completed' : 'cancelled', status === 'completed' ? 'mission_completed' : 'mission_cancelled', safeNote, {
       idempotencyKey: `${mission.id}:${status}:${mission.completedAt}`,
       evidence: {
         round: mission.scheduler.round,
@@ -1339,7 +1534,14 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
         cleanup,
       },
     })
-    await options.recordMissionReport(mission)
+    await Promise.resolve(options.recordMissionReport(mission)).catch((error) => {
+      options.pushMissionEvent({
+        missionId: mission.id,
+        type: 'agent_update',
+        actor: 'scheduler',
+        message: `Mission reached ${status}, but report persistence failed: ${safeError(error, 160)}`,
+      })
+    })
     await options.writeTeamSyncSnapshot({
       missionId: mission.id,
       title: mission.title,
@@ -1349,9 +1551,9 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
         ...entry,
         status: status === 'completed' ? (entry.status === 'failed' ? 'failed' : 'completed') : 'cancelled',
         updatedAt: isoNow(),
-        note: entry.note || note,
+        note: options.redactSensitiveText(entry.note || safeNote),
       })),
-      activity: [`${isoNow()} | ${note}`, ...activity].slice(0, 80),
+      activity: [`${isoNow()} | ${safeNote}`, ...activity].slice(0, 80),
     }).catch((error) => {
       options.pushMissionEvent({
         missionId: mission.id,
@@ -1363,6 +1565,7 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
   }
 
   async function failCronMission(mission: Mission, note: string, assignments: TeamSyncAssignment[], activity: string[]) {
+    const safeNote = options.redactSensitiveText(note)
     clearMissionController(mission.id)
     mission.status = 'cancelled'
     mission.completedAt = isoNow()
@@ -1370,9 +1573,9 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
     mission.scheduler.status = 'failed'
     mission.scheduler.nextRoundAt = null
     mission.scheduler.activeJobId = null
-    mission.scheduler.lastError = note
+    mission.scheduler.lastError = safeNote
     const cleanup = await cleanupMissionCronJobs(mission).catch(missionCronCleanupFailureSummary)
-    options.transitionMissionState(mission, 'failed', 'mission_cancelled', note, {
+    options.transitionMissionState(mission, 'failed', 'mission_cancelled', safeNote, {
       actor: 'scheduler',
       idempotencyKey: `${mission.id}:failed:${mission.completedAt}`,
       evidence: {
@@ -1382,7 +1585,14 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
         cleanup,
       },
     })
-    await options.recordMissionReport(mission)
+    await Promise.resolve(options.recordMissionReport(mission)).catch((error) => {
+      options.pushMissionEvent({
+        missionId: mission.id,
+        type: 'agent_update',
+        actor: 'scheduler',
+        message: `Mission failure was recorded, but report persistence failed: ${safeError(error, 160)}`,
+      })
+    })
     await options.writeTeamSyncSnapshot({
       missionId: mission.id,
       title: mission.title,
@@ -1392,9 +1602,9 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
         ...entry,
         status: entry.status === 'completed' ? 'completed' : 'failed',
         updatedAt: isoNow(),
-        note: entry.note || note,
+        note: options.redactSensitiveText(entry.note || safeNote),
       })),
-      activity: [`${isoNow()} | ${note}`, ...activity].slice(0, 80),
+      activity: [`${isoNow()} | ${safeNote}`, ...activity].slice(0, 80),
     }).catch((error) => {
       options.pushMissionEvent({
         missionId: mission.id,
@@ -1483,6 +1693,13 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
         status: mission.status,
         assignments,
         activity,
+      }).catch((error) => {
+        options.pushMissionEvent({
+          missionId: mission.id,
+          type: 'agent_update',
+          actor: 'scheduler',
+          message: `Cron round ${round} Team Sync kickoff snapshot failed; execution will continue: ${safeError(error, 160)}`,
+        })
       })
 
       if (leaderAgentId) {
@@ -1529,7 +1746,7 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
         if (activity.length > 80) activity.length = 80
       }
 
-      if (reviewerAgentId && options.missions.get(mission.id)?.status === 'active') {
+      if (reviewerAgentId && !controller.signal.aborted && options.missions.get(mission.id)?.status === 'active') {
         const reviewJob = await createMissionCronJob({ mission, agentId: reviewerAgentId, role: 'reviewer', round, signal: controller.signal })
         const reviewResult = await runMissionCronJob(reviewJob, controller.signal)
         if (!reviewResult.ok) roundFailures.push(`${reviewerAgentId} reviewer: ${reviewResult.summary}`)
@@ -1549,6 +1766,13 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
         status: mission.status,
         assignments,
         activity,
+      }).catch((error) => {
+        options.pushMissionEvent({
+          missionId: mission.id,
+          type: 'agent_update',
+          actor: 'scheduler',
+          message: `Cron round ${round} finished, but Team Sync snapshot failed: ${safeError(error, 160)}`,
+        })
       })
     } catch (error) {
       roundFailures.push(safeError(error, 180))
@@ -1583,178 +1807,197 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
   }
 
   function reconcileRecurringMissionCronRuntime(snapshots: MissionCronRuntimeSnapshot[]) {
-    if (runtimeReconciliationInFlight) return runtimeReconciliationInFlight
+    if (runtimeReconciliationInFlight) {
+      queuedRuntimeSnapshots = mergeRuntimeSnapshotsIntoMap(
+        queuedRuntimeSnapshots ?? new Map<string, MissionCronRuntimeSnapshot>(),
+        snapshots,
+      )
+      return runtimeReconciliationInFlight
+    }
     runtimeReconciliationInFlight = (async () => {
-      const byCronId = new Map(snapshots.map((snapshot) => [snapshot.cronId, snapshot]))
-      for (const mission of options.missions.values()) {
-        if (mission.status !== 'active' || mission.mode === 'instant') continue
-        // Manual immediate kickoff runs are already tracked by runMissionCronJob.
-        // Ignoring the native row until that wrapper finishes prevents the poller
-        // from counting the same cron execution a second time.
-        if (options.missionRunControllers.has(mission.id)) continue
-        const recurringJobs = mission.scheduler.jobs.filter((job) => job.scheduleKind === 'recurring' || (job.round === 0 && createMissionCronJobNeedsRecovery(job)))
-        if (!recurringJobs.length) continue
-        let changed = false
+      let byCronId = mergeRuntimeSnapshotsIntoMap(new Map<string, MissionCronRuntimeSnapshot>(), snapshots)
+      while (true) {
+        for (const mission of options.missions.values()) {
+          if (mission.status !== 'active' || mission.mode === 'instant') continue
+          // Manual immediate kickoff runs are already tracked by runMissionCronJob.
+          // Ignoring the native row until that wrapper finishes prevents the poller
+          // from counting the same cron execution a second time.
+          if (options.missionRunControllers.has(mission.id)) continue
+          const recurringJobs = mission.scheduler.jobs.filter((job) => job.scheduleKind === 'recurring' || (job.round === 0 && createMissionCronJobNeedsRecovery(job)))
+          if (!recurringJobs.length) continue
+          let changed = false
 
-        for (const job of recurringJobs) {
-          const snapshot = byCronId.get(job.cronId)
-          if (!snapshot) continue
-          const runningAtMs = snapshot.runningAt ? Date.parse(snapshot.runningAt) : NaN
-          const lastRunAtMs = snapshot.lastRunAt ? Date.parse(snapshot.lastRunAt) : NaN
-          const observedLastRunAtMs = job.lastRunAt ? Date.parse(job.lastRunAt) : NaN
-          const observedStartedAtMs = job.startedAt ? Date.parse(job.startedAt) : NaN
-          const isSkippedStatus = /^skipped$/i.test(snapshot.lastRunStatus || '')
-          const terminalStatus = /^(ok|completed|success)$/i.test(snapshot.lastRunStatus || '')
-            ? 'completed'
-            : /^(error|failed|timeout|timed_out|cancelled)$/i.test(snapshot.lastRunStatus || '')
-              ? 'failed'
-              : null
-          const lastRunIsNew = Number.isFinite(lastRunAtMs)
-            && lastRunAtMs > (Number.isFinite(observedLastRunAtMs) ? observedLastRunAtMs : 0)
-          const terminalReplacesSkip = terminalStatus !== null
-            && job.lastRunStatus === 'skipped'
-            && Number.isFinite(lastRunAtMs)
-            && (
-              lastRunAtMs === observedLastRunAtMs
-              || (
-                job.status === 'running'
-                && (!Number.isFinite(runningAtMs) || runningAtMs > lastRunAtMs)
-                && Number.isFinite(observedStartedAtMs)
-                && lastRunAtMs >= observedStartedAtMs
+          for (const job of recurringJobs) {
+            const snapshot = byCronId.get(job.cronId)
+            if (!snapshot) continue
+            const runningAtMs = snapshot.runningAt ? Date.parse(snapshot.runningAt) : NaN
+            const lastRunAtMs = snapshot.lastRunAt ? Date.parse(snapshot.lastRunAt) : NaN
+            const observedLastRunAtMs = job.lastRunAt ? Date.parse(job.lastRunAt) : NaN
+            const observedStartedAtMs = job.startedAt ? Date.parse(job.startedAt) : NaN
+            const isSkippedStatus = /^skipped$/i.test(snapshot.lastRunStatus || '')
+            const terminalStatus = /^(ok|completed|success)$/i.test(snapshot.lastRunStatus || '')
+              ? 'completed'
+              : /^(error|failed|timeout|timed_out|cancelled)$/i.test(snapshot.lastRunStatus || '')
+                ? 'failed'
+                : null
+            const lastRunIsNew = Number.isFinite(lastRunAtMs)
+              && lastRunAtMs > (Number.isFinite(observedLastRunAtMs) ? observedLastRunAtMs : 0)
+            const terminalReplacesSkip = terminalStatus !== null
+              && job.lastRunStatus === 'skipped'
+              && Number.isFinite(lastRunAtMs)
+              && (
+                lastRunAtMs === observedLastRunAtMs
+                || (
+                  job.status === 'running'
+                  && (!Number.isFinite(runningAtMs) || runningAtMs > lastRunAtMs)
+                  && Number.isFinite(observedStartedAtMs)
+                  && lastRunAtMs >= observedStartedAtMs
+                )
               )
-            )
 
-          if (isSkippedStatus && lastRunIsNew) {
-            const activeExecutionContinues = Number.isFinite(runningAtMs)
-            job.lastRunAt = snapshot.lastRunAt
-            job.lastRunStatus = 'skipped'
-            job.summary = snapshot.lastError
-              ? safeError(snapshot.lastError)
-              : activeExecutionContinues
-                ? 'Scheduled cron trigger skipped while active execution continues.'
-                : 'Scheduled cron trigger skipped.'
-            if (!activeExecutionContinues && job.status === 'running') {
+            if (isSkippedStatus && lastRunIsNew) {
+              const activeExecutionContinues = Number.isFinite(runningAtMs)
+              job.lastRunAt = snapshot.lastRunAt
+              job.lastRunStatus = 'skipped'
+              job.summary = snapshot.lastError
+                ? safeError(snapshot.lastError)
+                : activeExecutionContinues
+                  ? 'Scheduled cron trigger skipped while active execution continues.'
+                  : 'Scheduled cron trigger skipped.'
+              if (!activeExecutionContinues && job.status === 'running') {
+                job.status = 'created'
+                if (mission.scheduler.activeJobId === job.id) mission.scheduler.activeJobId = null
+              }
+              changed = true
+              options.pushMissionEvent({
+                missionId: mission.id,
+                type: 'agent_update',
+                agentId: job.agentId,
+                actor: 'scheduler',
+                message: `Scheduled cycle skipped: ${job.agentId} (${job.role}) — ${job.summary}`,
+                evidence: {
+                  cronId: job.cronId,
+                  runningAt: snapshot.runningAt,
+                  lastRunAt: snapshot.lastRunAt,
+                  lastRunStatus: snapshot.lastRunStatus,
+                  nextRunAt: snapshot.nextRunAt,
+                },
+              })
+            } else if (terminalStatus !== null && (lastRunIsNew || terminalReplacesSkip)) {
+              job.status = 'created'
+              job.endedAt = snapshot.lastRunAt
+              job.lastRunAt = snapshot.lastRunAt
+              job.lastRunStatus = terminalStatus
+              job.runCount = Math.max(0, job.runCount || 0) + 1
+              job.completedRunCount = Math.max(0, job.completedRunCount || 0) + (terminalStatus === 'completed' ? 1 : 0)
+              job.failedRunCount = Math.max(0, job.failedRunCount || 0) + (terminalStatus === 'failed' ? 1 : 0)
+              job.summary = terminalStatus === 'completed'
+                ? 'Scheduled cron cycle completed.'
+                : snapshot.lastError ? safeError(snapshot.lastError) : `Scheduled cron cycle ended with ${snapshot.lastRunStatus || 'an error'}.`
+              if (mission.scheduler.activeJobId === job.id) mission.scheduler.activeJobId = null
+              if (terminalStatus === 'failed') mission.scheduler.lastError = `${job.agentId} scheduled cycle failed: ${job.summary}`
+              changed = true
+              options.pushMissionEvent({
+                missionId: mission.id,
+                type: 'agent_update',
+                agentId: job.agentId,
+                actor: 'scheduler',
+                message: terminalStatus === 'completed'
+                  ? `Scheduled cycle completed: ${job.agentId} (${job.role}).`
+                  : `Scheduled cycle failed: ${job.agentId} (${job.role}) — ${job.summary}`,
+                evidence: {
+                  cronId: job.cronId,
+                  lastRunAt: snapshot.lastRunAt,
+                  lastRunStatus: snapshot.lastRunStatus,
+                  nextRunAt: snapshot.nextRunAt,
+                },
+              })
+            } else if (!Number.isFinite(runningAtMs) && job.status === 'running') {
               job.status = 'created'
               if (mission.scheduler.activeJobId === job.id) mission.scheduler.activeJobId = null
+              changed = true
             }
-            changed = true
-            options.pushMissionEvent({
-              missionId: mission.id,
-              type: 'agent_update',
-              agentId: job.agentId,
-              actor: 'scheduler',
-              message: `Scheduled cycle skipped: ${job.agentId} (${job.role}) — ${job.summary}`,
-              evidence: {
-                cronId: job.cronId,
-                runningAt: snapshot.runningAt,
-                lastRunAt: snapshot.lastRunAt,
-                lastRunStatus: snapshot.lastRunStatus,
-                nextRunAt: snapshot.nextRunAt,
-              },
-            })
-          } else if (terminalStatus !== null && (lastRunIsNew || terminalReplacesSkip)) {
-            job.status = 'created'
-            job.endedAt = snapshot.lastRunAt
-            job.lastRunAt = snapshot.lastRunAt
-            job.lastRunStatus = terminalStatus
-            job.runCount = Math.max(0, job.runCount || 0) + 1
-            job.completedRunCount = Math.max(0, job.completedRunCount || 0) + (terminalStatus === 'completed' ? 1 : 0)
-            job.failedRunCount = Math.max(0, job.failedRunCount || 0) + (terminalStatus === 'failed' ? 1 : 0)
-            job.summary = terminalStatus === 'completed'
-              ? 'Scheduled cron cycle completed.'
-              : snapshot.lastError ? safeError(snapshot.lastError) : `Scheduled cron cycle ended with ${snapshot.lastRunStatus || 'an error'}.`
-            if (mission.scheduler.activeJobId === job.id) mission.scheduler.activeJobId = null
-            if (terminalStatus === 'failed') mission.scheduler.lastError = `${job.agentId} scheduled cycle failed: ${job.summary}`
-            changed = true
-            options.pushMissionEvent({
-              missionId: mission.id,
-              type: 'agent_update',
-              agentId: job.agentId,
-              actor: 'scheduler',
-              message: terminalStatus === 'completed'
-                ? `Scheduled cycle completed: ${job.agentId} (${job.role}).`
-                : `Scheduled cycle failed: ${job.agentId} (${job.role}) — ${job.summary}`,
-              evidence: {
-                cronId: job.cronId,
-                lastRunAt: snapshot.lastRunAt,
-                lastRunStatus: snapshot.lastRunStatus,
-                nextRunAt: snapshot.nextRunAt,
-              },
-            })
-          } else if (!Number.isFinite(runningAtMs) && job.status === 'running') {
-            job.status = 'created'
-            if (mission.scheduler.activeJobId === job.id) mission.scheduler.activeJobId = null
-            changed = true
+
+            const latestNonSkippedRunAtMs = !isSkippedStatus && Number.isFinite(lastRunAtMs)
+              ? lastRunAtMs
+              : (!isSkippedStatus && job.lastRunStatus !== 'skipped' && Number.isFinite(observedLastRunAtMs) ? observedLastRunAtMs : 0)
+            const runningIsNew = Number.isFinite(runningAtMs)
+              && runningAtMs > Math.max(latestNonSkippedRunAtMs, Number.isFinite(observedStartedAtMs) ? observedStartedAtMs : 0)
+
+            if (runningIsNew && job.status !== 'running') {
+              job.status = 'running'
+              job.startedAt = snapshot.runningAt
+              job.endedAt = null
+              mission.scheduler.status = 'running'
+              mission.scheduler.activeJobId = job.id
+              changed = true
+              options.pushMissionEvent({
+                missionId: mission.id,
+                type: 'agent_update',
+                agentId: job.agentId,
+                actor: 'scheduler',
+                message: `Scheduled cycle started: ${job.agentId} (${job.role}).`,
+                evidence: { cronId: job.cronId, runningAt: snapshot.runningAt },
+              })
+            }
           }
 
-          const latestNonSkippedRunAtMs = !isSkippedStatus && Number.isFinite(lastRunAtMs)
-            ? lastRunAtMs
-            : (!isSkippedStatus && job.lastRunStatus !== 'skipped' && Number.isFinite(observedLastRunAtMs) ? observedLastRunAtMs : 0)
-          const runningIsNew = Number.isFinite(runningAtMs)
-            && runningAtMs > Math.max(latestNonSkippedRunAtMs, Number.isFinite(observedStartedAtMs) ? observedStartedAtMs : 0)
-
-          if (runningIsNew && job.status !== 'running') {
-            job.status = 'running'
-            job.startedAt = snapshot.runningAt
-            job.endedAt = null
+          const nextRunTimes = recurringJobs
+            .map((job) => byCronId.get(job.cronId)?.nextRunAt || null)
+            .filter((value): value is string => Boolean(value && Number.isFinite(Date.parse(value))))
+            .sort((left, right) => Date.parse(left) - Date.parse(right))
+          const nextRoundAt = nextRunTimes[0] || mission.scheduler.nextRoundAt
+          if (nextRoundAt !== mission.scheduler.nextRoundAt) {
+            mission.scheduler.nextRoundAt = nextRoundAt
+            changed = true
+          }
+          const activeJob = recurringJobs.find((job) => job.status === 'running')
+          if (activeJob) {
             mission.scheduler.status = 'running'
-            mission.scheduler.activeJobId = job.id
+            mission.scheduler.activeJobId = activeJob.id
+          } else if (mission.scheduler.status === 'running') {
+            mission.scheduler.status = 'waiting'
+            mission.scheduler.activeJobId = null
             changed = true
-            options.pushMissionEvent({
-              missionId: mission.id,
-              type: 'agent_update',
-              agentId: job.agentId,
-              actor: 'scheduler',
-              message: `Scheduled cycle started: ${job.agentId} (${job.role}).`,
-              evidence: { cronId: job.cronId, runningAt: snapshot.runningAt },
+          }
+          const completedCycles = Math.min(...recurringJobs.map((job) => Math.max(0, job.runCount || 0)))
+          if (Number.isFinite(completedCycles) && completedCycles > mission.scheduler.round) {
+            mission.scheduler.round = completedCycles
+            changed = true
+          }
+          if (changed) options.persistMissionRecord(mission, 'recurring-cron-runtime-reconciled')
+
+          if (mission.scheduler.maxCycles !== null && completedCycles >= mission.scheduler.maxCycles) {
+            const assignments = mission.party.map((agentId) => ({
+              agentId,
+              task: mission.brief,
+              status: 'completed' as const,
+              updatedAt: isoNow(),
+              note: `completed ${completedCycles} scheduled cycle(s)`,
+            }))
+            await completeCronMission(
+              mission,
+              'completed',
+              `Mission completed after ${completedCycles} scheduled cycle(s): ${mission.title}`,
+              assignments,
+              [`${isoNow()} | scheduler | cycle limit reached (${completedCycles})`],
+            ).catch((error) => {
+              options.pushMissionEvent({
+                missionId: mission.id,
+                type: 'agent_update',
+                actor: 'scheduler',
+                message: `Cycle-limit mission completion encountered an error: ${safeError(error, 160)}`,
+              })
             })
           }
         }
-
-        const nextRunTimes = recurringJobs
-          .map((job) => byCronId.get(job.cronId)?.nextRunAt || null)
-          .filter((value): value is string => Boolean(value && Number.isFinite(Date.parse(value))))
-          .sort((left, right) => Date.parse(left) - Date.parse(right))
-        const nextRoundAt = nextRunTimes[0] || mission.scheduler.nextRoundAt
-        if (nextRoundAt !== mission.scheduler.nextRoundAt) {
-          mission.scheduler.nextRoundAt = nextRoundAt
-          changed = true
-        }
-        const activeJob = recurringJobs.find((job) => job.status === 'running')
-        if (activeJob) {
-          mission.scheduler.status = 'running'
-          mission.scheduler.activeJobId = activeJob.id
-        } else if (mission.scheduler.status === 'running') {
-          mission.scheduler.status = 'waiting'
-          mission.scheduler.activeJobId = null
-          changed = true
-        }
-        const completedCycles = Math.min(...recurringJobs.map((job) => Math.max(0, job.runCount || 0)))
-        if (Number.isFinite(completedCycles) && completedCycles > mission.scheduler.round) {
-          mission.scheduler.round = completedCycles
-          changed = true
-        }
-        if (changed) options.persistMissionRecord(mission, 'recurring-cron-runtime-reconciled')
-
-        if (mission.scheduler.maxCycles !== null && completedCycles >= mission.scheduler.maxCycles) {
-          const assignments = mission.party.map((agentId) => ({
-            agentId,
-            task: mission.brief,
-            status: 'completed' as const,
-            updatedAt: isoNow(),
-            note: `completed ${completedCycles} scheduled cycle(s)`,
-          }))
-          await completeCronMission(
-            mission,
-            'completed',
-            `Mission completed after ${completedCycles} scheduled cycle(s): ${mission.title}`,
-            assignments,
-            [`${isoNow()} | scheduler | cycle limit reached (${completedCycles})`],
-          )
-        }
+        if (!queuedRuntimeSnapshots || queuedRuntimeSnapshots.size === 0) break
+        byCronId = queuedRuntimeSnapshots
+        queuedRuntimeSnapshots = null
       }
     })().finally(() => {
       runtimeReconciliationInFlight = null
+      queuedRuntimeSnapshots = null
     })
     return runtimeReconciliationInFlight
   }

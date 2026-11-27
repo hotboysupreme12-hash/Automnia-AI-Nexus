@@ -121,3 +121,107 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+.dy-background-action-toast {
+  position: fixed;
+  z-index: 1000;
+  inset-inline: 16px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  width: min(560px, calc(100vw - 32px));
+  margin-inline: auto;
+  border: 1px solid rgba(201, 211, 219, 0.18);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: #e4e8eb;
+  background: rgba(43, 49, 55, 0.94);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  font-size: 12px;
+  line-height: 1.4;
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 240ms ease, transform 240ms ease;
+}
+
+.dy-background-action-toast.is-fading {
+  opacity: 0;
+  transform: translateY(5px);
+  pointer-events: none;
+}
+
+.dy-background-action-toast__row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.dy-background-action-toast__dot {
+  flex: 0 0 auto;
+  color: #d8bd7c;
+  font-size: 8px;
+}
+
+.dy-background-action-toast__message {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  color: #e4e8eb;
+}
+
+.dy-background-action-toast__dismiss {
+  flex: 0 0 auto;
+  border: 1px solid rgba(213, 222, 228, 0.18);
+  border-radius: 7px;
+  padding: 5px 9px;
+  color: #c5cdd2;
+  background: rgba(255, 255, 255, 0.035);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease;
+}
+
+.dy-background-action-toast__dismiss:hover,
+.dy-background-action-toast__dismiss:focus-visible {
+  border-color: rgba(213, 222, 228, 0.36);
+  color: #f0f3f5;
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
+}
+
+.dy-background-action-toast__details {
+  margin: 8px 0 0 17px;
+  border-top: 1px solid rgba(213, 222, 228, 0.1);
+  padding-top: 6px;
+}
+
+.dy-background-action-toast__details summary {
+  width: fit-content;
+  color: #aeb8bf;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.dy-background-action-toast__details pre {
+  max-height: 160px;
+  overflow: auto;
+  margin: 7px 0 0;
+  border: 1px solid rgba(213, 222, 228, 0.1);
+  border-radius: 7px;
+  padding: 9px;
+  color: #ccd4da;
+  background: rgba(12, 15, 18, 0.34);
+  font-family: "Geist Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dy-background-action-toast {
+    transition-duration: 0.001ms;
+  }
+}

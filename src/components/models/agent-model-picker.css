@@ -6,9 +6,9 @@
     min-width: 0 !important;
   }
   html body [data-editor-panel="model"] .agent-model-settings :is(.amp-primary, .amp-backups) {
-    border: 1px solid #30363e !important;
-    border-radius: 10px !important;
-    background: #191d23 !important;
+    border: 1px solid #373e44 !important;
+    border-radius: 3px !important;
+    background: #1b1e21 !important;
     padding: 20px !important;
   }
   html body [data-editor-panel="model"] .agent-model-settings .amp-row {
@@ -56,7 +56,7 @@
   }
   html body [data-editor-panel="model"] .agent-model-settings button {
     padding: 8px 12px !important;
-    border: 1px solid #3a434e !important;
+    border: 1px solid #454b51 !important;
     background: transparent !important;
     color: #d6dde5 !important;
     min-height: 38px !important;
@@ -64,13 +64,13 @@
     font-weight: 500 !important;
   }
   html body [data-editor-panel="model"] .agent-model-settings button:hover:not(:disabled) {
-    background: #273039 !important;
+    background: #30363b !important;
     color: #fff !important;
   }
   html body [data-editor-panel="model"] .agent-model-settings .amp-change {
-    background: #d8e3e3 !important;
-    border-color: #d8e3e3 !important;
-    color: #172224 !important;
+    background: #30363b !important;
+    border-color: #59626a !important;
+    color: #f0f2f4 !important;
     flex-shrink: 0 !important;
   }
   html body [data-editor-panel="model"] .agent-model-settings .amp-secondary-actions {
@@ -98,7 +98,7 @@
   html body [data-editor-panel="model"] .amp-backup-body { padding-top: 16px !important; }
   html body [data-editor-panel="model"] .amp-backup-body > p { margin-bottom: 14px !important; }
   html body [data-editor-panel="model"] .amp-backup-body ol { padding: 0 !important; margin: 0 0 16px !important; }
-  html body [data-editor-panel="model"] .amp-backup-body li { padding: 12px 0 !important; border-bottom: 1px solid #30363e !important; }
+  html body [data-editor-panel="model"] .amp-backup-body li { padding: 12px 0 !important; border-bottom: 1px solid #373e44 !important; }
   html body [data-editor-panel="model"] .amp-order { color: #9da7b5 !important; font-variant-numeric: tabular-nums !important; }
   html body [data-editor-panel="model"] .amp-chooser {
     margin-top: 18px !important;
@@ -112,7 +112,7 @@
   html body [data-editor-panel="model"] .agent-model-settings .amp-filters button[aria-pressed="true"] { border-color: #587971 !important; background: #293c3c !important; color: #e6f4f0 !important; }
   html body [data-editor-panel="model"] .amp-filters > span { color: #9da7b5 !important; margin-left: auto !important; font-size: 12px !important; }
   html body [data-editor-panel="model"] .agent-model-settings .amp-provider-chips { display: flex !important; align-items: center !important; gap: 7px !important; flex-wrap: wrap !important; margin: 2px 0 14px !important; }
-  html body [data-editor-panel="model"] .agent-model-settings .amp-provider-chip { display: inline-flex !important; align-items: center !important; gap: 6px !important; min-height: 32px !important; padding: 6px 10px !important; border: 1px solid #38414b !important; border-radius: 999px !important; background: #20252c !important; color: #b7c0ca !important; font-size: 11px !important; white-space: nowrap !important; }
+  html body [data-editor-panel="model"] .agent-model-settings .amp-provider-chip { display: inline-flex !important; align-items: center !important; gap: 6px !important; min-height: 32px !important; padding: 6px 10px !important; border: 1px solid #38414b !important; border-radius: 3px !important; background: #252a2e !important; color: #b7c0ca !important; font-size: 11px !important; white-space: nowrap !important; }
   html body [data-editor-panel="model"] .agent-model-settings .amp-provider-chip [data-provider-logo] { width: 18px !important; height: 18px !important; border: 0 !important; background: transparent !important; box-shadow: none !important; }
   html body [data-editor-panel="model"] .agent-model-settings .amp-provider-chip[aria-pressed="true"] { border-color: #7c9d96 !important; background: #2c3a3a !important; color: #eef7f3 !important; }
   html body [data-editor-panel="model"] .amp-results { max-height: 310px !important; overflow-y: auto !important; overscroll-behavior: contain !important; scrollbar-gutter: stable !important; }
@@ -124,14 +124,14 @@
     min-height: 62px !important;
     padding: 10px !important;
     border: 0 !important;
-    border-bottom: 1px solid #30363e !important;
+    border-bottom: 1px solid #373e44 !important;
     border-radius: 0 !important;
   }
   html body [data-editor-panel="model"] .amp-result-state { color: #a7c8c1 !important; font-size: 12px !important; }
   html body [data-editor-panel="model"] .amp-empty { padding: 16px 4px !important; }
-  html body [data-editor-panel="model"] [data-model-advanced] { border-top: 1px solid #30363e !important; padding-top: 12px !important; }
+  html body [data-editor-panel="model"] [data-model-advanced] { border-top: 1px solid #373e44 !important; padding-top: 12px !important; }
   html body [data-editor-panel="model"] [data-model-advanced] > summary > span { color: #9da7b5 !important; font-size: 12px !important; }
-  html body [data-editor-panel="model"] [data-model-advanced] > div { margin-top: 12px !important; padding: 18px !important; background: #191d23 !important; border: 1px solid #30363e !important; border-radius: 10px !important; }
+  html body [data-editor-panel="model"] [data-model-advanced] > div { margin-top: 12px !important; padding: 18px !important; background: #1b1e21 !important; border: 1px solid #373e44 !important; border-radius: 3px !important; }
   html body [data-editor-panel="model"] [data-model-advanced] > summary::after { content: '+' !important; color: #a7c8c1 !important; }
   html body [data-editor-panel="model"] [data-model-advanced][open] > summary::after { content: '−' !important; }
   @media (max-width: 520px) {

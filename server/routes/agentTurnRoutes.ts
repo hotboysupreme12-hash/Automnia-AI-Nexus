@@ -1122,7 +1122,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       envOverrides,
       signal: requestAbortController.signal,
       gatewayChat: {
-        enabled: !googleGeminiToolWriteRuntime,
+        enabled: !googleGeminiToolWriteRuntime || Boolean(parsed.data.attachments?.length),
         sessionId,
         requestedSessionKey: parsed.data.sessionKey,
         freshSession: isFreshSession,
@@ -1185,7 +1185,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         signal: requestAbortController.signal,
         retry: false,
         gatewayChat: {
-          enabled: !googleGeminiToolWriteRuntime,
+          enabled: !googleGeminiToolWriteRuntime || Boolean(parsed.data.attachments?.length),
           sessionId,
           requestedSessionKey: parsed.data.sessionKey,
           freshSession: isFreshSession,
@@ -1245,7 +1245,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         signal: requestAbortController.signal,
         retry: false,
         gatewayChat: {
-          enabled: !googleGeminiToolWriteRuntime,
+          enabled: !googleGeminiToolWriteRuntime || Boolean(parsed.data.attachments?.length),
           sessionId: retrySessionId,
           requestedSessionKey: parsed.data.sessionKey,
           freshSession: true,
@@ -1294,7 +1294,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         signal: requestAbortController.signal,
         retry: false,
         gatewayChat: {
-          enabled: !googleGeminiToolWriteRuntime,
+          enabled: !googleGeminiToolWriteRuntime || Boolean(parsed.data.attachments?.length),
           sessionId: retrySessionId,
           requestedSessionKey: parsed.data.sessionKey,
           freshSession: true,
@@ -1347,7 +1347,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
           signal: requestAbortController.signal,
           retry: false,
           gatewayChat: {
-            enabled: !googleGeminiToolWriteRuntime,
+            enabled: !googleGeminiToolWriteRuntime || Boolean(parsed.data.attachments?.length),
             sessionId: retrySessionId,
             requestedSessionKey: parsed.data.sessionKey,
             freshSession: true,
@@ -1401,7 +1401,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
           signal: requestAbortController.signal,
           retry: false,
           gatewayChat: {
-            enabled: !googleGeminiToolWriteRuntime,
+            enabled: !googleGeminiToolWriteRuntime || Boolean(parsed.data.attachments?.length),
             sessionId: retrySessionId,
             requestedSessionKey: parsed.data.sessionKey,
             freshSession: true,

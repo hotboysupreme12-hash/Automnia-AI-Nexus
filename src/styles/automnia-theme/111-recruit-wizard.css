@@ -225,6 +225,47 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-step-intro p
   line-height: 1.55 !important;
 }
 
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-step-intro[data-template-phase="fade-out"] {
+  animation: recruit-template-intro-out .18s ease-in both;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-step-intro[data-template-phase="typing"] {
+  animation: recruit-template-intro-in .3s cubic-bezier(.2, .7, .25, 1) both;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-step-intro[data-has-template="true"] p {
+  min-height: 1.55em;
+  transition: opacity .18s ease-out;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-step-intro[data-template-copy-started="false"] p {
+  opacity: 0;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-intro-caret {
+  display: inline-block;
+  width: 2px;
+  height: .82em;
+  margin-left: 3px;
+  border-radius: 2px;
+  background: var(--recruit-accent-bright);
+  vertical-align: -.04em;
+  animation: recruit-intro-caret-blink .85s steps(2, start) infinite;
+}
+
+@keyframes recruit-template-intro-out {
+  to { opacity: 0; transform: translateY(-5px); }
+}
+
+@keyframes recruit-template-intro-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes recruit-intro-caret-blink {
+  to { opacity: 0; }
+}
+
 /* Shared panels */
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] :is(.dui-recruit-template-panel, .dui-recruit-section, .dui-recruit-files, .dui-recruit-review-strip, .dui-recruit-lane-summary) {
   border: 1px solid var(--recruit-line) !important;
@@ -1333,4 +1374,7 @@ html.dui-pro-overhaul .dui-recruit-editor-dialog .dui-recruit-code-mode > span {
 
 @media (prefers-reduced-motion: reduce) {
   html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-step-window { animation: none !important; }
+  html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-step-intro,
+  html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-intro-caret { animation: none !important; }
+  html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-step-intro p { transition: none !important; }
 }

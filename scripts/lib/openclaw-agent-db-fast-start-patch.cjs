@@ -77,6 +77,7 @@ function ensureAutomniaAgentDatabaseFastStart(vendorRoot) {
   }
 
   const schema = schemaFiles[0]
+  const bypass = `\n\t// ${schemaMarker}\n\tif (r) {\n\t\tr.integrityGateMode = "bypassed";\n\t\tr.integrityGateOutcome = "bypassed";\n\t\tdelete r.integrityGateReason;\n\t}\n\treturn false;\n`
   if (!schema.source.includes(schemaMarker)) {
     const signature = 'function* agentDatabaseIntegrityBeforeMutationSteps('
     const start = schema.source.indexOf(signature)
@@ -84,8 +85,13 @@ function ensureAutomniaAgentDatabaseFastStart(vendorRoot) {
     if (start < 0 || body < 0 || !schema.source.slice(start, body).includes('r,')) {
       throw new Error('[openclaw-vendor] Agent database integrity gate signature changed')
     }
-    const bypass = `\n\t// ${schemaMarker}\n\tif (r) {\n\t\tr.integrityGateMode = "bypassed";\n\t\tr.integrityGateOutcome = "bypassed";\n\t}\n\treturn false;\n`
     fs.writeFileSync(schema.file, `${schema.source.slice(0, body + 1)}${bypass}${schema.source.slice(body + 1)}`)
+  } else if (!schema.source.includes('delete r.integrityGateReason;')) {
+    const previousBypass = `\n\t// ${schemaMarker}\n\tif (r) {\n\t\tr.integrityGateMode = "bypassed";\n\t\tr.integrityGateOutcome = "bypassed";\n\t}\n\treturn false;\n`
+    if (!schema.source.includes(previousBypass)) {
+      throw new Error('[openclaw-vendor] Existing agent database integrity bypass changed')
+    }
+    fs.writeFileSync(schema.file, schema.source.replace(previousBypass, bypass))
   }
 
   const pending = [distRoot]

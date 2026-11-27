@@ -158,6 +158,7 @@ export type PluginApiPayload = PluginsResponse & {
   ok?: boolean
   error?: string
   detail?: string
+  restartPending?: boolean
   command?: PluginCommandResult
   doctor?: PluginCommandResult
   clawTalkSetup?: ClawTalkSetupPayload
@@ -207,6 +208,21 @@ export function runOpenClawPluginCommand(command: string, options: { refreshPlug
       timeoutMs: 620_000,
     },
     'OpenClaw command failed.',
+  )
+}
+
+export function patchTelegramSettings(
+  settings: Record<string, unknown>,
+  changedKeys: string[],
+): Promise<PluginApiPayload> {
+  return pluginApiData<PluginApiPayload>(
+    '/api/openclaw/telegram/settings/apply',
+    {
+      method: 'POST',
+      body: { settings, changedKeys },
+      timeoutMs: 7_230_000,
+    },
+    'Telegram settings could not be applied.',
   )
 }
 

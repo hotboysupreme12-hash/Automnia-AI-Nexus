@@ -45,6 +45,7 @@ type PluginInspectState = {
 let pluginsPanelCache: PluginsResponse | null = null
 
 const PLUGIN_NOTICE_MAX_CHARS = 360
+const GENERIC_PLUGIN_READY_GUIDANCE = 'Ready. Runtime inspect verifies loaded plugin surfaces after install or config changes.'
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -374,6 +375,7 @@ function PluginRow({
   onUninstall: (plugin: PluginEntry) => void
 }) {
   const primaryGuidance = plugin.guidance[0] || (plugin.enabled ? 'Ready after gateway refresh.' : 'Disabled.')
+  const showGuidance = primaryGuidance !== GENERIC_PLUGIN_READY_GUIDANCE
   const busy = Boolean(busyAction || mutationLocked)
   const capabilities = pluginCapabilities(plugin)
   const installable = Boolean(capabilities.install && plugin.installSpec)
@@ -414,17 +416,17 @@ function PluginRow({
             </Badge>
           </div>
           <div className="dy-plugin-card-meta">
-            {plugin.kind && <span>{plugin.kind}</span>}
+            {plugin.kind && plugin.kind.toLowerCase() !== 'plugin' && <span>{plugin.kind}</span>}
             <span>{plugin.category}</span>
             <span>{plugin.distribution || plugin.origin}</span>
             {plugin.catalogSource && <span>{plugin.catalogSource}</span>}
             <code>{plugin.id}</code>
           </div>
           <p className="dy-plugin-card-description">{plugin.description}</p>
-          <div className="dy-plugin-card-signal" data-tone={signalTone}>
+          {showGuidance && <div className="dy-plugin-card-signal" data-tone={signalTone}>
             <span className="dy-plugin-signal-led" aria-hidden="true" />
             <span>{primaryGuidance}</span>
-          </div>
+          </div>}
           {plugin.id === 'clawtalk' && <ClawTalkOperationsCard plugin={plugin} />}
         </div>
       </div>
@@ -1380,12 +1382,11 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
           <div className="dy-plugins-header-identity">
             <div className="dy-plugins-eyebrow">
               <span className="dy-plugin-signal-led" data-tone="healthy" aria-hidden="true" />
-              <span>PLUGIN FABRIC</span>
               <span className="dy-plugins-registry-label">{cacheLabel}</span>
             </div>
             <div className="dy-plugins-title-row">
               <h2>Plugins</h2>
-              <span>plugins, connectors, provider channels, and runtime tools</span>
+              <span>Manage integrations, channels, and tools.</span>
             </div>
           </div>
           <div className="dy-plugins-header-actions">
@@ -1417,7 +1418,7 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
           <div className="dy-plugins-overview-cell" data-tone="neutral">
             <span>Installed</span>
             <strong>{initialLoading ? '—' : stateSummary.installed}</strong>
-            <small>runtime packages, including bundled</small>
+            <small>packages in this runtime</small>
           </div>
           <div className="dy-plugins-overview-cell" data-tone="healthy">
             <span>Active</span>
@@ -1427,12 +1428,12 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
           <div className="dy-plugins-overview-cell" data-tone={initialLoading ? 'neutral' : attentionCount ? 'attention' : 'healthy'}>
             <span>Attention</span>
             <strong>{initialLoading ? '—' : attentionCount}</strong>
-            <small>{initialLoading ? 'checking runtime' : actionFailureCount ? 'plugin action failed' : attentionCount ? 'setup or runtime action' : 'all systems clear'}</small>
+            <small>{initialLoading ? 'checking status' : actionFailureCount ? 'an action failed' : attentionCount ? 'action needed' : 'no issues'}</small>
           </div>
           <div className="dy-plugins-overview-cell" data-tone="muted">
             <span>Available</span>
             <strong>{initialLoading ? '—' : stateSummary.available}</strong>
-            <small>compatible catalog packages</small>
+            <small>compatible catalog plugins</small>
           </div>
         </div>
 

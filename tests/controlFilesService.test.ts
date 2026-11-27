@@ -121,6 +121,65 @@ test('control files service rejects symlink escapes before read and write', asyn
   assert.equal(await fs.readFile(outsidePath, 'utf-8'), 'outside doctrine\n')
 })
 
+test('control files service rejects intra-workspace symlinks, directory targets, and symlinked workspace roots', async (t) => {
+  const workspaceRoot = await createTempWorkspace(t)
+  const service = createControlFilesService(workspaceRoot)
+
+  // Non-regular directory occupying a control file path must be rejected before read/write
+  await fs.mkdir(path.join(workspaceRoot, 'USER.md'))
+  await assert.rejects(
+    service.readFile('USER.md'),
+    /regular file/,
+  )
+  await assert.rejects(
+    service.writeFile('USER.md', '# Not a dir\n'),
+    /regular file/,
+  )
+
+  // Intra-workspace symlink should also be rejected as non-regular file
+  const realInside = path.join(workspaceRoot, 'SOUL.md')
+  await fs.writeFile(realInside, '# Soul\n', 'utf-8')
+  const intraLink = path.join(workspaceRoot, 'IDENTITY.md')
+  let symlinksSupported = true
+  try {
+    await fs.symlink(realInside, intraLink, 'file')
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'EPERM' || code === 'EACCES' || code === 'ENOTSUP' || code === 'EINVAL') {
+      symlinksSupported = false
+    } else {
+      throw error
+    }
+  }
+
+  if (symlinksSupported) {
+    await assert.rejects(
+      service.readFile('IDENTITY.md'),
+      /regular file/,
+    )
+    await assert.rejects(
+      service.writeFile('IDENTITY.md', '# Overwrite via intra-workspace link\n'),
+      /regular file/,
+    )
+    assert.equal(await fs.readFile(realInside, 'utf-8'), '# Soul\n')
+
+    const outsideWorkspace = await createTempWorkspace(t)
+    await fs.writeFile(path.join(outsideWorkspace, 'AGENTS.md'), '# Outside\n', 'utf-8')
+    const symlinkRoot = path.join(workspaceRoot, 'linked-root')
+    await fs.symlink(outsideWorkspace, symlinkRoot, process.platform === 'win32' ? 'junction' : 'dir')
+    const linkedRootService = createControlFilesService(symlinkRoot)
+    await assert.rejects(
+      linkedRootService.readFile('AGENTS.md'),
+      /outside workspace root/,
+    )
+    await assert.rejects(
+      linkedRootService.writeFile('AGENTS.md', '# Pwned\n'),
+      /outside workspace root/,
+    )
+    assert.equal(await fs.readFile(path.join(outsideWorkspace, 'AGENTS.md'), 'utf-8'), '# Outside\n')
+  }
+})
+
 test('control files service serializes atomic writes and rejects stale expectedRevision mutations', async (t) => {
   const workspaceRoot = await createTempWorkspace(t)
   const service = createControlFilesService(workspaceRoot)

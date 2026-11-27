@@ -14,6 +14,15 @@ import {
   type SpeechSettings,
   type SpeechTranscriptionMode,
 } from '../../speech/speechSettings'
+import {
+  DEFAULT_CURSOR_AGENT_SETTINGS,
+  CURSOR_AGENT_STATUS_EVENT,
+  publishCursorAgentStatus,
+  readCursorAgentStatus,
+  readCursorAgentSettings,
+  saveCursorAgentSettings,
+  type CursorAgentSettings,
+} from './cursorAgentSettings'
 import { clearAllCommandConsoleDrafts } from '../../store/commandConsoleState'
 import { useNexusStore } from '../../store/nexusStore'
 import { resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
@@ -23,7 +32,7 @@ import {
   formatAutomniaCredits,
   formatAutomniaCreditsFromTokens,
 } from '../../utils/creditDisplay'
-import { restartPluginGateway, runOpenClawPluginCommand } from '../../api/plugins'
+import { patchTelegramSettings, runOpenClawPluginCommand } from '../../api/plugins'
 import { apiRequest } from '../../api/client'
 import type {
   CapabilityKey,
@@ -44,6 +53,7 @@ import {
   type UiDensity,
   type UiFormChrome,
   type UiMotion,
+  type UiTextSize,
 } from './uiSettings'
 import {
   DEFAULT_CONSOLE_PREFERENCES,
@@ -64,9 +74,11 @@ import { SettingsActivityLog } from './SettingsActivityLog'
 import { AppUpdateSettings } from './AppUpdateSettings'
 import { buildRuntimePolicyPatch, mixedRuntimeFields, type RuntimeDefaultsDraft } from './runtimePolicyDraft'
 import { MicrophoneSettings } from './MicrophoneSettings'
+import { UserProfilePictureSettings } from './UserProfilePictureSettings'
 import { lastPreferenceSaveResult, PREFERENCE_STORAGE_STATUS_EVENT } from './preferenceStorage'
 import { MAX_PREFERENCES_BACKUP_BYTES, parsePreferencesBackup, serializePreferencesBackup, PREFERENCE_GROUP_LABELS, type PreferenceGroup, type PreferencesBackup } from './preferencesBackup'
 import { Button, Dialog } from '../ui'
+import { resolveUserProfileIdentity } from '../../utils/userProfileAvatar'
 import { SettingsAutomatedJobs } from './SettingsAutomatedJobs'
 import {
   DEFAULT_CHANNEL_ACTIVITY_SETTINGS,
@@ -79,13 +91,12 @@ import {
   parseTelegramConfigOutput,
   readTelegramSettings,
   saveTelegramSettings,
-  telegramSettingBatchCommand,
   telegramSettingCommandEntries,
   type TelegramSettings,
 } from './telegramSettings'
 
 type NoticeTone = 'neutral' | 'success' | 'warning' | 'error'
-export type SettingsSectionId = 'account' | 'appearance' | 'workspace' | 'voice' | 'missions' | 'agents' | 'jobs' | 'telegram' | 'updates' | 'logs' | 'data'
+export type SettingsSectionId = 'account' | 'appearance' | 'workspace' | 'cursorAgent' | 'voice' | 'missions' | 'agents' | 'jobs' | 'telegram' | 'updates' | 'logs' | 'data'
 type RuntimeTargetScope = 'party' | 'selection'
 type PendingConfirmation = 'reset-all' | 'reset-runtime' | 'clear-workspace' | null
 type ChannelDeliveryStatus = {
@@ -145,16 +156,17 @@ const SETTINGS_SECTIONS: Array<{
   keywords: string
 }> = [
   { id: 'account', label: 'Account', description: 'Profile, security and billing', keywords: 'account plan license credits key email tier balance provider oauth usage priority automnia fallback' },
-  { id: 'appearance', label: 'Appearance', description: 'Colors, spacing and accessibility', keywords: 'theme color accent contrast glow motion forms scrollbar interface display' },
+  { id: 'appearance', label: 'Appearance', description: 'Text size, colors and motion', keywords: 'theme color accent contrast glow motion forms scrollbar interface display font text size readability' },
   { id: 'workspace', label: 'Workspace', description: 'Layout and notifications', keywords: 'agents registry cards grid list sort filter console width drafts layout' },
+  { id: 'cursorAgent', label: 'Cursor Agent', description: 'Desktop quick access', keywords: 'mouse pointer cursor quick agent context clipboard image screenshot right click system wide desktop overlay' },
   { id: 'voice', label: 'Voice', description: 'Microphone and dictation', keywords: 'speech microphone local cloud online silence pause noise echo gain recording' },
-  { id: 'missions', label: 'Missions', description: 'Mission setup', keywords: 'mission objective duration risk complexity collaboration evidence build test' },
+  { id: 'missions', label: 'Missions', description: 'Defaults and collaboration', keywords: 'mission objective duration risk complexity collaboration evidence build test' },
   { id: 'agents', label: 'Agent Behavior', description: 'Timing, reasoning and teamwork', keywords: 'agent runtime heartbeat timeout thinking fast parallel concurrency simultaneous chat commands sequential recovery continuous' },
-  { id: 'jobs', label: 'Automated jobs', description: 'Live active cron schedules', keywords: 'automated jobs cron scheduled schedule scheduler openclaw active running next run' },
-  { id: 'telegram', label: 'Channels & Telegram', description: 'Messaging channels, replies and permissions', keywords: 'telegram discord slack whatsapp signal sms imessage channels bot commands agents pairing dm group topics streaming reactions polls media history actions settings delivery reliability' },
-  { id: 'updates', label: 'Updates', description: 'App version and updates', keywords: 'update upgrade version release download installer restart automatic security' },
-  { id: 'logs', label: 'Activity', description: 'Recent activity and history', keywords: 'logs activity agent runs gateway events tail automnia runtime response history channel telegram sms incoming sent retain trim memory' },
-  { id: 'data', label: 'Backup & Reset', description: 'Backup, cleanup and recovery', keywords: 'reset default backup export clear console responses simulation party data' },
+  { id: 'jobs', label: 'Automated jobs', description: 'Scheduled runs', keywords: 'automated jobs cron scheduled schedule scheduler openclaw active running next run' },
+  { id: 'telegram', label: 'Channels & Telegram', description: 'Connections and delivery', keywords: 'telegram discord slack whatsapp signal sms imessage channels bot commands agents pairing dm group topics streaming reactions polls media history actions settings delivery reliability' },
+  { id: 'updates', label: 'Updates', description: 'Version and downloads', keywords: 'update upgrade version release download installer restart automatic security' },
+  { id: 'logs', label: 'Activity', description: 'Runs and events', keywords: 'logs activity agent runs gateway events tail automnia runtime response history channel telegram sms incoming sent retain trim memory' },
+  { id: 'data', label: 'Backup & Reset', description: 'Save or restore preferences', keywords: 'reset default backup export clear console responses simulation party data' },
 ]
 
 const DEFAULT_RUNTIME_SETTINGS: RuntimeDefaultsDraft = {
@@ -203,6 +215,7 @@ function SettingsGlyph({ name }: { name: SettingsSectionId }) {
     account: <><path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm-3 5a3 3 0 0 1 6 0v3H9V7zm3 8a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z" /></>,
     appearance: <><path d="M12 3a9 9 0 1 0 9 9c0-1.1-.9-2-2-2h-1.5a1.5 1.5 0 0 1-1.3-2.2l.4-.7A1.7 1.7 0 0 0 15.1 4H12Z" /><path d="M7.5 12h.01M9.5 7.5h.01M14.5 7h.01" /></>,
     workspace: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M8 4v16M8 9h13" /></>,
+    cursorAgent: <><path d="m5 3 14 10-6 1.4-2.8 6.1L5 3Z" /><path d="m12.3 14.4 4.4 5.4M19 4.5h2M17.8 2.5l1-1.5M20 8.5l1.7 1" /></>,
     voice: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8" /></>,
     missions: <><path d="m14.5 4.5 5 5-10 10-5-5 10-10Z" /><path d="m12.5 6.5 5 5M5 19l2 2" /></>,
     agents: <><circle cx="12" cy="8" r="4" /><path d="M4.5 21a7.5 7.5 0 0 1 15 0M19 4v4M17 6h4" /></>,
@@ -215,13 +228,12 @@ function SettingsGlyph({ name }: { name: SettingsSectionId }) {
   return <svg viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>
 }
 
-function SectionHeader({ section, eyebrow }: { section: SettingsSectionId; eyebrow: string }) {
+function SectionHeader({ section }: { section: SettingsSectionId }) {
   const meta = SETTINGS_SECTIONS.find((entry) => entry.id === section) || SETTINGS_SECTIONS[0]
   return (
     <div className="dui-settings-section__head">
       <span className="dui-settings-section__icon"><SettingsGlyph name={section} /></span>
       <div>
-        <span>{eyebrow}</span>
         <h3>{meta.label}</h3>
         <p>{meta.description}</p>
       </div>
@@ -324,6 +336,8 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   const [searchQuery, setSearchQuery] = useRememberedState('settings-search', '')
   const [uiSettings, setUiSettings] = useState<AutomniaUiSettings>(() => readUiSettings())
   const [speechSettings, setSpeechSettings] = useState<SpeechSettings>(() => readSpeechSettings())
+  const [cursorAgentSettings, setCursorAgentSettings] = useState<CursorAgentSettings>(() => readCursorAgentSettings())
+  const [cursorAgentStatus, setCursorAgentStatus] = useState(() => readCursorAgentStatus())
   const [registryPreferences, setRegistryPreferences] = useState<RegistryPreferences>(() => readRegistryPreferences())
   const [consolePreferences, setConsolePreferences] = useState<ConsolePreferences>(() => readConsolePreferences())
   const [targetScope, setTargetScope] = useState<RuntimeTargetScope>(() => activePartyIds.length ? 'party' : 'selection')
@@ -356,6 +370,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   const [telegramSaving, setTelegramSaving] = useState(false)
   const [telegramLoaded, setTelegramLoaded] = useState(false)
   const [telegramLoadError, setTelegramLoadError] = useState('')
+  const telegramSaveInFlight = useRef(false)
   const [channelDeliveryStatus, setChannelDeliveryStatus] = useState<ChannelDeliveryStatus | null>(null)
   const [channelDeliveryLoading, setChannelDeliveryLoading] = useState(false)
   const [channelDeliveryError, setChannelDeliveryError] = useState('')
@@ -401,6 +416,15 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     return () => window.removeEventListener(PREFERENCE_STORAGE_STATUS_EVENT, storageStatus)
   }, [])
 
+  useEffect(() => {
+    const statusChanged = (event: Event) => {
+      const message = (event as CustomEvent<string>).detail
+      if (typeof message === 'string') setCursorAgentStatus(message)
+    }
+    window.addEventListener(CURSOR_AGENT_STATUS_EVENT, statusChanged)
+    return () => window.removeEventListener(CURSOR_AGENT_STATUS_EVENT, statusChanged)
+  }, [])
+
   const announceSaved = (label: string) => {
     const result = lastPreferenceSaveResult()
     setNotice(result.ok ? { tone: 'success', text: `${label} saved and applied.` } : { tone: 'warning', text: result.message })
@@ -423,6 +447,44 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     saveSpeechSettings(next)
     setSpeechSettings(next)
     announceSaved(label)
+  }
+
+  const updateCursorAgentSettings = (patch: Partial<CursorAgentSettings>) => {
+    const next = saveCursorAgentSettings({ ...cursorAgentSettings, ...patch })
+    setCursorAgentSettings(next)
+    const agent = agents.find((entry) => entry.id === next.agentId)
+    const bridge = window.automniaDesktop?.cursorAgent
+    if (!next.enabled) {
+      setCursorAgentStatus('Cursor agent is off.')
+      publishCursorAgentStatus('Cursor agent is off.')
+      void bridge?.setSettings({ ...next, agentName: agent?.name || '' })
+      announceSaved('Cursor agent settings')
+      return
+    }
+    if (!agent) {
+      setCursorAgentStatus('Choose an available agent before turning this on.')
+      publishCursorAgentStatus('Choose an available agent before turning this on.')
+      announceSaved('Cursor agent settings')
+      return
+    }
+    if (!bridge) {
+      setCursorAgentStatus('System-wide pointer access is available in the Automnia desktop app.')
+      publishCursorAgentStatus('System-wide pointer access is available in the Automnia desktop app.')
+      announceSaved('Cursor agent settings')
+      return
+    }
+    setCursorAgentStatus('Starting system-wide pointer access…')
+    publishCursorAgentStatus('Starting system-wide pointer access…')
+    void bridge.setSettings({ ...next, agentName: agent.name }).then((status) => {
+      const message = status.message || (status.enabled ? 'Ready. Hide Automnia to show the pointer mark and right-click bubble.' : 'Cursor agent is off.')
+      setCursorAgentStatus(message)
+      publishCursorAgentStatus(message)
+    }).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : 'System-wide pointer access could not start.'
+      setCursorAgentStatus(message)
+      publishCursorAgentStatus(message)
+    })
+    announceSaved('Cursor agent settings')
   }
 
   const updateRegistryPreferences = (patch: Partial<RegistryPreferences>, label: string) => {
@@ -452,7 +514,8 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
 
   const openClawCommandFailure = (payload: { ok?: boolean; error?: string; command?: { output?: string; stderr?: string; code?: number } }, fallback: string) => {
     if (payload.ok === false || payload.error || (typeof payload.command?.code === 'number' && payload.command.code !== 0)) {
-      return fallback
+      const detail = payload.command?.stderr?.trim() || payload.error?.trim()
+      return detail ? `${fallback} ${detail.slice(0, 400)}` : fallback
     }
     return ''
   }
@@ -504,7 +567,8 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   }, [channelDeliveryLoading])
 
   const applyTelegramSettings = async (settings = telegramSettings) => {
-    if (telegramSaving) return
+    if (telegramSaveInFlight.current) return
+    telegramSaveInFlight.current = true
     const next = normalizeTelegramSettings(settings)
     setTelegramSaving(true)
     setTelegramLoadError('')
@@ -518,20 +582,20 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
         setNotice({ tone: 'success', text: 'Your Telegram settings are already up to date.' })
         return
       }
-      const command = telegramSettingBatchCommand(next, changedKeys)
       setNotice({ tone: 'neutral', text: `Saving ${changedKeys.length} Telegram setting${changedKeys.length === 1 ? '' : 's'}…` })
-      const payload = await runOpenClawPluginCommand(command, { refreshPlugins: false })
+      const payload = await patchTelegramSettings(next as unknown as Record<string, unknown>, changedKeys)
       const failure = openClawCommandFailure(payload, 'Telegram settings could not be saved. Check your Telegram connection and try again.')
       if (failure) throw new Error(failure)
-      const restart = await restartPluginGateway()
-      if (restart.ok === false || restart.error) throw new Error(restart.error || 'Telegram could not restart with the new settings.')
       setTelegramSettings(next)
       setTelegramGatewaySettings(next)
       saveTelegramSettings(next)
-      setNotice({ tone: 'success', text: 'Telegram settings saved and applied.' })
+      setNotice(payload.restartPending
+        ? { tone: 'neutral', text: 'Telegram settings saved. OpenClaw queued the managed Gateway restart needed to apply them.' }
+        : { tone: 'success', text: 'Telegram settings saved and applied.' })
     } catch (error) {
       setNotice({ tone: 'error', text: `Some Telegram settings could not be saved. ${error instanceof Error ? error.message : String(error)}` })
     } finally {
+      telegramSaveInFlight.current = false
       setTelegramSaving(false)
     }
   }
@@ -603,10 +667,14 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     saveRegistryPreferences(DEFAULT_REGISTRY_PREFERENCES)
     saveConsolePreferences(DEFAULT_CONSOLE_PREFERENCES)
     saveSpeechSettings(DEFAULT_SPEECH_SETTINGS)
+    saveCursorAgentSettings(DEFAULT_CURSOR_AGENT_SETTINGS)
     saveChannelActivitySettings(DEFAULT_CHANNEL_ACTIVITY_SETTINGS)
     setRegistryPreferences(DEFAULT_REGISTRY_PREFERENCES)
     setConsolePreferences(DEFAULT_CONSOLE_PREFERENCES)
     setSpeechSettings(DEFAULT_SPEECH_SETTINGS)
+    setCursorAgentSettings(DEFAULT_CURSOR_AGENT_SETTINGS)
+    setCursorAgentStatus('Cursor agent is off.')
+    void window.automniaDesktop?.cursorAgent?.setSettings({ ...DEFAULT_CURSOR_AGENT_SETTINGS, agentName: '' })
     clearAllCommandConsoleDrafts()
     try { window.localStorage.removeItem('automnia-monitor-doctor-dismissed-run') } catch { /* Retain a usable workspace when storage is blocked. */ }
     resetMission()
@@ -655,7 +723,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     }
   }
 
-  const createSettingsBackup = () => serializePreferencesBackup({ appearance: uiSettings, activity: readChannelActivitySettings(), voice: speechSettings, registry: registryPreferences, console: consolePreferences, mission: missionDraft })
+  const createSettingsBackup = () => serializePreferencesBackup({ appearance: uiSettings, activity: readChannelActivitySettings(), voice: speechSettings, cursorAgent: cursorAgentSettings, registry: registryPreferences, console: consolePreferences, mission: missionDraft })
 
   const copySettingsBackup = async () => {
     try { await navigator.clipboard.writeText(createSettingsBackup()); setNotice({ tone: 'success', text: 'Settings backup copied to the clipboard.' }) }
@@ -697,6 +765,17 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
       switch (group) {
         case 'appearance': { const value = backupPreview.appearance!; saveUiSettings(value); applyUiSettings(value); setUiSettings(value); break }
         case 'voice': { const value = backupPreview.voice!; saveSpeechSettings(value); setSpeechSettings(value); break }
+        case 'cursorAgent': {
+          const value = backupPreview.cursorAgent!
+          const next = saveCursorAgentSettings(value)
+          setCursorAgentSettings(next)
+          const agent = agents.find((entry) => entry.id === next.agentId)
+          void window.automniaDesktop?.cursorAgent?.setSettings({ ...next, enabled: next.enabled && Boolean(agent), agentName: agent?.name || '' })
+          const status = next.enabled && !agent ? 'Restored setting. Choose an available agent before enabling it.' : next.enabled ? 'Cursor agent settings restored.' : 'Cursor agent is off.'
+          setCursorAgentStatus(status)
+          publishCursorAgentStatus(status)
+          break
+        }
         case 'registry': {
           const value = { ...DEFAULT_REGISTRY_PREFERENCES, ...backupPreview.registry!, pinnedAgentIds: backupPreview.registry!.pinnedAgentIds ?? [] }
           saveRegistryPreferences(value)
@@ -715,7 +794,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
 
   const renderAppearance = () => (
     <div className="dui-settings-section" id="settings-section-appearance">
-      <SectionHeader section="appearance" eyebrow="Make Automnia feel right for you" />
+      <SectionHeader section="appearance" />
       <SettingsCard title="Colors and layout" description="Choose how Automnia looks.">
         <Field label="Accent color" hint="Used for selected items, highlights, and status indicators.">
           <select value={uiSettings.accentMode} onChange={(event) => updateUiSetting('accentMode', event.target.value as UiAccentMode, 'Accent color')}>
@@ -734,6 +813,11 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
         </SettingGroup>
       </SettingsCard>
       <SettingsCard title="Accessibility" description="Make Automnia calmer and easier to read.">
+        <SettingGroup label="Text size" hint="Enlarges labels and copy across every workspace.">
+          <div data-dui-setting="text-size">
+            <SegmentedControl value={uiSettings.textSize} label="Text size" options={[{ id: 'standard', label: 'Standard' }, { id: 'large', label: 'Large' }, { id: 'extra-large', label: 'Extra large' }]} onChange={(value: UiTextSize) => updateUiSetting('textSize', value, 'Text size')} />
+          </div>
+        </SettingGroup>
         <SettingGroup label="Animation" hint="Choose Reduced to limit movement and transitions.">
           <div data-dui-setting="motion">
             <SegmentedControl value={uiSettings.motion} label="Animation preference" options={[{ id: 'standard', label: 'Standard' }, { id: 'reduced', label: 'Reduced' }]} onChange={(value: UiMotion) => updateUiSetting('motion', value, 'Animation preference')} />
@@ -750,7 +834,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
 
   const renderWorkspace = () => (
     <div className="dui-settings-section" id="settings-section-workspace">
-      <SectionHeader section="workspace" eyebrow="Arrange your everyday workspace" />
+      <SectionHeader section="workspace" />
       <WorkspaceProfiles onApply={() => { setUiSettings(readUiSettings()); setRegistryPreferences(readRegistryPreferences()); setConsolePreferences(readConsolePreferences()) }} />
       <SettingsCard title="Notifications" description="Choose when Automnia should alert you."><NotificationSettings /></SettingsCard>
       <SettingsCard title="Agent list" description="Choose how your agents are displayed.">
@@ -796,9 +880,39 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     </div>
   )
 
+  const renderCursorAgent = () => (
+    <div className="dui-settings-section" id="settings-section-cursorAgent">
+      <SectionHeader section="cursorAgent" />
+      <SettingsCard title="Cursor agent" description="Show a small Automnia mark by your pointer while the main window is hidden. Right-click anywhere on the desktop to open a quick chat.">
+        <Field label="Agent for the pointer" hint="Quick chat messages go directly to this agent.">
+          <select value={cursorAgentSettings.agentId} onChange={(event) => updateCursorAgentSettings({ agentId: event.target.value, enabled: cursorAgentSettings.enabled && Boolean(event.target.value) })}>
+            <option value="">Choose an agent</option>
+            {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+          </select>
+        </Field>
+        <ToggleField
+          label="Enable cursor agent"
+          hint="Automnia must remain running in the tray. The pointer mark appears while the main window is hidden."
+          checked={cursorAgentSettings.enabled}
+          disabled={!agents.some((agent) => agent.id === cursorAgentSettings.agentId)}
+          onChange={(enabled) => updateCursorAgentSettings({ enabled })}
+        />
+        <ToggleField
+          label="Include current clipboard content"
+          hint="When you right-click, Automnia reads the current clipboard text or image locally. It is sent only after you press Send, and you can remove it from the bubble first."
+          checked={cursorAgentSettings.includeClipboard}
+          disabled={!cursorAgentSettings.enabled}
+          onChange={(includeClipboard) => updateCursorAgentSettings({ includeClipboard })}
+        />
+        <p className="mt-1 text-xs leading-relaxed text-slate-400">Global mouse access depends on operating-system permissions. On macOS, allow Automnia under System Settings → Privacy &amp; Security → Input Monitoring if requested. Linux requires an X11 session; Wayland does not expose the global pointer events this feature needs.</p>
+        {cursorAgentStatus && <p className="mt-2 text-sm text-slate-300" role="status" aria-live="polite">{cursorAgentStatus}</p>}
+      </SettingsCard>
+    </div>
+  )
+
   const renderVoice = () => (
     <div className="dui-settings-section" id="settings-section-voice">
-      <SectionHeader section="voice" eyebrow="Set up dictation your way" />
+      <SectionHeader section="voice" />
       <SettingsCard title="Dictation service" description="Choose private on-device dictation or connected cloud dictation.">
         <SettingGroup label="Dictation mode" hint="Your choice is used the next time you select the microphone.">
           <div className="dui-settings-voice-mode" role="group" aria-label="Voice transcription provider" data-mode={speechSettings.mode}>
@@ -846,7 +960,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     const requirements = missionDraft.requiredEvidence || DEFAULT_MISSION_DRAFT.requiredEvidence || []
     return (
       <div className="dui-settings-section" id="settings-section-missions">
-        <SectionHeader section="missions" eyebrow="Prepare your next mission" />
+        <SectionHeader section="missions" />
         <SettingsCard title="Mission defaults" description="Set the starting choices for new missions.">
           <Field label="Mission title"><input value={missionDraft.title} onChange={(event) => updateMissionDraft({ title: event.target.value })} /></Field>
           <Field label="Default objective" hint="Use a concrete instruction that can be verified."><textarea rows={4} value={missionDraft.description} onChange={(event) => updateMissionDraft({ description: event.target.value })} /></Field>
@@ -871,7 +985,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
 
   const renderAgents = () => (
     <div className="dui-settings-section" id="settings-section-agents">
-      <SectionHeader section="agents" eyebrow="Choose how your agents work" />
+      <SectionHeader section="agents" />
       <SettingsCard title="Agent teamwork" description="Choose whether different agents can work at the same time.">
         <ToggleField label="Work on separate requests at the same time" hint="When off, agents begin one after another. Follow-up messages still wait for the same agent to finish." checked={consolePreferences.parallelAgentChat} onChange={(value) => updateConsolePreferences({ parallelAgentChat: value }, 'Agent teamwork')} />
       </SettingsCard>
@@ -909,7 +1023,8 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
 
   const renderTelegram = () => (
     <div className="dui-settings-section" id="settings-section-telegram">
-      <SectionHeader section="telegram" eyebrow="Manage your messaging channels" />
+      <SectionHeader section="telegram" />
+      <fieldset disabled={telegramLoading || telegramSaving} style={{ display: 'contents' }}>
       <SettingsCard title="Channel reliability" description="Live OpenClaw probes cover every configured messaging channel. Connection, recovery, activity, and delivery evidence are shown separately so a successful send is never mistaken for a receipt.">
         <div className="dui-settings-metrics">
           <div><span>Live probe</span><strong>{channelDeliveryStatus ? channelDeliveryStatus.probe.state.replace(/-/g, ' ') : 'Not checked'}</strong></div>
@@ -1064,8 +1179,9 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
         <ToggleField label="Introduce Automnia on group join" hint="Post a brief room-specific introduction when the bot joins a Telegram group." checked={telegramSettings.joinIntro} onChange={(value) => updateTelegramDraft('joinIntro', value)} />
         <ToggleField label="Automatic DM topic labels" hint="Let Automnia give a direct-message forum topic a useful name after its first message." checked={telegramSettings.autoTopicLabel} onChange={(value) => updateTelegramDraft('autoTopicLabel', value)} />
       </SettingsCard>
+      </fieldset>
 
-      <SettingsCard title="Save Telegram settings" description="Changes are validated by OpenClaw, then the managed Gateway reloads the Telegram channel.">
+      <SettingsCard title="Save Telegram settings" description="OpenClaw hot-reloads changes, restarting only the Telegram channel when needed. The Gateway restarts only when required.">
         <div className="dui-settings-actions">
           <button type="button" onClick={() => void loadTelegramFromGateway()} disabled={telegramLoading || telegramSaving}>{telegramLoading ? 'Refreshing…' : 'Refresh settings'}</button>
           <button type="button" onClick={() => { const next = normalizeTelegramSettings(DEFAULT_TELEGRAM_SETTINGS); setTelegramSettings(next); saveTelegramSettings(next); void applyTelegramSettings(next) }} disabled={telegramLoading || telegramSaving}>{telegramSaving ? 'Applying…' : 'Restore safe defaults'}</button>
@@ -1078,7 +1194,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
 
   const renderData = () => (
     <div className="dui-settings-section" id="settings-section-data">
-      <SectionHeader section="data" eyebrow="Keep your preferences safe" />
+      <SectionHeader section="data" />
       <SettingsCard title="Runtime backup" description="Protects Automnia's local agents, sessions, configuration, and runtime history. It is separate from the preferences-only backup below.">
         <p className="text-sm text-slate-300">Automatic backups run weekly when no agent is active. Automnia keeps the two newest verified snapshots; backups run in the background and wait rather than slow active work. Runtime snapshots can contain local credentials, so keep the backup folder private; copies are not separately encrypted.</p>
         <div className="dui-settings-metrics">
@@ -1115,7 +1231,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
 
   const renderUpdates = () => (
     <div className="dui-settings-section" id="settings-section-updates">
-      <SectionHeader section="updates" eyebrow="Keep Automnia current" />
+      <SectionHeader section="updates" />
       <AppUpdateSettings />
     </div>
   )
@@ -1255,7 +1371,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
 
     return (
       <div className="dui-settings-section dui-settings-account-section" id="settings-section-account">
-        <SectionHeader section="account" eyebrow="Manage your account and access" />
+        <SectionHeader section="account" />
         <div className="dui-settings-account-hero">
           <div>
             <span>Signed in as</span>
@@ -1269,7 +1385,11 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
           </div>
         </div>
         <div className="dui-settings-account-overview">
-          <SettingsCard className="dui-settings-account-card dui-settings-account-profile" title="Profile & sign-in" description="Manage your email and password.">
+          <SettingsCard className="dui-settings-account-card dui-settings-account-profile" title="Profile & sign-in" description="Manage your picture, email and password.">
+            <UserProfilePictureSettings
+              identity={resolveUserProfileIdentity(account, license?.email)}
+              name={account?.email || license?.email}
+            />
             <Field label="Account email">
               <input type="text" readOnly value={license?.email || 'Not reported'} style={{ fontWeight: 'bold', backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
             </Field>
@@ -1333,7 +1453,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
                   <li>Secure processing</li>
                   <li>Simple credit billing</li>
                 </ul>
-                {!isCurrentStarterPlan && <button type="button" onClick={() => void openCheckout()} disabled={checkoutBusy}>{checkoutBusy ? 'Opening checkout…' : 'Choose Starter'}</button>}
+                <button type="button" onClick={() => { if (!isCurrentStarterPlan) void openCheckout() }} disabled={isCurrentStarterPlan || checkoutBusy}>{isCurrentStarterPlan ? 'Current' : checkoutBusy ? 'Opening checkout…' : 'Choose Starter'}</button>
               </article>
               <article className={`dui-plan-card is-pro${isCurrentProPlan ? ' is-current' : ''}`}>
                 <div className="dui-plan-card__head">
@@ -1348,7 +1468,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
                   <li>Use your own AI provider</li>
                   <li>Choose which service is used first</li>
                 </ul>
-                {!isCurrentProPlan && <button type="button" onClick={() => void openCheckout()} disabled={checkoutBusy}>{checkoutBusy ? 'Opening checkout…' : 'Upgrade to Pro'}</button>}
+                <button type="button" onClick={() => { if (!isCurrentProPlan) void openCheckout() }} disabled={isCurrentProPlan || checkoutBusy}>{isCurrentProPlan ? 'Current' : checkoutBusy ? 'Opening checkout…' : 'Upgrade to Pro'}</button>
               </article>
             </section>
           </SettingsCard>
@@ -1465,12 +1585,13 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     if (section === 'account') return renderAccount()
     if (section === 'appearance') return renderAppearance()
     if (section === 'workspace') return renderWorkspace()
+    if (section === 'cursorAgent') return renderCursorAgent()
     if (section === 'voice') return renderVoice()
     if (section === 'missions') return renderMissions()
     if (section === 'agents') return renderAgents()
     if (section === 'jobs') return (
       <div className="dui-settings-section" id="settings-section-jobs" role="tabpanel">
-        <SectionHeader section="jobs" eyebrow="Runtime schedules" />
+        <SectionHeader section="jobs" />
         <SettingsCard title="Active cron jobs" description="This list reads the live OpenClaw scheduler, including jobs created outside the Automnia workspace.">
           <SettingsAutomatedJobs />
         </SettingsCard>
@@ -1501,7 +1622,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   return (
     <section ref={settingsRoot} data-dui-panel="settings" data-ui-revision="settings-v2" className="dui-settings-panel dui-settings-redesign dui-settings-polished">
       <header className="dui-settings-topbar">
-        <div><span>Your preferences</span><h2>Settings</h2><p>Make Automnia work the way you do.</p></div>
+        <div><h2>Settings</h2></div>
         <label className="dui-settings-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m16 16 4 4" /></svg><input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search settings…" aria-label="Search settings" />{searchQuery && <button type="button" onClick={() => setSearchQuery('')} aria-label="Clear settings search">×</button>}</label>
       </header>
 
@@ -1514,11 +1635,10 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
 
       <div className="dui-settings-layout">
         <nav className="dui-settings-nav" aria-label="Settings categories">
-          <p className="dui-settings-nav-label">Settings</p>
           {SETTINGS_SECTIONS.map((section) => (
             <button key={section.id} type="button" aria-current={!normalizedSearch && activeSection === section.id ? 'page' : undefined} aria-controls={`settings-section-${section.id}`} data-settings-section={section.id} data-active={!normalizedSearch && activeSection === section.id ? 'true' : 'false'} onClick={() => { setActiveSection(section.id); setSearchQuery('') }}>
               <span aria-hidden="true"><SettingsGlyph name={section.id} /></span>
-              <div><strong>{section.label}</strong><small>{section.description}</small></div>
+              <div><strong>{section.label}</strong></div>
               <b aria-hidden="true">›</b>
             </button>
           ))}

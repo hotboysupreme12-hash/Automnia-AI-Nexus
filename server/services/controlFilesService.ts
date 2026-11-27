@@ -1,6 +1,11 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { ControlFileConflict, controlFileRevision, writeAtomicControlFile } from './filesystem/atomicControlFile'
+import {
+  ControlFileConflict,
+  assertContainedRegularFilePath,
+  controlFileRevision,
+  writeAtomicControlFile,
+} from './filesystem/atomicControlFile'
 import { isPathUnder as defaultIsPathUnder } from './filesystem/safePathService'
 
 export { ControlFileConflict, controlFileRevision }
@@ -14,6 +19,25 @@ export type ControlFilesServiceOptions = {
 
 export function isAllowedControlFile(file: string): file is ControlFile {
   return (CONTROL_FILES as readonly string[]).includes(file)
+}
+
+async function resolveRealPathThroughExistingAncestor(candidatePath: string): Promise<string> {
+  const absolute = path.resolve(candidatePath)
+  let current = absolute
+  const remainder: string[] = []
+  while (true) {
+    try {
+      const realCurrent = await fs.realpath(current)
+      return remainder.length ? path.join(realCurrent, ...remainder.reverse()) : realCurrent
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | undefined)?.code
+      if (code !== 'ENOENT') throw error
+      const parent = path.dirname(current)
+      if (parent === current) return absolute
+      remainder.push(path.basename(current))
+      current = parent
+    }
+  }
 }
 
 export function createControlFilesService(workspaceRoot: string, options: ControlFilesServiceOptions = {}) {
@@ -31,30 +55,50 @@ export function createControlFilesService(workspaceRoot: string, options: Contro
     return targetPath
   }
 
-  async function assertExistingControlFilePathInsideWorkspace(targetPath: string) {
-    let stats: Awaited<ReturnType<typeof fs.lstat>>
-    try {
-      stats = await fs.lstat(targetPath)
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
-      throw error
-    }
-
-    if (!stats.isSymbolicLink()) return
-
+  async function assertContainedControlFile(targetPath: string) {
     let realWorkspaceRoot: string
-    let realTargetPath: string
     try {
-      [realWorkspaceRoot, realTargetPath] = await Promise.all([
-        fs.realpath(resolvedWorkspaceRoot),
-        fs.realpath(targetPath),
-      ])
+      realWorkspaceRoot = await resolveRealPathThroughExistingAncestor(resolvedWorkspaceRoot)
     } catch {
       throw new Error('Control file path resolved outside workspace root.')
     }
 
-    if (!isPathUnder(realWorkspaceRoot, realTargetPath)) {
-      throw new Error('Control file path resolved outside workspace root.')
+    const rootStats = await fs.lstat(resolvedWorkspaceRoot).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null
+      throw error
+    })
+    if (rootStats && (rootStats.isSymbolicLink() || !rootStats.isDirectory())) {
+      throw new Error('Control file workspace root must be a regular directory (outside workspace root).')
+    }
+
+    const stats = await fs.lstat(targetPath).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null
+      throw error
+    })
+
+    if (stats?.isSymbolicLink()) {
+      const realTargetPath = await fs.realpath(targetPath).catch(() => null)
+      if (!realTargetPath || !defaultIsPathUnder(realWorkspaceRoot, realTargetPath)) {
+        throw new Error('Control file path resolved outside workspace root.')
+      }
+      throw new Error('Control file must be a regular file.')
+    }
+
+    if (stats && !stats.isFile()) {
+      throw new Error('Control file must be a regular file.')
+    }
+
+    try {
+      await assertContainedRegularFilePath(targetPath, {
+        allowedRoots: [resolvedWorkspaceRoot],
+        label: 'Control file',
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (/outside allowed workspace root/i.test(message)) {
+        throw new Error('Control file path resolved outside workspace root.')
+      }
+      throw error
     }
   }
 
@@ -65,18 +109,21 @@ export function createControlFilesService(workspaceRoot: string, options: Contro
     revision: controlFileRevision,
     async readFile(file: string) {
       const targetPath = resolveControlFilePath(file)
-      await assertExistingControlFilePathInsideWorkspace(targetPath)
-      return fs.readFile(targetPath, 'utf-8')
+      await assertContainedControlFile(targetPath)
+      const content = await fs.readFile(targetPath, 'utf-8')
+      await assertContainedControlFile(targetPath)
+      return content
     },
     async readFileWithRevision(file: string) {
       const targetPath = resolveControlFilePath(file)
-      await assertExistingControlFilePathInsideWorkspace(targetPath)
+      await assertContainedControlFile(targetPath)
       const content = await fs.readFile(targetPath, 'utf-8')
+      await assertContainedControlFile(targetPath)
       return { content, revision: controlFileRevision(content) }
     },
     async writeFile(file: string, content: string, expectedRevision?: string) {
       const targetPath = resolveControlFilePath(file)
-      await assertExistingControlFilePathInsideWorkspace(targetPath)
+      await assertContainedControlFile(targetPath)
       return writeAtomicControlFile(targetPath, content, expectedRevision)
     },
   }

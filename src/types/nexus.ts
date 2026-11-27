@@ -439,6 +439,8 @@ export interface AgentActivityEvent {
 
 export interface AgentResponse {
   id: string
+  /** Groups responses dispatched from one operator message in the chat UI. */
+  userTurnId?: string
   missionId?: string
   agentId: string
   sessionKey?: string

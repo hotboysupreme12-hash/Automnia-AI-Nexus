@@ -261,12 +261,19 @@ export function normalizeMissionRecordSnapshot(value: unknown): Mission | null {
   const cadenceSeconds = numberValue(record.cadenceSeconds)
   const missionType = normalizeMissionType(record.missionType)
   const collaborationMode = normalizeMissionCollaborationMode(record.collaborationMode)
-  const agentCadenceRecord = record.agentCadenceSeconds && typeof record.agentCadenceSeconds === 'object' && !Array.isArray(record.agentCadenceSeconds)
+  const rawAgentCadenceRecord = record.agentCadenceSeconds && typeof record.agentCadenceSeconds === 'object' && !Array.isArray(record.agentCadenceSeconds)
     ? record.agentCadenceSeconds as Record<string, unknown>
     : {}
+  const trimmedAgentCadenceRecord: Record<string, unknown> = {}
+  for (const [rawKey, rawVal] of Object.entries(rawAgentCadenceRecord)) {
+    const trimmedKey = rawKey.trim()
+    if (trimmedKey && !(trimmedKey in trimmedAgentCadenceRecord)) {
+      trimmedAgentCadenceRecord[trimmedKey] = rawVal
+    }
+  }
   const agentCadenceSeconds = Object.fromEntries(
     party.flatMap((agentId) => {
-      const seconds = numberValue(agentCadenceRecord[agentId])
+      const seconds = numberValue(trimmedAgentCadenceRecord[agentId] ?? rawAgentCadenceRecord[agentId])
       return seconds === null ? [] : [[agentId, Math.max(15, Math.min(24 * 60 * 60, Math.round(seconds)))] as const]
     }),
   )
@@ -327,6 +334,30 @@ function missionWallTimeMs(mission: Mission) {
   const ended = Date.parse(mission.completedAt || mission.endAt || '')
   if (!Number.isFinite(started) || !Number.isFinite(ended)) return null
   return Math.max(0, ended - started)
+}
+
+const SUCCESSFUL_CRON_COMPLETION_PREFIX_RE =
+  /^(?:Immediate kickoff completed:|Scheduled cycle completed:|\S+\s+cron\s+(?:leader|worker|reviewer)\s+round\s+\d+\s+completed:)/i
+const NEGATED_FAILURE_PHRASE_RE =
+  /\b(?:0|zero|no|without)\s+(?:[a-z0-9_-]+\s+){0,2}(?:errors?|failures?|failed)\b/gi
+const TIMEOUT_FAILURE_RE =
+  /\b(?:timed?\s*out|timeout|deadline\s+exceeded|ETIMEDOUT)\b/i
+const TOOL_FAILURE_RE =
+  /\b(?:tool\s+(?:call\s+|execution\s+)?(?:fail(?:ed|ure)?|errors?)|mcp\s+error|same\s+tool\s+call\s+failed)\b/i
+
+function sanitizedFailureCandidateMessage(message: string): string {
+  const trimmed = (message || '').trim()
+  if (!trimmed || SUCCESSFUL_CRON_COMPLETION_PREFIX_RE.test(trimmed)) return ''
+  return trimmed.replace(NEGATED_FAILURE_PHRASE_RE, ' ')
+}
+
+function isFeedAgentRunStartEvent(event: MissionFeedEvent): boolean {
+  if (event.type !== 'agent_update' || !event.agentId) return false
+  const message = event.message || ''
+  if (/^(?:Cron job created:|Recurring schedule ready:)|stopped before .* started|\b(?:completed|failed|skipped|cancelled)\b/i.test(message)) {
+    return false
+  }
+  return /\b(?:started|running)\b/i.test(message)
 }
 
 function missionReportUnavailableMetrics(report: Pick<BackendMissionReport, 'efficiencyRating' | 'soulDrift' | 'heartbeatStabilityScore' | 'runtimeEfficiency' | 'errors' | 'xpGained'>) {
@@ -406,22 +437,52 @@ export function createMissionReportService(options: MissionReportServiceOptions)
     const sessionIds = Array.from(new Set(jobs.map((job) => job.sessionId).filter((value): value is string => Boolean(value))))
     const sessionKeys = Array.from(new Set(jobs.map((job) => job.sessionKey).filter((value): value is string => Boolean(value))))
     const hasRuntimeEvidence = runtimeRunIds.length > 0 || cronRunIds.length > 0 || sessionIds.length > 0 || sessionKeys.length > 0
-    const verificationFailures = missionEvents.filter((event) => /\b(verification|acceptance|test|build)\b.*\b(fail|failed|failure|error)\b/i.test(event.message)).length
-    const commandFailures = missionEvents.filter((event) => /\b(command|cron|openclaw)\b.*\b(fail|failed|error)\b/i.test(event.message)).length
+    const verificationFailures = missionEvents.filter((event) => {
+      const candidate = sanitizedFailureCandidateMessage(event.message)
+      return Boolean(candidate && /\b(verification|acceptance|test|build)\b.*\b(fail|failed|failure|error)\b/i.test(candidate))
+    }).length
+    const commandFailures = missionEvents.filter((event) => {
+      const candidate = sanitizedFailureCandidateMessage(event.message)
+      return Boolean(candidate && /\b(command|cron|openclaw)\b.*\b(fail|failed|error)\b/i.test(candidate))
+    }).length
+    const failedJobs = jobs.filter((job) => job.status === 'failed' || job.lastRunStatus === 'failed')
+    const timedOutJobs = failedJobs.filter((job) => TIMEOUT_FAILURE_RE.test(job.summary || '')).length
+    const timedOutEvents = missionEvents.filter((event) => {
+      const candidate = sanitizedFailureCandidateMessage(event.message)
+      return Boolean(candidate && TIMEOUT_FAILURE_RE.test(candidate))
+    }).length
+    const timedOutRuns = Math.max(timedOutJobs, timedOutEvents)
+    const toolFailedJobs = failedJobs.filter((job) => TOOL_FAILURE_RE.test(job.summary || '')).length
+    const toolFailedEvents = missionEvents.filter((event) => {
+      const candidate = sanitizedFailureCandidateMessage(event.message)
+      return Boolean(candidate && TOOL_FAILURE_RE.test(candidate))
+    }).length
+    const toolFailures = Math.max(toolFailedJobs, toolFailedEvents)
     const retryCount = missionEvents.filter((event) => /\bretry(?:ing| attempts?)?\b/i.test(event.message)).length
     const fallbackCount = missionEvents.filter((event) => /\bfallback|fall back\b/i.test(event.message)).length
     const cancelledRuns = mission.lifecycleState === 'cancelled' ? Math.max(1, mission.party.length) : 0
+    const jobStartedRuns = jobs.reduce(
+      (total, job) => total + Math.max(0, job.runCount || 0, job.startedAt || job.status === 'completed' || job.status === 'failed' ? 1 : 0),
+      0,
+    )
+    const feedStartedRuns = missionEvents.filter(isFeedAgentRunStartEvent).length
+    const startedRuns = Math.max(jobStartedRuns, feedStartedRuns)
     const acceptedRuns = Math.max(
       mission.party.length,
+      startedRuns,
       missionEvents.filter((event) => event.type === 'agent_assigned').length,
     )
-    const startedRuns = Math.max(
-      jobs.filter((job) => job.startedAt).length,
-      missionEvents.filter((event) => /\b(round|started|running)\b/i.test(event.message)).length,
-    )
-    const startedTimes = jobs
-      .map((job) => (job.startedAt ? Date.parse(job.startedAt) : null))
-      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+    const missionCreatedMs = Date.parse(mission.createdAt)
+    const jobQueueDelays = jobs.flatMap((job) => {
+      if (!job.startedAt) return []
+      if (job.scheduleKind === 'recurring' && (job.runCount || 0) > 1) return []
+      const startedMs = Date.parse(job.startedAt)
+      if (!Number.isFinite(startedMs)) return []
+      const jobCreatedMs = job.createdAt ? Date.parse(job.createdAt) : NaN
+      const baselineMs = Number.isFinite(jobCreatedMs) ? jobCreatedMs : missionCreatedMs
+      if (!Number.isFinite(baselineMs)) return []
+      return [Math.max(0, startedMs - baselineMs)]
+    })
     const totalExecutionDurationMs = terminalJobs.length
       ? terminalJobs.reduce((total, job) => {
           const started = job.startedAt ? Date.parse(job.startedAt) : NaN
@@ -429,13 +490,21 @@ export function createMissionReportService(options: MissionReportServiceOptions)
           return total + (Number.isFinite(started) && Number.isFinite(ended) ? Math.max(0, ended - started) : 0)
         }, 0)
       : null
-    const queueDelayMs = startedTimes.length
-      ? Math.round(startedTimes.reduce((total, value) => total + Math.max(0, value - Date.parse(mission.createdAt)), 0) / startedTimes.length)
+    const queueDelayMs = jobQueueDelays.length
+      ? Math.round(jobQueueDelays.reduce((total, delay) => total + delay, 0) / jobQueueDelays.length)
       : null
-    const runtimeEfficiency = terminalRuns ? clampMissionScore((completedRuns / terminalRuns) * 100 - retryCount * 3 - commandFailures * 5) : null
-    const efficiencyRating = terminalRuns ? clampMissionScore((completedRuns / terminalRuns) * 100 - retryCount * 3 - verificationFailures * 10 - commandFailures * 4) : null
-    const heartbeatStabilityScore = clampMissionScore(100 - failedRuns * 8 - cancelledRuns * 8 - retryCount * 3 - fallbackCount * 4)
-    const errors = missionEvents.length || terminalRuns ? failedRuns + verificationFailures + commandFailures : null
+    const runtimeEfficiency = terminalRuns
+      ? clampMissionScore((completedRuns / terminalRuns) * 100 - retryCount * 3 - commandFailures * 5 - toolFailures * 3 - timedOutRuns * 4)
+      : null
+    const efficiencyRating = terminalRuns
+      ? clampMissionScore((completedRuns / terminalRuns) * 100 - retryCount * 3 - verificationFailures * 10 - commandFailures * 4 - toolFailures * 4 - timedOutRuns * 5)
+      : null
+    const heartbeatStabilityScore = clampMissionScore(
+      100 - failedRuns * 8 - cancelledRuns * 8 - timedOutRuns * 6 - retryCount * 3 - fallbackCount * 4,
+    )
+    const errors = missionEvents.length || terminalRuns
+      ? failedRuns + verificationFailures + commandFailures + toolFailures
+      : null
     const baseReport = {
       efficiencyRating,
       soulDrift: null,
@@ -457,11 +526,11 @@ export function createMissionReportService(options: MissionReportServiceOptions)
         completedRuns,
         failedRuns,
         cancelledRuns,
-        timedOutRuns: 0,
+        timedOutRuns,
         retryCount,
         fallbackCount,
         verificationFailures,
-        toolFailures: 0,
+        toolFailures,
         commandFailures,
         humanInterventions: missionEvents.filter((event) => event.actor === 'operator').length,
         agentParticipation: Array.from(new Set([

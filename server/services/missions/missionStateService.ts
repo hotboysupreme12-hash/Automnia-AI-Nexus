@@ -377,6 +377,8 @@ export function createMissionStateService(options: MissionStateServiceOptions) {
   let missionPersistenceSequence = 0
   let missionPersistenceQueue: Promise<void> = Promise.resolve()
   let missionPersistenceFailures: Array<{ sequence: number; operation: string; error: unknown }> = []
+  const inFlightStartsByKey = new Map<string, Promise<MissionStartResult>>()
+  const inFlightStops = new Map<string, Promise<MissionStopResult>>()
 
   class MissionPersistenceError extends Error {
     constructor(failures: Array<{ operation: string; error: unknown }>) {
@@ -498,6 +500,34 @@ export function createMissionStateService(options: MissionStateServiceOptions) {
     return { previousState, nextState, event }
   }
 
+  async function abortCancelledMissionDuringSetup(mission: Mission): Promise<MissionStateServiceError | null> {
+    if (mission.status === 'active') return null
+    const timer = options.missionTimers.get(mission.id)
+    if (timer) {
+      clearTimeout(timer)
+      options.missionTimers.delete(mission.id)
+    }
+    options.clearMissionController(mission.id)
+    if (mission.scheduler.jobs.some(options.missionCronJobNeedsRecovery)) {
+      const cleanup = await options.cleanupMissionCronJobs(mission).catch(options.missionCronCleanupFailureSummary)
+      if (cleanup.failed > 0) {
+        mission.scheduler.status = 'failed'
+        mission.scheduler.lastError = `Mission cancellation cleanup failed for ${cleanup.failed} job(s).`
+      }
+      persistMissionRecord(mission, 'setup-cancelled-cron-cleanup')
+      await flushMissionPersistence().catch((persistenceError) => {
+        warnSafely('[missions] failed to persist setup cancellation cleanup:', persistenceError)
+      })
+    }
+    return {
+      ok: false,
+      status: 409,
+      code: 'mission_invalid_state',
+      message: `Mission "${mission.title}" was cancelled while setup was still in progress.`,
+      detail: { missionId: mission.id, status: mission.status, lifecycleState: mission.lifecycleState },
+    }
+  }
+
   async function startMission(payload: MissionStartPayload): Promise<MissionStartResult> {
     const idempotencyKey = normalizeMissionLaunchIdempotencyKey(payload.idempotencyKey)
     const party = uniqueMissionParty(payload.party)
@@ -507,6 +537,13 @@ export function createMissionStateService(options: MissionStateServiceOptions) {
         status: 400,
         code: 'invalid_payload',
         message: 'Mission requires at least one valid agent.',
+      }
+    }
+    if (idempotencyKey) {
+      const inFlight = inFlightStartsByKey.get(idempotencyKey)
+      if (inFlight) {
+        const settled = await inFlight
+        return settled.ok ? { ...settled, deduped: true } : settled
       }
     }
     const existingMission = findMissionByIdempotencyKey(idempotencyKey)
@@ -538,10 +575,18 @@ export function createMissionStateService(options: MissionStateServiceOptions) {
       }
     }
 
+    const normalizedAgentCadence = new Map<string, number>()
+    for (const [rawAgentId, rawSeconds] of Object.entries(payload.agentCadenceSeconds || {})) {
+      const cleanAgentId = rawAgentId.trim()
+      if (cleanAgentId && !normalizedAgentCadence.has(cleanAgentId)) {
+        normalizedAgentCadence.set(cleanAgentId, rawSeconds)
+      }
+    }
+
     const createdAt = isoNow()
     const agentCadenceSeconds = Object.fromEntries(
       party.map((agentId) => {
-        const requested = Number(payload.agentCadenceSeconds?.[agentId] ?? payload.cadenceSeconds ?? 300)
+        const requested = Number(normalizedAgentCadence.get(agentId) ?? payload.cadenceSeconds ?? 300)
         return [agentId, Math.max(15, Math.min(24 * 60 * 60, Math.round(Number.isFinite(requested) ? requested : 300)))]
       }),
     )
@@ -587,153 +632,185 @@ export function createMissionStateService(options: MissionStateServiceOptions) {
     }
 
     options.missions.set(mission.id, mission)
-    if (mission.endAt) armMissionEndTimer(mission, missionAssignments, missionActivity)
-    transitionMissionState(mission, 'validating', 'mission_started', `Cron mission accepted for validation: ${mission.title}`, {
-      idempotencyKey: `${mission.id}:draft->validating`,
-      evidence: { partySize: mission.party.length, mode: mission.mode },
-    })
-    transitionMissionState(mission, 'scheduled', 'mission_started', `Cron mission scheduled: ${mission.title}`, {
-      idempotencyKey: `${mission.id}:validating->scheduled`,
-      evidence: { cadenceSeconds: mission.cadenceSeconds || null, maxCycles: mission.scheduler.maxCycles },
-    })
-    missionActivity.unshift(`${isoNow()} | cron mission started`)
-    const hierarchical = (mission.collaborationMode || 'hierarchical') === 'hierarchical'
-    for (const state of missionAssignments) {
-      state.status = 'queued'
-      state.updatedAt = isoNow()
-      state.note = hierarchical ? 'awaiting immediate commander kickoff' : 'awaiting immediate mission kickoff'
-    }
-    for (const agentId of mission.party) {
-      pushMissionEvent({
-        missionId: mission.id,
-        type: 'agent_assigned',
-        agentId,
-        message: `${agentId} assigned to cron mission: ${mission.brief.slice(0, 120)}`,
-      })
-    }
-    await options.writeTeamSyncSnapshot({
-      missionId: mission.id,
-      title: mission.title,
-      mode: mission.mode,
-      status: mission.status,
-      assignments: missionAssignments,
-      activity: missionActivity,
-    }).catch((error) => {
-      warn('[missions] initial Team Sync snapshot failed:', error)
-      pushMissionEvent({
-        missionId: mission.id,
-        type: 'agent_update',
-        actor: 'scheduler',
-        message: 'Initial Team Sync snapshot failed; scheduler setup will continue and agents will retry the shared file path.',
-      })
-    })
 
-    try {
-      // Persist the accepted mission and its assignments before creating
-      // scheduled work. If the ledger is unavailable, fail before dispatch.
-      await flushMissionPersistence()
-      if (options.controlCenterMissionSchedulerDryRun) {
-        mission.scheduler.status = 'waiting'
-        mission.scheduler.nextRoundAt = null
-        mission.scheduler.lastError = null
-        missionActivity.unshift(`${isoNow()} | scheduler | mission scheduler dry-run armed`)
-        persistMissionRecord(mission, 'scheduler-dry-run')
+    const launchPromise = (async (): Promise<MissionStartResult> => {
+      if (mission.endAt) armMissionEndTimer(mission, missionAssignments, missionActivity)
+      transitionMissionState(mission, 'validating', 'mission_started', `Cron mission accepted for validation: ${mission.title}`, {
+        idempotencyKey: `${mission.id}:draft->validating`,
+        evidence: { partySize: mission.party.length, mode: mission.mode },
+      })
+      transitionMissionState(mission, 'scheduled', 'mission_started', `Cron mission scheduled: ${mission.title}`, {
+        idempotencyKey: `${mission.id}:validating->scheduled`,
+        evidence: { cadenceSeconds: mission.cadenceSeconds || null, maxCycles: mission.scheduler.maxCycles },
+      })
+      missionActivity.unshift(`${isoNow()} | cron mission started`)
+      const hierarchical = (mission.collaborationMode || 'hierarchical') === 'hierarchical'
+      for (const state of missionAssignments) {
+        state.status = 'queued'
+        state.updatedAt = isoNow()
+        state.note = hierarchical ? 'awaiting immediate commander kickoff' : 'awaiting immediate mission kickoff'
+      }
+      for (const agentId of mission.party) {
+        pushMissionEvent({
+          missionId: mission.id,
+          type: 'agent_assigned',
+          agentId,
+          message: `${agentId} assigned to cron mission: ${mission.brief.slice(0, 120)}`,
+        })
+      }
+      await options.writeTeamSyncSnapshot({
+        missionId: mission.id,
+        title: mission.title,
+        mode: mission.mode,
+        status: mission.status,
+        assignments: missionAssignments,
+        activity: missionActivity,
+      }).catch((error) => {
+        warn('[missions] initial Team Sync snapshot failed:', error)
         pushMissionEvent({
           missionId: mission.id,
           type: 'agent_update',
-          message: `Mission scheduler dry-run armed: ${mission.title}`,
           actor: 'scheduler',
-          evidence: {
-            dryRun: true,
-            reason: 'CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN',
-            partySize: mission.party.length,
-            mode: mission.mode,
-          },
+          message: 'Initial Team Sync snapshot failed; scheduler setup will continue and agents will retry the shared file path.',
         })
-      } else if (mission.mode !== 'instant') {
-        await options.startRecurringMissionCronJobs(mission, missionAssignments, missionActivity)
-      }
-      const recurring = mission.mode !== 'instant'
-      const immediateKickoff = !options.controlCenterMissionSchedulerDryRun
-      const cadenceDescription = missionCadenceDescription(mission)
-      transitionMissionState(
-        mission,
-        'running',
-        'mission_started',
-        !immediateKickoff
-          ? `Mission scheduler dry run ready: ${mission.title}. No agents were launched.`
-          : recurring
-          ? `Mission deployed: ${mission.title}. Immediate kickoff is starting now; scheduled cycles continue ${cadenceDescription}.`
-          : `Mission deployed: ${mission.title}. The Strike cycle is starting now.`,
-        {
-          idempotencyKey: `${mission.id}:scheduled->running`,
-          evidence: {
-            schedulerStatus: mission.scheduler.status,
-            jobs: mission.scheduler.jobs.length,
-            immediateKickoff,
-            ...(recurring ? { nextRoundAt: mission.scheduler.nextRoundAt } : {}),
-          },
-        },
-      )
-      // Do not launch an immediate turn until the running state and its event
-      // evidence are durable. A restart can then reconcile rather than lose it.
-      await flushMissionPersistence()
-      if (mission.mode === 'instant' && immediateKickoff) {
-        options.scheduleNextMissionRound(mission, missionAssignments, missionActivity, 0)
-      }
-      if (recurring && immediateKickoff) {
-        void options.launchRecurringMissionImmediately(mission, missionAssignments, missionActivity).catch((error) => {
-          warn('[missions] immediate recurring kickoff failed:', error)
-        })
-      }
-    } catch (error) {
-      const errorDetail = safeError(error)
-      const timer = options.missionTimers.get(mission.id)
-      if (timer) {
-        clearTimeout(timer)
-        options.missionTimers.delete(mission.id)
-      }
-      const cleanup = await options.cleanupMissionCronJobs(mission).catch(options.missionCronCleanupFailureSummary)
-      mission.status = 'cancelled'
-      mission.completedAt = isoNow()
-      mission.scheduler.status = cleanup.failed > 0 ? 'failed' : 'stopped'
-      mission.scheduler.nextRoundAt = null
-      mission.scheduler.activeJobId = null
-      mission.scheduler.lastError = cleanup.failed > 0
-        ? `Mission setup cleanup failed for ${cleanup.failed} scheduled job(s).`
-        : errorDetail
-      transitionMissionState(mission, 'failed', 'mission_cancelled', `Cron mission failed during scheduler setup: ${errorDetail}`, {
-        idempotencyKey: `${mission.id}:scheduled->failed`,
-        evidence: { error: errorDetail, cleanup },
       })
-      await flushMissionPersistence().catch((persistenceError) => {
-        warnSafely('[missions] failed to persist mission setup failure:', persistenceError)
-      })
+
+      const cancelledAfterSnapshot = await abortCancelledMissionDuringSetup(mission)
+      if (cancelledAfterSnapshot) return cancelledAfterSnapshot
+
       try {
-        await options.recordMissionReport(mission)
-      } catch (reportError) {
-        warnSafely('[missions] failed to record mission setup failure report:', reportError)
+        // Persist the accepted mission and its assignments before creating
+        // scheduled work. If the ledger is unavailable, fail before dispatch.
+        await flushMissionPersistence()
+        const cancelledAfterInitialFlush = await abortCancelledMissionDuringSetup(mission)
+        if (cancelledAfterInitialFlush) return cancelledAfterInitialFlush
+
+        if (options.controlCenterMissionSchedulerDryRun) {
+          mission.scheduler.status = 'waiting'
+          mission.scheduler.nextRoundAt = null
+          mission.scheduler.lastError = null
+          missionActivity.unshift(`${isoNow()} | scheduler | mission scheduler dry-run armed`)
+          persistMissionRecord(mission, 'scheduler-dry-run')
+          pushMissionEvent({
+            missionId: mission.id,
+            type: 'agent_update',
+            message: `Mission scheduler dry-run armed: ${mission.title}`,
+            actor: 'scheduler',
+            evidence: {
+              dryRun: true,
+              reason: 'CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN',
+              partySize: mission.party.length,
+              mode: mission.mode,
+            },
+          })
+        } else if (mission.mode !== 'instant') {
+          await options.startRecurringMissionCronJobs(mission, missionAssignments, missionActivity)
+          const cancelledAfterCronSetup = await abortCancelledMissionDuringSetup(mission)
+          if (cancelledAfterCronSetup) return cancelledAfterCronSetup
+        }
+        const recurring = mission.mode !== 'instant'
+        const immediateKickoff = !options.controlCenterMissionSchedulerDryRun
+        const cadenceDescription = missionCadenceDescription(mission)
+        transitionMissionState(
+          mission,
+          'running',
+          'mission_started',
+          !immediateKickoff
+            ? `Mission scheduler dry run ready: ${mission.title}. No agents were launched.`
+            : recurring
+            ? `Mission deployed: ${mission.title}. Immediate kickoff is starting now; scheduled cycles continue ${cadenceDescription}.`
+            : `Mission deployed: ${mission.title}. The Strike cycle is starting now.`,
+          {
+            idempotencyKey: `${mission.id}:scheduled->running`,
+            evidence: {
+              schedulerStatus: mission.scheduler.status,
+              jobs: mission.scheduler.jobs.length,
+              immediateKickoff,
+              ...(recurring ? { nextRoundAt: mission.scheduler.nextRoundAt } : {}),
+            },
+          },
+        )
+        // Do not launch an immediate turn until the running state and its event
+        // evidence are durable. A restart can then reconcile rather than lose it.
+        await flushMissionPersistence()
+        const cancelledBeforeKickoff = await abortCancelledMissionDuringSetup(mission)
+        if (cancelledBeforeKickoff) return cancelledBeforeKickoff
+
+        if (mission.mode === 'instant' && immediateKickoff) {
+          options.scheduleNextMissionRound(mission, missionAssignments, missionActivity, 0)
+        }
+        if (recurring && immediateKickoff) {
+          void options.launchRecurringMissionImmediately(mission, missionAssignments, missionActivity).catch((error) => {
+            warn('[missions] immediate recurring kickoff failed:', error)
+          })
+        }
+      } catch (error) {
+        const cancelledDuringError = await abortCancelledMissionDuringSetup(mission)
+        if (cancelledDuringError) return cancelledDuringError
+
+        const errorDetail = safeError(error)
+        const timer = options.missionTimers.get(mission.id)
+        if (timer) {
+          clearTimeout(timer)
+          options.missionTimers.delete(mission.id)
+        }
+        const cleanup = await options.cleanupMissionCronJobs(mission).catch(options.missionCronCleanupFailureSummary)
+        mission.status = 'cancelled'
+        mission.completedAt = isoNow()
+        mission.scheduler.status = cleanup.failed > 0 ? 'failed' : 'stopped'
+        mission.scheduler.nextRoundAt = null
+        mission.scheduler.activeJobId = null
+        mission.scheduler.lastError = cleanup.failed > 0
+          ? `Mission setup cleanup failed for ${cleanup.failed} scheduled job(s).`
+          : errorDetail
+        transitionMissionState(mission, 'failed', 'mission_cancelled', `Cron mission failed during scheduler setup: ${errorDetail}`, {
+          idempotencyKey: `${mission.id}:scheduled->failed`,
+          evidence: { error: errorDetail, cleanup },
+        })
+        await flushMissionPersistence().catch((persistenceError) => {
+          warnSafely('[missions] failed to persist mission setup failure:', persistenceError)
+        })
+        try {
+          await options.recordMissionReport(mission)
+        } catch (reportError) {
+          warnSafely('[missions] failed to record mission setup failure report:', reportError)
+        }
+        if (cleanup.failed === 0) options.missions.delete(mission.id)
+        const persistenceFailed = error instanceof MissionPersistenceError
+        return {
+          ok: false,
+          status: persistenceFailed ? 503 : 500,
+          code: persistenceFailed ? 'mission_persistence_failed' : 'mission_scheduler_failed',
+          message: persistenceFailed
+            ? 'Automnia could not save this mission’s recovery record, so agent work was not started.'
+            : cleanup.failed > 0
+              ? 'Mission setup failed and some scheduled jobs could not be removed. Check Monitor before retrying.'
+              : 'Mission setup failed before agent work could safely start. Any partial schedules were removed.',
+          detail: { error: errorDetail, cleanup },
+        }
       }
-      if (cleanup.failed === 0) options.missions.delete(mission.id)
-      const persistenceFailed = error instanceof MissionPersistenceError
-      return {
-        ok: false,
-        status: persistenceFailed ? 503 : 500,
-        code: persistenceFailed ? 'mission_persistence_failed' : 'mission_scheduler_failed',
-        message: persistenceFailed
-          ? 'Automnia could not save this mission’s recovery record, so agent work was not started.'
-          : cleanup.failed > 0
-            ? 'Mission setup failed and some scheduled jobs could not be removed. Check Monitor before retrying.'
-            : 'Mission setup failed before agent work could safely start. Any partial schedules were removed.',
-        detail: { error: errorDetail, cleanup },
-      }
+
+      return { ok: true, deduped: false, idempotencyKey, mission: missionView(mission) }
+    })()
+
+    if (idempotencyKey) {
+      inFlightStartsByKey.set(idempotencyKey, launchPromise)
+      void launchPromise.finally(() => {
+        if (inFlightStartsByKey.get(idempotencyKey) === launchPromise) {
+          inFlightStartsByKey.delete(idempotencyKey)
+        }
+      })
     }
 
-    return { ok: true, deduped: false, idempotencyKey, mission: missionView(mission) }
+    return launchPromise
   }
 
   async function stopMission(payload: MissionStopPayload): Promise<MissionStopResult> {
-    const mission = options.missions.get(payload.missionId)
+    const cleanMissionId = payload.missionId.trim()
+    const inFlightStop = inFlightStops.get(cleanMissionId)
+    if (inFlightStop) return inFlightStop
+
+    const mission = options.missions.get(cleanMissionId)
     if (!mission) return { ok: false, status: 404, code: 'mission_not_found', message: 'Mission not found' }
     if (mission.status !== 'active') {
       return {
@@ -744,117 +821,126 @@ export function createMissionStateService(options: MissionStateServiceOptions) {
       }
     }
 
-    const timer = options.missionTimers.get(mission.id)
-    if (timer) {
-      clearTimeout(timer)
-      options.missionTimers.delete(mission.id)
-    }
-    options.clearMissionController(mission.id)
-
-    mission.status = 'cancelled'
-    mission.completedAt = isoNow()
-    mission.endAt ||= mission.completedAt
-    mission.scheduler.status = 'stopping'
-    mission.scheduler.nextRoundAt = null
-    mission.scheduler.activeJobId = null
-    mission.scheduler.lastError = null
-    const cancellationReason = payload.reason || 'mission cancelled by operator'
-    persistMissionRecord(mission, 'cancellation-requested')
-    pushMissionEvent({
-      missionId: mission.id,
-      type: 'agent_update',
-      message: `Mission cancellation requested: ${mission.title}`,
-      actor: 'operator',
-      previousState: mission.lifecycleState,
-      nextState: mission.lifecycleState,
-      idempotencyKey: `${mission.id}:operator-cancel-requested:${mission.completedAt}`,
-      evidence: {
-        reason: cancellationReason,
-        jobs: mission.scheduler.jobs.length,
-        activeJobs: mission.scheduler.jobs.filter(options.missionCronJobNeedsRecovery).length,
-        round: mission.scheduler.round,
-      },
-    })
-
-    let persistenceWarning: string | null = null
-    try {
-      await flushMissionPersistence()
-    } catch (error) {
-      persistenceWarning = safeError(error)
-      warnSafely('[missions] cancellation is proceeding without a durable request record:', error)
-    }
-
-    const cleanup = await options.cleanupMissionCronJobs(mission).catch(options.missionCronCleanupFailureSummary)
-    if (cleanup.failed > 0) {
-      mission.scheduler.status = 'failed'
-      mission.scheduler.lastError = `Mission cancellation cleanup failed for ${cleanup.failed} job(s).`
-      pushMissionEvent({
-        missionId: mission.id,
-        type: 'agent_update',
-        message: `Mission cancellation cleanup failed for ${cleanup.failed} cron job(s).`,
-        actor: 'scheduler',
-        evidence: { cleanup },
-      })
-    } else {
-      mission.scheduler.status = 'stopped'
-    }
-    transitionMissionState(mission, 'cancelled', 'mission_cancelled', `Cron mission cancelled: ${mission.title}`, {
-      actor: 'operator',
-      idempotencyKey: `${mission.id}:operator-cancel:${mission.completedAt}`,
-      evidence: {
-        reason: cancellationReason,
-        jobs: mission.scheduler.jobs.length,
-        round: mission.scheduler.round,
-        cleanup,
-      },
-    })
-    try {
-      await options.recordMissionReport(mission)
-    } catch (reportError) {
-      persistenceWarning ||= safeError(reportError)
-      warnSafely('[missions] mission was stopped, but its final report could not be saved:', reportError)
-    }
-    await options.writeTeamSyncSnapshot({
-      missionId: mission.id,
-      title: mission.title,
-      mode: mission.mode,
-      status: mission.status,
-      assignments: mission.party.map((agentId) => ({
-        agentId,
-        task: mission.brief,
-        status: 'cancelled',
-        updatedAt: isoNow(),
-        note: cancellationReason,
-      })),
-      activity: [
-        `${isoNow()} | ${cancellationReason}`,
-        `${isoNow()} | scheduler | cancellation cleanup removed=${cleanup.removed} disabled=${cleanup.disabled} failed=${cleanup.failed}`,
-      ],
-    }).catch((error) => {
-      warn('[missions] cancellation Team Sync snapshot failed:', error)
-      pushMissionEvent({
-        missionId: mission.id,
-        type: 'agent_update',
-        actor: 'scheduler',
-        message: 'Mission was cancelled, but the final Team Sync snapshot could not be written.',
-      })
-    })
-    try {
-      await flushMissionPersistence()
-    } catch (error) {
-      persistenceWarning ||= safeError(error)
-      warnSafely('[missions] mission stopped, but its final recovery record could not be saved:', error)
-    }
-    if (persistenceWarning) {
-      return {
-        ok: false,
-        status: 503,
-        code: 'mission_persistence_failed',
-        message: 'Mission was stopped, but Automnia could not save its recovery record. Check Mission History before retrying.',
-        detail: persistenceWarning,
+    const stopPromise = (async (): Promise<MissionStopResult> => {
+      const timer = options.missionTimers.get(mission.id)
+      if (timer) {
+        clearTimeout(timer)
+        options.missionTimers.delete(mission.id)
       }
-    }
-    return { ok: true, mission: missionView(mission), cleanup }
+      options.clearMissionController(mission.id)
+
+      mission.status = 'cancelled'
+      mission.completedAt = isoNow()
+      mission.endAt ||= mission.completedAt
+      mission.scheduler.status = 'stopping'
+      mission.scheduler.nextRoundAt = null
+      mission.scheduler.activeJobId = null
+      mission.scheduler.lastError = null
+      const cancellationReason = payload.reason || 'mission cancelled by operator'
+      persistMissionRecord(mission, 'cancellation-requested')
+      pushMissionEvent({
+        missionId: mission.id,
+        type: 'agent_update',
+        message: `Mission cancellation requested: ${mission.title}`,
+        actor: 'operator',
+        previousState: mission.lifecycleState,
+        nextState: mission.lifecycleState,
+        idempotencyKey: `${mission.id}:operator-cancel-requested:${mission.completedAt}`,
+        evidence: {
+          reason: cancellationReason,
+          jobs: mission.scheduler.jobs.length,
+          activeJobs: mission.scheduler.jobs.filter(options.missionCronJobNeedsRecovery).length,
+          round: mission.scheduler.round,
+        },
+      })
+
+      let persistenceWarning: string | null = null
+      try {
+        await flushMissionPersistence()
+      } catch (error) {
+        persistenceWarning = safeError(error)
+        warnSafely('[missions] cancellation is proceeding without a durable request record:', error)
+      }
+
+      const cleanup = await options.cleanupMissionCronJobs(mission).catch(options.missionCronCleanupFailureSummary)
+      if (cleanup.failed > 0) {
+        mission.scheduler.status = 'failed'
+        mission.scheduler.lastError = `Mission cancellation cleanup failed for ${cleanup.failed} job(s).`
+        pushMissionEvent({
+          missionId: mission.id,
+          type: 'agent_update',
+          message: `Mission cancellation cleanup failed for ${cleanup.failed} cron job(s).`,
+          actor: 'scheduler',
+          evidence: { cleanup },
+        })
+      } else {
+        mission.scheduler.status = 'stopped'
+      }
+      transitionMissionState(mission, 'cancelled', 'mission_cancelled', `Cron mission cancelled: ${mission.title}`, {
+        actor: 'operator',
+        idempotencyKey: `${mission.id}:operator-cancel:${mission.completedAt}`,
+        evidence: {
+          reason: cancellationReason,
+          jobs: mission.scheduler.jobs.length,
+          round: mission.scheduler.round,
+          cleanup,
+        },
+      })
+      try {
+        await options.recordMissionReport(mission)
+      } catch (reportError) {
+        persistenceWarning ||= safeError(reportError)
+        warnSafely('[missions] mission was stopped, but its final report could not be saved:', reportError)
+      }
+      await options.writeTeamSyncSnapshot({
+        missionId: mission.id,
+        title: mission.title,
+        mode: mission.mode,
+        status: mission.status,
+        assignments: mission.party.map((agentId) => ({
+          agentId,
+          task: mission.brief,
+          status: 'cancelled',
+          updatedAt: isoNow(),
+          note: cancellationReason,
+        })),
+        activity: [
+          `${isoNow()} | ${cancellationReason}`,
+          `${isoNow()} | scheduler | cancellation cleanup removed=${cleanup.removed} disabled=${cleanup.disabled} failed=${cleanup.failed}`,
+        ],
+      }).catch((error) => {
+        warn('[missions] cancellation Team Sync snapshot failed:', error)
+        pushMissionEvent({
+          missionId: mission.id,
+          type: 'agent_update',
+          actor: 'scheduler',
+          message: 'Mission was cancelled, but the final Team Sync snapshot could not be written.',
+        })
+      })
+      try {
+        await flushMissionPersistence()
+      } catch (error) {
+        persistenceWarning ||= safeError(error)
+        warnSafely('[missions] mission stopped, but its final recovery record could not be saved:', error)
+      }
+      if (persistenceWarning) {
+        return {
+          ok: false,
+          status: 503,
+          code: 'mission_persistence_failed',
+          message: 'Mission was stopped, but Automnia could not save its recovery record. Check Mission History before retrying.',
+          detail: persistenceWarning,
+        }
+      }
+      return { ok: true, mission: missionView(mission), cleanup }
+    })()
+
+    inFlightStops.set(mission.id, stopPromise)
+    return stopPromise.finally(() => {
+      if (inFlightStops.get(mission.id) === stopPromise) {
+        inFlightStops.delete(mission.id)
+      }
+    })
   }
 
   return {

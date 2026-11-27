@@ -79,6 +79,7 @@ type LightweightGatewayPendingRequest = {
 // for archival diagnostics, not this short-lived request object.
 const MAX_GATEWAY_CHAT_TOOL_EVENTS = 256
 const MAX_GATEWAY_CHAT_STREAMED_TEXT_CHARS = 256_000
+const GATEWAY_STARTUP_ADMISSION_TIMEOUT_MS = 5 * 60_000
 
 export type GatewayClientState = {
   client: GatewayClientLike
@@ -326,7 +327,7 @@ export class LightweightGatewayClient implements GatewayClientLike {
     if (options.signal?.aborted) return Promise.reject(gatewayChatAbortError('gateway request aborted'))
     const id = randomUUID()
     const timeoutMs = options.timeoutMs === null ? this.options.requestTimeoutMs : options.timeoutMs || this.options.requestTimeoutMs
-    return new Promise((resolve, reject) => {
+    const requestPromise = new Promise<unknown>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id)
         this.clearPendingRequest(pending)
@@ -351,6 +352,11 @@ export class LightweightGatewayClient implements GatewayClientLike {
         reject(error instanceof Error ? error : new Error(String(error)))
       }
     })
+    // The Gateway can close while a caller has intentionally abandoned a
+    // fire-and-forget request. Preserve rejection for awaiters while preventing
+    // a transient service restart from becoming a process-level unhandled error.
+    void requestPromise.catch(() => undefined)
+    return requestPromise
   }
 
   private sendConnect() {
@@ -818,15 +824,24 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       }
       return ''
     }
-    const compactValue = (value: unknown, max = 360) => {
+    const boundedPayloadValue = (value: unknown, max: number) => {
       const redacted = redactedGatewayDiagnosticValue(value)
       const text = typeof redacted === 'string' ? redacted : JSON.stringify(redacted)
-      return text ? trimText(text, max) : ''
+      const clean = text || ''
+      return {
+        text: clean.slice(0, max),
+        truncated: clean.length > max,
+      }
     }
     const toolAction = pick('action', 'operation', 'verb')
-    const command = pick('command', 'cmd', 'commandLine', 'shellCommand')
-    const toolInput = compactValue(payload.args ?? payload.arguments ?? payload.input ?? payload.params)
-    const toolOutput = compactValue(payload.output ?? payload.result ?? payload.commandOutput)
+    const args = payload.args ?? payload.arguments ?? payload.input ?? payload.params
+    const argsRecord = isLooseRecord(args) ? args : {}
+    const command = pick('command', 'cmd', 'commandLine', 'shellCommand') ||
+      [argsRecord.command, argsRecord.cmd, argsRecord.commandLine, argsRecord.shellCommand]
+        .find((value): value is string => typeof value === 'string' && Boolean(value.trim())) || ''
+    const commandValue = boundedPayloadValue(command, 2_000)
+    const toolInputValue = boundedPayloadValue(args, 4_000)
+    const toolOutputValue = boundedPayloadValue(payload.output ?? payload.result ?? payload.commandOutput, 8_000)
     const activityType = gatewayActivityType(eventName, payload)
     return {
       transport: 'gateway-chat',
@@ -840,11 +855,15 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       ...(status ? { status } : {}),
       ...(stream ? { stream } : {}),
       ...(toolName ? { toolName } : {}),
+      ...(typeof payload.toolCallId === 'string' ? { toolId: payload.toolCallId } : {}),
       ...(activityType ? { activityType } : {}),
       ...(toolAction ? { toolAction: trimText(toolAction, 120) } : {}),
-      ...(command ? { command: compactValue(command, 360) } : {}),
-      ...(toolInput ? { toolInput } : {}),
-      ...(toolOutput ? { toolOutput } : {}),
+      ...(commandValue.text ? { command: commandValue.text } : {}),
+      ...(commandValue.truncated ? { commandTruncated: true } : {}),
+      ...(toolInputValue.text ? { toolInput: toolInputValue.text } : {}),
+      ...(toolInputValue.truncated ? { toolInputTruncated: true } : {}),
+      ...(toolOutputValue.text ? { toolOutput: toolOutputValue.text } : {}),
+      ...(toolOutputValue.truncated ? { toolOutputTruncated: true } : {}),
     }
   }
 
@@ -1705,7 +1724,10 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       agentName,
       sessionId: params.sessionId,
       sessionKey,
-      timeoutMs: params.timeoutMs + finalExtraTimeoutMs,
+      // The Gateway can take longer than the agent turn timeout to finish
+      // startup. Reserve a separate admission window so startup does not eat
+      // the time the agent needs to complete its turn.
+      timeoutMs: params.timeoutMs + GATEWAY_STARTUP_ADMISSION_TIMEOUT_MS + finalExtraTimeoutMs,
       streamObserverId: params.streamObserverId,
       message: params.message,
       signal: params.signal,
@@ -1733,7 +1755,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       idempotencyKey: runId,
     }
     async function sendWhenReady(client: GatewayClientLike) {
-      const startupDeadline = nowMs() + Math.min(params.timeoutMs, 20_000)
+      const startupDeadline = nowMs() + GATEWAY_STARTUP_ADMISSION_TIMEOUT_MS
       let retryDelayMs = 250
       while (true) {
         params.signal?.throwIfAborted()
@@ -1757,7 +1779,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
             })
           }
           await delay(retryDelayMs, undefined, { signal: params.signal })
-          retryDelayMs = Math.min(retryDelayMs * 2, 2_000)
+          retryDelayMs = Math.min(retryDelayMs * 2, 5_000)
           if (!gatewayChatRunWaiters.has(runId)) throw error
         }
       }

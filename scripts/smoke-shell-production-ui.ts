@@ -19,6 +19,7 @@ const pluginsPanel = read('src/components/plugins/PluginsPanel.tsx')
 const recruitModal = read('src/components/recruit/RecruitAgentModal.tsx')
 const accessibility = read('src/styles/accessibility.css')
 const polish = read('src/styles/automnia-theme/80-production-polish.css')
+const responsiveUx = read('src/styles/automnia-theme/106-responsive-ux.css')
 const theme = read('src/automnia-app-theme.css')
 const phaseKSettingsPersistenceSmoke = read('scripts/smoke-phase-k-settings-persistence.ts')
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
@@ -106,7 +107,7 @@ assert.match(shell, /className="dy-workspace-context__state"[\s\S]*role="status"
 
 assert.match(polish, /\.dy-skip-link:focus-visible/, 'skip link should become visible on keyboard focus')
 assert.match(polish, /:focus-visible[\s\S]*outline: 2px solid var\(--dui-focus-inner\)/, 'interactive controls should have a strong visible focus treatment')
-assert.match(polish, /@media \(max-width: 900px\)[\s\S]*\.dy-human-rail[\s\S]*bottom:/, 'small screens should receive a bottom navigation dock')
+assert.match(responsiveUx, /@media \(max-width: 860px\)[\s\S]*\.dy-human-rail[\s\S]*position: fixed[\s\S]*bottom: 10px/, 'compact screens should keep navigation in a fixed left rail')
 assert.match(polish, /@media \(pointer: coarse\)[\s\S]*min-height: 44px/, 'coarse pointers should receive production-sized targets')
 assert.match(polish, /@media \(prefers-reduced-motion: reduce\)/, 'motion should respect the operator preference')
 assert.match(polish, /@media \(forced-colors: active\)/, 'focus treatment should survive forced-color modes')
@@ -204,6 +205,11 @@ assert.deepEqual(layersAfterTypography, [
   { order: 158, name: 'workspace-graphite-surfaces' },
   { order: 159, name: 'plugin-loading-state' },
   { order: 161, name: 'agent-registry-zoom-fit' },
+  { order: 162, name: 'agent-response-activity' },
+  { order: 163, name: 'user-profile-picture' },
+  { order: 164, name: 'readable-ui' },
+  { order: 165, name: 'settings-graphite' },
+  { order: 166, name: 'recruit-graphite' },
 ], 'global automnia theme layers should remain in the reviewed cascade order')
 assert.doesNotMatch(theme, /99-mission-quiet-redesign/, 'mission quiet redesign should no longer be a global late layer')
 assert.ok(
@@ -224,7 +230,7 @@ assert.ok(theme.indexOf(agentCardThemesImport) < theme.indexOf(settingsSystemImp
 assert.ok(theme.indexOf(settingsSystemImport) < theme.indexOf(cronJobsSystemImport), 'Settings System must load before the scoped Cron Jobs System')
 assert.ok(theme.indexOf(monitorLogsImport) < theme.indexOf(monitorReadableImport), 'Monitor Logs must load before Monitor Readability')
 assert.ok(theme.includes(obsidianAgentCardsImport), 'Obsidian agent card constraints must remain in the cascade')
-assert.ok(theme.trimEnd().endsWith("@import './styles/automnia-theme/161-agent-registry-zoom-fit.css';"), 'Agent registry zoom-fit must remain the final shared theme layer')
+assert.ok(theme.trimEnd().endsWith("@import './styles/automnia-theme/166-recruit-graphite.css';"), 'Recruit Graphite must remain the final shared theme layer')
 assert.doesNotMatch(read('src/styles/automnia-theme/136-product-usability.css'), /\.dy-agent-card/, 'Shared affordances must preserve the final agent card artwork')
 assert.match(operatorExperience, /\.dui-recruit-code-editor:focus-within[\s\S]*#071012 !important/, 'focused recruit Markdown editing must retain its dedicated contrast treatment')
 assert.match(horizonCommandCenter, /Each destination has a dedicated hue/, 'navigation selection should document the workspace identity system')
@@ -232,7 +238,7 @@ for (const [tone, accent] of [
   ['recruit', '#f17d72'],
   ['agents', '#66aee7'],
   ['missions', '#e5b967'],
-  ['monitor', '#60d9cb'],
+  ['monitor', '#75d991'],
   ['plugins', '#ad8ae8'],
   ['settings', '#7ec5ad'],
 ] as const) {

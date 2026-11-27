@@ -13,6 +13,7 @@ type CommandConsoleFileRoutesOptions = {
 const COMMAND_CONSOLE_UPLOAD_CONTENT_TYPES = [
   'image/*',
   'audio/*',
+  'video/*',
   'text/*',
   'application/octet-stream',
   'application/pdf',
@@ -28,6 +29,13 @@ const COMMAND_CONSOLE_UPLOAD_CONTENT_TYPES = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-word.document.macroEnabled.12',
+  'application/vnd.ms-powerpoint.presentation.macroEnabled.12',
+  'application/vnd.ms-excel.sheet.macroEnabled.12',
+  'application/vnd.oasis.opendocument.text',
+  'application/vnd.oasis.opendocument.presentation',
+  'application/vnd.oasis.opendocument.spreadsheet',
+  'application/epub+zip',
 ]
 
 export function registerCommandConsoleFileRoutes(app: Express, options: CommandConsoleFileRoutesOptions) {

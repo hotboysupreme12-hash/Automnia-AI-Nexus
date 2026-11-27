@@ -22,7 +22,7 @@ html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-agents .agent-registry-pa
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-agents [data-dui-panel="active-party"] .active-party-head {
-  border-bottom-color: #30363b !important;
+  border-bottom: 0 !important;
   border-radius: 0 !important;
   background: #202428 !important;
   background-image: none !important;

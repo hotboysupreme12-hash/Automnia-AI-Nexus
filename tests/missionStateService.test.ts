@@ -636,3 +636,241 @@ test('stopMission rejects missing and terminal missions without mutating state',
   assert.equal(state.appendedEvents.length, 0)
   assert.equal(state.appendedRecords.length, 0)
 })
+
+test('concurrent startMission calls with identical idempotencyKey await in-flight setup and propagate failure or settled running view', async () => {
+  let releaseSetup!: () => void
+  const setupBarrier = new Promise<void>((resolve) => {
+    releaseSetup = resolve
+  })
+  const missions = new Map<string, Mission>()
+  const missionFeed: MissionFeedEvent[] = []
+  const missionTimers = new Map<string, NodeJS.Timeout>()
+  let shouldFail = false
+  let id = 0
+  const service = createMissionStateService({
+    appendMissionEvent: async () => undefined,
+    appendMissionRecord: async () => undefined,
+    cleanupMissionCronJobs: async () => ({ attempted: 0, removed: 0, disabled: 0, failed: 0, results: [] }),
+    clearMissionController: () => undefined,
+    completeCronMission: async () => undefined,
+    controlCenterMissionSchedulerDryRun: false,
+    launchRecurringMissionImmediately: async () => undefined,
+    missionCronCleanupFailureSummary: (error) => ({
+      attempted: 0,
+      removed: 0,
+      disabled: 0,
+      failed: 1,
+      results: [{ jobId: 'u', cronId: 'u', agentId: 'u', previousStatus: 'failed', status: 'failed', ok: false, action: 'unchanged', detail: String(error) }],
+    }),
+    missionCronJobNeedsRecovery: (job) => job.status === 'created' || job.status === 'running',
+    missionFeed,
+    missions,
+    missionTimers,
+    now: () => new Date('2026-06-30T12:00:00.000Z'),
+    persistWarning: () => undefined,
+    randomId: () => `inflight-${++id}`,
+    recordMissionReport: () => undefined,
+    redactSensitiveText: (text) => text,
+    scheduleNextMissionRound: () => undefined,
+    startRecurringMissionCronJobs: async (mission) => {
+      await setupBarrier
+      if (shouldFail) throw new Error('cron setup rejected')
+      mission.scheduler.jobs.push(missionCronJobFixture({ missionId: mission.id }))
+    },
+    writeTeamSyncSnapshot: async () => undefined,
+  })
+
+  const firstPromise = service.startMission({
+    title: 'Concurrent launch',
+    brief: 'Coalesce duplicate launch retries.',
+    party: [' agent-a '],
+    mode: 'hours',
+    amount: 1,
+    agentCadenceSeconds: { ' agent-a ': 45 },
+    idempotencyKey: 'concurrent-launch-key',
+  })
+  const secondPromise = service.startMission({
+    title: 'Concurrent launch retry',
+    brief: 'Should await first launch.',
+    party: ['agent-a'],
+    mode: 'hours',
+    amount: 1,
+    idempotencyKey: 'concurrent-launch-key',
+  })
+
+  releaseSetup()
+  const [first, second] = await Promise.all([firstPromise, secondPromise])
+
+  assert.equal(first.ok, true)
+  assert.equal(first.ok && first.deduped, false)
+  assert.equal(first.ok && first.mission.lifecycleState, 'running')
+  assert.equal(first.ok && first.mission.scheduler.jobs.length, 1)
+  assert.deepEqual(first.ok && first.mission.agentCadenceSeconds, { 'agent-a': 45 })
+  assert.equal(second.ok, true)
+  assert.equal(second.ok && second.deduped, true)
+  assert.equal(second.ok && second.mission.lifecycleState, 'running')
+  assert.equal(second.ok && second.mission.scheduler.jobs.length, 1)
+
+  for (const timer of missionTimers.values()) clearTimeout(timer)
+  missionTimers.clear()
+  missions.clear()
+
+  shouldFail = true
+  let releaseFailedSetup!: () => void
+  const failedBarrier = new Promise<void>((resolve) => {
+    releaseFailedSetup = resolve
+  })
+  const failingService = createMissionStateService({
+    appendMissionEvent: async () => undefined,
+    appendMissionRecord: async () => undefined,
+    cleanupMissionCronJobs: async () => ({ attempted: 0, removed: 0, disabled: 0, failed: 0, results: [] }),
+    clearMissionController: () => undefined,
+    completeCronMission: async () => undefined,
+    controlCenterMissionSchedulerDryRun: false,
+    launchRecurringMissionImmediately: async () => undefined,
+    missionCronCleanupFailureSummary: (error) => ({
+      attempted: 0,
+      removed: 0,
+      disabled: 0,
+      failed: 1,
+      results: [{ jobId: 'u', cronId: 'u', agentId: 'u', previousStatus: 'failed', status: 'failed', ok: false, action: 'unchanged', detail: String(error) }],
+    }),
+    missionCronJobNeedsRecovery: (job) => job.status === 'created' || job.status === 'running',
+    missionFeed,
+    missions,
+    missionTimers,
+    now: () => new Date('2026-06-30T12:00:00.000Z'),
+    persistWarning: () => undefined,
+    randomId: () => `inflight-fail-${++id}`,
+    recordMissionReport: () => undefined,
+    redactSensitiveText: (text) => text,
+    scheduleNextMissionRound: () => undefined,
+    startRecurringMissionCronJobs: async () => {
+      await failedBarrier
+      throw new Error('cron setup rejected')
+    },
+    writeTeamSyncSnapshot: async () => undefined,
+  })
+
+  const failFirstPromise = failingService.startMission({
+    title: 'Failing concurrent launch',
+    brief: 'Must not return false ok to duplicate retry.',
+    party: ['agent-a'],
+    mode: 'hours',
+    amount: 1,
+    idempotencyKey: 'failing-concurrent-key',
+  })
+  const failSecondPromise = failingService.startMission({
+    title: 'Failing concurrent launch retry',
+    brief: 'Must receive same failure.',
+    party: ['agent-a'],
+    mode: 'hours',
+    amount: 1,
+    idempotencyKey: 'failing-concurrent-key',
+  })
+
+  releaseFailedSetup()
+  const [failFirst, failSecond] = await Promise.all([failFirstPromise, failSecondPromise])
+  assert.equal(failFirst.ok, false)
+  assert.equal(failSecond.ok, false)
+  assert.equal(failSecond.ok === false && failSecond.code, 'mission_scheduler_failed')
+  assert.equal(missions.size, 0)
+})
+
+test('stopMission during in-flight startMission aborts setup, cleans up late cron jobs, and prevents resurrection to running', async () => {
+  let notifyCronSetupEntered!: () => void
+  const cronSetupEntered = new Promise<void>((resolve) => {
+    notifyCronSetupEntered = resolve
+  })
+  let releaseCronSetup!: () => void
+  const cronSetupFinish = new Promise<void>((resolve) => {
+    releaseCronSetup = resolve
+  })
+  let cleanupCalls = 0
+  let immediateKickoffs = 0
+  const missions = new Map<string, Mission>()
+  const missionFeed: MissionFeedEvent[] = []
+  const missionTimers = new Map<string, NodeJS.Timeout>()
+  const service = createMissionStateService({
+    appendMissionEvent: async () => undefined,
+    appendMissionRecord: async () => undefined,
+    cleanupMissionCronJobs: async (mission) => {
+      cleanupCalls += 1
+      let removed = 0
+      for (const job of mission.scheduler.jobs) {
+        if (job.status === 'created' || job.status === 'running') {
+          job.status = 'removed'
+          removed += 1
+        }
+      }
+      return { attempted: removed, removed, disabled: 0, failed: 0, results: [] }
+    },
+    clearMissionController: () => undefined,
+    completeCronMission: async () => undefined,
+    controlCenterMissionSchedulerDryRun: false,
+    launchRecurringMissionImmediately: async () => {
+      immediateKickoffs += 1
+    },
+    missionCronCleanupFailureSummary: (error) => ({
+      attempted: 0,
+      removed: 0,
+      disabled: 0,
+      failed: 1,
+      results: [{ jobId: 'u', cronId: 'u', agentId: 'u', previousStatus: 'failed', status: 'failed', ok: false, action: 'unchanged', detail: String(error) }],
+    }),
+    missionCronJobNeedsRecovery: (job) => job.status === 'created' || job.status === 'running',
+    missionFeed,
+    missions,
+    missionTimers,
+    now: () => new Date('2026-06-30T12:00:00.000Z'),
+    persistWarning: () => undefined,
+    randomId: () => 'mission-cancel-during-setup',
+    recordMissionReport: () => undefined,
+    redactSensitiveText: (text) => text,
+    scheduleNextMissionRound: () => undefined,
+    startRecurringMissionCronJobs: async (mission) => {
+      notifyCronSetupEntered()
+      await cronSetupFinish
+      // Simulate a cron job registered right after stopMission ran its initial cleanup.
+      mission.scheduler.jobs.push(missionCronJobFixture({
+        id: 'late-job',
+        cronId: 'late-cron',
+        missionId: mission.id,
+        status: 'created',
+      }))
+    },
+    writeTeamSyncSnapshot: async () => undefined,
+  })
+
+  const startPromise = service.startMission({
+    title: 'Cancelled mid-setup',
+    brief: 'Operator stops while cron jobs are still being created.',
+    party: ['agent-a'],
+    mode: 'hours',
+    amount: 1,
+    idempotencyKey: 'cancel-mid-setup-key',
+  })
+
+  await cronSetupEntered
+  const stopResultPromise = service.stopMission({ missionId: 'mission-cancel-during-setup', reason: 'operator aborted setup' })
+  const concurrentDuplicateStopPromise = service.stopMission({ missionId: 'mission-cancel-during-setup', reason: 'duplicate click' })
+  const [stopResult, duplicateStopResult] = await Promise.all([stopResultPromise, concurrentDuplicateStopPromise])
+
+  assert.equal(stopResult.ok, true)
+  assert.equal(duplicateStopResult.ok, true)
+  assert.equal(cleanupCalls, 1)
+
+  releaseCronSetup()
+  const startResult = await startPromise
+
+  assert.equal(startResult.ok, false)
+  assert.equal(startResult.ok === false && startResult.status, 409)
+  assert.equal(startResult.ok === false && startResult.code, 'mission_invalid_state')
+  assert.equal(immediateKickoffs, 0)
+  assert.equal(cleanupCalls, 2)
+  const settledMission = missions.get('mission-cancel-during-setup')
+  assert.equal(settledMission?.status, 'cancelled')
+  assert.equal(settledMission?.lifecycleState, 'cancelled')
+  assert.equal(settledMission?.scheduler.jobs[0]?.status, 'removed')
+  assert.equal(missionTimers.size, 0)
+})

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -49,9 +49,12 @@ function makeAssignments(party: string[], task = 'Initial mission task'): TeamSy
 }
 
 function createHarness(overrides: Partial<{
-  runOpenClaw: (args: string[]) => Promise<MissionSchedulerOpenClawResult>
+  runOpenClaw: (args: string[], options?: { cwd?: string; envOverrides?: Record<string, string>; signal?: AbortSignal }) => Promise<MissionSchedulerOpenClawResult>
   extractAgentReply: (stdout: string, stderr: string) => string
   openClawAgentsRoot: string
+  maxConcurrentCronRuns: number
+  maxConcurrentCronSetups: number
+  recordMissionReport: (mission: Mission) => unknown
 }> = {}) {
   const state = {
     activeShifts: new Map<string, unknown>(),
@@ -89,6 +92,8 @@ function createHarness(overrides: Partial<{
     ensureTeamSyncFile: async () => undefined,
     extractAgentReply: overrides.extractAgentReply || (() => 'round 1 complete evidence: ok'),
     getAgentAuthEnv: async (agentId) => ({ [`AUTH_${agentId.toUpperCase()}`]: 'configured' }),
+    maxConcurrentCronRuns: overrides.maxConcurrentCronRuns,
+    maxConcurrentCronSetups: overrides.maxConcurrentCronSetups,
     missionAgentTimeoutSeconds: 900,
     missionLoopTimers,
     missionRunControllers,
@@ -112,7 +117,7 @@ function createHarness(overrides: Partial<{
     randomId: () => `id-${++id}`,
     recordMissionReport: (mission) => {
       state.reports.push({ ...mission })
-      return { missionId: mission.id }
+      return overrides.recordMissionReport ? overrides.recordMissionReport(mission) : { missionId: mission.id }
     },
     redactSensitiveText: (text) => text.replace(/secret-token/gi, '[REDACTED]'),
     resolveAgentRunContext: async () => ({
@@ -126,9 +131,9 @@ function createHarness(overrides: Partial<{
     }),
     resolveSharedTeamSyncPath: async (agentId) => `C:/automnia/${agentId}/TEAM_SYNC.md`,
     runCwdForContext: (context) => context.executionWorkspace,
-    runOpenClaw: async (args) => {
+    runOpenClaw: async (args, _timeoutMs, callOptions) => {
       state.openClawCalls.push([...args])
-      if (overrides.runOpenClaw) return overrides.runOpenClaw(args)
+      if (overrides.runOpenClaw) return overrides.runOpenClaw(args, callOptions)
       if (args[0] === 'cron' && args[1] === 'add') {
         return { stdout: JSON.stringify({ id: `cron-${++cronId}` }), stderr: '', code: 0 }
       }
@@ -815,4 +820,285 @@ test('instant collaboration modes use distinct command, relay, and concurrent ex
     assert.equal(state.openClawCalls.filter((args) => args[0] === 'cron' && args[1] === 'run').length, 4)
     assert.equal(mission.status, 'completed')
   }
+})
+
+test('runSemaphore enforces bounded concurrency across parallel cron workers and cancels queued waiters cleanly', async () => {
+  let activeRuns = 0
+  let maxObservedRuns = 0
+  let cronCounter = 0
+  const { service, state, missions } = createHarness({
+    maxConcurrentCronRuns: 2,
+    maxConcurrentCronSetups: 2,
+    runOpenClaw: async (args, callOptions) => {
+      if (callOptions?.signal?.aborted) {
+        throw new Error('aborted signal reached runOpenClaw')
+      }
+      if (args[0] === 'cron' && args[1] === 'add') {
+        return { stdout: JSON.stringify({ id: `cron-bounded-${++cronCounter}` }), stderr: '', code: 0 }
+      }
+      if (args[0] === 'cron' && args[1] === 'run') {
+        activeRuns += 1
+        maxObservedRuns = Math.max(maxObservedRuns, activeRuns)
+        await new Promise((resolve) => setTimeout(resolve, 12))
+        activeRuns -= 1
+        return {
+          stdout: JSON.stringify({
+            runId: `run-${args[2]}`,
+            sessionId: '12345678-1234-1234-1234-123456789abc',
+            sessionKey: `key-${args[2]}`,
+          }),
+          stderr: '',
+          code: 0,
+        }
+      }
+      return { stdout: '{}', stderr: '', code: 0 }
+    },
+  })
+  const party = ['agent-a', 'agent-b', 'agent-c', 'agent-d']
+  const mission = makeMission({
+    id: 'mission-bounded-concurrency',
+    mode: 'instant',
+    collaborationMode: 'parallel',
+    party,
+    scheduler: missionSchedulerInitialState({ party, collaborationMode: 'parallel' }),
+  })
+  missions.set(mission.id, mission)
+
+  await service.runMissionCronRound(mission.id, makeAssignments(party), [])
+
+  assert.equal(maxObservedRuns, 2)
+  assert.equal(mission.status, 'completed')
+  assert.equal(state.openClawCalls.filter((args) => args[0] === 'cron' && args[1] === 'run').length, 5)
+
+  // Verify a queued semaphore waiter aborts cleanly and tears down its one-shot cron job.
+  let releaseBlocker!: () => void
+  const blockerPromise = new Promise<void>((resolve) => {
+    releaseBlocker = resolve
+  })
+  let cronCancelCounter = 0
+  const cancelHarness = createHarness({
+    maxConcurrentCronRuns: 1,
+    runOpenClaw: async (args, callOptions) => {
+      if (callOptions?.signal?.aborted) {
+        throw new Error('aborted signal passed to cleanup')
+      }
+      if (args[0] === 'cron' && args[1] === 'add') {
+        return { stdout: JSON.stringify({ id: `cron-waiter-${++cronCancelCounter}` }), stderr: '', code: 0 }
+      }
+      if (args[0] === 'cron' && args[1] === 'run') {
+        await blockerPromise
+        return { stdout: '{}', stderr: '', code: 0 }
+      }
+      return { stdout: '{}', stderr: '', code: 0 }
+    },
+  })
+  const cancelMission = makeMission({ id: 'mission-waiter-cancel', party: ['agent-a', 'agent-b'] })
+  cancelHarness.missions.set(cancelMission.id, cancelMission)
+  const job1 = await cancelHarness.service.createMissionCronJob({ mission: cancelMission, agentId: 'agent-a', role: 'worker', round: 1 })
+  const job2 = await cancelHarness.service.createMissionCronJob({ mission: cancelMission, agentId: 'agent-b', role: 'worker', round: 1 })
+  const waiterController = new AbortController()
+  const run1 = cancelHarness.service.runMissionCronJob(job1)
+  const run2 = cancelHarness.service.runMissionCronJob(job2, waiterController.signal)
+  await new Promise((resolve) => setTimeout(resolve, 8))
+  waiterController.abort()
+  const res2 = await run2
+  assert.equal(res2.ok, false)
+  assert.equal(cancelHarness.state.openClawCalls.some((args) => args[0] === 'cron' && args[1] === 'rm' && args[2] === job2.cronId), true)
+  releaseBlocker()
+  const res1 = await run1
+  assert.equal(res1.ok, true)
+})
+
+test('aborted mid-flight cron run still removes one-shot cron job without passing aborted signal to cron rm', async () => {
+  const controller = new AbortController()
+  let removedWithAbortedSignal = false
+  const { service, state, missions } = createHarness({
+    extractAgentReply: () => '',
+    runOpenClaw: async (args, callOptions) => {
+      if (args[0] === 'cron' && args[1] === 'add') {
+        return { stdout: '{"id":"cron-midflight-abort"}', stderr: '', code: 0 }
+      }
+      if (args[0] === 'cron' && args[1] === 'run') {
+        controller.abort()
+        return { stdout: '', stderr: 'aborted by mission stop', code: 1 }
+      }
+      if (args[0] === 'cron' && args[1] === 'rm') {
+        removedWithAbortedSignal = Boolean(callOptions?.signal?.aborted)
+        if (callOptions?.signal?.aborted) {
+          throw new Error('AbortError')
+        }
+        return { stdout: '{}', stderr: '', code: 0 }
+      }
+      return { stdout: '{}', stderr: '', code: 0 }
+    },
+  })
+  const mission = makeMission({ id: 'mission-midflight-abort' })
+  missions.set(mission.id, mission)
+  const job = await service.createMissionCronJob({ mission, agentId: 'agent-a', role: 'worker', round: 1 })
+  await service.runMissionCronJob(job, controller.signal)
+
+  assert.equal(removedWithAbortedSignal, false)
+  assert.equal(state.openClawCalls.some((args) => args[0] === 'cron' && args[1] === 'rm' && args[2] === 'cron-midflight-abort'), true)
+  assert.deepEqual(state.clearedCronIds, ['cron-midflight-abort'])
+})
+
+test('failed cron run redacts sensitive tokens across job summaries, events, daily memory, and failCronMission', async () => {
+  let cronSeq = 0
+  const { service, state, missions } = createHarness({
+    extractAgentReply: () => 'Provider auth error: secret-token rejected',
+    runOpenClaw: async (args) => {
+      if (args[0] === 'cron' && args[1] === 'add') {
+        return { stdout: JSON.stringify({ id: `cron-secret-${++cronSeq}` }), stderr: '', code: 0 }
+      }
+      if (args[0] === 'cron' && args[1] === 'run') {
+        return { stdout: '', stderr: 'fatal error using secret-token', code: 1 }
+      }
+      return { stdout: '{}', stderr: '', code: 0 }
+    },
+  })
+  const mission = makeMission({ id: 'mission-secret-redaction', mode: 'instant', party: ['agent-a'] })
+  missions.set(mission.id, mission)
+
+  await service.runMissionCronRound(mission.id, makeAssignments(mission.party), [])
+
+  const serializedEvidence = JSON.stringify({
+    jobs: mission.scheduler.jobs,
+    lastError: mission.scheduler.lastError,
+    events: state.events,
+    memory: state.agentMemory,
+    transitions: state.transitions,
+    snapshots: state.snapshots,
+  })
+  assert.equal(serializedEvidence.includes('secret-token'), false)
+  assert.match(mission.scheduler.jobs[0].summary || '', /\[REDACTED\]/)
+  assert.match(mission.scheduler.lastError || '', /\[REDACTED\]/)
+})
+
+test('session evidence recovery blocks path-traversal agentIds and symlinked session files outside openClawAgentsRoot', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'automnia-evidence-root-'))
+  const outside = await mkdtemp(path.join(tmpdir(), 'automnia-evidence-outside-'))
+  try {
+    const sessionId = '12345678-1234-1234-1234-123456789abc'
+    const validLine = JSON.stringify({
+      type: 'message',
+      timestamp: '2026-06-30T12:00:02.000Z',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Changed files: leaked.md. Verification: all acceptance checks passed.' }],
+      },
+    }) + '\n'
+    const outsideFile = path.join(outside, `${sessionId}.jsonl`)
+    await writeFile(outsideFile, validLine)
+    await mkdir(path.join(root, 'agent-a', 'sessions'), { recursive: true })
+
+    // 1) Invalid traversal agentId is rejected before path resolution.
+    const traversalHarness = createHarness({
+      openClawAgentsRoot: root,
+      extractAgentReply: () => '',
+      runOpenClaw: async (args) => args[1] === 'add'
+        ? { stdout: '{"id":"cron-traversal"}', stderr: '', code: 0 }
+        : { stdout: JSON.stringify({ sessionId }), stderr: 'failed', code: 1 },
+    })
+    const traversalMission = makeMission({ id: 'mission-traversal', party: ['../outside'] })
+    traversalHarness.missions.set(traversalMission.id, traversalMission)
+    const traversalJob = await traversalHarness.service.createMissionCronJob({
+      mission: traversalMission,
+      agentId: '../outside',
+      role: 'leader',
+      round: 1,
+    })
+    const traversalResult = await traversalHarness.service.runMissionCronJob(traversalJob)
+    assert.equal(traversalResult.ok, false)
+
+    // 2) Symlinked session file pointing outside openClawAgentsRoot is rejected by assertContainedRegularFilePath.
+    const symlinkTarget = path.join(root, 'agent-a', 'sessions', `${sessionId}.jsonl`)
+    let symlinkCreated = false
+    try {
+      await symlink(outsideFile, symlinkTarget)
+      symlinkCreated = true
+    } catch {
+      symlinkCreated = false
+    }
+    if (symlinkCreated) {
+      const symlinkHarness = createHarness({
+        openClawAgentsRoot: root,
+        extractAgentReply: () => '',
+        runOpenClaw: async (args) => args[1] === 'add'
+          ? { stdout: '{"id":"cron-symlink"}', stderr: '', code: 0 }
+          : { stdout: JSON.stringify({ sessionId }), stderr: 'failed', code: 1 },
+      })
+      const symlinkMission = makeMission({ id: 'mission-symlink', party: ['agent-a'] })
+      symlinkHarness.missions.set(symlinkMission.id, symlinkMission)
+      const symlinkJob = await symlinkHarness.service.createMissionCronJob({
+        mission: symlinkMission,
+        agentId: 'agent-a',
+        role: 'leader',
+        round: 1,
+      })
+      const symlinkResult = await symlinkHarness.service.runMissionCronJob(symlinkJob)
+      assert.equal(symlinkResult.ok, false)
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true })
+    await rm(outside, { recursive: true, force: true })
+  }
+})
+
+test('reconcileRecurringMissionCronRuntime queues concurrent poll snapshots instead of dropping updates', async () => {
+  let releaseReport!: () => void
+  const reportGate = new Promise<void>((resolve) => {
+    releaseReport = resolve
+  })
+  const { service, missions } = createHarness({
+    recordMissionReport: () => reportGate,
+  })
+  const missionA = makeMission({
+    id: 'mission-queue-a',
+    mode: 'continuous',
+    cadenceSeconds: 300,
+    party: ['agent-a'],
+    scheduler: missionSchedulerInitialState({ party: ['agent-a'], cadenceSeconds: 300, maxCycles: 1 }),
+  })
+  const missionB = makeMission({
+    id: 'mission-queue-b',
+    mode: 'continuous',
+    cadenceSeconds: 300,
+    party: ['agent-b'],
+    scheduler: missionSchedulerInitialState({ party: ['agent-b'], cadenceSeconds: 300 }),
+  })
+  missions.set(missionA.id, missionA)
+  missions.set(missionB.id, missionB)
+  await service.startRecurringMissionCronJobs(missionA, makeAssignments(missionA.party), [])
+  await service.startRecurringMissionCronJobs(missionB, makeAssignments(missionB.party), [])
+  const cronA = missionA.scheduler.jobs[0].cronId
+  const cronB = missionB.scheduler.jobs[0].cronId
+
+  const firstReconcile = service.reconcileRecurringMissionCronRuntime([{
+    cronId: cronA,
+    runningAt: null,
+    lastRunAt: '2026-06-30T12:05:00.000Z',
+    lastRunStatus: 'ok',
+    lastError: null,
+    nextRunAt: null,
+  }])
+  await new Promise((resolve) => setTimeout(resolve, 10))
+
+  // While firstReconcile is awaiting missionA report persistence, a second snapshot arrives for missionB.
+  const secondReconcile = service.reconcileRecurringMissionCronRuntime([{
+    cronId: cronB,
+    runningAt: null,
+    lastRunAt: '2026-06-30T12:05:02.000Z',
+    lastRunStatus: 'ok',
+    lastError: null,
+    nextRunAt: '2026-06-30T12:10:02.000Z',
+  }])
+
+  releaseReport()
+  await Promise.all([firstReconcile, secondReconcile])
+
+  assert.equal(missionA.status, 'completed')
+  assert.equal(missionB.scheduler.jobs[0].runCount, 1)
+  assert.equal(missionB.scheduler.jobs[0].completedRunCount, 1)
+  assert.equal(missionB.scheduler.round, 1)
+  assert.equal(missionB.scheduler.nextRoundAt, '2026-06-30T12:10:02.000Z')
 })

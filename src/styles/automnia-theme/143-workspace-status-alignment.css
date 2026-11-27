@@ -78,6 +78,12 @@
   white-space: nowrap !important;
 }
 
+#automnia-main .dy-workspace-context[data-workspace] .dy-workspace-context__meta > [data-quick-links-root] {
+  grid-column: 1 / -1 !important;
+  justify-self: end !important;
+  width: max-content !important;
+}
+
 #automnia-main .dy-workspace-context[data-workspace] > .dy-workspace-context__notice,
 #automnia-main .dy-workspace-context[data-workspace] > .dy-workspace-context__meta > .dy-workspace-context__notice {
   grid-column: 1 / -1 !important;

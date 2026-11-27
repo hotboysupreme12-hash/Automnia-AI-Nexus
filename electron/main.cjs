@@ -1,9 +1,9 @@
-const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, shell, screen, systemPreferences } = require('electron')
+const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, shell, screen, systemPreferences, clipboard } = require('electron')
 const { spawn, spawnSync } = require('node:child_process')
 const fs = require('node:fs')
 const https = require('node:https')
 const http = require('node:http')
-const { randomBytes } = require('node:crypto')
+const { createHash, randomBytes, randomUUID } = require('node:crypto')
 const { autoUpdater } = require('electron-updater')
 const { createAppUpdater } = require('./app-updater.cjs')
 const { assertTrustedHttpsUrl, parseSha256Manifest, sha256File } = require('./runtime-download-security.cjs')
@@ -204,6 +204,24 @@ if (!hasSingleInstanceLock) {
 }
 
 let mainWindow = null
+let quickAgentWindow = null
+let quickAgentSettings = { enabled: false, agentId: '', agentName: '', includeClipboard: true }
+let quickAgentHook = null
+let quickAgentHookListenersBound = false
+let quickAgentHookStarted = false
+let quickAgentPopupOpen = false
+let quickAgentPopupOpening = false
+let quickAgentFileDialogOpen = false
+let quickAgentLastPoint = { x: 0, y: 0 }
+let quickAgentCollapseTimer = null
+let quickAgentClipboardImageMonitor = null
+let quickAgentClipboardImageMonitorPaused = false
+let quickAgentClipboardImageMonitorGeneration = 0
+let quickAgentClipboardImageMonitorBusy = false
+const quickAgentClipboardImageState = { initialized: false, hash: '', changedAt: 0 }
+const QUICK_AGENT_CLIPBOARD_IMAGE_MAX_AGE_MS = 5 * 60 * 1000
+const QUICK_AGENT_CLIPBOARD_IMAGE_POLL_MS = 2_000
+const quickAgentPendingRequests = new Map()
 let rendererWindowRecreationAttempted = false
 let e2eRendererLoadCount = 0
 let e2eRendererGone = false
@@ -346,6 +364,760 @@ function isTrustedRendererSender(event) {
   }
 }
 
+function normalizeQuickAgentSettings(input = {}) {
+  const agentId = typeof input?.agentId === 'string' ? input.agentId.trim().slice(0, 128) : ''
+  return {
+    enabled: input?.enabled === true && Boolean(agentId),
+    agentId,
+    agentName: typeof input?.agentName === 'string' ? input.agentName.trim().slice(0, 100) : '',
+    includeClipboard: input?.includeClipboard !== false,
+  }
+}
+
+function quickAgentDesktopStatus(ok, message = '') {
+  return { ok, supported: ok, enabled: quickAgentHookStarted && quickAgentSettings.enabled, ...(message ? { message } : {}) }
+}
+
+function quickAgentPointToDip(point) {
+  const raw = { x: Math.round(Number(point?.x) || 0), y: Math.round(Number(point?.y) || 0) }
+  if (process.platform === 'win32' || process.platform === 'linux') {
+    try { return screen.screenToDipPoint(raw) } catch { return raw }
+  }
+  return raw
+}
+
+function quickAgentOverlayBounds(point, expanded) {
+  const bounds = expanded ? { width: 382, height: 344 } : { width: 40, height: 40 }
+  const display = screen.getDisplayNearestPoint(point)
+  const area = display?.workArea || screen.getPrimaryDisplay().workArea
+  let x = expanded ? point.x - 20 : point.x - bounds.width / 2
+  let y = expanded ? point.y - 20 : point.y - bounds.height / 2
+  if (expanded && x + bounds.width > area.x + area.width - 6) x = point.x - bounds.width + 20
+  if (expanded && y + bounds.height > area.y + area.height - 6) y = point.y - bounds.height + 20
+  x = Math.max(area.x + 4, Math.min(x, area.x + area.width - bounds.width - 4))
+  y = Math.max(area.y + 4, Math.min(y, area.y + area.height - bounds.height - 4))
+  return { x: Math.round(x), y: Math.round(y), ...bounds }
+}
+
+function quickAgentPopupOrigin(point, bounds) {
+  return {
+    x: `${Math.max(0, Math.min(bounds.width, point.x - bounds.x))}px`,
+    y: `${Math.max(0, Math.min(bounds.height, point.y - bounds.y))}px`,
+  }
+}
+
+function quickAgentIsInBackground() {
+  return Boolean(quickAgentSettings.enabled && mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible() && !isQuitting)
+}
+
+function readQuickAgentLogoDataUrl() {
+  const logoPath = isDev
+    ? path.join(appRoot(), 'public', 'brand', 'automnia-ai-nexus-emblem-v2.png')
+    : resourcePath('dist', 'brand', 'automnia-ai-nexus-emblem-v2.png')
+  try {
+    const png = fs.readFileSync(logoPath)
+    return `data:image/png;base64,${png.toString('base64')}`
+  } catch {
+    return ''
+  }
+}
+
+function quickAgentSendToOverlay(channel, value) {
+  if (!quickAgentWindow || quickAgentWindow.isDestroyed() || quickAgentWindow.webContents.isDestroyed() || !quickAgentPageReady) return false
+  quickAgentWindow.webContents.send(channel, value)
+  return true
+}
+
+let quickAgentPageReady = false
+let quickAgentPendingContext = null
+
+function createQuickAgentWindow() {
+  if (quickAgentWindow && !quickAgentWindow.isDestroyed()) return quickAgentWindow
+  quickAgentPageReady = false
+  const win = new BrowserWindow({
+    x: quickAgentLastPoint.x,
+    y: quickAgentLastPoint.y,
+    width: 40,
+    height: 40,
+    show: false,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    hasShadow: false,
+    alwaysOnTop: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'quick-agent-preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      backgroundThrottling: false,
+    },
+  })
+  win.setAlwaysOnTop(true, 'floating')
+  // Keep the moving mark fully click-through so it never blocks desktop input.
+  // The global hook recognizes a double-click over its bounds and opens the UI.
+  win.setIgnoreMouseEvents(true, { forward: true })
+  win.setFocusable(false)
+  if (process.platform === 'darwin') win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  win.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault()
+      collapseQuickAgentBubble()
+    }
+  })
+  win.on('closed', () => {
+    if (quickAgentWindow === win) quickAgentWindow = null
+    quickAgentPageReady = false
+  })
+  win.webContents.on('did-finish-load', () => {
+    if (quickAgentWindow !== win || win.isDestroyed()) return
+    quickAgentPageReady = true
+    const logo = readQuickAgentLogoDataUrl()
+    if (logo) win.webContents.send('automnia:quick-agent-logo', logo)
+    if (quickAgentPendingContext && quickAgentPopupOpen) {
+      win.webContents.send('automnia:quick-agent-open', quickAgentPendingContext)
+      quickAgentPendingContext = null
+    }
+  })
+  win.webContents.on('will-navigate', (event) => event.preventDefault())
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  win.webContents.on('context-menu', (event) => event.preventDefault())
+  win.webContents.on('render-process-gone', (_event, details) => {
+    appendDesktopDiagnostic('quick-agent-renderer-gone', { reason: details?.reason || 'unknown' })
+  })
+  quickAgentWindow = win
+  void win.loadFile(path.join(__dirname, 'quick-agent.html')).catch((error) => {
+    appendDesktopDiagnostic('quick-agent-window-load-failed', { message: error?.message || String(error) })
+  })
+  return win
+}
+
+function hideQuickAgentWindow() {
+  if (!quickAgentWindow || quickAgentWindow.isDestroyed()) return
+  if (quickAgentCollapseTimer) clearTimeout(quickAgentCollapseTimer)
+  quickAgentCollapseTimer = null
+  quickAgentPopupOpening = false
+  quickAgentSendToOverlay('automnia:quick-agent-collapse')
+  quickAgentPopupOpen = false
+  quickAgentFileDialogOpen = false
+  quickAgentPendingContext = null
+  quickAgentWindow.setIgnoreMouseEvents(true, { forward: true })
+  quickAgentWindow.setFocusable(false)
+  quickAgentWindow.hide()
+}
+
+function collapseQuickAgentBubble() {
+  quickAgentSendToOverlay('automnia:quick-agent-collapse')
+  quickAgentPopupOpen = false
+  quickAgentPopupOpening = false
+  quickAgentFileDialogOpen = false
+  quickAgentPendingContext = null
+  if (!quickAgentWindow || quickAgentWindow.isDestroyed()) return
+  if (quickAgentCollapseTimer) clearTimeout(quickAgentCollapseTimer)
+  quickAgentWindow.setIgnoreMouseEvents(true, { forward: true })
+  quickAgentWindow.setFocusable(false)
+  const win = quickAgentWindow
+  quickAgentCollapseTimer = setTimeout(() => {
+    quickAgentCollapseTimer = null
+    if (quickAgentWindow !== win || win.isDestroyed()) return
+    if (quickAgentIsInBackground()) {
+      win.setBounds(quickAgentOverlayBounds(quickAgentLastPoint, false))
+      win.showInactive()
+    } else {
+      win.hide()
+    }
+  }, 190)
+}
+
+function updateQuickAgentSurface() {
+  if (!quickAgentSettings.enabled || !quickAgentHookStarted || !quickAgentWindow || quickAgentWindow.isDestroyed()) {
+    hideQuickAgentWindow()
+    return
+  }
+  if (!quickAgentIsInBackground()) {
+    hideQuickAgentWindow()
+    return
+  }
+  if (quickAgentPopupOpen || quickAgentPopupOpening || quickAgentCollapseTimer) return
+  try { quickAgentLastPoint = screen.getCursorScreenPoint() } catch {}
+  const markerBounds = quickAgentOverlayBounds(quickAgentLastPoint, false)
+  const currentBounds = quickAgentWindow.getBounds()
+  if (currentBounds.x !== markerBounds.x || currentBounds.y !== markerBounds.y || currentBounds.width !== markerBounds.width || currentBounds.height !== markerBounds.height) {
+    quickAgentWindow.setBounds(markerBounds, false)
+  }
+  if (!quickAgentWindow.isVisible()) quickAgentWindow.showInactive()
+}
+
+function quickAgentEventPoint(event) {
+  return quickAgentPointToDip({ x: event?.x, y: event?.y })
+}
+
+function isQuickAgentPointInsideBubble(point) {
+  if (!quickAgentPopupOpen || !quickAgentWindow || quickAgentWindow.isDestroyed()) return false
+  const bounds = quickAgentWindow.getBounds()
+  return point.x >= bounds.x && point.y >= bounds.y && point.x < bounds.x + bounds.width && point.y < bounds.y + bounds.height
+}
+
+function isQuickAgentPointInsideMarker(point) {
+  if (!quickAgentWindow || quickAgentWindow.isDestroyed() || quickAgentPopupOpen || quickAgentPopupOpening) return false
+  const bounds = quickAgentWindow.getBounds()
+  return point.x >= bounds.x && point.y >= bounds.y && point.x < bounds.x + bounds.width && point.y < bounds.y + bounds.height
+}
+
+async function readQuickAgentClipboardImage() {
+  // Electron 44 moved clipboard reads to ClipboardItems; keep the older
+  // NativeImage path for worktrees that have not refreshed node_modules yet.
+  const clipboardApi = /** @type {any} */ (clipboard)
+  if (typeof clipboardApi.readImage === 'function') {
+    const nativeImageValue = clipboardApi.readImage()
+    if (nativeImageValue && !nativeImageValue.isEmpty()) {
+      const png = nativeImageValue.toPNG()
+      if (png.length > 20 * 1024 * 1024) return { tooLarge: true }
+      return {
+        name: 'clipboard-image.png',
+        mimeType: 'image/png',
+        size: png.length,
+        data: png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength),
+      }
+    }
+  }
+  if (typeof clipboardApi.read !== 'function') return null
+  const items = await clipboardApi.read()
+  for (const item of items) {
+    const type = Array.isArray(item.types) ? item.types.find((entry) => /^image\/[\w.+-]+$/i.test(entry)) : ''
+    if (!type) continue
+    const blob = await item.getType(type)
+    if (blob.size > 20 * 1024 * 1024) return { tooLarge: true }
+    const data = await blob.arrayBuffer()
+    const extension = type.split('/')[1].toLowerCase().replace('jpeg', 'jpg').replace(/[^a-z0-9]/g, '') || 'image'
+    return { name: `clipboard-image.${extension}`, mimeType: type, size: data.byteLength, data }
+  }
+  return null
+}
+
+function snapshotQuickAgentClipboard() {
+  const clipboardApi = /** @type {any} */ (clipboard)
+  if (typeof clipboardApi.availableFormats !== 'function' || typeof clipboardApi.readBuffer !== 'function') return null
+  try {
+    return clipboardApi.availableFormats().map((format) => ({
+      format,
+      data: clipboardApi.readBuffer(format),
+    })).filter((entry) => Buffer.isBuffer(entry.data) && entry.data.length > 0)
+  } catch {
+    return null
+  }
+}
+
+function restoreQuickAgentClipboard(snapshot) {
+  if (!Array.isArray(snapshot)) return
+  const clipboardApi = /** @type {any} */ (clipboard)
+  try {
+    clipboardApi.clear()
+    for (const entry of snapshot) {
+      if (typeof entry?.format !== 'string' || !Buffer.isBuffer(entry?.data)) continue
+      clipboardApi.writeBuffer(entry.format, entry.data)
+    }
+  } catch (error) {
+    appendDesktopDiagnostic('quick-agent-clipboard-restore-failed', { message: error?.message || String(error) })
+  }
+}
+
+async function readQuickAgentClipboardContext(captureSelection) {
+  const context = { text: '', textSource: '', clipboardText: '', selectionText: '', image: null, message: '' }
+  let snapshot = null
+  try {
+    if (captureSelection) snapshot = snapshotQuickAgentClipboard()
+    const originalText = (await clipboard.readText()).slice(0, 32_000)
+    context.clipboardText = originalText
+    context.text = originalText
+    context.textSource = originalText ? 'clipboard' : ''
+    context.image = await readQuickAgentClipboardImage()
+
+    if (captureSelection) {
+      quickAgentClipboardImageMonitorPaused = true
+      quickAgentClipboardImageMonitorGeneration += 1
+      try {
+        const { UiohookKey } = require('uiohook-napi')
+        quickAgentHook?.keyTap?.(UiohookKey.C, [UiohookKey.Ctrl])
+        await new Promise((resolve) => setTimeout(resolve, 60))
+        const selectedText = (await clipboard.readText()).slice(0, 32_000)
+        if (selectedText && selectedText !== originalText) {
+          context.selectionText = selectedText
+          context.text = (originalText
+            ? `Selected text:\n${selectedText}\n\nClipboard text:\n${originalText}`
+            : selectedText).slice(0, 32_000)
+          context.textSource = originalText ? 'selection+clipboard' : 'selection'
+        }
+      } catch (error) {
+        appendDesktopDiagnostic('quick-agent-selection-text-read-failed', { message: error?.message || String(error) })
+      } finally {
+        restoreQuickAgentClipboard(snapshot)
+        quickAgentClipboardImageMonitorPaused = false
+        quickAgentClipboardImageMonitorGeneration += 1
+      }
+    }
+
+    if (context.image?.tooLarge) {
+      context.message = 'Clipboard image is over 20 MB. Use + to attach a smaller image.'
+      context.image = null
+    } else if (context.image && !(await quickAgentClipboardImagePayloadIsRecent(context.image))) {
+      context.message = 'Clipboard image is older than 5 minutes or was already on the clipboard when Automnia started. Take a new screenshot or attach the file with +.'
+      context.image = null
+    }
+  } catch (error) {
+    if (captureSelection) restoreQuickAgentClipboard(snapshot)
+    context.message = 'Clipboard content could not be read. You can still type or attach a file.'
+    appendDesktopDiagnostic('quick-agent-clipboard-read-failed', { message: error?.message || String(error) })
+  }
+  return context
+}
+
+function readWindowsExplorerSelectedPaths() {
+  if (process.platform !== 'win32') return Promise.resolve([])
+  const powershellPath = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+  const script = [
+    "$nativeType = 'using System; using System.Runtime.InteropServices; public static class AutomniaQuickAgentNative { [DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow(); }'",
+    'Add-Type -TypeDefinition $nativeType -ErrorAction SilentlyContinue',
+    '$foreground = 0L; try { $foreground = [AutomniaQuickAgentNative]::GetForegroundWindow().ToInt64() } catch {}',
+    '$shell = New-Object -ComObject Shell.Application',
+    '$activeExplorerFound = $false; $activePaths = @(); $allPaths = @()',
+    'foreach ($window in $shell.Windows()) { try { $handle = [long]$window.HWND; $selected = @($window.Document.SelectedItems()); if ($handle -eq $foreground) { $activeExplorerFound = $true }; foreach ($item in $selected) { $selectedPath = [string]$item.Path; if ($selectedPath -and [System.IO.File]::Exists($selectedPath)) { $allPaths += $selectedPath; if ($handle -eq $foreground) { $activePaths += $selectedPath } } } } catch {} }',
+    'if ($activeExplorerFound) { $result = $activePaths } else { $uniquePaths = @($allPaths | Select-Object -Unique); if ($uniquePaths.Count -eq 1) { $result = $uniquePaths } else { $result = @() } }',
+    'ConvertTo-Json -InputObject @($result | Select-Object -Unique) -Compress',
+  ].join('; ')
+
+  return new Promise((resolve) => {
+    let settled = false
+    let output = ''
+    let timeout = null
+    const finish = (value) => {
+      if (settled) return
+      settled = true
+      if (timeout) clearTimeout(timeout)
+      resolve(value)
+    }
+    let child
+    try {
+      child = spawn(powershellPath, ['-NoLogo', '-NoProfile', '-NonInteractive', '-STA', '-Command', script], {
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      })
+    } catch {
+      finish([])
+      return
+    }
+    timeout = setTimeout(() => {
+      try { child.kill() } catch {}
+      finish([])
+    }, 1_200)
+    child.stdout?.setEncoding('utf8')
+    child.stdout?.on('data', (chunk) => {
+      output = (output + String(chunk)).slice(-24_000)
+    })
+    child.on('error', () => finish([]))
+    child.on('close', () => {
+      try {
+        const parsed = JSON.parse(output.trim())
+        const paths = Array.isArray(parsed) ? parsed : parsed ? [parsed] : []
+        finish([...new Set(paths.filter((entry) => typeof entry === 'string' && entry.length <= 1_024))].slice(0, 8))
+      } catch {
+        finish([])
+      }
+    })
+  })
+}
+
+function quickAgentMimeType(filePath) {
+  const extension = path.extname(filePath).toLowerCase()
+  const knownTypes = {
+    '.csv': 'text/csv',
+    '.gif': 'image/gif',
+    '.html': 'text/html',
+    '.jpeg': 'image/jpeg',
+    '.jpg': 'image/jpeg',
+    '.json': 'application/json',
+    '.md': 'text/markdown',
+    '.pdf': 'application/pdf',
+    '.png': 'image/png',
+    '.rtf': 'application/rtf',
+    '.svg': 'image/svg+xml',
+    '.txt': 'text/plain',
+    '.webp': 'image/webp',
+    '.xml': 'application/xml',
+  }
+  return knownTypes[extension] || 'application/octet-stream'
+}
+
+async function readQuickAgentSelectedFiles(filePaths, fileLimit = 8) {
+  const attachments = []
+  const messages = []
+  let totalBytes = 0
+  const safePaths = Array.isArray(filePaths) ? filePaths : []
+  for (const filePath of safePaths.slice(0, fileLimit)) {
+    try {
+      const stat = await fs.promises.stat(filePath)
+      const fileName = path.basename(filePath)
+      if (!stat.isFile()) continue
+      if (stat.size > 25 * 1024 * 1024) {
+        messages.push(fileName + ' is over 25 MB and was skipped.')
+        continue
+      }
+      if (totalBytes + stat.size > 100 * 1024 * 1024) {
+        messages.push('The selected files exceed the 100 MB total limit. The remaining files were skipped.')
+        break
+      }
+      const data = await fs.promises.readFile(filePath)
+      totalBytes += data.length
+      attachments.push({
+        name: fileName,
+        mimeType: quickAgentMimeType(filePath),
+        size: data.length,
+        data: data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength),
+      })
+    } catch {
+      messages.push(path.basename(filePath) + ' could not be read.')
+    }
+  }
+  if (safePaths.length > fileLimit && fileLimit < 8) {
+    messages.push(`Only ${fileLimit} selected files were attached because the clipboard image uses one attachment slot.`)
+  }
+  return { attachments, message: messages.join(' ') }
+}
+
+async function buildQuickAgentOpenContext(clipboardContext, selectedPaths) {
+  const context = { agentName: quickAgentSettings.agentName || 'Selected agent' }
+  const fileLimit = quickAgentSettings.includeClipboard && clipboardContext?.image ? 7 : 8
+  const selectedFiles = await readQuickAgentSelectedFiles(selectedPaths, fileLimit)
+  if (selectedFiles.attachments.length) context.attachments = selectedFiles.attachments
+  const messages = selectedFiles.message ? [selectedFiles.message] : []
+
+  if (quickAgentSettings.includeClipboard) {
+    const hasSelectedFiles = Array.isArray(selectedPaths) && selectedPaths.length > 0
+    const text = hasSelectedFiles ? clipboardContext?.clipboardText : clipboardContext?.text
+    const textSource = hasSelectedFiles && clipboardContext?.clipboardText
+      ? 'clipboard'
+      : hasSelectedFiles ? '' : clipboardContext?.textSource
+    if (text) context.text = text
+    if (textSource) context.textSource = textSource
+    if (clipboardContext?.image) context.image = clipboardContext.image
+    if (clipboardContext?.message) messages.push(clipboardContext.message)
+  }
+  if (messages.length) context.message = messages.join(' ')
+  return context
+}
+
+async function quickAgentClipboardImageFingerprint() {
+  const clipboardApi = /** @type {any} */ (clipboard)
+  if (typeof clipboardApi.readImage === 'function') {
+    const image = clipboardApi.readImage()
+    if (image && !image.isEmpty()) return createHash('sha256').update(image.toPNG()).digest('hex')
+  }
+  if (typeof clipboardApi.read !== 'function') return ''
+  const items = await clipboardApi.read()
+  for (const item of items) {
+    const type = Array.isArray(item.types) ? item.types.find((entry) => /^image\/[\w.+-]+$/i.test(entry)) : ''
+    if (!type) continue
+    const blob = await item.getType(type)
+    if (blob.size > 20 * 1024 * 1024) return ''
+    return createHash('sha256').update(Buffer.from(await blob.arrayBuffer())).digest('hex')
+  }
+  return ''
+}
+
+async function observeQuickAgentClipboardImage() {
+  if (quickAgentClipboardImageMonitorPaused || quickAgentClipboardImageMonitorBusy) return
+  quickAgentClipboardImageMonitorBusy = true
+  const generation = quickAgentClipboardImageMonitorGeneration
+  try {
+    const hash = await quickAgentClipboardImageFingerprint()
+    if (quickAgentClipboardImageMonitorPaused || generation !== quickAgentClipboardImageMonitorGeneration) return
+    if (!quickAgentClipboardImageState.initialized) {
+      // An image already on the clipboard at startup has no trustworthy age.
+      // Do not attach it until the clipboard changes while Automnia is running.
+      quickAgentClipboardImageState.initialized = true
+      quickAgentClipboardImageState.hash = hash
+      quickAgentClipboardImageState.changedAt = 0
+      return
+    }
+    if (hash !== quickAgentClipboardImageState.hash) {
+      quickAgentClipboardImageState.hash = hash
+      quickAgentClipboardImageState.changedAt = hash ? Date.now() : 0
+    }
+  } catch (error) {
+    appendDesktopDiagnostic('quick-agent-clipboard-image-monitor-failed', { message: error?.message || String(error) })
+  } finally {
+    quickAgentClipboardImageMonitorBusy = false
+  }
+}
+
+function startQuickAgentClipboardImageMonitor() {
+  if (quickAgentClipboardImageMonitor) return
+  void observeQuickAgentClipboardImage()
+  quickAgentClipboardImageMonitor = setInterval(() => void observeQuickAgentClipboardImage(), QUICK_AGENT_CLIPBOARD_IMAGE_POLL_MS)
+  if (typeof quickAgentClipboardImageMonitor.unref === 'function') quickAgentClipboardImageMonitor.unref()
+}
+
+function stopQuickAgentClipboardImageMonitor() {
+  if (!quickAgentClipboardImageMonitor) return
+  clearInterval(quickAgentClipboardImageMonitor)
+  quickAgentClipboardImageMonitor = null
+}
+
+async function quickAgentClipboardImagePayloadIsRecent(input) {
+  const image = quickAgentAttachmentBytes(input)
+  if (!image || !image.mimeType.startsWith('image/')) return false
+  const hash = createHash('sha256').update(Buffer.from(image.data)).digest('hex')
+  if (!quickAgentClipboardImageState.initialized) return false
+  const clipboardHash = await quickAgentClipboardImageFingerprint()
+  if (!clipboardHash || clipboardHash !== hash) return false
+  if (clipboardHash !== quickAgentClipboardImageState.hash) {
+    quickAgentClipboardImageState.hash = clipboardHash
+    quickAgentClipboardImageState.changedAt = Date.now()
+  }
+  const capturedAt = quickAgentClipboardImageState.changedAt
+  const ageMs = Date.now() - capturedAt
+  return Boolean(
+    hash === quickAgentClipboardImageState.hash &&
+    capturedAt > 0 &&
+    ageMs >= 0 &&
+    ageMs <= QUICK_AGENT_CLIPBOARD_IMAGE_MAX_AGE_MS,
+  )
+}
+
+async function openQuickAgentBubble(point) {
+  if (!quickAgentIsInBackground() || quickAgentPopupOpen || quickAgentPopupOpening) return
+  quickAgentPopupOpening = true
+  quickAgentFileDialogOpen = false
+  quickAgentLastPoint = point
+  let clipboardContext = null
+  const selectedPathsPromise = readWindowsExplorerSelectedPaths()
+  try {
+    if (quickAgentSettings.includeClipboard) {
+      clipboardContext = await readQuickAgentClipboardContext(process.platform === 'win32')
+    }
+  } catch (error) {
+    clipboardContext = { message: 'Selection context could not be read. You can still type or attach a file.' }
+    appendDesktopDiagnostic('quick-agent-open-context-failed', { message: error?.message || String(error) })
+  }
+  if (!quickAgentIsInBackground()) {
+    quickAgentPopupOpening = false
+    return
+  }
+  if (quickAgentCollapseTimer) clearTimeout(quickAgentCollapseTimer)
+  quickAgentCollapseTimer = null
+  const win = createQuickAgentWindow()
+  const bounds = quickAgentOverlayBounds(point, true)
+  const popupOrigin = quickAgentPopupOrigin(point, bounds)
+  quickAgentPopupOpening = false
+  quickAgentPopupOpen = true
+  win.setBounds(bounds)
+  win.setIgnoreMouseEvents(false)
+  win.setFocusable(true)
+  win.show()
+  win.focus()
+  const initialContext = {
+    agentName: quickAgentSettings.agentName || 'Selected agent',
+    popupOrigin,
+    contextPending: true,
+    message: 'Reading selected content…',
+  }
+  if (!quickAgentSendToOverlay('automnia:quick-agent-open', initialContext)) quickAgentPendingContext = initialContext
+  void selectedPathsPromise
+    .then((selectedPaths) => buildQuickAgentOpenContext(clipboardContext, selectedPaths))
+    .then((context) => {
+      if (quickAgentWindow !== win || win.isDestroyed() || !quickAgentPopupOpen) return
+      context.popupOrigin = popupOrigin
+      context.contextPending = false
+      if (!quickAgentSendToOverlay('automnia:quick-agent-context', context)) quickAgentPendingContext = context
+    })
+    .catch((error) => {
+      appendDesktopDiagnostic('quick-agent-open-context-failed', { message: error?.message || String(error) })
+      if (quickAgentWindow !== win || win.isDestroyed() || !quickAgentPopupOpen) return
+      const context = {
+        agentName: quickAgentSettings.agentName || 'Selected agent',
+        popupOrigin,
+        contextPending: false,
+        message: 'Selection context could not be read. You can still type or attach a file.',
+      }
+      if (!quickAgentSendToOverlay('automnia:quick-agent-context', context)) quickAgentPendingContext = context
+    })
+}
+
+function quickAgentCurrentPoint(event) {
+  try { return screen.getCursorScreenPoint() } catch { return quickAgentEventPoint(event) }
+}
+
+function bindQuickAgentHookListeners(hook) {
+  if (quickAgentHookListenersBound) return
+  quickAgentHookListenersBound = true
+  hook.on('mousemove', (event) => {
+    quickAgentLastPoint = quickAgentCurrentPoint(event)
+    if (!quickAgentSettings.enabled || !quickAgentIsInBackground() || quickAgentPopupOpen || quickAgentPopupOpening || quickAgentCollapseTimer) return
+    updateQuickAgentSurface()
+  })
+  hook.on('mousedown', (event) => {
+    const point = quickAgentCurrentPoint(event)
+    quickAgentLastPoint = point
+    if (!quickAgentSettings.enabled || !quickAgentHookStarted || !quickAgentIsInBackground()) return
+    if (quickAgentFileDialogOpen) return
+    if (Number(event?.button) !== 1) return
+    if (quickAgentPopupOpen) {
+      if (!isQuickAgentPointInsideBubble(point)) collapseQuickAgentBubble()
+      return
+    }
+    if (quickAgentPopupOpening || quickAgentCollapseTimer) return
+    if (Number(event?.clicks) >= 2 && isQuickAgentPointInsideMarker(point)) void openQuickAgentBubble(point)
+  })
+  hook.on('click', (event) => {
+    const point = quickAgentCurrentPoint(event)
+    if (!quickAgentSettings.enabled || !quickAgentHookStarted || !quickAgentIsInBackground()) return
+    if (quickAgentFileDialogOpen || quickAgentPopupOpen || quickAgentPopupOpening || quickAgentCollapseTimer) return
+    if (Number(event?.button) === 1 && Number(event?.clicks) >= 2 && isQuickAgentPointInsideMarker(point)) {
+      quickAgentLastPoint = point
+      void openQuickAgentBubble(point)
+    }
+  })
+}
+
+function startQuickAgentHook() {
+  if (quickAgentHookStarted && quickAgentHook) return { ok: true }
+  if (process.platform === 'linux' && process.env.WAYLAND_DISPLAY) {
+    return { ok: false, message: 'Global mouse tracking needs an X11 desktop session. It is unavailable in Wayland sessions.' }
+  }
+  let hook = null
+  try {
+    const { uIOhook } = require('uiohook-napi')
+    hook = uIOhook
+    quickAgentHook = uIOhook
+    bindQuickAgentHookListeners(uIOhook)
+    uIOhook.start()
+    quickAgentHookStarted = true
+    return { ok: true }
+  } catch (error) {
+    try { hook?.stop() } catch {}
+    quickAgentHookStarted = false
+    quickAgentHook = null
+    appendDesktopDiagnostic('quick-agent-hook-start-failed', { message: error?.message || String(error) })
+    return { ok: false, message: process.platform === 'darwin'
+      ? 'macOS did not allow global mouse access. Check System Settings → Privacy & Security → Input Monitoring, allow Automnia, then restart it.'
+      : `Global mouse access could not start: ${error?.message || String(error)}` }
+  }
+}
+
+function stopQuickAgentHook() {
+  if (!quickAgentHookStarted || !quickAgentHook) return
+  try { quickAgentHook.stop() } catch (error) {
+    appendDesktopDiagnostic('quick-agent-hook-stop-failed', { message: error?.message || String(error) })
+  }
+  quickAgentHookStarted = false
+}
+
+function applyQuickAgentSettings(input) {
+  quickAgentSettings = normalizeQuickAgentSettings(input)
+  if (!quickAgentSettings.enabled) {
+    stopQuickAgentHook()
+    hideQuickAgentWindow()
+    return quickAgentDesktopStatus(true)
+  }
+  const hookStatus = startQuickAgentHook()
+  if (!hookStatus.ok) {
+    hideQuickAgentWindow()
+    return quickAgentDesktopStatus(false, hookStatus.message)
+  }
+  createQuickAgentWindow()
+  updateQuickAgentSurface()
+  return quickAgentDesktopStatus(true)
+}
+
+function quickAgentAttachmentBytes(input) {
+  if (!input || typeof input !== 'object') return null
+  let data
+  if (input.data instanceof ArrayBuffer) data = Buffer.from(input.data)
+  else if (Buffer.isBuffer(input.data)) data = input.data
+  else if (ArrayBuffer.isView(input.data)) data = Buffer.from(input.data.buffer, input.data.byteOffset, input.data.byteLength)
+  else return null
+  const name = typeof input.name === 'string' ? path.basename(input.name).replace(/[\0\r\n]/g, '').slice(0, 240) : ''
+  const mimeType = typeof input.mimeType === 'string' && /^[\w.+-]+\/[\w.+-]+$/.test(input.mimeType) ? input.mimeType.slice(0, 100) : 'application/octet-stream'
+  if (!name || !data.length || data.length > 25 * 1024 * 1024) return null
+  return { name, mimeType, size: data.length, data: data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) }
+}
+
+ipcMain.handle('automnia:cursor-agent-set-settings', async (event, input = {}) => {
+  if (!isTrustedRendererSender(event)) return quickAgentDesktopStatus(false, 'Untrusted renderer origin')
+  return applyQuickAgentSettings(input)
+})
+
+ipcMain.handle('automnia:quick-agent-close', async (event) => {
+  if (!quickAgentWindow || event.sender !== quickAgentWindow.webContents) return false
+  collapseQuickAgentBubble()
+  return true
+})
+
+ipcMain.on('automnia:quick-agent-file-dialog', (event, input) => {
+  if (!quickAgentWindow || event.sender !== quickAgentWindow.webContents) return
+  quickAgentFileDialogOpen = input === true
+})
+
+ipcMain.handle('automnia:quick-agent-submit', async (event, input = {}) => {
+  if (!quickAgentWindow || event.sender !== quickAgentWindow.webContents || !quickAgentSettings.enabled || !quickAgentSettings.agentId) {
+    return { ok: false, message: 'The cursor agent is not available. Open Automnia settings to reconnect it.' }
+  }
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed() || mainWindow.webContents.isLoading()) {
+    return { ok: false, message: 'Automnia is still opening. Wait a moment and try again.' }
+  }
+  const prompt = typeof input?.prompt === 'string' ? input.prompt.trim().slice(0, 16_000) : ''
+  const clipboardText = quickAgentSettings.includeClipboard && typeof input?.clipboardText === 'string' ? input.clipboardText.slice(0, 32_000) : ''
+  const clipboardImageInput = quickAgentSettings.includeClipboard ? input?.clipboardImage : null
+  if (clipboardImageInput && !(await quickAgentClipboardImagePayloadIsRecent(clipboardImageInput))) {
+    return { ok: false, message: 'Clipboard screenshot expired. Take a new screenshot or attach the image with +.' }
+  }
+  const clipboardImage = clipboardImageInput ? quickAgentAttachmentBytes(clipboardImageInput) : null
+  if (clipboardImageInput && !clipboardImage) return { ok: false, message: 'The clipboard screenshot could not be read. Take it again or attach the image with +.' }
+  const files = Array.isArray(input?.attachments) ? input.attachments.slice(0, 8).map(quickAgentAttachmentBytes) : []
+  if (files.some((file) => !file)) return { ok: false, message: 'One of the selected files could not be read. Remove it and choose it again.' }
+  const attachments = files.filter(Boolean)
+  const totalBytes = attachments.reduce((total, file) => total + file.size, clipboardImage?.size || 0)
+  if (clipboardImage && clipboardImage.mimeType.startsWith('image/')) attachments.unshift(clipboardImage)
+  if (totalBytes > 100 * 1024 * 1024 || attachments.length > 8) return { ok: false, message: 'Attach up to 8 files and keep the total under 100 MB.' }
+  if (!prompt && !clipboardText && !attachments.length) return { ok: false, message: 'Type a request or include clipboard content before sending.' }
+  const requestId = randomUUID()
+  const request = {
+    requestId,
+    agentId: quickAgentSettings.agentId,
+    agentName: quickAgentSettings.agentName || 'Selected agent',
+    prompt,
+    clipboardText,
+    attachments,
+  }
+  if (!mainWindow.isVisible()) mainWindow.webContents.send('automnia:quick-agent-submit', request)
+  else return { ok: false, message: 'Show Automnia and hide it again before using the cursor agent.' }
+  return await new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      quickAgentPendingRequests.delete(requestId)
+      resolve({ ok: false, message: 'The agent did not accept the request in time. Your draft is still here.' })
+    }, 120_000)
+    quickAgentPendingRequests.set(requestId, { resolve, timer })
+  })
+})
+
+ipcMain.on('automnia:quick-agent-complete', (event, input = {}) => {
+  if (!isTrustedRendererSender(event)) return
+  const requestId = typeof input?.requestId === 'string' ? input.requestId : ''
+  const pending = quickAgentPendingRequests.get(requestId)
+  if (!pending) return
+  clearTimeout(pending.timer)
+  quickAgentPendingRequests.delete(requestId)
+  pending.resolve({ ok: input?.ok === true, ...(typeof input?.message === 'string' && input.message ? { message: input.message.slice(0, 500) } : {}) })
+})
+
 function normalizePersistedControlCenterToken(value) {
   if (typeof value !== 'string') return ''
   const token = value.trim()
@@ -468,6 +1240,12 @@ function resolveDirectoryPickerStartPath(startPath) {
   } catch {}
   return app.getPath('documents')
 }
+
+ipcMain.handle('automnia:copy-text', async (event, text) => {
+  if (!isTrustedRendererSender(event)) throw new Error('Untrusted renderer origin')
+  if (typeof text !== 'string') throw new TypeError('Clipboard text must be a string')
+  await clipboard.writeText(text)
+})
 
 ipcMain.handle('automnia:microphone-request', async (event) => {
   if (!isTrustedRendererSender(event)) throw new Error('Untrusted renderer origin')
@@ -2270,18 +3048,15 @@ async function stopGatewayCompletely() {
 
 async function stopRuntimeCompletelyForQuit() {
   appendGatewayLog('lifecycle', 'tray requested complete runtime shutdown')
-  let runtimeShutdownOk = false
   try {
-    await postControlApi('/api/openclaw/runtime/shutdown', 20_000)
-    runtimeShutdownOk = true
+    // Agent shutdown can stall when a provider child (for example Cursor) is
+    // wedged. Give the runtime a brief chance to stop cleanly, then let the
+    // desktop process-tree cleanup below terminate anything it still owns.
+    await postControlApi('/api/openclaw/runtime/shutdown', 8_000)
   } catch (err) {
-    appendGatewayLog('lifecycle', `runtime shutdown API failed: ${err?.message || err}`)
+    appendGatewayLog('lifecycle', `runtime shutdown API failed; stopping owned processes directly: ${err?.message || err}`)
   }
-  try {
-    if (!runtimeShutdownOk) await stopGatewayCompletely()
-  } finally {
-    await stopControlServerProcess('desktop quit')
-  }
+  await stopControlServerProcess('desktop quit')
 }
 
 async function resetGateway() {
@@ -2470,6 +3245,9 @@ function createMainWindow() {
     ...(resolveAppIcon() ? { icon: resolveAppIcon() } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
+      // Keep newer renderer IPC calls from reaching an older, already-running
+      // Electron main process during a dev reload or partial app update.
+      additionalArguments: ['--automnia-main-ipc-v2'],
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -2851,14 +3629,20 @@ function createMainWindow() {
   win.on('show', () => {
     win.setSkipTaskbar(false)
     updateTrayMenu()
+    updateQuickAgentSurface()
   })
-  win.on('hide', updateTrayMenu)
+  win.on('hide', () => {
+    updateTrayMenu()
+    updateQuickAgentSurface()
+  })
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = null
     clearRendererLoadTimer()
     if (rendererRecoveryTimer) clearTimeout(rendererRecoveryTimer)
     rendererRecoveryTimer = null
     updateTrayMenu()
+    updateQuickAgentSurface()
+    if (!TRAY_ENABLED) app.quit()
   })
   win.once('ready-to-show', () => {
     // did-finish-load is the normal presentation path. Keep this fallback
@@ -2935,15 +3719,21 @@ function updateTrayMenu() {
     { type: 'separator' },
     {
       label: exitLabel,
-      enabled: !gatewayBusy,
-      click: async () => {
+      enabled: !isQuitting,
+      click: () => {
+        if (isQuitting) return
         isQuitting = true
         updateTrayMenu()
-        await performQuitCleanup()
-        for (const win of BrowserWindow.getAllWindows()) {
-          if (!win.isDestroyed()) win.close()
-        }
-        app.exit(0)
+        void performQuitCleanup()
+          .catch((err) => {
+            console.warn('[automnia] desktop quit cleanup failed:', err?.message || err)
+          })
+          .finally(() => {
+            for (const win of BrowserWindow.getAllWindows()) {
+              if (!win.isDestroyed()) win.close()
+            }
+            app.exit(0)
+          })
       },
     },
   ]
@@ -3700,6 +4490,7 @@ async function runElectronE2eTraySelfTest(win) {
 app.whenReady().then(async () => {
   logE2e('app-ready')
   if (!hasSingleInstanceLock) return
+  startQuickAgentClipboardImageMonitor()
   if (startingUp || startupFailed || isQuitting) return
   startingUp = true
   logE2e('startup-begin')
@@ -3821,9 +4612,19 @@ app.on('before-quit', (event) => {
     startupFailed,
   })
   isQuitting = true
+  stopQuickAgentHook()
+  stopQuickAgentClipboardImageMonitor()
+  hideQuickAgentWindow()
+  for (const [requestId, pending] of quickAgentPendingRequests) {
+    clearTimeout(pending.timer)
+    pending.resolve({ ok: false, message: 'Automnia is closing.' })
+    quickAgentPendingRequests.delete(requestId)
+  }
   if (quitCleanupComplete || !hasSingleInstanceLock) return
   event.preventDefault()
-  void performQuitCleanup().finally(() => {
+  void performQuitCleanup().catch((err) => {
+    console.warn('[automnia] desktop quit cleanup failed:', err?.message || err)
+  }).finally(() => {
     if (ELECTRON_E2E) {
       app.exit(0)
       // A renderer crash/recovery can leave Chromium helper handles alive

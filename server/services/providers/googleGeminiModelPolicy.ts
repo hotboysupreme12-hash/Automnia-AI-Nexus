@@ -16,6 +16,25 @@ function normalizedGoogleGeminiModel(model: string) {
     .replace(/^(?:google|google-vertex)\//, '')
 }
 
+/**
+ * Google Gemini chat models in the supported generations accept inline image
+ * input. Keep this separate from video/audio metadata because not every model
+ * in those families accepts the same additional media types.
+ */
+export function googleGeminiSupportsImageInput(model: string) {
+  const normalized = normalizedGoogleGeminiModel(model)
+  return /^(?:gemini-1\.5-(?:pro|flash)|gemini-(?:[2-9](?:\.\d+)?)-(?:pro|flash|ultra|computer-use)|gemini-4-(?:hydrogen|argon|carbon))(?:$|[-@])/.test(normalized)
+}
+
+export function googleGeminiInputModalities(model: string) {
+  const normalized = normalizedGoogleGeminiModel(model)
+  if (!googleGeminiSupportsImageInput(normalized)) return ['text']
+  if (/^(?:gemini-3\.8-flash|gemini-4-(?:hydrogen|carbon))(?:$|[-@])/.test(normalized)) {
+    return ['text', 'image', 'audio', 'video']
+  }
+  return ['text', 'image']
+}
+
 export function isGoogleGemini37FlashModel(model: string) {
   return /^gemini-3\.7-flash(?:$|[-@])/.test(normalizedGoogleGeminiModel(model))
 }

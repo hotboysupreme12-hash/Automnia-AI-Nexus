@@ -1,11 +1,13 @@
 import { useAgentVoiceStore } from '../../speech/agentVoiceStore'
 import { AvatarFallback } from '../ui/AvatarFallback'
 import { useRememberedState } from '../../hooks/useRememberedState'
-import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type WheelEvent } from 'react'
+import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type WheelEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useDialogFocus } from '../ui/Dialog'
 import { indexResponseActivity, selectResponseHistory, selectTargetAgentRuns } from '../../store/responseHistoryIndex'
-import { ResponseMarkdown } from './ResponseMarkdown'
+import { StreamedResponseMarkdown } from './ResponseMarkdown'
+import { AgentResponseActivityTimeline } from './AgentResponseActivityTimeline'
+import { AgentResponseCodeChanges } from './AgentResponseCodeChanges'
 import { QueuedFollowupControls } from './QueuedFollowupControls'
 import { apiErrorMessage, apiRequest } from '../../api/client'
 import { isUploadResponse } from '../../api/responseValidation'
@@ -26,7 +28,11 @@ import type { AgentResponse, AgentTurnAttachment, OpenClawAgent } from '../../ty
 import { apiUrl } from '../../utils/apiUrl'
 import { fetchControlCenterWithAuth } from '../../api/authenticatedFetch'
 import { useLicense } from '../../context/useLicense'
+import { useAuth } from '../../context/useAuth'
+import { useUserProfileAvatar } from '../../hooks/useUserProfileAvatar'
 import { redactDiagnosticText } from '../../utils/diagnosticRedaction'
+import { buildAgentAttachmentMessage } from '../../utils/agentAttachmentMessage'
+import { resolveUserProfileIdentity } from '../../utils/userProfileAvatar'
 import { agentPortraitSrc } from '../../utils/portrait'
 import { runOutcomeLabel } from '../../utils/runOutcome'
 import { failureRecoveryForKind, type FailureRecovery, type FailureRecoveryAction } from '../../utils/failureRecovery'
@@ -81,14 +87,14 @@ const LANE_DIAGNOSTIC_STALLED_MS = 30 * 60 * 1000
 const LANE_DIAGNOSTIC_TICK_MS = 30 * 1000
 const VOICE_WAVEFORM_PROFILE = [0.46, 0.7, 0.94, 1, 0.86, 0.64, 0.42]
 const COMMAND_CONSOLE_ACCEPTED_FILE_TYPES = [
-  'image/*',
-  'audio/*',
-  '.pdf', '.doc', '.docx', '.rtf', '.ppt', '.pptx', '.xls', '.xlsx',
+  'image/*', 'audio/*', 'video/*',
+  '.pdf', '.doc', '.docx', '.docm', '.odt', '.rtf', '.ppt', '.pptx', '.pptm', '.odp', '.xls', '.xlsx', '.xlsm', '.ods', '.epub',
   '.txt', '.md', '.markdown', '.json', '.jsonl', '.csv', '.tsv', '.log', '.xml', '.yaml', '.yml',
   '.html', '.htm', '.css', '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs',
   '.py', '.ipynb', '.java', '.go', '.rs', '.c', '.cc', '.cpp', '.h', '.hpp', '.cs',
   '.php', '.rb', '.sh', '.bash', '.zsh', '.ps1', '.sql', '.toml', '.ini', '.env',
-  '.mp3', '.wav', '.m4a', '.aac', '.ogg', '.oga', '.flac', '.opus',
+  '.mp3', '.wav', '.m4a', '.aac', '.ogg', '.oga', '.flac', '.opus', '.aiff', '.aif', '.amr', '.caf',
+  '.mp4', '.m4v', '.mov', '.webm', '.mpeg', '.mpg', '.mpegps', '.avi', '.mkv', '.3gp', '.wmv', '.flv',
 ].join(',')
 
 function readPromptHistory(): string[] {
@@ -111,7 +117,7 @@ function writePromptHistory(history: string[]): void {
   }
 }
 
-type PendingAttachmentKind = 'image' | 'audio' | 'document' | 'spreadsheet' | 'presentation' | 'code' | 'data' | 'file'
+type PendingAttachmentKind = 'image' | 'audio' | 'video' | 'document' | 'spreadsheet' | 'presentation' | 'code' | 'data' | 'file'
 
 type PendingAttachment = {
   id: string
@@ -143,6 +149,12 @@ type ConsoleStreamHealth = {
 }
 
 type VoiceInputPhase = 'idle' | 'requesting' | 'recording' | 'processing'
+type VoiceDeliveryTarget =
+  | { kind: 'draft' }
+  | { kind: 'agent' | 'party'; agentIds: string[] }
+type ProfileVoiceHold = { pointerId: number; timer: number; held: boolean; started: boolean }
+
+const PROFILE_VOICE_HOLD_DELAY_MS = 240
 
 type OnlineSpeechTranscriptionPayload = {
   text: string
@@ -242,6 +254,13 @@ function paintVoiceWaveform(element: HTMLSpanElement | null, level: number) {
   }
 }
 
+function paintProfileVoiceWaveforms(level: number) {
+  if (typeof document === 'undefined') return
+  for (const waveform of document.querySelectorAll<HTMLSpanElement>('.dy-chat-profile__voice-waveform')) {
+    paintVoiceWaveform(waveform, level)
+  }
+}
+
 function agentBusyMessage(agent: Pick<OpenClawAgent, 'name'>) {
   return `${agent.name} is working. Send a follow-up and it will start when the current turn finishes.`
 }
@@ -296,6 +315,9 @@ function pendingAttachmentKind(file: File): PendingAttachmentKind {
   const ext = fileExtension(file.name)
   if (mime.startsWith('image/')) return 'image'
   if (mime.startsWith('audio/')) return 'audio'
+  if (mime.startsWith('video/')) return 'video'
+  if (['heic', 'heif'].includes(ext)) return 'image'
+  if (['mp4', 'm4v', 'mov', 'webm', 'mpeg', 'mpg', 'mpegps', 'avi', 'mkv', '3gp', 'wmv', 'flv'].includes(ext)) return 'video'
   if (['pdf', 'doc', 'docx', 'rtf'].includes(ext)) return 'document'
   if (['xls', 'xlsx', 'csv', 'tsv'].includes(ext)) return 'spreadsheet'
   if (['ppt', 'pptx'].includes(ext)) return 'presentation'
@@ -497,28 +519,6 @@ function isInternalRunStatusText(value: string) {
   return /\b(?:working in )?run_status\b/i.test(value.trim())
 }
 
-function responseActivityItems(entry: AgentResponse) {
-  const ignoredTypes = new Set([
-    'message.partial',
-    'message.final',
-    'run.accepted',
-    'run.context_building',
-    'run.prompt_assembled',
-    'run.finished',
-  ])
-  const labels = new Set<string>()
-  return (entry.activity || [])
-    .filter((event) => !ignoredTypes.has(event.type) && Boolean(event.label.trim()))
-    .filter((event) => !isInternalRunStatusText(event.label))
-    .filter((event) => {
-      const label = event.label.trim()
-      if (labels.has(label)) return false
-      labels.add(label)
-      return true
-    })
-    .slice(-5)
-}
-
 type ResponseCta = Omit<FailureRecovery, 'action'> & { action?: FailureRecoveryAction | 'cancel-queued' }
 
 function responseCta(entry: AgentResponse, staleQueueAgeMs: number | null = null): ResponseCta | null {
@@ -552,6 +552,7 @@ function portraitFailureKey(agentId: string, src: string) {
 
 const ResponseMessage = memo(function ResponseMessage({
   entry,
+  index,
   meta,
   avatarFailed,
   onPortraitFailed,
@@ -561,6 +562,7 @@ const ResponseMessage = memo(function ResponseMessage({
   hostedCreditsFirst,
 }: {
   entry: AgentResponse
+  index: number
   meta?: AgentMessageMeta
   avatarFailed: boolean
   onPortraitFailed: (agentId: string, src: string) => void
@@ -615,8 +617,6 @@ const ResponseMessage = memo(function ResponseMessage({
   const statusText = runOutcomeLabel(entry)
   const durationLabel = entry.durationMs > 0 ? `${(entry.durationMs / 1000).toFixed(1)}s` : ''
   const cta = responseCta(entry, staleQueued ? queueAgeMs : null)
-  const activityItems = responseActivityItems(entry)
-  const showLiveActivity = entry.streaming && activityItems.length > 0
   const hasActivity = (entry.activity || []).some((event) => event.type !== 'message.partial' && event.type !== 'message.final')
   const runtimeTitle = [
     durationLabel ? `Total runtime: ${durationLabel}` : '',
@@ -626,10 +626,17 @@ const ResponseMessage = memo(function ResponseMessage({
   ].filter(Boolean).join(' / ')
   const clockTitle = `${messageTimestampTitle(entry.timestamp)} / ${timeAgo(entry.timestamp)}`
   const bodyText = hasContent ? replyText : entry.streaming ? '' : entry.ok ? 'No output' : 'Request failed'
-  const showInlineThinking = entry.streaming && !hasContent && runtimeNoticeActive && !hasActivity && !entry.progressLabel && !entry.progressLines?.length
-  const progressText = entry.streaming && !hasContent && !showInlineThinking && !showLiveActivity ? latestRunStatus(entry) : ''
+  const showInlineThinking = entry.streaming && entry.transport === 'command-console-queue' && !hasContent && !hasActivity && !entry.progressLines?.length
+  const progressText = entry.streaming && !hasContent
+    ? latestRunStatus(entry)
+    : ''
   const displayText = bodyText || progressText
   const bodyState = showInlineThinking ? 'thinking' : hasContent ? 'response' : progressText ? 'progress' : entry.ok ? 'empty' : 'blocked'
+  // eslint-disable-next-line react-hooks/purity -- Brief entrance and reveal windows use the current wall clock.
+  const renderNow = Date.now()
+  const recentlyCompleted = Boolean(entry.completedAt && renderNow - timestampMs(entry.completedAt) < 5000)
+  const animateResponse = (hasContent && (entry.streaming || recentlyCompleted)) || Boolean(progressText && entry.streaming)
+  const cascadeIndex = Math.min(index, 5)
 
   return (
     <div
@@ -637,8 +644,10 @@ const ResponseMessage = memo(function ResponseMessage({
       data-agent-rarity={rarity}
       data-message-state={status}
       data-message-transport={entry.transport || ''}
+      data-cascade-enter={renderNow - timestampMs(entry.timestamp) < 2500 ? 'true' : 'false'}
       data-queue-stale={staleQueued ? 'true' : 'false'}
       data-runtime-notice={runtimeNoticeActive ? 'true' : 'false'}
+      style={{ '--response-cascade-index': cascadeIndex, animationDelay: `${cascadeIndex * 36}ms` } as CSSProperties}
       className="dy-command-message group/message relative overflow-hidden border border-white/[0.055] bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.018))] p-4 transition-all duration-200 hover:bg-white/[0.045] hover:border-white/[0.09] border-l-[3px]"
     >
       <div className="dy-command-message-header mb-3">
@@ -662,16 +671,6 @@ const ResponseMessage = memo(function ResponseMessage({
             {entry.transport === 'command-console-queue' && !entry.streaming && (
               <span className="dy-command-agent-role">System queue notice</span>
             )}
-            <Badge
-              className="dy-command-message-status"
-              data-state={status}
-              tone={responseStatusTone(status)}
-              size="micro"
-              aria-label={`Agent response ${statusText}`}
-              title={statusText}
-            >
-              {statusText}
-            </Badge>
           </div>
           {(modelLabel || displayRole) && (
             <p className="dy-command-agent-context">
@@ -719,10 +718,7 @@ const ResponseMessage = memo(function ResponseMessage({
                   </span>
                 </span>
               ) : (
-                <div className="dy-command-response-markdown">
-                  <ResponseMarkdown text={displayText} />
-                  {entry.streaming && <span className="ml-0.5 inline-block h-3 w-1 animate-pulse rounded-sm bg-cyan-300/70 align-[-2px]" />}
-                </div>
+                <StreamedResponseMarkdown key={hasContent ? 'response' : 'progress'} text={displayText} animate={animateResponse} streaming={entry.streaming === true && hasContent} />
               )}
             </div>
           </div>
@@ -734,37 +730,25 @@ const ResponseMessage = memo(function ResponseMessage({
         </div>
       )}
 
-      {showLiveActivity && (
-        <section
-          className="dy-command-live-activity"
-          data-activity-count={activityItems.length}
-          aria-label={`${name} live activity`}
-          role="log"
-          aria-live="polite"
-          aria-relevant="additions text"
-        >
-          <div className="dy-command-live-activity__current">
-            <span className="dy-command-live-activity__pulse" aria-hidden="true" />
-            <span className="dy-command-live-activity__status">{latestRunStatus(entry)}</span>
-            <span className="dy-command-live-activity__label">Live activity</span>
-          </div>
-          {activityItems.length > 1 && (
-            <ol className="dy-command-live-activity__list">
-              {activityItems.slice(0, -1).map((event) => (
-                <li key={event.id} data-activity-type={event.type}>
-                  <span className="dy-command-live-activity__marker" aria-hidden="true" />
-                  <span>{event.label}</span>
-                </li>
-              ))}
-            </ol>
-          )}
-        </section>
-      )}
+      {!entry.streaming && <AgentResponseCodeChanges events={entry.activity || []} />}
+      <AgentResponseActivityTimeline events={entry.activity || []} streaming={entry.streaming === true} />
 
       <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">{name}: {statusText}.</span>
       {entry.transport === 'command-console-queue' && <QueuedFollowupControls id={entry.id} position={entry.queuePosition || 0} depth={entry.queueDepth || 0} />}
       <details className="dy-chat-response-details">
-        <summary>Response details</summary>
+        <summary>
+          Response details
+          <Badge
+            className="dy-command-message-status"
+            data-state={status}
+            tone={responseStatusTone(status)}
+            size="micro"
+            aria-label={`Agent response ${statusText}`}
+            title={statusText}
+          >
+            {statusText}
+          </Badge>
+        </summary>
       <div className="dy-command-message-meta" aria-label="Response details">
         {(firstTokenLabel || (durationLabel && entry.streaming)) && (
           <div className="dy-command-message-meta-group dy-command-message-meta-group--performance" aria-label="Performance">
@@ -898,9 +882,118 @@ const ResponseMessage = memo(function ResponseMessage({
   )
 })
 
+const UserPromptMessage = memo(function UserPromptMessage({
+  prompt,
+  targetIds,
+  timestamp,
+  avatarSrc,
+  avatarName,
+  onResend,
+}: {
+  prompt: string
+  targetIds: string[]
+  timestamp: string
+  avatarSrc: string
+  avatarName: string
+  onResend: (prompt: string, targets: string[]) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(prompt)
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle')
+  const [failedAvatarSrc, setFailedAvatarSrc] = useState('')
+  const avatarFailed = failedAvatarSrc === avatarSrc
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const resendSubmittedRef = useRef(false)
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current) }, [])
+
+  const copyMessage = async () => {
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
+    try {
+      if (window.automniaDesktop?.copyText) await window.automniaDesktop.copyText(prompt)
+      else await navigator.clipboard.writeText(prompt)
+      setCopyStatus('copied')
+    } catch {
+      setCopyStatus('error')
+    }
+    copyTimerRef.current = setTimeout(() => setCopyStatus('idle'), 2500)
+  }
+
+  const cancelEdit = () => {
+    setDraft(prompt)
+    setEditing(false)
+  }
+  const resend = () => {
+    const clean = draft.trim()
+    if (!clean || resendSubmittedRef.current) return
+    resendSubmittedRef.current = true
+    onResend(clean, targetIds)
+    setEditing(false)
+  }
+
+  return (
+    <article className="dy-chat-user-message" data-editing={editing ? 'true' : 'false'}>
+      <div className="dy-chat-user-main">
+        <div className="dy-chat-user-bubble" data-editing={editing ? 'true' : 'false'}>
+          {editing ? (
+            <textarea
+              ref={textareaRef}
+              autoFocus
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') { event.preventDefault(); cancelEdit() }
+                if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); event.stopPropagation(); if (!event.repeat) resend() }
+              }}
+              aria-label="Edit your message"
+              rows={Math.min(10, Math.max(3, draft.split('\n').length))}
+              className="dy-chat-user-editor"
+            />
+          ) : (
+            <div className="dy-chat-user-text">{prompt}</div>
+          )}
+        </div>
+        <div className="dy-chat-user-actions" data-editing={editing ? 'true' : 'false'}>
+          {editing ? (
+            <>
+              <button type="button" className="dy-chat-user-action" title="Cancel editing" onClick={cancelEdit}>Cancel</button>
+              <button type="button" className="dy-chat-user-action is-primary" title="Send the edited message" onClick={resend} disabled={!draft.trim()}>Resend</button>
+            </>
+          ) : (
+            <>
+              <time dateTime={timestamp} title={messageTimestampTitle(timestamp)}>{messageClock(timestamp)}</time>
+              <button type="button" className="dy-chat-user-icon" aria-label={copyStatus === 'copied' ? 'Message copied' : 'Copy message'} title={copyStatus === 'copied' ? 'Copied' : 'Copy message'} onClick={copyMessage}>
+                {copyStatus === 'copied'
+                  ? <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m3 8 3 3 7-7" /></svg>
+                  : <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="5.5" y="2" width="8" height="9" rx="1.5" /><path d="M10.5 11v1.5A1.5 1.5 0 0 1 9 14H3.5A1.5 1.5 0 0 1 2 12.5V6a1.5 1.5 0 0 1 1.5-1.5h2" /></svg>}
+              </button>
+              <button
+                type="button"
+                className="dy-chat-user-icon"
+                aria-label="Edit and send your message"
+                title="Edit and send"
+                onClick={() => { resendSubmittedRef.current = false; setDraft(prompt); setEditing(true); requestAnimationFrame(() => textareaRef.current?.focus()) }}
+              >
+                <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m10.9 2.2 2.9 2.9M2.2 13.8l2.7-.6 8-8a1.65 1.65 0 0 0-2.3-2.3l-8 8-.4 2.9Z" /></svg>
+              </button>
+            </>
+          )}
+        </div>
+        <span className="dy-chat-user-copy-status" role="status">{copyStatus === 'copied' ? 'Message copied' : copyStatus === 'error' ? 'Could not copy message' : ''}</span>
+      </div>
+      <div className="dy-chat-user-avatar" role="img" aria-label="Your profile picture">
+        {avatarSrc && !avatarFailed
+          ? <img src={avatarSrc} alt="" onError={() => setFailedAvatarSrc(avatarSrc)} />
+          : <span aria-hidden="true">{avatarName || 'U'}</span>}
+      </div>
+    </article>
+  )
+})
+
 const ResponseMessages = memo(function ResponseMessages({
   visibleDisplayedResponses, agentMetaById, failedPortraitKeys, markPortraitFailed,
-  restartGatewayFromMessage, cancelQueuedTurnFromMessage, messageActionId, hostedCreditsFirst,
+  restartGatewayFromMessage, cancelQueuedTurnFromMessage, messageActionId, hostedCreditsFirst, onResendPrompt, userAvatar, userAvatarName,
 }: {
   visibleDisplayedResponses: AgentResponse[]
   agentMetaById: Map<string, AgentMessageMeta>
@@ -910,8 +1003,35 @@ const ResponseMessages = memo(function ResponseMessages({
   cancelQueuedTurnFromMessage: (entryId: string) => void
   messageActionId: string
   hostedCreditsFirst: boolean
+  onResendPrompt: (prompt: string, targets: string[]) => void
+  userAvatar: string
+  userAvatarName: string
 }) {
-  return <>{visibleDisplayedResponses.map((entry) => {
+  const turns = new Map<string, { id: string; prompt: string; timestamp: string; entries: Array<{ entry: AgentResponse; index: number }> }>()
+  visibleDisplayedResponses.forEach((entry, index) => {
+    const id = entry.userTurnId || `response:${entry.id}`
+    const existing = turns.get(id)
+    if (existing) existing.entries.push({ entry, index })
+    else turns.set(id, { id, prompt: entry.prompt, timestamp: entry.timestamp, entries: [{ entry, index }] })
+  })
+
+  return <>{[...turns.values()].map((turn) => {
+    const targetIds = [...new Set(turn.entries.map(({ entry }) => entry.agentId))]
+    const orderedEntries = [...turn.entries].sort((left, right) => {
+      const leftHasOutput = Boolean(left.entry.response.trim())
+      const rightHasOutput = Boolean(right.entry.response.trim())
+      if (leftHasOutput !== rightHasOutput) return leftHasOutput ? 1 : -1
+      const outputVisibleAt = (entry: AgentResponse) => {
+        if (entry.firstTokenAt) return timestampMs(entry.firstTokenAt)
+        if (entry.response.trim() && !entry.streaming && entry.completedAt) return timestampMs(entry.completedAt)
+        return timestampMs(entry.startedAt || entry.timestamp)
+      }
+      return outputVisibleAt(left.entry) - outputVisibleAt(right.entry) || left.index - right.index
+    })
+    return (
+      <div key={turn.id} className="dy-chat-turn">
+        {turn.prompt.trim() && <UserPromptMessage prompt={turn.prompt} timestamp={turn.timestamp} targetIds={targetIds} avatarSrc={userAvatar} avatarName={userAvatarName} onResend={onResendPrompt} />}
+        {orderedEntries.map(({ entry, index }) => {
           const meta = agentMetaById.get(entry.agentId)
           const avatar = meta?.portrait || ''
           const avatarFailed = avatar ? failedPortraitKeys.has(portraitFailureKey(entry.agentId, avatar)) : false
@@ -919,6 +1039,7 @@ const ResponseMessages = memo(function ResponseMessages({
             <ResponseMessage
               key={entry.id}
               entry={entry}
+              index={index}
               meta={meta}
               avatarFailed={avatarFailed}
               onPortraitFailed={markPortraitFailed}
@@ -928,10 +1049,54 @@ const ResponseMessages = memo(function ResponseMessages({
               hostedCreditsFirst={hostedCreditsFirst}
             />
           )
-        })}</>
+        })}
+      </div>
+    )
+  })}</>
 })
 
-export function AgentResponseConsole() {
+interface AgentResponseConsoleProps {
+  quickLinksOpen: boolean
+  onToggleQuickLinks: () => void
+}
+
+function VoiceErrorNotice({ message, onOpenPermissions }: { message: string; onOpenPermissions: () => void }) {
+  const [shownMessage, setShownMessage] = useState(message)
+  const [isExiting, setIsExiting] = useState(false)
+
+  useEffect(() => {
+    if (message) {
+      if (shownMessage === message && !isExiting) return
+      const frame = window.requestAnimationFrame(() => {
+        setShownMessage(message)
+        setIsExiting(false)
+      })
+      return () => window.cancelAnimationFrame(frame)
+    }
+    if (!shownMessage) return
+
+    const frame = window.requestAnimationFrame(() => setIsExiting(true))
+    const timeout = window.setTimeout(() => {
+      setShownMessage('')
+      setIsExiting(false)
+    }, 240)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.clearTimeout(timeout)
+    }
+  }, [isExiting, message, shownMessage])
+
+  if (!shownMessage) return null
+
+  return (
+    <div className="dy-command-voice-error shrink-0" data-exiting={isExiting ? 'true' : 'false'} role="alert">
+      {shownMessage}
+      {/microphone.*(blocked|access)|permission/i.test(shownMessage) && <button type="button" onClick={onOpenPermissions}>Open microphone permissions</button>}
+    </div>
+  )
+}
+
+export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: AgentResponseConsoleProps) {
   useEffect(() => { window.dispatchEvent(new Event('automnia:console-ready')) }, [])
   const [responseQuery, setResponseQuery] = useState('')
   const [historySearchOpen, setHistorySearchOpen] = useState(false)
@@ -947,6 +1112,10 @@ export function AgentResponseConsole() {
     if (historySearchOpen) historySearchInputRef.current?.focus({ preventScroll: true })
   }, [historySearchOpen])
   const { license } = useLicense()
+  const { account } = useAuth()
+  const userProfileIdentity = resolveUserProfileIdentity(account, license?.email)
+  const [userAvatar] = useUserProfileAvatar(userProfileIdentity)
+  const userAvatarName = account?.email?.trim().charAt(0).toUpperCase() || license?.email?.trim().charAt(0).toUpperCase() || 'U'
   const agents = useNexusStore((s) => s.agents)
   const selectedAgentIds = useNexusStore((s) => s.selectedAgentIds)
   const activePartyIds = useNexusStore((s) => s.activePartyIds)
@@ -992,7 +1161,8 @@ export function AgentResponseConsole() {
   const [voiceStatus, setVoiceStatus] = useState('')
   const [voiceError, setVoiceError] = useState('')
   const voiceRequestRef = useRef<AbortController | null>(null)
-  const [retryRecording, setRetryRecording] = useState<{ blob: Blob; mode: SpeechTranscriptionMode; agentId?: string } | null>(null)
+  const [retryRecording, setRetryRecording] = useState<{ blob: Blob; mode: SpeechTranscriptionMode; target: VoiceDeliveryTarget } | null>(null)
+  const [profileVoiceTarget, setProfileVoiceTarget] = useState<VoiceDeliveryTarget | null>(null)
   const [speechProgress, setSpeechProgress] = useState<number | undefined>(undefined)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [chatRemovedPartyIds, setChatRemovedPartyIds] = useState<string[]>([])
@@ -1006,6 +1176,12 @@ export function AgentResponseConsole() {
   const listRef = useRef<HTMLDivElement | null>(null)
   const consoleRootRef = useRef<HTMLElement | null>(null)
   const stickToBottomRef = useRef(true)
+  const smoothFollowFrameRef = useRef<number | null>(null)
+  const programmaticFollowRef = useRef(false)
+  const lastMessageScrollTopRef = useRef<number | null>(null)
+  const userScrollActiveRef = useRef(false)
+  const userScrollIdleTimerRef = useRef<number | null>(null)
+  const hasAgentStartedReplyRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const promptRef = useRef('')
@@ -1018,6 +1194,7 @@ export function AgentResponseConsole() {
   const recordingLimitRef = useRef<number | null>(null)
   const voiceActivityCleanupRef = useRef<(() => void) | null>(null)
   const voiceWaveformRef = useRef<HTMLSpanElement | null>(null)
+  const profileVoiceHoldRef = useRef<ProfileVoiceHold | null>(null)
   const recordingDiscardReasonRef = useRef('')
   const voiceStatusClearRef = useRef<number | null>(null)
   const voiceMountedRef = useRef(true)
@@ -1087,6 +1264,21 @@ export function AgentResponseConsole() {
   )
   const gatewayStabilityTitleText = useMemo(() => gatewayStabilityTitle(gatewayStability), [gatewayStability])
   const agentById = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents])
+  const resendEditedPrompt = useCallback((editedPrompt: string, targetIds: string[]) => {
+    const cleanPrompt = editedPrompt.trim()
+    const recipients = [...new Set(targetIds)].filter((id) => agentById.has(id))
+    if (!cleanPrompt || !recipients.length) {
+      setMessageActionError('This message no longer has an available agent recipient.')
+      return
+    }
+    const userTurnId = crypto.randomUUID()
+    setMessageActionError('')
+    for (const agentId of recipients) {
+      void sendPromptToAgent(agentId, cleanPrompt, undefined, userTurnId).catch((error: unknown) => {
+        setMessageActionError(String(error))
+      })
+    }
+  }, [agentById, sendPromptToAgent])
   const agentMetaById = useMemo(() => new Map(agents.map((agent) => [agent.id, {
     name: agent.name,
     role: agent.role,
@@ -1293,6 +1485,92 @@ export function AgentResponseConsole() {
   const visibleDisplayedResponses = responseHistory.entries
   const hiddenResponseCount = responseHistory.total - visibleDisplayedResponses.length
   const agentReplyInFlight = chatBusyAgents.length > 0 || visibleDisplayedResponses.some((entry) => entry.streaming)
+  const hasAgentStartedReply = chatHistoryResponses.some((entry) => entry.streaming && Boolean(entry.response.trim()))
+  hasAgentStartedReplyRef.current = hasAgentStartedReply
+  const replyingAgentNames = useMemo(() => {
+    const names = new Set(chatBusyAgents.map((agent) => agent.name))
+    for (const entry of visibleDisplayedResponses) {
+      if (!entry.streaming || entry.transport === 'command-console-queue') continue
+      names.add(agentById.get(entry.agentId)?.name || entry.agentId)
+    }
+    return [...names].filter(Boolean)
+  }, [agentById, chatBusyAgents, visibleDisplayedResponses])
+  const replyAction = hasAgentStartedReply ? 'writing' : 'preparing'
+  const replyBelowLabel = replyingAgentNames.length === 1
+    ? `${replyingAgentNames[0]} is ${replyAction} a reply below`
+    : replyingAgentNames.length === 2
+      ? `${replyingAgentNames[0]} and ${replyingAgentNames[1]} are ${replyAction} replies below`
+      : `${replyingAgentNames.length} agents are ${replyAction} replies below`
+  const animateFollowToLatest = useCallback(() => {
+    const list = listRef.current
+    if (!list || userScrollActiveRef.current || smoothFollowFrameRef.current !== null) return
+
+    let previousFrameAt = 0
+    const followFrame = (now: number) => {
+      const currentList = listRef.current
+      if (!currentList || !stickToBottomRef.current || userScrollActiveRef.current) {
+        smoothFollowFrameRef.current = null
+        programmaticFollowRef.current = false
+        return
+      }
+
+      const target = Math.max(0, currentList.scrollHeight - currentList.clientHeight)
+      const distance = target - currentList.scrollTop
+      if (Math.abs(distance) <= 1) {
+        currentList.scrollTop = target
+        lastMessageScrollTopRef.current = currentList.scrollTop
+        smoothFollowFrameRef.current = null
+        programmaticFollowRef.current = false
+        lastReadResponseId.current = useNexusStore.getState().agentResponses[0]?.id
+        return
+      }
+
+      // Ease toward the current bottom instead of issuing competing jumps.
+      // Re-reading the target every frame lets this same animation follow text
+      // that grows while the agent is still streaming.
+      programmaticFollowRef.current = true
+      const elapsed = previousFrameAt === 0 ? 16 : Math.min(40, now - previousFrameAt)
+      previousFrameAt = now
+      currentList.scrollTop += distance * (1 - Math.exp(-elapsed / 70))
+      lastMessageScrollTopRef.current = currentList.scrollTop
+      smoothFollowFrameRef.current = window.requestAnimationFrame(followFrame)
+    }
+
+    smoothFollowFrameRef.current = window.requestAnimationFrame(followFrame)
+  }, [])
+  const scrollToLatest = useCallback(() => {
+    if (userScrollIdleTimerRef.current !== null) {
+      window.clearTimeout(userScrollIdleTimerRef.current)
+      userScrollIdleTimerRef.current = null
+    }
+    userScrollActiveRef.current = false
+    const list = listRef.current
+    if (!list) return
+    stickToBottomRef.current = true
+    animateFollowToLatest()
+    lastReadResponseId.current = useNexusStore.getState().agentResponses[0]?.id
+    setFollowingLatest(true)
+  }, [animateFollowToLatest])
+  const noteUserScrollActivity = useCallback((movingUp = false) => {
+    // Keep the reader in control while scrolling and while an agent has not
+    // produced its first reply text. Resume following only after both settle.
+    userScrollActiveRef.current = true
+    if (smoothFollowFrameRef.current !== null) {
+      window.cancelAnimationFrame(smoothFollowFrameRef.current)
+      smoothFollowFrameRef.current = null
+    }
+    programmaticFollowRef.current = false
+    if (movingUp) {
+      stickToBottomRef.current = false
+      setFollowingLatest(false)
+    }
+    if (userScrollIdleTimerRef.current !== null) window.clearTimeout(userScrollIdleTimerRef.current)
+    userScrollIdleTimerRef.current = window.setTimeout(() => {
+      userScrollIdleTimerRef.current = null
+      userScrollActiveRef.current = false
+      if (hasAgentStartedReplyRef.current) scrollToLatest()
+    }, 900)
+  }, [scrollToLatest])
   const targetMode = selectedTargets.length
     ? selectedTargets.length === 1 ? 'Direct chat' : 'Multi-agent chat'
     : 'Party chat'
@@ -1500,30 +1778,83 @@ export function AgentResponseConsole() {
   useLayoutEffect(() => {
     const list = listRef.current
     if (!list) return
+    if (lastMessageScrollTopRef.current === null) lastMessageScrollTopRef.current = list.scrollTop
     if (olderResponseAnchor.current) {
       const anchor = olderResponseAnchor.current
       list.scrollTop = anchor.top + list.scrollHeight - anchor.height
+      lastMessageScrollTopRef.current = list.scrollTop
       olderResponseAnchor.current = null
       return
     }
-    if (!stickToBottomRef.current) return
+    if (!stickToBottomRef.current || userScrollActiveRef.current) return
+    animateFollowToLatest()
+  }, [animateFollowToLatest, visibleDisplayedResponses, responses])
 
-    const frame = window.requestAnimationFrame(() => {
-      list.scrollTop = list.scrollHeight
-      lastReadResponseId.current = responses[0]?.id
+  // StreamedResponseMarkdown reveals text on its own animation frames. Those
+  // renders do not update this component's response arrays, so keep the newest
+  // text visible by following changes to the rendered conversation turns too.
+  useLayoutEffect(() => {
+    const list = listRef.current
+    if (!list || typeof ResizeObserver === 'undefined') return
+
+    const followRenderedContent = () => animateFollowToLatest()
+    const resizeObserver = new ResizeObserver(followRenderedContent)
+    for (const child of Array.from(list.children)) resizeObserver.observe(child)
+
+    const mutationObserver = new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of Array.from(record.removedNodes)) {
+          if (node instanceof Element) resizeObserver.unobserve(node)
+        }
+        for (const node of Array.from(record.addedNodes)) {
+          if (node instanceof Element) resizeObserver.observe(node)
+        }
+      }
+      followRenderedContent()
     })
+    mutationObserver.observe(list, { childList: true })
+    followRenderedContent()
 
-    return () => window.cancelAnimationFrame(frame)
-  }, [visibleDisplayedResponses, responses])
+    return () => {
+      mutationObserver.disconnect()
+      resizeObserver.disconnect()
+    }
+  }, [animateFollowToLatest])
+
+  useEffect(() => {
+    if (!hasAgentStartedReply) return
+    if (!stickToBottomRef.current && !userScrollActiveRef.current) scrollToLatest()
+  }, [hasAgentStartedReply, scrollToLatest])
+
+  useEffect(() => () => {
+    if (userScrollIdleTimerRef.current !== null) window.clearTimeout(userScrollIdleTimerRef.current)
+    if (smoothFollowFrameRef.current !== null) window.cancelAnimationFrame(smoothFollowFrameRef.current)
+  }, [])
 
   const handleMessageScroll = useCallback(() => {
     const list = listRef.current
     if (!list) return
     const distanceFromBottom = list.scrollHeight - list.scrollTop - list.clientHeight
-    stickToBottomRef.current = distanceFromBottom < 120
+    if (programmaticFollowRef.current) {
+      lastMessageScrollTopRef.current = list.scrollTop
+      if (distanceFromBottom < 64) lastReadResponseId.current = responses[0]?.id
+      return
+    }
+    const previousScrollTop = lastMessageScrollTopRef.current
+    const movingUp = previousScrollTop !== null && list.scrollTop < previousScrollTop - 1
+    const moved = previousScrollTop !== null && Math.abs(list.scrollTop - previousScrollTop) > 1
+    lastMessageScrollTopRef.current = list.scrollTop
+    if (moved) noteUserScrollActivity(movingUp)
+    stickToBottomRef.current = !movingUp && distanceFromBottom < 64
     setFollowingLatest(stickToBottomRef.current)
-    if (stickToBottomRef.current) lastReadResponseId.current = responses[0]?.id
-  }, [responses])
+    if (stickToBottomRef.current) {
+      lastReadResponseId.current = responses[0]?.id
+    }
+  }, [noteUserScrollActivity, responses])
+
+  const handleMessageWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
+    if (event.deltaY !== 0) noteUserScrollActivity(event.deltaY < 0)
+  }, [noteUserScrollActivity])
 
   const handleConsoleWheel = useCallback((event: WheelEvent<HTMLElement>) => {
     const list = listRef.current
@@ -1540,8 +1871,9 @@ export function AgentResponseConsole() {
     // every part of the console has the same "read the next response" affordance.
     if (list.scrollHeight <= list.clientHeight) return
     event.preventDefault()
+    noteUserScrollActivity(event.deltaY < 0)
     list.scrollTop += event.deltaY
-  }, [])
+  }, [noteUserScrollActivity])
 
   const resizeComposerTextarea = useCallback(() => {
     const textarea = textareaRef.current
@@ -1575,6 +1907,10 @@ export function AgentResponseConsole() {
     }
   }, [])
 
+  useEffect(() => {
+    if (voicePhase === 'idle') setProfileVoiceTarget(null)
+  }, [voicePhase])
+
   const clearVoiceTimers = useCallback(() => {
     if (recordingTickRef.current !== null) window.clearInterval(recordingTickRef.current)
     if (recordingLimitRef.current !== null) window.clearTimeout(recordingLimitRef.current)
@@ -1583,6 +1919,7 @@ export function AgentResponseConsole() {
     recordingLimitRef.current = null
     voiceActivityCleanupRef.current = null
     paintVoiceWaveform(voiceWaveformRef.current, 0)
+    paintProfileVoiceWaveforms(0)
   }, [])
 
   const stopMicrophoneTracks = useCallback(() => {
@@ -1600,6 +1937,8 @@ export function AgentResponseConsole() {
       const recorder = mediaRecorderRef.current
       if (recorder?.state === 'recording') recorder.stop()
       stopMicrophoneTracks()
+      if (profileVoiceHoldRef.current) window.clearTimeout(profileVoiceHoldRef.current.timer)
+      profileVoiceHoldRef.current = null
     }
   }, [clearVoiceTimers, stopMicrophoneTracks])
 
@@ -1644,26 +1983,36 @@ export function AgentResponseConsole() {
     }, 4_000)
   }, [])
 
-  const deliverVoiceTranscript = useCallback((transcript: string, agentId?: string) => {
-    if (!agentId) { appendVoiceTranscript(transcript); return }
+  const deliverVoiceTranscript = useCallback((transcript: string, target: VoiceDeliveryTarget) => {
+    if (target.kind === 'draft') { appendVoiceTranscript(transcript); return }
     const text = transcript.trim()
     if (!text) throw new Error('No speech was recognized. Please try again.')
-    if (!useNexusStore.getState().agents.some((agent) => agent.id === agentId)) {
+    const availableAgentIds = new Set(useNexusStore.getState().agents.map((agent) => agent.id))
+    const recipientIds = [...new Set(target.agentIds)].filter((id) => availableAgentIds.has(id))
+    if (!recipientIds.length) {
       throw new Error('This agent is no longer available. Your recording is saved for retry.')
     }
     // The send action owns execution and queuing; recording can end immediately.
-    void sendPromptToAgent(agentId, text).catch((error: unknown) => {
+    const userTurnId = crypto.randomUUID()
+    const reportSendError = (error: unknown) => {
       if (voiceMountedRef.current) setVoiceError(`Could not send voice message: ${error instanceof Error ? error.message : String(error)}`)
-    })
-  }, [appendVoiceTranscript, sendPromptToAgent])
+    }
+    if (target.kind === 'party') {
+      void sendPromptToActiveParty(text, undefined, userTurnId, recipientIds).catch(reportSendError)
+    } else {
+      for (const recipientId of recipientIds) {
+        void sendPromptToAgent(recipientId, text, undefined, userTurnId).catch(reportSendError)
+      }
+    }
+  }, [appendVoiceTranscript, sendPromptToActiveParty, sendPromptToAgent])
 
-  const transcribeVoiceBlob = useCallback(async (blob: Blob, mode: SpeechTranscriptionMode, agentId?: string) => {
+  const transcribeVoiceBlob = useCallback(async (blob: Blob, mode: SpeechTranscriptionMode, target: VoiceDeliveryTarget) => {
     if (!voiceMountedRef.current) return
     voiceRequestRef.current?.abort()
     const controller = new AbortController()
     voiceRequestRef.current = controller
-    setRetryRecording({ blob, mode, agentId })
-    useAgentVoiceStore.setState({ agentId: agentId ?? null })
+    setRetryRecording({ blob, mode, target })
+    useAgentVoiceStore.setState({ agentId: target.kind === 'agent' ? target.agentIds[0] ?? null : null })
     setVoicePhase('processing')
     setVoiceError('')
     try {
@@ -1673,9 +2022,9 @@ export function AgentResponseConsole() {
         if (controller.signal.aborted) return
         const result = await transcribeAudioLocally(audio, localSpeechProgress, { signal: controller.signal, language: speechSettings.language })
         if (!voiceMountedRef.current || controller.signal.aborted) return
-        deliverVoiceTranscript(result.text, agentId)
+        deliverVoiceTranscript(result.text, target)
         setRetryRecording(null)
-        settleVoiceStatus(agentId ? 'Voice message sent to agent' : `Transcript added · local ${result.backend === 'webgpu' ? 'GPU' : 'CPU'}`)
+        settleVoiceStatus(target.kind !== 'draft' ? target.kind === 'party' ? 'Voice message sent to active party' : 'Voice message sent to agent' : `Transcript added · local ${result.backend === 'webgpu' ? 'GPU' : 'CPU'}`)
       } else {
         setVoiceStatus('Preparing audio for accurate transcription')
         const audio = await decodeAudioToMono16Khz(blob)
@@ -1698,9 +2047,9 @@ export function AgentResponseConsole() {
         )
         if (!result.ok) throw new Error(apiErrorMessage(result.error))
         if (!voiceMountedRef.current || controller.signal.aborted) return
-        deliverVoiceTranscript(result.data.text, agentId)
+        deliverVoiceTranscript(result.data.text, target)
         setRetryRecording(null)
-        settleVoiceStatus(agentId ? 'Voice message sent to agent' : 'Transcript added · online accuracy')
+        settleVoiceStatus(target.kind !== 'draft' ? target.kind === 'party' ? 'Voice message sent to active party' : 'Voice message sent to agent' : 'Transcript added · online accuracy')
       }
     } catch (error) {
       if (!voiceMountedRef.current || controller.signal.aborted) return
@@ -1715,6 +2064,7 @@ export function AgentResponseConsole() {
         voiceRequestRef.current = null
         setVoicePhase('idle')
         setSpeechProgress(undefined)
+        setProfileVoiceTarget(null)
       }
     }
   }, [deliverVoiceTranscript, localSpeechProgress, settleVoiceStatus, speechSettings.language, speechSettings.vocabulary, setVoicePhase])
@@ -1727,7 +2077,7 @@ export function AgentResponseConsole() {
     recorder.stop()
   }, [clearVoiceTimers])
 
-  const startVoiceRecording = useCallback(async (agentId?: string) => {
+  const startVoiceRecording = useCallback(async (target: VoiceDeliveryTarget = { kind: 'draft' }, pushToTalk = false) => {
     if (voicePhase !== 'idle') return
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
       useAgentVoiceStore.getState().reset()
@@ -1737,9 +2087,9 @@ export function AgentResponseConsole() {
 
     if (voiceStatusClearRef.current !== null) window.clearTimeout(voiceStatusClearRef.current)
     voiceStatusClearRef.current = null
-    setVoiceError('')
     setRetryRecording(null)
-    useAgentVoiceStore.setState({ agentId: agentId ?? null })
+    useAgentVoiceStore.setState({ agentId: target.kind === 'agent' ? target.agentIds[0] ?? null : null })
+    setProfileVoiceTarget(target.kind === 'draft' ? null : target)
     setVoiceStatus('Requesting microphone access')
     setVoicePhase('requesting')
 
@@ -1750,6 +2100,7 @@ export function AgentResponseConsole() {
         return
       }
 
+      setVoiceError('')
       mediaStreamRef.current = stream
       if (usedFallback) setVoiceError('The selected microphone is unavailable. Recording with your default microphone.')
       recordingChunksRef.current = []
@@ -1792,7 +2143,7 @@ export function AgentResponseConsole() {
           setVoicePhase('idle')
           return
         }
-        void transcribeVoiceBlob(blob, recordingMode, agentId)
+        void transcribeVoiceBlob(blob, recordingMode, target)
       }, { once: true })
 
       recorder.start(250)
@@ -1807,7 +2158,10 @@ export function AgentResponseConsole() {
 
       try {
         voiceActivityCleanupRef.current = monitorVoiceActivity(stream, {
-          onLevel: (level) => paintVoiceWaveform(voiceWaveformRef.current, level),
+          onLevel: (level) => {
+            paintVoiceWaveform(voiceWaveformRef.current, level)
+            paintProfileVoiceWaveforms(level)
+          },
           onSpeechStart: () => {
             if (!voiceMountedRef.current || recorder.state !== 'recording') return
             setVoiceStatus(recordingMode === 'local'
@@ -1821,12 +2175,12 @@ export function AgentResponseConsole() {
           },
           onNoSpeech: () => {
             if (!voiceMountedRef.current || recorder.state !== 'recording') return
-            if (agentId) recordingDiscardReasonRef.current = 'No speech detected. Click Chat to try again.'
+            if (target.kind !== 'draft') recordingDiscardReasonRef.current = 'No speech detected. Hold an agent or Party profile to try again.'
             setVoiceStatus('Checking the recording for quiet speech')
             stopVoiceRecording()
           },
         }, {
-          autoStop: agentId ? true : recordingSettings.autoStop,
+          autoStop: pushToTalk ? false : target.kind !== 'draft' ? true : recordingSettings.autoStop,
           pauseDurationMs: recordingSettings.pauseDurationMs,
         })
       } catch {
@@ -1840,6 +2194,9 @@ export function AgentResponseConsole() {
           setVoiceStatus(`Listening · local model setup will retry (${redactDiagnosticText(message, 80)})`)
         })
       }
+      // The pointer can be released while the operating system microphone
+      // prompt is open. Finish as soon as recording starts in that case.
+      if (pushToTalk && !profileVoiceHoldRef.current?.held) window.setTimeout(stopVoiceRecording, 0)
     } catch (error) {
       stopMicrophoneTracks()
       if (!voiceMountedRef.current) return
@@ -1854,7 +2211,7 @@ export function AgentResponseConsole() {
   useEffect(() => {
     if (!pendingVoiceAgentId || voicePhase !== 'idle' || useAgentVoiceStore.getState().pendingAgentId !== pendingVoiceAgentId) return
     useAgentVoiceStore.setState({ pendingAgentId: null })
-    void startVoiceRecording(pendingVoiceAgentId)
+    void startVoiceRecording({ kind: 'agent', agentIds: [pendingVoiceAgentId] })
   }, [pendingVoiceAgentId, startVoiceRecording, voicePhase])
 
   useEffect(() => {
@@ -1863,14 +2220,45 @@ export function AgentResponseConsole() {
     stopVoiceRecording()
   }, [voiceStopRequested, stopVoiceRecording])
 
+  const beginProfileVoiceHold = useCallback((event: React.PointerEvent<HTMLButtonElement>, target: VoiceDeliveryTarget) => {
+    if (event.button !== 0 || event.isPrimary === false || voicePhase !== 'idle' || isUploading) return
+    if (target.kind !== 'draft' && !target.agentIds.length) {
+      setVoiceError('Add an agent to the active party before recording a voice message.')
+      return
+    }
+    const hold: ProfileVoiceHold = {
+      pointerId: event.pointerId,
+      held: true,
+      started: false,
+      timer: window.setTimeout(() => {
+        if (profileVoiceHoldRef.current !== hold || !hold.held) return
+        if (voicePhase !== 'idle' || useAgentVoiceStore.getState().phase !== 'idle') return
+        hold.started = true
+        if (target.kind === 'agent') selectAgent(target.agentIds[0])
+        else clearSelectedAgents()
+        void startVoiceRecording(target, true)
+      }, PROFILE_VOICE_HOLD_DELAY_MS),
+    }
+    profileVoiceHoldRef.current = hold
+  }, [clearSelectedAgents, isUploading, selectAgent, startVoiceRecording, voicePhase])
+
+  const endProfileVoiceHold = useCallback((pointerId: number) => {
+    const hold = profileVoiceHoldRef.current
+    if (!hold || hold.pointerId !== pointerId) return
+    window.clearTimeout(hold.timer)
+    hold.held = false
+    profileVoiceHoldRef.current = null
+    if (hold.started) stopVoiceRecording()
+  }, [stopVoiceRecording])
+
+  const cancelProfileVoiceHold = useCallback((pointerId: number) => {
+    endProfileVoiceHold(pointerId)
+  }, [endProfileVoiceHold])
+
   useEffect(() => () => useAgentVoiceStore.getState().reset(), [])
 
-  const buildMessage = (draftPrompt: string, attachments: AgentTurnAttachment[]): string => {
-    const base = draftPrompt.trim() || 'Analyze the attached file.'
-    if (!attachments.length) return base
-    const list = attachments.map((attachment) => `- ${attachment.name}: ${attachment.path}${attachment.delivery === 'workspace' ? ' (workspace file; exceeds the inline limit, use a file-reading tool)' : ''}`).join('\n')
-    return `${base}\n\nAttached file(s):\n${list}`
-  }
+  const buildMessage = (draftPrompt: string, attachments: AgentTurnAttachment[]): string =>
+    buildAgentAttachmentMessage(draftPrompt, attachments)
 
   const clearInput = () => {
     setPrompt('')
@@ -1958,14 +2346,15 @@ export function AgentResponseConsole() {
       setIsUploading(false)
     }
     const msg = buildMessage(draftPrompt, attachments)
+    const userTurnId = crypto.randomUUID()
     stickToBottomRef.current = true
     if (selectedTargets.length || partyTargetIds.length) rememberPrompt(draftPrompt)
     if (selectedTargets.length === 1) {
       clearInput()
-      await sendPromptToAgent(selectedTargets[0].id, msg, attachments)
+      await sendPromptToAgent(selectedTargets[0].id, msg, attachments, userTurnId)
     } else if (selectedTargets.length > 1) {
       clearInput()
-      await sendPromptToSelectedAgents(msg, attachments)
+      await sendPromptToSelectedAgents(msg, attachments, userTurnId)
     } else {
       if (!partyTargetIds.length) return
       const trimmed = draftPrompt.trim().toLowerCase()
@@ -1973,7 +2362,7 @@ export function AgentResponseConsole() {
       const multi = draftPrompt.match(/(?:^|\n)\s*(?:\d+|#\d+|slot\s*\d+|agent\s*\d+|@[a-z0-9_-]+)\s*[:-]\s+/gim)
       if (multi && multi.length > 1) {
         clearInput()
-        await sendPromptToActiveParty(msg, attachments)
+        await sendPromptToActiveParty(msg, attachments, userTurnId)
         return
       }
 
@@ -1983,7 +2372,7 @@ export function AgentResponseConsole() {
         const idx = Number(slotMatch[1]) - 1
         if (idx >= 0 && idx < partyTargetIds.length) {
           clearInput()
-          await sendPromptToAgent(partyTargetIds[idx], msg, attachments)
+          await sendPromptToAgent(partyTargetIds[idx], msg, attachments, userTurnId)
           return
         }
       }
@@ -1993,13 +2382,13 @@ export function AgentResponseConsole() {
         const names = [agent.name.toLowerCase(), agent.id.toLowerCase(), agent.id.replace(/^hn-/, '').toLowerCase()]
         if (names.some((n) => trimmed.includes(n))) {
           clearInput()
-          await sendPromptToAgent(agent.id, msg, attachments)
+          await sendPromptToAgent(agent.id, msg, attachments, userTurnId)
           return
         }
       }
 
       clearInput()
-      await sendPromptToActiveParty(msg, attachments)
+      await sendPromptToActiveParty(msg, attachments, userTurnId)
     }
   }
 
@@ -2205,7 +2594,8 @@ export function AgentResponseConsole() {
               </div>
             </div>
           </div>
-          <div className="dy-command-console__meta" role="group" aria-label="Conversation actions">
+          <div className="dy-command-console__action-stack">
+            <div className="dy-command-console__meta" role="group" aria-label="Conversation actions">
               <button
                 type="button"
                 className="dy-chat-parallel-toggle"
@@ -2244,25 +2634,7 @@ export function AgentResponseConsole() {
                 icon={(
                   <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="12" r="3" />
-                    <path d="m19.4 15 .1.1a1.7 1.7 0 0 1-2.4 2.4l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a1.7 1.7 0 0 1-3.4 0v-.2a1.7 1.7 0 0 0-2.9-1.2l-.1.1a1.7 1.7 0 0 1-2.4-2.4l.1-.1A1.7 1.7 0 0 0 4.2 12h-.2a1.7 1.7 0 0 1 0-3.4h.2a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a1.7 1.7 0 0 1 2.4-2.4l.1.1a1.7 1.7 0 0 0 2.9-1.2v-.2a1.7 1.7 0 0 1 3.4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a1.7 1.7 0 0 1 2.4 2.4l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.2a1.7 1.7 0 0 1 0 3.4h-.2a1.7 1.7 0 0 0-1.2 2.9Z" />
-                  </svg>
-                )}
-              />
-              {responses.length > 0 && <>
-              <IconButton
-                onClick={toggleHistorySearch}
-                className="dy-command-console__action"
-                title={historySearchOpen ? 'Close conversation search' : 'Search conversation'}
-                aria-label={historySearchOpen ? 'Close conversation search' : 'Search conversation'}
-                aria-controls="agent-chat-history-search"
-                aria-expanded={historySearchOpen}
-                data-active={historySearchOpen ? 'true' : 'false'}
-                variant="quiet"
-                size="compact"
-                icon={(
-                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="10.75" cy="10.75" r="6.25" />
-                    <path d="m15.4 15.4 4.35 4.35" />
+                    <path d="M12 2h1.4l.6 2.2a8 8 0 0 1 2 .8l2-1.1 2 2-1.1 2a8 8 0 0 1 .8 2L22 10.6v2.8l-2.3.6a8 8 0 0 1-.8 2l1.1 2-2 2-2-1.1a8 8 0 0 1-2 .8l-.6 2.3h-2.8l-.6-2.3a8 8 0 0 1-2-.8l-2 1.1-2-2 1.1-2a8 8 0 0 1-.8-2L2 13.4v-2.8l2.3-.6a8 8 0 0 1 .8-2L4 6l2-2 2 1.1a8 8 0 0 1 2-.8L10.6 2H12Z" />
                   </svg>
                 )}
               />
@@ -2274,24 +2646,42 @@ export function AgentResponseConsole() {
                 variant="quiet"
                 size="compact"
                 icon={(
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M4 6.5h16" />
-                  <path d="M9 6.5V4.25h6V6.5" />
-                  <path d="m6.5 6.5.85 12.2a1 1 0 0 0 1 .93h7.3a1 1 0 0 0 1-.93l.85-12.2" />
-                  <path d="M10 10.5v5.25" />
-                  <path d="M14 10.5v5.25" />
-                </svg>
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M4 6.5h16" />
+                    <path d="M9 6.5V4.25h6V6.5" />
+                    <path d="m6.5 6.5.85 12.2a1 1 0 0 0 1 .93h7.3a1 1 0 0 0 1-.93l.85-12.2" />
+                    <path d="M10 10.5v5.25" />
+                    <path d="M14 10.5v5.25" />
+                  </svg>
                 )}
               />
-              </>}
+              {responses.length > 0 && (
+                <IconButton
+                  onClick={toggleHistorySearch}
+                  className="dy-command-console__action"
+                  title={historySearchOpen ? 'Close conversation search' : 'Search conversation'}
+                  aria-label={historySearchOpen ? 'Close conversation search' : 'Search conversation'}
+                  aria-controls="agent-chat-history-search"
+                  aria-expanded={historySearchOpen}
+                  data-active={historySearchOpen ? 'true' : 'false'}
+                  variant="quiet"
+                  size="compact"
+                  icon={(
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="10.75" cy="10.75" r="6.25" />
+                      <path d="m15.4 15.4 4.35 4.35" />
+                    </svg>
+                  )}
+                />
+              )}
               <IconButton
                 onClick={() => {
                   if (!isFullScreen) {
@@ -2316,6 +2706,23 @@ export function AgentResponseConsole() {
                 )}
               />
             </div>
+            <div className="dy-command-console__quick-links-row" data-quick-links-root>
+              <Button
+                id="agent-chat-quick-links-trigger"
+                variant="quiet"
+                size="compact"
+                className="dy-command-console__quick-links-button"
+                onClick={onToggleQuickLinks}
+                aria-haspopup="dialog"
+                aria-expanded={quickLinksOpen}
+                aria-controls={quickLinksOpen ? 'quick-links-menu' : undefined}
+                aria-keyshortcuts="Control+k Meta+k"
+                title="Quick Links (Ctrl/⌘ K)"
+              >
+                Quick Links
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2324,10 +2731,19 @@ export function AgentResponseConsole() {
           type="button"
           className="dy-chat-profile dy-chat-profile--party"
           aria-pressed={selectedTargets.length === 0}
-          aria-label={`Chat with active party, ${partyTargetIds.length} agents`}
+          aria-label={`Chat with active party, ${partyTargetIds.length} agents. Press and hold to speak to the party.`}
+          title="Party · press and hold to speak to the active party"
+          data-voice-phase={profileVoiceTarget?.kind === 'party' ? voicePhase : 'idle'}
+          onPointerDown={(event) => beginProfileVoiceHold(event, { kind: 'party', agentIds: [...partyTargetIds] })}
+          onPointerUp={(event) => endProfileVoiceHold(event.pointerId)}
+          onPointerLeave={(event) => cancelProfileVoiceHold(event.pointerId)}
+          onPointerCancel={(event) => cancelProfileVoiceHold(event.pointerId)}
           onClick={() => { clearSelectedAgents(); setChatRemovedPartyIds([]) }}
         >
-          <span className="dy-chat-profile__avatar dy-chat-profile__party-icon" aria-hidden="true">◈</span>
+          <span className="dy-chat-profile__avatar dy-chat-profile__party-icon" aria-hidden="true">
+            ◈
+            {profileVoiceTarget?.kind === 'party' && <span className="dy-chat-profile__voice-waveform"><i /><i /><i /><i /><i /></span>}
+          </span>
           <span className="dy-chat-profile__name">Party</span>
         </button>
         {agents.map((agent) => {
@@ -2341,8 +2757,13 @@ export function AgentResponseConsole() {
               key={agent.id}
               className="dy-chat-profile"
               aria-pressed={selected}
-              aria-label={`Chat with ${agent.name}${busy ? ', working' : ''}`}
-              title={`${agent.name}${busy ? ' · Working' : ''}`}
+              aria-label={`Chat with ${agent.name}${busy ? ', working' : ''}. Press and hold to speak to this agent.`}
+              title={`${agent.name}${busy ? ' · Working' : ''} · Press and hold to speak`}
+              data-voice-phase={profileVoiceTarget?.kind === 'agent' && profileVoiceTarget.agentIds.includes(agent.id) ? voicePhase : 'idle'}
+              onPointerDown={(event) => beginProfileVoiceHold(event, { kind: 'agent', agentIds: [agent.id] })}
+              onPointerUp={(event) => endProfileVoiceHold(event.pointerId)}
+              onPointerLeave={(event) => cancelProfileVoiceHold(event.pointerId)}
+              onPointerCancel={(event) => cancelProfileVoiceHold(event.pointerId)}
               onClick={() => selectAgent(agent.id)}
             >
               <span className="dy-chat-profile__avatar" aria-hidden="true">
@@ -2350,6 +2771,7 @@ export function AgentResponseConsole() {
                   ? <img src={portraitSrc} alt="" onError={() => markPortraitFailed(agent.id, portraitSrc)} />
                   : <AvatarFallback name={agent.name} />}
                 {busy && <i className="dy-chat-profile__busy" />}
+                {profileVoiceTarget?.kind === 'agent' && profileVoiceTarget.agentIds.includes(agent.id) && <span className="dy-chat-profile__voice-waveform"><i /><i /><i /><i /><i /></span>}
               </span>
               <span className="dy-chat-profile__name">{agent.name}</span>
             </button>
@@ -2634,6 +3056,7 @@ export function AgentResponseConsole() {
       <div
         ref={listRef}
         onScroll={handleMessageScroll}
+        onWheel={handleMessageWheel}
         role="log"
         aria-live="polite"
         aria-relevant="additions text"
@@ -2652,35 +3075,22 @@ export function AgentResponseConsole() {
         {responseQuery && visibleDisplayedResponses.length === 0 && <p role="status" className="p-3 text-[13px]">No retained messages match this search.</p>}
         {visibleDisplayedResponses.length === 0 && !responseQuery && (
           <div className="dy-command-idle-hint" aria-label="Command console is standing by">
-            <span className="dy-command-idle-hint__icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M7.5 8.5h9M7.5 12h6M7.5 15.5h3.5" />
-                <path d="M5 4.5h14a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-6l-4 2v-2H5a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2Z" />
-              </svg>
-            </span>
-            <p className="dy-command-idle-hint__title">{targetCount ? 'Ready to collaborate?' : 'Choose a conversation'}</p>
-            <p className="dy-command-idle-hint__copy">{targetCount ? 'Ask a question, share a file, or delegate a task.' : 'Select an agent above or start with your active party.'}</p>
+            <img className="dy-command-idle-hint__brand" src={AUTOMNIA_RUNTIME_MARK_SRC} alt="" aria-hidden="true" />
+            <p className="dy-command-idle-hint__title">
+              {targetCount === 1
+                ? `What should ${armedTargets[0].name} build?`
+                : targetCount > 1 ? 'What should we build together?' : 'Choose an agent to begin'}
+            </p>
             {targetCount === 0 && <Button variant="quiet" size="compact" onClick={() => {
               const firstProfile = consoleRootRef.current?.querySelector<HTMLButtonElement>('.dy-chat-profile:not(.dy-chat-profile--party)')
               if (firstProfile) firstProfile.focus({ preventScroll: true })
               else useNexusStore.getState().setTab('agents')
             }}>Choose an agent</Button>}
-            {targetCount > 0 && <div className="dy-chat-starters" aria-label="Ways to get started">
-              <button type="button" onClick={() => { if (!promptRef.current.trim()) setPrompt('Help me understand '); textareaRef.current?.focus() }}>
-                <strong>Ask a question</strong><span>Get answers and ideas</span>
-              </button>
-              <button type="button" disabled={isUploading} onClick={openAttachmentPicker}>
-                <strong>Analyze a file</strong><span>Explore an attachment</span>
-              </button>
-              <button type="button" onClick={() => { if (!promptRef.current.trim()) setPrompt('Help me plan and complete '); textareaRef.current?.focus() }}>
-                <strong>Delegate a task</strong><span>Turn a goal into action</span>
-              </button>
-            </div>}
           </div>
         )}
         <ResponseMessages visibleDisplayedResponses={visibleDisplayedResponses} agentMetaById={agentMetaById} failedPortraitKeys={failedPortraitKeys}
           markPortraitFailed={markPortraitFailed} restartGatewayFromMessage={restartGatewayFromMessage} cancelQueuedTurnFromMessage={cancelQueuedTurnFromMessage}
-          messageActionId={messageActionId} hostedCreditsFirst={hostedCreditsFirst} />
+          messageActionId={messageActionId} hostedCreditsFirst={hostedCreditsFirst} onResendPrompt={resendEditedPrompt} userAvatar={userAvatar} userAvatarName={userAvatarName} />
       </div>
 
       {uploadError && (
@@ -2693,12 +3103,7 @@ export function AgentResponseConsole() {
           {messageActionError}
         </div>
       )}
-      {voiceError && (
-        <div className="dy-command-voice-error shrink-0" role="alert">
-          {voiceError}
-          {/microphone.*(blocked|access)|permission/i.test(voiceError) && <button type="button" onClick={() => { void openMicrophoneSettings().then(setVoiceError).catch((error) => setVoiceError(friendlyMicrophoneError(error))) }}>Open microphone permissions</button>}
-        </div>
-      )}
+      <VoiceErrorNotice message={voiceError} onOpenPermissions={() => { void openMicrophoneSettings().then(setVoiceError).catch((error) => setVoiceError(friendlyMicrophoneError(error))) }} />
       {voicePhase === 'processing' && <div className="flex shrink-0 flex-wrap items-center gap-2 px-3 py-2">
         {speechProgress !== undefined && <progress max={100} value={speechProgress} aria-label="Local speech model preparation" className="min-w-0 flex-1" />}
         <Button size="compact" variant="quiet" onClick={() => {
@@ -2708,22 +3113,23 @@ export function AgentResponseConsole() {
         }}>Cancel transcription</Button>
       </div>}
       {retryRecording && voicePhase === 'idle' && <div className="flex shrink-0 flex-wrap gap-2 px-3 py-2">
-        <Button size="compact" onClick={() => void transcribeVoiceBlob(retryRecording.blob, retryRecording.mode, retryRecording.agentId)}>Retry recording</Button>
+        <Button size="compact" onClick={() => void transcribeVoiceBlob(retryRecording.blob, retryRecording.mode, retryRecording.target)}>Retry recording</Button>
         <Button size="compact" variant="quiet" onClick={() => { setRetryRecording(null); setVoiceError(''); setVoiceStatus('Recording discarded.') }}>Discard recording</Button>
       </div>}
       {/* Input area */}
       {!followingLatest && <div className="dy-command-jump-latest">
+        {replyingAgentNames.length > 0 && <div className="dy-chat-reply-below" role="status" aria-live="polite" aria-atomic="true">
+          <span className="dy-chat-reply-below__label">{replyBelowLabel}</span>
+          <span className="dy-chat-reply-below__bubble" aria-hidden="true">
+            <i /><i /><i />
+          </span>
+        </div>}
         <IconButton
           className="dy-command-jump-latest__button"
           variant="quiet"
           size="compact"
           aria-label={`Jump to latest messages${unreadResponseCount ? `, ${unreadResponseCount} new` : ''}`}
-          onClick={() => {
-            if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight
-            stickToBottomRef.current = true
-            setFollowingLatest(true)
-            lastReadResponseId.current = responses[0]?.id
-          }}
+          onClick={scrollToLatest}
           icon={(
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 4v11" />
@@ -2795,7 +3201,7 @@ export function AgentResponseConsole() {
               <span className="dy-command-upload-size" title={`${uploadedAttachment.file.name} · ${formatFileSize(uploadedAttachment.file.size)}`}>
                 {formatFileSize(uploadedAttachment.file.size)}{uploadedAttachment.uploaded ? ' · Uploaded' : ''}
               </span>
-              {(uploadedAttachment.uploaded?.delivery === 'workspace' || uploadedAttachment.file.size > (uploadedAttachment.kind === 'image' ? 6 : 8) * 1024 * 1024) && <span className="max-w-56 text-xs text-amber-200">Exceeds the inline limit. The agent will need file-reading tools to open the saved file.</span>}
+              {(uploadedAttachment.uploaded?.delivery === 'workspace' || uploadedAttachment.file.size > (uploadedAttachment.kind === 'image' ? 6 : 20) * 1024 * 1024) && <span className="max-w-56 text-xs text-amber-200">Exceeds the inline limit. The agent will need file-reading tools to open the saved file.</span>}
               {uploadedAttachment.error && <div className="max-w-56 text-xs text-rose-200" role="alert">Upload failed. <button type="button" disabled={isUploading} onClick={() => void retryAttachment(uploadedAttachment)} className="underline">Retry upload</button></div>}
             </div>
           ))}</div>}
@@ -2924,7 +3330,6 @@ export function AgentResponseConsole() {
             </div>
           </div>
         </div>
-        <p className="dy-chat-composer-hint">Enter to send <span aria-hidden="true">·</span> Shift + Enter for a new line</p>
       </div>
       </div>
     </section>

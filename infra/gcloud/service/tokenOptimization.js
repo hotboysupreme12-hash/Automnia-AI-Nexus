@@ -9,8 +9,9 @@ const DEFAULT_MAX_SYSTEM_CHARS = 6_000;
 const DEFAULT_MAX_MESSAGE_CHARS = 12_000;
 const DEFAULT_MAX_TOOL_RESULT_CHARS = 4_000;
 const DEFAULT_MAX_HISTORY_MESSAGES = 8;
-const DEFAULT_MAX_INLINE_IMAGES = 1;
-const DEFAULT_MAX_INLINE_IMAGE_CHARS = 400_000;
+const DEFAULT_MAX_INLINE_IMAGES = 8;
+const DEFAULT_MAX_INLINE_IMAGE_CHARS = 8_500_000;
+const DEFAULT_MAX_TOTAL_INLINE_IMAGE_CHARS = 20_000_000;
 // Tool names and required argument fields are capability contracts. The
 // remaining schema prose is descriptive metadata and can be aggressively
 // bounded before it reaches the hosted provider.
@@ -31,7 +32,7 @@ function environmentInteger(name, fallback, minimum, maximum) {
   return boundedInteger(process.env[name], fallback, minimum, maximum);
 }
 
-export const AUTOMNIA_RELAY_TOKEN_OPTIMIZATION_VERSION = '2026-09-13.1';
+export const AUTOMNIA_RELAY_TOKEN_OPTIMIZATION_VERSION = '2026-11-27.1';
 
 export const automniaRelayTokenOptimization = Object.freeze({
   version: AUTOMNIA_RELAY_TOKEN_OPTIMIZATION_VERSION,
@@ -45,12 +46,43 @@ export const automniaRelayTokenOptimization = Object.freeze({
   maxMessageChars: environmentInteger('AUTOMNIA_RELAY_MAX_MESSAGE_CHARS', DEFAULT_MAX_MESSAGE_CHARS, 1_000, 100_000),
   maxToolResultChars: environmentInteger('AUTOMNIA_RELAY_MAX_TOOL_RESULT_CHARS', DEFAULT_MAX_TOOL_RESULT_CHARS, 1_000, 100_000),
   maxHistoryMessages: environmentInteger('AUTOMNIA_RELAY_MAX_HISTORY_MESSAGES', DEFAULT_MAX_HISTORY_MESSAGES, 2, 64),
-  maxInlineImages: environmentInteger('AUTOMNIA_RELAY_MAX_INLINE_IMAGES', DEFAULT_MAX_INLINE_IMAGES, 0, 8),
-  maxInlineImageChars: environmentInteger('AUTOMNIA_RELAY_MAX_INLINE_IMAGE_CHARS', DEFAULT_MAX_INLINE_IMAGE_CHARS, 100_000, 4_000_000),
+  maxInlineImages: environmentInteger('AUTOMNIA_RELAY_MAX_INLINE_IMAGES', DEFAULT_MAX_INLINE_IMAGES, 1, 8),
+  maxInlineImageChars: environmentInteger('AUTOMNIA_RELAY_MAX_INLINE_IMAGE_CHARS', DEFAULT_MAX_INLINE_IMAGE_CHARS, 100_000, 8_500_000),
+  maxTotalInlineImageChars: environmentInteger('AUTOMNIA_RELAY_MAX_TOTAL_INLINE_IMAGE_CHARS', DEFAULT_MAX_TOTAL_INLINE_IMAGE_CHARS, 1_000_000, 20_000_000),
 });
 
+function isImageContentPart(part) {
+  return Boolean(part && typeof part === 'object' && !Array.isArray(part) && (
+    part.image_url || part.source?.type === 'base64' || part.type === 'input_image' || part.type === 'image_url' || part.type === 'image'
+  ));
+}
+
+function inlineImageContentLength(part) {
+  if (typeof part.source?.data === 'string') return part.source.data.length;
+  if (typeof part.data === 'string') return part.data.length;
+  const imageUrl = typeof part.image_url === 'string'
+    ? part.image_url
+    : typeof part.image_url?.url === 'string'
+      ? part.image_url.url
+      : '';
+  return imageUrl.startsWith('data:') ? imageUrl.length : 0;
+}
+
+function budgetShape(value) {
+  if (Array.isArray(value)) return value.map(budgetShape);
+  if (!value || typeof value !== 'object') return value;
+  if (isImageContentPart(value)) {
+    return { type: 'inline_image', mimeType: value.mimeType || value.mime_type || value.source?.media_type || '' };
+  }
+  return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, budgetShape(child)]));
+}
+
+function inputBudgetChars(value) {
+  return JSON.stringify(budgetShape(value)).length;
+}
+
 export function estimateRelayTokens(value) {
-  const text = typeof value === 'string' ? value : JSON.stringify(value ?? '');
+  const text = typeof value === 'string' ? value : JSON.stringify(budgetShape(value ?? ''));
   return Math.max(0, Math.ceil(String(text).length / 4));
 }
 
@@ -66,7 +98,16 @@ function shortenText(value, maxChars, marker = '[content shortened to conserve A
   };
 }
 
-function compactContent(content, maxChars, imageState, marker, maxInlineImageChars) {
+function imageLimitError(message, code) {
+  return Object.assign(new Error(message), {
+    status: 413,
+    publicMessage: message,
+    publicType: 'invalid_request_error',
+    publicCode: code,
+  });
+}
+
+function compactContent(content, maxChars, imageState, marker, limits, isCurrentTurn = false) {
   if (typeof content === 'string') return shortenText(content, maxChars, marker);
   if (!Array.isArray(content)) return { value: content, truncated: false };
 
@@ -80,28 +121,29 @@ function compactContent(content, maxChars, imageState, marker, maxInlineImageCha
       continue;
     }
     if (!part || typeof part !== 'object') continue;
-    const isImage = Boolean(part.image_url || part.source?.type === 'base64' || part.type === 'input_image');
-    if (isImage) {
-      const imageChars = typeof part.source?.data === 'string'
-        ? part.source.data.length
-        : typeof part.data === 'string'
-          ? part.data.length
-          : typeof part.image_url?.url === 'string' && part.image_url.url.startsWith('data:')
-            ? part.image_url.url.length
-            : 0;
-      if (imageChars > maxInlineImageChars) {
+    if (isImageContentPart(part)) {
+      const imageChars = inlineImageContentLength(part);
+      const perImageTooLarge = imageChars > limits.maxInlineImageChars;
+      const countExceeded = imageState.count >= imageState.limit;
+      const totalTooLarge = imageState.totalChars + imageChars > limits.maxTotalInlineImageChars;
+      if (perImageTooLarge || countExceeded || totalTooLarge) {
+        if (isCurrentTurn) {
+          if (perImageTooLarge) {
+            throw imageLimitError('An image exceeds Automnia’s hosted vision size limit. Compress it or attach a smaller image, then retry.', 'image_too_large');
+          }
+          if (countExceeded) {
+            throw imageLimitError(`Automnia supports up to ${imageState.limit} images in one request. Send the remaining images in another message.`, 'image_limit_exceeded');
+          }
+          throw imageLimitError('Images in this request exceed Automnia’s combined hosted vision limit. Split them across messages and retry.', 'image_total_too_large');
+        }
         truncated = true;
         imageState.dropped += 1;
-        imageState.oversized += 1;
-        value.push({ type: 'text', text: '[large inline image omitted to conserve Automnia credits; attach a smaller image if it is required]' });
-        continue;
-      }
-      if (imageState.count >= imageState.limit) {
-        truncated = true;
-        imageState.dropped += 1;
+        imageState.oversized += Number(perImageTooLarge || totalTooLarge);
+        value.push({ type: 'text', text: '[Earlier image omitted to keep this request within the hosted vision limit. Reattach it if the current question refers to that image.]' });
         continue;
       }
       imageState.count += 1;
+      imageState.totalChars += imageChars;
       value.push(part);
       continue;
     }
@@ -126,7 +168,7 @@ function messageRole(message) {
   return role === 'developer' ? 'system' : role;
 }
 
-function compactMessage(message, imageState, limits) {
+function compactMessage(message, imageState, limits, isCurrentTurn = false) {
   const role = messageRole(message);
   const maxChars = role === 'system'
     ? limits.maxSystemChars
@@ -136,7 +178,7 @@ function compactMessage(message, imageState, limits) {
   const marker = role === 'tool'
     ? '[tool output shortened to conserve Automnia credits]'
     : '[conversation context shortened to conserve Automnia credits]';
-  const content = compactContent(message?.content, maxChars, imageState, marker, limits.maxInlineImageChars);
+  const content = compactContent(message?.content, maxChars, imageState, marker, limits, isCurrentTurn);
   return {
     value: {
       ...message,
@@ -145,6 +187,42 @@ function compactMessage(message, imageState, limits) {
     },
     truncated: content.truncated,
   };
+}
+
+function textContentLength(content) {
+  if (typeof content === 'string') return content.length;
+  if (!Array.isArray(content)) return 0;
+  return content.reduce((total, part) => {
+    if (typeof part === 'string') return total + part.length;
+    if (!part || typeof part !== 'object' || isImageContentPart(part)) return total;
+    const text = typeof part.text === 'string' ? part.text : typeof part.input_text === 'string' ? part.input_text : '';
+    return total + text.length;
+  }, 0);
+}
+
+function shortenContentText(content, targetLength, marker) {
+  if (typeof content === 'string') return shortenText(content, targetLength, marker);
+  if (!Array.isArray(content)) return { value: content, truncated: false };
+
+  let excess = Math.max(0, textContentLength(content) - targetLength);
+  let truncated = false;
+  const value = content.map((part) => {
+    if (excess <= 0) return part;
+    if (typeof part === 'string') {
+      const shortened = shortenText(part, Math.max(64, part.length - excess), marker);
+      excess = Math.max(0, excess - (part.length - shortened.value.length));
+      truncated ||= shortened.truncated;
+      return shortened.value;
+    }
+    if (!part || typeof part !== 'object' || isImageContentPart(part)) return part;
+    const key = typeof part.text === 'string' ? 'text' : typeof part.input_text === 'string' ? 'input_text' : '';
+    if (!key) return part;
+    const shortened = shortenText(part[key], Math.max(64, part[key].length - excess), marker);
+    excess = Math.max(0, excess - (part[key].length - shortened.value.length));
+    truncated ||= shortened.truncated;
+    return { ...part, [key]: shortened.value };
+  });
+  return { value, truncated };
 }
 
 function conversationUnits(messages) {
@@ -173,12 +251,13 @@ export function compactOpenAiMessages(messages, overrides = {}) {
     maxHistoryMessages: overrides.maxHistoryMessages || automniaRelayTokenOptimization.maxHistoryMessages,
     maxInlineImages: overrides.maxInlineImages ?? automniaRelayTokenOptimization.maxInlineImages,
     maxInlineImageChars: overrides.maxInlineImageChars || automniaRelayTokenOptimization.maxInlineImageChars,
+    maxTotalInlineImageChars: overrides.maxTotalInlineImageChars || automniaRelayTokenOptimization.maxTotalInlineImageChars,
   };
   const source = Array.isArray(messages) ? messages.filter((message) => message && typeof message === 'object') : [];
   const inputLimitChars = Math.max(8_000, limits.maxInputTokens * 4);
   const systemMessages = source.filter((message) => ['system', 'developer'].includes(messageRole(message)));
   const conversationMessages = source.filter((message) => !['system', 'developer'].includes(messageRole(message)));
-  const imageState = { count: 0, dropped: 0, oversized: 0, limit: limits.maxInlineImages };
+  const imageState = { count: 0, dropped: 0, oversized: 0, totalChars: 0, limit: limits.maxInlineImages };
   let truncatedMessages = 0;
 
   let compactedSystem = [];
@@ -221,12 +300,20 @@ export function compactOpenAiMessages(messages, overrides = {}) {
   }
   const keptUnits = allUnits.filter(unit => selectedUnits.has(unit));
   const protectedMessages = new Set();
-  let conversation = keptUnits.flatMap(unit => unit.map((message) => {
-    const compacted = compactMessage(message, imageState, limits);
-    truncatedMessages += Number(compacted.truncated);
-    if (protectedUnits.has(unit)) protectedMessages.add(compacted.value);
-    return compacted.value;
-  }));
+  const keptMessages = keptUnits.flatMap((unit) => unit.map((message) => ({ message, protected: protectedUnits.has(unit) })));
+  const currentTurnMessages = new Set(allUnits.slice(activeTurnStart).flat());
+  const imagePriorityOrder = [
+    ...keptMessages.filter(({ message }) => currentTurnMessages.has(message)),
+    ...keptMessages.filter(({ message }) => !currentTurnMessages.has(message)),
+  ];
+  const compactedByMessage = new Map();
+  for (const { message, protected: isProtected } of imagePriorityOrder) {
+    const compactedMessage = compactMessage(message, imageState, limits, currentTurnMessages.has(message));
+    truncatedMessages += Number(compactedMessage.truncated);
+    if (isProtected) protectedMessages.add(compactedMessage.value);
+    compactedByMessage.set(message, compactedMessage.value);
+  }
+  let conversation = keptMessages.map(({ message }) => compactedByMessage.get(message));
   const rebuild = () => [...compactedSystem, ...conversation];
   let compacted = rebuild();
   const originalChars = JSON.stringify(source).length;
@@ -234,7 +321,7 @@ export function compactOpenAiMessages(messages, overrides = {}) {
 
   // Drop old exchanges atomically, retaining the instructions and newest
   // exchange. Shorten their text below if those alone exceed the budget.
-  while (JSON.stringify(compacted).length > inputLimitChars && conversation.length > 2) {
+  while (inputBudgetChars(compacted) > inputLimitChars && conversation.length > 2) {
     const removable = conversationUnits(conversation).find(unit => !unit.some(message => protectedMessages.has(message)));
     if (!removable) break;
     const removed = new Set(removable);
@@ -247,31 +334,30 @@ export function compactOpenAiMessages(messages, overrides = {}) {
   // within budget. This is intentionally iterative because JSON overhead,
   // tool-call metadata, and multiple large messages can require several
   // reductions before the limit is actually met.
-  for (let pass = 0; JSON.stringify(compacted).length > inputLimitChars && pass < 64; pass += 1) {
+  for (let pass = 0; inputBudgetChars(compacted) > inputLimitChars && pass < 64; pass += 1) {
     const candidates = [];
     if (compactedSystem[0]?.content) {
-      candidates.push({ scope: 'system', index: 0, value: String(compactedSystem[0].content), minimum: 512 });
+      candidates.push({ scope: 'system', index: 0, valueLength: String(compactedSystem[0].content).length, minimum: 512 });
     }
     conversation.forEach((message, index) => {
-      const value = typeof message.content === 'string' ? message.content : JSON.stringify(message.content || '');
-      if (value) candidates.push({ scope: 'conversation', index, value, minimum: 256 });
+      const valueLength = textContentLength(message.content);
+      if (valueLength) candidates.push({ scope: 'conversation', index, valueLength, minimum: 256 });
     });
-    const largest = candidates.sort((left, right) => right.value.length - left.value.length)[0];
-    if (!largest || largest.value.length <= largest.minimum) break;
+    const largest = candidates.sort((left, right) => right.valueLength - left.valueLength)[0];
+    if (!largest || largest.valueLength <= largest.minimum) break;
 
-    const overBudget = JSON.stringify(compacted).length - inputLimitChars;
+    const overBudget = inputBudgetChars(compacted) - inputLimitChars;
     const targetLength = Math.max(
       largest.minimum,
-      largest.value.length - Math.max(128, Math.ceil(overBudget * 1.15)),
+      largest.valueLength - Math.max(128, Math.ceil(overBudget * 1.15)),
     );
-    const shortened = shortenText(
-      largest.value,
-      targetLength,
-      largest.scope === 'system'
-        ? '[system context shortened to fit the hosted credit budget]'
-        : '[current context shortened to fit the hosted credit budget]',
-    );
-    if (!shortened.truncated || shortened.value.length >= largest.value.length) break;
+    const marker = largest.scope === 'system'
+      ? '[system context shortened to fit the hosted credit budget]'
+      : '[current context shortened to fit the hosted credit budget]';
+    const shortened = largest.scope === 'system'
+      ? shortenText(String(compactedSystem[0].content), targetLength, marker)
+      : shortenContentText(conversation[largest.index].content, targetLength, marker);
+    if (!shortened.truncated || textContentLength(shortened.value) >= largest.valueLength) break;
     if (largest.scope === 'system') {
       compactedSystem[0] = { ...compactedSystem[0], content: shortened.value };
     } else {
