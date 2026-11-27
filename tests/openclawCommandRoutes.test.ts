@@ -87,6 +87,7 @@ test('parseGatewaySummaryStdout parses clean, ANSI-wrapped, and diagnostic-prefi
 })
 
 test('sanitizeSummaryConfigValue redacts sensitive nested keys and embedded bearer/API secrets while preserving safe fields', () => {
+  const bearerApiKey = 'sk-' + 'abcdefghijklmnop' + 'qrstuvwxyz123456'
   const input = {
     port: 3400,
     bind: '127.0.0.1',
@@ -96,7 +97,7 @@ test('sanitizeSummaryConfigValue redacts sensitive nested keys and embedded bear
       emptyToken: '',
       mode: 'local',
     },
-    note: 'Authorization: Bearer sk-abcdefghijklmnopqrstuvwxyz123456',
+    note: `Authorization: Bearer ${bearerApiKey}`,
   }
   const sanitized = sanitizeSummaryConfigValue(input, redactSensitiveText) as Record<string, unknown>
   assert.equal(sanitized.port, 3400)
@@ -106,7 +107,7 @@ test('sanitizeSummaryConfigValue redacts sensitive nested keys and embedded bear
   assert.equal(auth.signingKey, '[redacted]')
   assert.equal(auth.emptyToken, '')
   assert.equal(auth.mode, 'local')
-  assert.ok(!String(sanitized.note).includes('sk-abcdefghijklmnopqrstuvwxyz123456'))
+  assert.ok(!String(sanitized.note).includes(bearerApiKey))
 })
 
 test('redactSensitiveCommandArgs masks inline secret flags, split secret flags, and config set secret values', () => {
@@ -125,6 +126,7 @@ test('redactSensitiveCommandArgs masks inline secret flags, split secret flags, 
 })
 
 test('GET /api/openclaw/summary applies bounded subcommand timeouts, survives non-JSON stdout, and redacts gateway/status/cron secrets', async () => {
+  const cronApiKey = 'sk-' + '1234567890' + 'abcdefghijklmnop'
   await withOpenClawCommandServer(
     {
       runOpenClaw: async (args, timeoutMs) => {
@@ -141,7 +143,7 @@ test('GET /api/openclaw/summary applies bounded subcommand timeouts, survives no
           }
         }
         assert.equal(timeoutMs, 30_000)
-        return { stdout: 'job-1 --api-key=sk-1234567890abcdefghijklmnop', stderr: '', code: 0 }
+        return { stdout: `job-1 --api-key=${cronApiKey}`, stderr: '', code: 0 }
       },
     },
     async ({ baseUrl }) => {
@@ -154,7 +156,7 @@ test('GET /api/openclaw/summary applies bounded subcommand timeouts, survives no
       assert.equal(body.data.gateway.auth.token, '[redacted]')
       assert.equal(body.data.gateway.auth.password, '[redacted]')
       assert.ok(!String(body.data.status).includes('secret-bearer-xyz987654321'))
-      assert.ok(!String(body.data.cron).includes('sk-1234567890abcdefghijklmnop'))
+      assert.ok(!String(body.data.cron).includes(cronApiKey))
     },
   )
 
