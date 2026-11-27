@@ -24,6 +24,20 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav > .dy-human-n
   background: transparent !important;
 }
 
+/* Keep Recruit's sidebar affordance global; the larger modal treatment loads lazily. */
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav-action[data-tone="recruit"] {
+  border: 1px solid #373e44 !important;
+  border-radius: 3px !important;
+  background: #252a2e !important;
+  color: #e4e7e9 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav-action[data-tone="recruit"]:hover {
+  border-color: #59626a !important;
+  background: #30363b !important;
+}
+
 html.dui-pro-overhaul .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):focus-visible,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):focus-visible {
   outline: 2px solid rgba(183, 204, 195, .58) !important;

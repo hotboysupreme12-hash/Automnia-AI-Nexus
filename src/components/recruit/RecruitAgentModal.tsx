@@ -1,3 +1,4 @@
+import '../../styles/automnia-theme/166-recruit-graphite.css'
 import { useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Dialog, useDialogFocus } from '../ui/Dialog'
 import { navigateTabList } from '../ui/tabNavigation'
