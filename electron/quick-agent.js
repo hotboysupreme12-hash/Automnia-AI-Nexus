@@ -138,7 +138,7 @@ function openComposer(context) {
   collapseTimer = 0
   composerGeneration += 1
   contextPending = context?.contextPending === true
-  if (!clipboardContext && context && (context.text || context.image)) clipboardContext = context
+  if (!submitting && !clipboardContext && context && (context.text || context.image)) clipboardContext = context
   const initialFileLimit = 8 - (context?.image ? 1 : 0)
   for (const attachment of !submitting && Array.isArray(context?.attachments) ? context.attachments.slice(0, initialFileLimit) : []) {
     const bytes = bytesOf(attachment?.data)
@@ -186,6 +186,7 @@ window.automniaQuickAgent?.onContext((context) => {
   if (!root.classList.contains('quick-agent--open')) return
   contextPending = context?.contextPending === true
   if (context?.agentName) agentName.textContent = context.agentName
+  if (submitting) { updateControls(); return }
   if (!clipboardContext && context && (context.text || context.image)) clipboardContext = context
   const existingFiles = new Set(pendingFiles.map((file) => `${file.name}:${file.size}`))
   const fileLimit = 8 - (clipboardContext?.image ? 1 : 0)
