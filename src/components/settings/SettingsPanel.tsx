@@ -477,7 +477,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     setCursorAgentStatus('Starting system-wide pointer access…')
     publishCursorAgentStatus('Starting system-wide pointer access…')
     void bridge.setSettings({ ...next, agentName: agent.name }).then((status) => {
-      const message = status.message || (status.enabled ? 'Ready. Hide Automnia to show the pointer mark and right-click bubble.' : 'Cursor agent is off.')
+      const message = status.message || (status.enabled ? 'Ready. Hide Automnia, then double-click the pointer mark to open quick chat.' : 'Cursor agent is off.')
       setCursorAgentStatus(message)
       publishCursorAgentStatus(message)
     }).catch((error: unknown) => {
@@ -884,7 +884,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   const renderCursorAgent = () => (
     <div className="dui-settings-section" id="settings-section-cursorAgent">
       <SectionHeader section="cursorAgent" />
-      <SettingsCard title="Cursor agent" description="Show a small Automnia mark by your pointer while the main window is hidden. Right-click anywhere on the desktop to open a quick chat.">
+      <SettingsCard title="Cursor agent" description="Show a small Automnia mark by your pointer while the main window is hidden. Double-click the mark to open a quick chat.">
         <Field label="Agent for the pointer" hint="Quick chat messages go directly to this agent.">
           <select value={cursorAgentSettings.agentId} onChange={(event) => updateCursorAgentSettings({ agentId: event.target.value, enabled: cursorAgentSettings.enabled && Boolean(event.target.value) })}>
             <option value="">Choose an agent</option>
@@ -900,7 +900,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
         />
         <ToggleField
           label="Include current clipboard content"
-          hint="When you right-click, Automnia reads the current clipboard text or image locally. It is sent only after you press Send, and you can remove it from the bubble first."
+          hint="When you open quick chat, Automnia reads the current clipboard text or image locally. It is sent only after you press Send, and you can remove it from the bubble first."
           checked={cursorAgentSettings.includeClipboard}
           disabled={!cursorAgentSettings.enabled}
           onChange={(includeClipboard) => updateCursorAgentSettings({ includeClipboard })}

@@ -703,7 +703,7 @@ interface NexusState extends NexusAgentConfigState, NexusMissionState, NexusUiSt
   deployMission: () => void
   steerMission: () => void
   stopMission: () => void
-  sendPromptToAgent: (agentId: string, prompt: string, attachments?: AgentTurnAttachment[], userTurnId?: string) => Promise<void>
+  sendPromptToAgent: (agentId: string, prompt: string, attachments?: AgentTurnAttachment[], userTurnId?: string, displayPrompt?: string) => Promise<void>
   sendPromptToSelectedAgents: (prompt: string, attachments?: AgentTurnAttachment[], userTurnId?: string) => Promise<void>
   sendPromptToActiveParty: (prompt: string, attachments?: AgentTurnAttachment[], userTurnId?: string, targetAgentIds?: string[]) => Promise<void>
   stopActiveAgentRuns: (agentIds?: string[]) => number
@@ -3414,7 +3414,7 @@ export const useNexusStore = create<NexusState>()(
           }))
         },
 
-        sendPromptToAgent: async (aid, prompt, attachments, userTurnId) => {
+        sendPromptToAgent: async (aid, prompt, attachments, userTurnId, displayPrompt) => {
           if (consoleClearPromise) await consoleClearPromise
           const normalized = normalizeOperatorPrompt(prompt)
           if (!normalized || isRetiredAgentId(aid)) return
@@ -3427,7 +3427,7 @@ export const useNexusStore = create<NexusState>()(
             .filter((id) => !isRetiredAgentId(id) && state.agents.some((entry) => entry.id === id))
           const contextAgentIds = partyIds.includes(aid) ? partyIds : [aid]
           const options: PromptRunOptions = {
-            displayPrompt: normalized,
+            displayPrompt: displayPrompt?.trim() || normalized,
             userTurnId,
             includeRecentContext: true,
             freshSession: explicitFreshSession,
