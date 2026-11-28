@@ -19,7 +19,7 @@ export async function compressAttachmentImage(file: File, signal: AbortSignal): 
       worker.terminate()
       if (signal.aborted) return reject(signal.reason)
       resolve(blob && blob.size < file.size
-        ? new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' })
+        ? new File([blob], file.name.replace(/\.[^.]+$/, blob.type === 'image/jpeg' ? '.jpg' : '.png'), { type: blob.type })
         : file)
     }
     const abort = () => finish()

@@ -25,6 +25,12 @@ contextBridge.exposeInMainWorld('automniaQuickAgent', {
     ipcRenderer.on('automnia:quick-agent-collapse', wrapped)
     return () => ipcRenderer.removeListener('automnia:quick-agent-collapse', wrapped)
   },
+  onFade: (listener) => {
+    if (typeof listener !== 'function') return () => {}
+    const wrapped = (_event, fading) => listener(fading === true)
+    ipcRenderer.on('automnia:quick-agent-fade', wrapped)
+    return () => ipcRenderer.removeListener('automnia:quick-agent-fade', wrapped)
+  },
   submit: (payload = {}) => ipcRenderer.invoke('automnia:quick-agent-submit', {
     prompt: typeof payload.prompt === 'string' ? payload.prompt.slice(0, 16_000) : '',
     clipboardText: typeof payload.clipboardText === 'string' ? payload.clipboardText.slice(0, 32_000) : '',

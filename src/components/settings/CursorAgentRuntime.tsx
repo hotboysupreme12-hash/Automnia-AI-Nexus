@@ -13,6 +13,10 @@ async function uploadQuickAttachment(input: { name: string; mimeType: string; si
   const file = new File([input.data], input.name, { type: input.mimeType || 'application/octet-stream' })
   const controller = new AbortController()
   const uploadFile = await compressAttachmentImage(file, controller.signal)
+  if (uploadFile.type.startsWith('image/') && uploadFile.size > 6 * 1024 * 1024) {
+    throw new Error(`${input.name} is too large to send as an image. Resize it and try again.`)
+  }
+  if (uploadFile.size > 18 * 1024 * 1024) throw new Error(`${input.name} is too large to send. Choose a file under 18 MB.`)
   const result = await apiRequest<UploadPayload>(`/api/files/upload?name=${encodeURIComponent(uploadFile.name)}&mimeType=${encodeURIComponent(uploadFile.type || 'application/octet-stream')}`, {
     validate: isUploadResponse,
     method: 'POST',
@@ -60,7 +64,7 @@ export function CursorAgentRuntime() {
         lastAppliedSettingsKey.current = settingsKey
         void desktop.cursorAgent.setSettings(nextSettings).then((status) => {
           publishCursorAgentStatus(status.message || (status.enabled
-            ? 'Ready. Hide Automnia to show the pointer mark and right-click bubble.'
+            ? 'Ready. Hide Automnia, then double-click the pointer mark to open quick chat.'
             : settings.enabled && !selectedAgent
               ? 'The saved agent is unavailable. Choose another agent in Settings.'
               : 'Cursor agent is off.'))
@@ -77,12 +81,24 @@ export function CursorAgentRuntime() {
           if (!agent) throw new Error('The selected agent is no longer available. Choose another agent in Settings.')
           const uploaded: AgentTurnAttachment[] = []
           for (const attachment of request.attachments) uploaded.push(await uploadQuickAttachment(attachment))
+          if (uploaded.some((attachment) => attachment.delivery === 'workspace')) throw new Error('An attachment is too large for direct delivery. Resize it and try again.')
+          if (uploaded.reduce((total, attachment) => total + attachment.size, 0) > 18 * 1024 * 1024) {
+            throw new Error('Attachments exceed the combined 18 MB limit after processing. Send them separately.')
+          }
+          if (!useNexusStore.getState().agents.some((entry) => entry.id === agent.id)) throw new Error('The selected agent is no longer available. Choose another agent in Settings.')
           const parts = [request.prompt.trim()]
           if (request.clipboardText) parts.push(`Copied clipboard text:\n${request.clipboardText}`)
           const base = parts.filter(Boolean).join('\n\n') || 'Please help me with this content.'
           const message = buildAgentAttachmentMessage(base, uploaded)
-          await sendPromptToAgent(agent.id, message, uploaded)
+          const dispatch = sendPromptToAgent(agent.id, message, uploaded, undefined, base)
+          // The store promise resolves after the agent turn finishes. The quick
+          // composer only needs to wait until the message has been handed off.
           quickAgent.complete(request.requestId, { ok: true })
+          void dispatch.catch((error: unknown) => {
+            publishCursorAgentStatus(error instanceof Error
+              ? `Cursor Agent message failed: ${error.message}`
+              : 'Cursor Agent message failed after it was queued.')
+          })
         } catch (error) {
           quickAgent.complete(request.requestId, {
             ok: false,
