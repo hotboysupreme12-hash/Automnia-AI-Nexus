@@ -1,6 +1,8 @@
 .dy-command-jump-latest {
   display: flex;
   flex: 0 0 auto;
+  min-height: 42px;
+  align-items: center;
   justify-content: flex-end;
   padding-inline: var(--space-3);
 }

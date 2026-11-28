@@ -211,9 +211,11 @@ let quickAgentHookListenersBound = false
 let quickAgentHookStarted = false
 let quickAgentPopupOpen = false
 let quickAgentPopupOpening = false
+let quickAgentOpenGeneration = 0
 let quickAgentFileDialogOpen = false
 let quickAgentLastPoint = { x: 0, y: 0 }
 let quickAgentCollapseTimer = null
+let quickAgentHideTimer = null
 let quickAgentClipboardImageMonitor = null
 let quickAgentClipboardImageMonitorPaused = false
 let quickAgentClipboardImageMonitorGeneration = 0
@@ -501,20 +503,39 @@ function createQuickAgentWindow() {
 }
 
 function hideQuickAgentWindow() {
-  if (!quickAgentWindow || quickAgentWindow.isDestroyed()) return
+  quickAgentOpenGeneration += 1
   if (quickAgentCollapseTimer) clearTimeout(quickAgentCollapseTimer)
   quickAgentCollapseTimer = null
+  if (quickAgentHideTimer) clearTimeout(quickAgentHideTimer)
+  quickAgentHideTimer = null
   quickAgentPopupOpening = false
   quickAgentSendToOverlay('automnia:quick-agent-collapse')
   quickAgentPopupOpen = false
   quickAgentFileDialogOpen = false
   quickAgentPendingContext = null
+  if (!quickAgentWindow || quickAgentWindow.isDestroyed()) return
+  const win = quickAgentWindow
   quickAgentWindow.setIgnoreMouseEvents(true, { forward: true })
   quickAgentWindow.setFocusable(false)
-  quickAgentWindow.hide()
+  const fading = quickAgentWindow.isVisible() && quickAgentSendToOverlay('automnia:quick-agent-fade', true)
+  if (!fading) {
+    quickAgentWindow.hide()
+    return
+  }
+  quickAgentHideTimer = setTimeout(() => {
+    quickAgentHideTimer = null
+    if (quickAgentWindow !== win || win.isDestroyed()) return
+    if (quickAgentIsInBackground()) {
+      quickAgentSendToOverlay('automnia:quick-agent-fade', false)
+      updateQuickAgentSurface()
+      return
+    }
+    win.hide()
+  }, 190)
 }
 
 function collapseQuickAgentBubble() {
+  quickAgentOpenGeneration += 1
   quickAgentSendToOverlay('automnia:quick-agent-collapse')
   quickAgentPopupOpen = false
   quickAgentPopupOpening = false
@@ -547,6 +568,9 @@ function updateQuickAgentSurface() {
     return
   }
   if (quickAgentPopupOpen || quickAgentPopupOpening || quickAgentCollapseTimer) return
+  if (quickAgentHideTimer) clearTimeout(quickAgentHideTimer)
+  quickAgentHideTimer = null
+  quickAgentSendToOverlay('automnia:quick-agent-fade', false)
   try { quickAgentLastPoint = screen.getCursorScreenPoint() } catch {}
   const markerBounds = quickAgentOverlayBounds(quickAgentLastPoint, false)
   const currentBounds = quickAgentWindow.getBounds()
@@ -635,11 +659,14 @@ async function readQuickAgentClipboardContext(captureSelection) {
   let snapshot = null
   try {
     if (captureSelection) snapshot = snapshotQuickAgentClipboard()
-    const originalText = (await clipboard.readText()).slice(0, 32_000)
+    // Start both clipboard reads before synthesizing Ctrl+C so the foreground
+    // selection cannot replace the user's original clipboard context.
+    const originalTextPromise = clipboard.readText()
+    const clipboardImagePromise = readQuickAgentClipboardImage()
+    const originalText = (await originalTextPromise).slice(0, 32_000)
     context.clipboardText = originalText
     context.text = originalText
     context.textSource = originalText ? 'clipboard' : ''
-    context.image = await readQuickAgentClipboardImage()
 
     if (captureSelection) {
       quickAgentClipboardImageMonitorPaused = true
@@ -664,6 +691,8 @@ async function readQuickAgentClipboardContext(captureSelection) {
         quickAgentClipboardImageMonitorGeneration += 1
       }
     }
+
+    context.image = await clipboardImagePromise
 
     if (context.image?.tooLarge) {
       context.message = 'Clipboard image is over 20 MB. Use + to attach a smaller image.'
@@ -765,7 +794,8 @@ async function readQuickAgentSelectedFiles(filePaths, fileLimit = 8) {
     try {
       const stat = await fs.promises.stat(filePath)
       const fileName = path.basename(filePath)
-      if (!stat.isFile()) continue
+      if (!stat.isFile()) { messages.push(fileName + ' is not a file and was skipped.'); continue }
+      if (!stat.size) { messages.push(fileName + ' is empty and was skipped.'); continue }
       if (stat.size > 25 * 1024 * 1024) {
         messages.push(fileName + ' is over 25 MB and was skipped.')
         continue
@@ -786,8 +816,8 @@ async function readQuickAgentSelectedFiles(filePaths, fileLimit = 8) {
       messages.push(path.basename(filePath) + ' could not be read.')
     }
   }
-  if (safePaths.length > fileLimit && fileLimit < 8) {
-    messages.push(`Only ${fileLimit} selected files were attached because the clipboard image uses one attachment slot.`)
+  if (safePaths.length > fileLimit) {
+    messages.push(`Only ${fileLimit} selected files could be attached. Add the remaining files in another message.`)
   }
   return { attachments, message: messages.join(' ') }
 }
@@ -930,17 +960,18 @@ async function openQuickAgentBubble(point) {
     message: 'Reading selected content…',
   }
   if (!quickAgentSendToOverlay('automnia:quick-agent-open', initialContext)) quickAgentPendingContext = initialContext
+  const openGeneration = ++quickAgentOpenGeneration
   void selectedPathsPromise
     .then((selectedPaths) => buildQuickAgentOpenContext(clipboardContext, selectedPaths))
     .then((context) => {
-      if (quickAgentWindow !== win || win.isDestroyed() || !quickAgentPopupOpen) return
+      if (quickAgentOpenGeneration !== openGeneration || quickAgentWindow !== win || win.isDestroyed() || !quickAgentPopupOpen) return
       context.popupOrigin = popupOrigin
       context.contextPending = false
       if (!quickAgentSendToOverlay('automnia:quick-agent-context', context)) quickAgentPendingContext = context
     })
     .catch((error) => {
       appendDesktopDiagnostic('quick-agent-open-context-failed', { message: error?.message || String(error) })
-      if (quickAgentWindow !== win || win.isDestroyed() || !quickAgentPopupOpen) return
+      if (quickAgentOpenGeneration !== openGeneration || quickAgentWindow !== win || win.isDestroyed() || !quickAgentPopupOpen) return
       const context = {
         agentName: quickAgentSettings.agentName || 'Selected agent',
         popupOrigin,
@@ -1102,8 +1133,8 @@ ipcMain.handle('automnia:quick-agent-submit', async (event, input = {}) => {
   return await new Promise((resolve) => {
     const timer = setTimeout(() => {
       quickAgentPendingRequests.delete(requestId)
-      resolve({ ok: false, message: 'The agent did not accept the request in time. Your draft is still here.' })
-    }, 120_000)
+      resolve({ ok: false, message: 'The handoff timed out. Check the conversation before retrying; the request may still be running.' })
+    }, 15 * 60_000)
     quickAgentPendingRequests.set(requestId, { resolve, timer })
   })
 })
@@ -4179,8 +4210,10 @@ async function runElectronE2eRendererJourney(win) {
 
       const visited = [];
       for (const label of ['Agents', 'Monitor', 'Plugins']) {
-        const button = [...nav.querySelectorAll('button')]
-          .find((candidate) => candidate.getAttribute('aria-label')?.startsWith(label + ' '));
+        const button = [...nav.querySelectorAll('button')].find((candidate) => {
+          const accessibleName = candidate.getAttribute('aria-label')?.trim() || '';
+          return accessibleName === label || accessibleName.startsWith(label + ' ');
+        });
         if (!button) throw new Error('Missing navigation button for ' + label);
         button.click();
         await waitFor(

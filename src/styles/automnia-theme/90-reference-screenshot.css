@@ -4408,7 +4408,7 @@ html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-filter-searc
 
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-filter-search] input,
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-filter-select] {
-  height: 38px !important;
+  height: 34px !important;
   border: 1px solid rgba(76, 181, 209, .38) !important;
   border-radius: 7px !important;
   outline: 0 !important;
@@ -4448,8 +4448,12 @@ html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-filter-contr
   gap: 6px !important;
 }
 
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-filter-select] {
+  height: 28px !important;
+}
+
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-switch] {
-  min-height: 44px !important;
+  min-height: 28px !important;
   align-items: center !important;
   gap: 4px !important;
   border: 0 !important;
@@ -4459,8 +4463,8 @@ html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-switch]
 }
 
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-choice] {
-  min-height: 40px !important;
-  min-width: 56px !important;
+  min-height: 28px !important;
+  min-width: 52px !important;
   flex: 0 0 auto !important;
   position: relative !important;
   z-index: 1 !important;
@@ -4472,6 +4476,11 @@ html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-choice]
   background: transparent !important;
   color: rgba(199, 232, 241, .72) !important;
   box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg [data-dui-panel="agent-registry"] [data-agent-filter-controls] :is([data-agent-filter-pinned], [data-agent-filter-select], [data-agent-view-choice]) {
+  font-size: 12px !important;
+  line-height: 1.15 !important;
 }
 
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-choice][data-active="true"] {

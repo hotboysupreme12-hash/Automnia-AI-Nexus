@@ -49,7 +49,10 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-messages {
   min-height: 0 !important;
   overflow-x: hidden !important;
   overflow-y: auto !important;
-  overscroll-behavior: contain;
+  /* The conversation controller pins the list directly while replies stream. */
+  scroll-behavior: auto !important;
+  overflow-anchor: none;
+  overscroll-behavior-y: none;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
 }

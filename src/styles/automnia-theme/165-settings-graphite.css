@@ -66,7 +66,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-ui-revision="settings-v2"] .dui-sett
 html.dui-pro-overhaul.dui-cohesive-ui [data-ui-revision="settings-v2"] .dui-settings-topbar h2 {
   margin: 0;
   color: #f0f2f4;
-  font-size: clamp(25px, 1.9vw, 30px);
+  font-size: clamp(22px, 1.6vw, 26px);
   font-weight: 650;
   line-height: 1.15;
   letter-spacing: -.035em;
@@ -74,7 +74,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-ui-revision="settings-v2"] .dui-sett
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-ui-revision="settings-v2"] .dui-settings-search {
   width: min(390px, 42vw);
-  min-height: 42px;
+  min-height: 38px;
   grid-template-columns: 18px minmax(0, 1fr) auto;
   gap: 9px;
   padding: 0 12px;
@@ -94,7 +94,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-ui-revision="settings-v2"] .dui-sett
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-ui-revision="settings-v2"] .dui-settings-search input {
-  min-height: 40px !important;
+  min-height: 36px !important;
   color: #e4e7e9 !important;
   font-size: var(--dui-readable-control) !important;
 }
@@ -160,7 +160,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-ui-revision="settings-v2"].dui-setti
   display: grid;
   width: 100%;
   min-width: 0;
-  min-height: 42px;
+  min-height: 38px;
   grid-template-columns: 24px minmax(0, 1fr) auto;
   align-items: center;
   gap: 9px;
@@ -377,8 +377,8 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-ui-revision="settings-v2"] :is(.dui-
 html.dui-pro-overhaul.dui-cohesive-ui [data-ui-revision="settings-v2"] .dui-settings-field > .dui-settings-control > :is(input, select, textarea) {
   width: 100% !important;
   min-width: 0 !important;
-  min-height: 40px !important;
-  padding: 8px 11px !important;
+  min-height: 36px !important;
+  padding: 6px 10px !important;
   border: 1px solid #373e44 !important;
   border-radius: 0 !important;
   background: #15181b !important;
@@ -425,7 +425,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-ui-revision="settings-v2"] .dui-sett
 html.dui-pro-overhaul.dui-cohesive-ui [data-ui-revision="settings-v2"] .dui-settings-segmented {
   display: flex;
   width: 100%;
-  min-height: 40px;
+  min-height: 36px;
   gap: 2px;
   padding: 3px;
   border: 1px solid #373e44;
@@ -435,7 +435,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-ui-revision="settings-v2"] .dui-sett
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-ui-revision="settings-v2"] .dui-settings-segmented button {
   min-width: 0;
-  min-height: 32px;
+  min-height: 28px;
   flex: 1 1 0;
   border: 1px solid transparent;
   border-radius: 0;
@@ -848,7 +848,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-ui-revision="settings-v2"] :is(.dui-
   html.dui-pro-overhaul.dui-cohesive-ui [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-nav > button {
     width: 170px;
     min-width: 170px;
-    min-height: 40px;
+    min-height: 36px;
   }
 }
 
@@ -907,7 +907,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="settings"].dui-settings-p
   & .dui-settings-topbar { min-height: 82px !important; padding: 16px 24px !important; background: #202428 !important; }
   & .dui-settings-layout { min-height: calc(100dvh - 242px) !important; background: #202428 !important; }
   & .dui-settings-nav { background: #1b1e21 !important; border-right: 1px solid #30363b !important; padding: 14px 10px !important; }
-  & .dui-settings-nav > button { min-height: 44px !important; border-radius: 0 !important; }
+  & .dui-settings-nav > button { min-height: 38px !important; border-radius: 0 !important; }
   & .dui-settings-nav > button[data-active="true"] { background: #2d3338 !important; border-color: #59626a !important; color: #f0f2f4 !important; }
   & .dui-settings-content { min-width: 0; padding: 24px !important; background: #202428 !important; }
   & .dui-settings-content > div + div { margin-top: 0 !important; }

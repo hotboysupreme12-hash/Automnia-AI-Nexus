@@ -14,6 +14,23 @@ let imageObjectUrl = ''
 let submitting = false
 let collapseTimer = 0
 let contextPending = false
+let readingFiles = 0
+let composerGeneration = 0
+let previewUrls = []
+const addButton = document.querySelector('.quick-agent__add')
+
+function updateControls() {
+  const busy = submitting || readingFiles > 0 || contextPending
+  sendButton.disabled = busy
+  addButton.disabled = submitting
+  promptInput.readOnly = submitting
+  fileList.querySelectorAll('button').forEach((button) => { button.disabled = submitting })
+  contextBox.querySelectorAll('button').forEach((button) => { button.disabled = submitting })
+}
+
+function formatSize(size) {
+  return size < 1024 * 1024 ? `${Math.max(1, Math.ceil(size / 1024))} KB` : `${(size / (1024 * 1024)).toFixed(1)} MB`
+}
 
 function bytesOf(value) {
   if (value instanceof ArrayBuffer) return new Uint8Array(value)
@@ -77,13 +94,29 @@ function renderContext() {
 }
 
 function renderFiles() {
+  for (const url of previewUrls) URL.revokeObjectURL(url)
+  previewUrls = []
   fileList.replaceChildren()
   for (const file of pendingFiles) {
     const chip = document.createElement('span')
     chip.className = 'quick-agent__file'
+    if (file.mimeType.startsWith('image/')) {
+      const image = document.createElement('img')
+      image.className = 'quick-agent__file-preview'
+      image.alt = ''
+      const url = URL.createObjectURL(new Blob([file.data], { type: file.mimeType }))
+      previewUrls.push(url)
+      image.src = url
+      image.addEventListener('error', () => { image.hidden = true })
+      chip.append(image)
+    }
     const name = document.createElement('span')
     name.className = 'quick-agent__file-name'
     name.textContent = file.name
+    name.title = `${file.name} - ${formatSize(file.size)}`
+    const size = document.createElement('span')
+    size.className = 'quick-agent__file-size'
+    size.textContent = formatSize(file.size)
     const remove = document.createElement('button')
     remove.type = 'button'
     remove.className = 'quick-agent__remove-file'
@@ -94,21 +127,24 @@ function renderFiles() {
       if (index >= 0) pendingFiles.splice(index, 1)
       renderFiles()
     })
-    chip.append(name, remove)
+    chip.append(name, size, remove)
     fileList.append(chip)
   }
+  updateControls()
 }
 
 function openComposer(context) {
   if (collapseTimer) window.clearTimeout(collapseTimer)
   collapseTimer = 0
+  composerGeneration += 1
   contextPending = context?.contextPending === true
-  clipboardContext = context && (context.text || context.image) ? context : null
-  pendingFiles.splice(0)
+  if (!clipboardContext && context && (context.text || context.image)) clipboardContext = context
   const initialFileLimit = 8 - (context?.image ? 1 : 0)
-  for (const attachment of Array.isArray(context?.attachments) ? context.attachments.slice(0, initialFileLimit) : []) {
+  for (const attachment of !submitting && Array.isArray(context?.attachments) ? context.attachments.slice(0, initialFileLimit) : []) {
     const bytes = bytesOf(attachment?.data)
     if (!attachment?.name || !bytes.byteLength || bytes.byteLength > 25 * 1024 * 1024) continue
+    if (pendingFiles.length + (clipboardContext?.image ? 1 : 0) >= 8 || totalAttachmentBytes() + bytes.byteLength > 100 * 1024 * 1024) break
+    if (pendingFiles.some((file) => file.name === attachment.name && file.size === bytes.byteLength)) continue
     pendingFiles.push({
       name: String(attachment.name).slice(0, 240),
       mimeType: typeof attachment.mimeType === 'string' ? attachment.mimeType : 'application/octet-stream',
@@ -127,7 +163,7 @@ function openComposer(context) {
   root.classList.add('quick-agent--open')
   bubble.hidden = false
   showStatus(context?.message || '')
-  sendButton.disabled = contextPending
+  updateControls()
   renderContext()
   renderFiles()
   window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
@@ -143,14 +179,16 @@ window.automniaQuickAgent?.onLogo((dataUrl) => {
 })
 
 window.automniaQuickAgent?.onOpen((context) => openComposer(context || {}))
+window.automniaQuickAgent?.onFade((fading) => {
+  root.classList.toggle('quick-agent--fading', fading)
+})
 window.automniaQuickAgent?.onContext((context) => {
   if (!root.classList.contains('quick-agent--open')) return
   contextPending = context?.contextPending === true
   if (context?.agentName) agentName.textContent = context.agentName
-  if (context && (context.text || context.image)) clipboardContext = context
-  else clipboardContext = null
+  if (!clipboardContext && context && (context.text || context.image)) clipboardContext = context
   const existingFiles = new Set(pendingFiles.map((file) => `${file.name}:${file.size}`))
-  const fileLimit = 8 - (context?.image ? 1 : 0)
+  const fileLimit = 8 - (clipboardContext?.image ? 1 : 0)
   for (const attachment of Array.isArray(context?.attachments) ? context.attachments : []) {
     const bytes = bytesOf(attachment?.data)
     const key = `${attachment?.name || ''}:${bytes.byteLength}`
@@ -165,7 +203,7 @@ window.automniaQuickAgent?.onContext((context) => {
     })
     existingFiles.add(key)
   }
-  if (!submitting) sendButton.disabled = contextPending
+  updateControls()
   if (!statusText.hidden && ['Reading selected content…', 'Still reading selected content…'].includes(statusText.textContent)) showStatus(context?.message || '')
   else if (context?.message && !submitting) showStatus(context.message)
   renderContext()
@@ -180,14 +218,8 @@ window.automniaQuickAgent?.onCollapse(() => {
     root.classList.remove('quick-agent--open', 'quick-agent--closing')
     root.classList.add('quick-agent--trail')
     bubble.hidden = true
-    promptInput.value = ''
-    pendingFiles.splice(0)
-    clipboardContext = null
     contextPending = false
-    sendButton.disabled = false
-    renderFiles()
-    renderContext()
-    showStatus('')
+    updateControls()
   }, 190)
 })
 
@@ -196,24 +228,47 @@ document.querySelector('.quick-agent__close').addEventListener('click', () => {
 })
 
 document.querySelector('.quick-agent__add').addEventListener('click', () => {
+  if (submitting) return
   window.automniaQuickAgent?.setFileDialogOpen(true)
   fileInput.click()
 })
 async function addFiles(selected) {
-  for (const file of selected) {
-    if (pendingFiles.some((entry) => entry.name === file.name && entry.size === file.size && entry.lastModified === file.lastModified)) continue
-    if (pendingFiles.length + (clipboardContext?.image ? 1 : 0) >= 8) { showStatus('Attach up to 8 files, including any clipboard image.', true); break }
-    if (file.size > 25 * 1024 * 1024 || totalAttachmentBytes() + file.size > 100 * 1024 * 1024) {
-      showStatus('Each file can be up to 25 MB. Keep all attachments under 100 MB.', true)
-      continue
+  if (submitting || !selected.length) return
+  readingFiles += 1
+  updateControls()
+  showStatus('Reading attachments...')
+  let issue = ''
+  try {
+    for (const file of selected) {
+      if (pendingFiles.some((entry) => entry.name === file.name && entry.size === file.size && entry.lastModified === file.lastModified)) {
+        issue = `${file.name} is already attached.`
+        continue
+      }
+      if (pendingFiles.length + (clipboardContext?.image ? 1 : 0) >= 8) { issue = 'Attach up to 8 files, including any clipboard image.'; break }
+      if (!file.size) { issue = `${file.name} is empty and was not attached.`; continue }
+      if (file.size > 25 * 1024 * 1024 || totalAttachmentBytes() + file.size > 100 * 1024 * 1024) {
+        issue = 'Each file can be up to 25 MB. Keep all attachments under 100 MB.'
+        continue
+      }
+      try {
+        const data = await file.arrayBuffer()
+        // Another picker or drop may have completed while this file was read.
+        if (pendingFiles.some((entry) => entry.name === file.name && entry.size === file.size && entry.lastModified === file.lastModified)) continue
+        if (pendingFiles.length + (clipboardContext?.image ? 1 : 0) >= 8 || totalAttachmentBytes() + data.byteLength > 100 * 1024 * 1024) {
+          issue = 'Attachment limit reached. Send remaining files separately.'
+          break
+        }
+        pendingFiles.push({ name: file.name, mimeType: file.type || 'application/octet-stream', size: data.byteLength, data, lastModified: file.lastModified })
+      } catch {
+        issue = `Could not read ${file.name}. Choose the file again to retry.`
+      }
     }
-    try {
-      pendingFiles.push({ name: file.name, mimeType: file.type || 'application/octet-stream', size: file.size, data: await file.arrayBuffer() })
-    } catch {
-      showStatus(`Could not read ${file.name}. Choose the file again to retry.`, true)
-    }
+  } finally {
+    readingFiles -= 1
+    renderFiles()
+    showStatus(issue || (readingFiles ? 'Reading attachments...' : ''), Boolean(issue))
+    updateControls()
   }
-  renderFiles()
 }
 fileInput.addEventListener('change', async () => {
   window.automniaQuickAgent?.setFileDialogOpen(false)
@@ -244,7 +299,7 @@ root.addEventListener('drop', (event) => {
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault()
-  if (submitting) return
+  if (submitting || readingFiles) return
   if (contextPending) {
     showStatus('Still reading selected content…')
     return
@@ -257,7 +312,8 @@ form.addEventListener('submit', async (event) => {
     return
   }
   submitting = true
-  sendButton.disabled = true
+  const submittedGeneration = composerGeneration
+  updateControls()
   sendButton.textContent = 'Sending…'
   showStatus('Sending to your selected agent…')
   try {
@@ -273,20 +329,36 @@ form.addEventListener('submit', async (event) => {
     }
     pendingFiles.splice(0)
     clipboardContext = null
-    await window.automniaQuickAgent.close()
+    promptInput.value = ''
+    renderFiles()
+    renderContext()
+    showStatus('')
+    if (composerGeneration === submittedGeneration && root.classList.contains('quick-agent--open')) await window.automniaQuickAgent.close()
   } catch (error) {
     showStatus(error instanceof Error ? error.message : 'The request could not be sent. Your draft is still here.', true)
   } finally {
     submitting = false
-    sendButton.disabled = contextPending
     sendButton.textContent = 'Send'
+    updateControls()
   }
 })
 
 promptInput.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter' && !event.shiftKey) {
+  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
     event.preventDefault()
     form.requestSubmit()
   }
   if (event.key === 'Escape') void window.automniaQuickAgent?.close()
+})
+
+// Pasting an image or file should attach it, while ordinary text pastes normally.
+promptInput.addEventListener('paste', (event) => {
+  const files = Array.from(event.clipboardData?.files || [])
+  if (!files.length || submitting) return
+  event.preventDefault()
+  void addFiles(files)
+})
+window.addEventListener('beforeunload', () => {
+  if (imageObjectUrl) URL.revokeObjectURL(imageObjectUrl)
+  for (const url of previewUrls) URL.revokeObjectURL(url)
 })

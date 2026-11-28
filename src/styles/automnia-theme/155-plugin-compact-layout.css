@@ -24,7 +24,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-tit
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugins-title-row h2 {
-  font-size: 22px !important;
+  font-size: 20px !important;
   font-weight: 680 !important;
 }
 
@@ -81,18 +81,18 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-disc
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-search-field {
-  min-height: 34px !important;
+  min-height: 32px !important;
   border-radius: 8px !important;
   box-shadow: none !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-search-input {
-  height: 32px !important;
+  height: 30px !important;
   font-size: 11px !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-search-button {
-  min-height: 34px !important;
+  min-height: 32px !important;
   border-radius: 8px !important;
 }
 
