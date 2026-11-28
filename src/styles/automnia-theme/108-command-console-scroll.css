@@ -49,11 +49,10 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-messages {
   min-height: 0 !important;
   overflow-x: hidden !important;
   overflow-y: auto !important;
-  /* scrollTop is animated by the conversation follow controller; keep the
-     browser from adding smooth-scroll or anchor corrections of its own. */
+  /* The conversation controller pins the list directly while replies stream. */
   scroll-behavior: auto !important;
   overflow-anchor: none;
-  overscroll-behavior: contain;
+  overscroll-behavior-y: none;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
 }

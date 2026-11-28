@@ -1176,13 +1176,8 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
   const listRef = useRef<HTMLDivElement | null>(null)
   const consoleRootRef = useRef<HTMLElement | null>(null)
   const stickToBottomRef = useRef(true)
-  const smoothFollowFrameRef = useRef<number | null>(null)
-  const programmaticFollowRef = useRef(false)
   const lastMessageScrollTopRef = useRef<number | null>(null)
-  const userScrollActiveRef = useRef(false)
-  const userScrollIdleTimerRef = useRef<number | null>(null)
   const scrollbarDragActiveRef = useRef(false)
-  const hasAgentStartedReplyRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const promptRef = useRef('')
@@ -1487,7 +1482,6 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
   const hiddenResponseCount = responseHistory.total - visibleDisplayedResponses.length
   const agentReplyInFlight = chatBusyAgents.length > 0 || visibleDisplayedResponses.some((entry) => entry.streaming)
   const hasAgentStartedReply = chatHistoryResponses.some((entry) => entry.streaming && Boolean(entry.response.trim()))
-  hasAgentStartedReplyRef.current = hasAgentStartedReply
   const replyingAgentNames = useMemo(() => {
     const names = new Set(chatBusyAgents.map((agent) => agent.name))
     for (const entry of visibleDisplayedResponses) {
@@ -1502,91 +1496,34 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
     : replyingAgentNames.length === 2
       ? `${replyingAgentNames[0]} and ${replyingAgentNames[1]} are ${replyAction} replies below`
       : `${replyingAgentNames.length} agents are ${replyAction} replies below`
-  const animateFollowToLatest = useCallback(() => {
+  const followToLatest = useCallback(() => {
     const list = listRef.current
-    if (!list || userScrollActiveRef.current || smoothFollowFrameRef.current !== null) return
+    if (!list || !stickToBottomRef.current || scrollbarDragActiveRef.current) return
 
-    let previousFrameAt = 0
-    const followFrame = (now: number) => {
-      const currentList = listRef.current
-      if (!currentList || !stickToBottomRef.current || userScrollActiveRef.current) {
-        smoothFollowFrameRef.current = null
-        programmaticFollowRef.current = false
-        return
-      }
-
-      const target = Math.max(0, currentList.scrollHeight - currentList.clientHeight)
-      const distance = target - currentList.scrollTop
-      if (Math.abs(distance) <= 1) {
-        // Snap the sub-pixel remainder only. Streamed Markdown can briefly
-        // shrink while its blocks are reflowed; following that negative delta
-        // makes the list bounce up and down as the next chunk grows it again.
-        if (distance >= -1) currentList.scrollTop = target
-        lastMessageScrollTopRef.current = currentList.scrollTop
-        smoothFollowFrameRef.current = null
-        programmaticFollowRef.current = false
-        lastReadResponseId.current = useNexusStore.getState().agentResponses[0]?.id
-        setFollowingLatest(true)
-        return
-      }
-
-      // Auto-follow only moves toward newer messages. If a render briefly
-      // contracts the content, let the browser clamp the scroll range instead
-      // of issuing an upward correction that can fight the next streamed chunk.
-      if (distance < 0) {
-        lastMessageScrollTopRef.current = currentList.scrollTop
-        smoothFollowFrameRef.current = null
-        programmaticFollowRef.current = false
-        return
-      }
-
-      // Ease toward the current bottom instead of issuing competing jumps.
-      // Re-reading the target every frame lets this same animation follow text
-      // that grows while the agent is still streaming.
-      programmaticFollowRef.current = true
-      const elapsed = previousFrameAt === 0 ? 16 : Math.min(40, now - previousFrameAt)
-      previousFrameAt = now
-      currentList.scrollTop += distance * (1 - Math.exp(-elapsed / 70))
-      lastMessageScrollTopRef.current = currentList.scrollTop
-      smoothFollowFrameRef.current = window.requestAnimationFrame(followFrame)
-    }
-
-    smoothFollowFrameRef.current = window.requestAnimationFrame(followFrame)
+    // Streamed markdown can change its measured height several times per
+    // frame. Pin the list to the current bottom instead of easing toward a
+    // target that moves underneath the scrollbar thumb.
+    list.scrollTop = Math.max(0, list.scrollHeight - list.clientHeight)
+    lastMessageScrollTopRef.current = list.scrollTop
+    lastReadResponseId.current = useNexusStore.getState().agentResponses[0]?.id
+    setFollowingLatest(true)
   }, [])
   const scrollToLatest = useCallback(() => {
-    if (userScrollIdleTimerRef.current !== null) {
-      window.clearTimeout(userScrollIdleTimerRef.current)
-      userScrollIdleTimerRef.current = null
-    }
-    userScrollActiveRef.current = false
     const list = listRef.current
     if (!list) return
     stickToBottomRef.current = true
     setFollowingLatest(true)
-    animateFollowToLatest()
+    followToLatest()
     lastReadResponseId.current = useNexusStore.getState().agentResponses[0]?.id
-  }, [animateFollowToLatest])
+  }, [followToLatest])
   const noteUserScrollActivity = useCallback((movingUp = false) => {
-    // Keep the reader in control while scrolling and while an agent has not
-    // produced its first reply text. Resume following only after both settle.
-    userScrollActiveRef.current = true
-    if (smoothFollowFrameRef.current !== null) {
-      window.cancelAnimationFrame(smoothFollowFrameRef.current)
-      smoothFollowFrameRef.current = null
-    }
-    programmaticFollowRef.current = false
+    // Keep the reader in control while scrolling. Returning to the latest
+    // messages is explicit once the reader has moved away from the bottom.
     if (movingUp) {
       stickToBottomRef.current = false
       setFollowingLatest(false)
     }
-    if (userScrollIdleTimerRef.current !== null) window.clearTimeout(userScrollIdleTimerRef.current)
-    if (scrollbarDragActiveRef.current) return
-    userScrollIdleTimerRef.current = window.setTimeout(() => {
-      userScrollIdleTimerRef.current = null
-      userScrollActiveRef.current = false
-      if (hasAgentStartedReplyRef.current) scrollToLatest()
-    }, 900)
-  }, [scrollToLatest])
+  }, [])
   const targetMode = selectedTargets.length
     ? selectedTargets.length === 1 ? 'Direct chat' : 'Multi-agent chat'
     : 'Party chat'
@@ -1802,9 +1739,9 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
       olderResponseAnchor.current = null
       return
     }
-    if (!stickToBottomRef.current || userScrollActiveRef.current) return
-    animateFollowToLatest()
-  }, [animateFollowToLatest, visibleDisplayedResponses, responses])
+    if (!stickToBottomRef.current) return
+    followToLatest()
+  }, [followToLatest, visibleDisplayedResponses, responses])
 
   // StreamedResponseMarkdown reveals text on its own animation frames. Those
   // renders do not update this component's response arrays, so keep the newest
@@ -1813,7 +1750,7 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
     const list = listRef.current
     if (!list || typeof ResizeObserver === 'undefined') return
 
-    const followRenderedContent = () => animateFollowToLatest()
+    const followRenderedContent = () => followToLatest()
     const resizeObserver = new ResizeObserver(followRenderedContent)
     for (const child of Array.from(list.children)) resizeObserver.observe(child)
 
@@ -1835,27 +1772,12 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
       mutationObserver.disconnect()
       resizeObserver.disconnect()
     }
-  }, [animateFollowToLatest])
-
-  useEffect(() => {
-    if (!hasAgentStartedReply) return
-    if (!stickToBottomRef.current && !userScrollActiveRef.current) scrollToLatest()
-  }, [hasAgentStartedReply, scrollToLatest])
-
-  useEffect(() => () => {
-    if (userScrollIdleTimerRef.current !== null) window.clearTimeout(userScrollIdleTimerRef.current)
-    if (smoothFollowFrameRef.current !== null) window.cancelAnimationFrame(smoothFollowFrameRef.current)
-  }, [])
+  }, [followToLatest])
 
   const handleMessageScroll = useCallback(() => {
     const list = listRef.current
     if (!list) return
     const distanceFromBottom = list.scrollHeight - list.scrollTop - list.clientHeight
-    if (programmaticFollowRef.current) {
-      lastMessageScrollTopRef.current = list.scrollTop
-      if (distanceFromBottom < 64) lastReadResponseId.current = responses[0]?.id
-      return
-    }
     const previousScrollTop = lastMessageScrollTopRef.current
     const movingUp = previousScrollTop !== null && list.scrollTop < previousScrollTop - 1
     const moved = previousScrollTop !== null && Math.abs(list.scrollTop - previousScrollTop) > 1
@@ -1880,8 +1802,7 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
     if (scrollbarDragActiveRef.current || event.button !== 0 || event.target !== list || event.clientX < scrollbarEdge) return
 
     // A held native scrollbar thumb can keep moving while streamed content
-    // changes the scroll range. Do not let the idle timer restart auto-follow
-    // until that drag has actually ended.
+    // changes the scroll range. Pause bottom-follow until the drag ends.
     scrollbarDragActiveRef.current = true
     noteUserScrollActivity(false)
   }, [noteUserScrollActivity])
@@ -1891,6 +1812,7 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
       if (!scrollbarDragActiveRef.current) return
       scrollbarDragActiveRef.current = false
       noteUserScrollActivity(false)
+      if (stickToBottomRef.current) followToLatest()
     }
     window.addEventListener('pointerup', finishScrollbarDrag)
     window.addEventListener('pointercancel', finishScrollbarDrag)
@@ -1902,7 +1824,7 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
       window.removeEventListener('mouseup', finishScrollbarDrag)
       window.removeEventListener('blur', finishScrollbarDrag)
     }
-  }, [noteUserScrollActivity])
+  }, [followToLatest, noteUserScrollActivity])
 
   const handleConsoleWheel = useCallback((event: WheelEvent<HTMLElement>) => {
     const list = listRef.current
@@ -3167,28 +3089,30 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
         <Button size="compact" variant="quiet" onClick={() => { setRetryRecording(null); setVoiceError(''); setVoiceStatus('Recording discarded.') }}>Discard recording</Button>
       </div>}
       {/* Input area */}
-      {!followingLatest && <div className="dy-command-jump-latest">
-        {replyingAgentNames.length > 0 && <div className="dy-chat-reply-below" role="status" aria-live="polite" aria-atomic="true">
-          <span className="dy-chat-reply-below__label">{replyBelowLabel}</span>
-          <span className="dy-chat-reply-below__bubble" aria-hidden="true">
-            <i /><i /><i />
-          </span>
-        </div>}
-        <IconButton
-          className="dy-command-jump-latest__button"
-          variant="quiet"
-          size="compact"
-          aria-label={`Jump to latest messages${unreadResponseCount ? `, ${unreadResponseCount} new` : ''}`}
-          onClick={scrollToLatest}
-          icon={(
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 4v11" />
-              <path d="m7.5 11.5 4.5 4.5 4.5-4.5" />
-              <path d="M5 19h14" />
-            </svg>
-          )}
-        />
-      </div>}
+      <div className="dy-command-jump-latest" aria-hidden={followingLatest}>
+        {!followingLatest && <>
+          {replyingAgentNames.length > 0 && <div className="dy-chat-reply-below" role="status" aria-live="polite" aria-atomic="true">
+            <span className="dy-chat-reply-below__label">{replyBelowLabel}</span>
+            <span className="dy-chat-reply-below__bubble" aria-hidden="true">
+              <i /><i /><i />
+            </span>
+          </div>}
+          <IconButton
+            className="dy-command-jump-latest__button"
+            variant="quiet"
+            size="compact"
+            aria-label={`Jump to latest messages${unreadResponseCount ? `, ${unreadResponseCount} new` : ''}`}
+            onClick={scrollToLatest}
+            icon={(
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 4v11" />
+                <path d="m7.5 11.5 4.5 4.5 4.5-4.5" />
+                <path d="M5 19h14" />
+              </svg>
+            )}
+          />
+        </>}
+      </div>
       <div className="dy-command-composer shrink-0"
         onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy' } }}
         onDrop={(event) => { if (event.dataTransfer.files.length) { event.preventDefault(); addAttachments(Array.from(event.dataTransfer.files)) } }}
