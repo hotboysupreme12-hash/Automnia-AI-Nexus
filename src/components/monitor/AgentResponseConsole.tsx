@@ -1177,7 +1177,13 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
   const consoleRootRef = useRef<HTMLElement | null>(null)
   const stickToBottomRef = useRef(true)
   const lastMessageScrollTopRef = useRef<number | null>(null)
+  const smoothFollowFrameRef = useRef<number | null>(null)
+  const programmaticScrollTopRef = useRef<number | null>(null)
+  const userScrollActiveRef = useRef(false)
+  const userScrollIdleTimerRef = useRef<number | null>(null)
   const scrollbarDragActiveRef = useRef(false)
+  const hasAgentStartedReplyRef = useRef(false)
+  const agentReplyInFlightRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const promptRef = useRef('')
@@ -1482,6 +1488,8 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
   const hiddenResponseCount = responseHistory.total - visibleDisplayedResponses.length
   const agentReplyInFlight = chatBusyAgents.length > 0 || visibleDisplayedResponses.some((entry) => entry.streaming)
   const hasAgentStartedReply = chatHistoryResponses.some((entry) => entry.streaming && Boolean(entry.response.trim()))
+  hasAgentStartedReplyRef.current = hasAgentStartedReply
+  agentReplyInFlightRef.current = agentReplyInFlight
   const replyingAgentNames = useMemo(() => {
     const names = new Set(chatBusyAgents.map((agent) => agent.name))
     for (const entry of visibleDisplayedResponses) {
@@ -1498,17 +1506,51 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
       : `${replyingAgentNames.length} agents are ${replyAction} replies below`
   const followToLatest = useCallback(() => {
     const list = listRef.current
-    if (!list || !stickToBottomRef.current || scrollbarDragActiveRef.current) return
+    if (!list || !stickToBottomRef.current || userScrollActiveRef.current || scrollbarDragActiveRef.current || smoothFollowFrameRef.current !== null) return
 
-    // Streamed markdown can change its measured height several times per
-    // frame. Pin the list to the current bottom instead of easing toward a
-    // target that moves underneath the scrollbar thumb.
-    list.scrollTop = Math.max(0, list.scrollHeight - list.clientHeight)
-    lastMessageScrollTopRef.current = list.scrollTop
-    lastReadResponseId.current = useNexusStore.getState().agentResponses[0]?.id
-    setFollowingLatest(true)
+    let previousFrameAt = 0
+    const followFrame = (now: number) => {
+      const currentList = listRef.current
+      if (!currentList || !stickToBottomRef.current || userScrollActiveRef.current || scrollbarDragActiveRef.current) {
+        smoothFollowFrameRef.current = null
+        return
+      }
+
+      const target = Math.max(0, currentList.scrollHeight - currentList.clientHeight)
+      const distance = target - currentList.scrollTop
+      if (distance <= 1) {
+        // Never correct upward during streaming. Markdown can briefly contract
+        // while it is reparsed; following that negative delta makes the list
+        // bounce when the next text chunk expands it again.
+        if (distance >= 0.5) {
+          programmaticScrollTopRef.current = target
+          currentList.scrollTop = target
+        }
+        lastMessageScrollTopRef.current = currentList.scrollTop
+        smoothFollowFrameRef.current = null
+        lastReadResponseId.current = useNexusStore.getState().agentResponses[0]?.id
+        setFollowingLatest(true)
+        return
+      }
+
+      const elapsed = previousFrameAt === 0 ? 16 : Math.min(40, now - previousFrameAt)
+      previousFrameAt = now
+      const easedDistance = distance * (1 - Math.exp(-elapsed / 80))
+      const nextScrollTop = Math.min(target, currentList.scrollTop + Math.max(0.75, easedDistance))
+      programmaticScrollTopRef.current = nextScrollTop
+      currentList.scrollTop = nextScrollTop
+      lastMessageScrollTopRef.current = currentList.scrollTop
+      smoothFollowFrameRef.current = window.requestAnimationFrame(followFrame)
+    }
+
+    smoothFollowFrameRef.current = window.requestAnimationFrame(followFrame)
   }, [])
   const scrollToLatest = useCallback(() => {
+    if (userScrollIdleTimerRef.current !== null) {
+      window.clearTimeout(userScrollIdleTimerRef.current)
+      userScrollIdleTimerRef.current = null
+    }
+    userScrollActiveRef.current = false
     const list = listRef.current
     if (!list) return
     stickToBottomRef.current = true
@@ -1517,13 +1559,27 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
     lastReadResponseId.current = useNexusStore.getState().agentResponses[0]?.id
   }, [followToLatest])
   const noteUserScrollActivity = useCallback((movingUp = false) => {
-    // Keep the reader in control while scrolling. Returning to the latest
-    // messages is explicit once the reader has moved away from the bottom.
+    userScrollActiveRef.current = true
+    programmaticScrollTopRef.current = null
+    if (smoothFollowFrameRef.current !== null) {
+      window.cancelAnimationFrame(smoothFollowFrameRef.current)
+      smoothFollowFrameRef.current = null
+    }
     if (movingUp) {
       stickToBottomRef.current = false
       setFollowingLatest(false)
     }
-  }, [])
+    if (userScrollIdleTimerRef.current !== null) window.clearTimeout(userScrollIdleTimerRef.current)
+    if (scrollbarDragActiveRef.current) return
+    userScrollIdleTimerRef.current = window.setTimeout(() => {
+      userScrollIdleTimerRef.current = null
+      userScrollActiveRef.current = false
+      if (scrollbarDragActiveRef.current || (!hasAgentStartedReplyRef.current && !agentReplyInFlightRef.current)) return
+      stickToBottomRef.current = true
+      setFollowingLatest(true)
+      followToLatest()
+    }, 900)
+  }, [followToLatest])
   const targetMode = selectedTargets.length
     ? selectedTargets.length === 1 ? 'Direct chat' : 'Multi-agent chat'
     : 'Party chat'
@@ -1774,10 +1830,35 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
     }
   }, [followToLatest])
 
+  useEffect(() => {
+    if (!hasAgentStartedReply || stickToBottomRef.current || userScrollActiveRef.current || scrollbarDragActiveRef.current) return
+    scrollToLatest()
+  }, [hasAgentStartedReply, scrollToLatest])
+
+  useEffect(() => () => {
+    if (userScrollIdleTimerRef.current !== null) window.clearTimeout(userScrollIdleTimerRef.current)
+    if (smoothFollowFrameRef.current !== null) window.cancelAnimationFrame(smoothFollowFrameRef.current)
+  }, [])
+
   const handleMessageScroll = useCallback(() => {
     const list = listRef.current
     if (!list) return
     const distanceFromBottom = list.scrollHeight - list.scrollTop - list.clientHeight
+    const expectedProgrammaticTop = programmaticScrollTopRef.current
+    if (expectedProgrammaticTop !== null && Math.abs(list.scrollTop - expectedProgrammaticTop) <= 1) {
+      programmaticScrollTopRef.current = null
+      lastMessageScrollTopRef.current = list.scrollTop
+      if (distanceFromBottom < 64) lastReadResponseId.current = responses[0]?.id
+      return
+    }
+    // Content shrinking at the bottom can make the browser clamp scrollTop.
+    // That is part of following the stream, not an upward gesture from the user.
+    if (stickToBottomRef.current && !scrollbarDragActiveRef.current && distanceFromBottom <= 1) {
+      lastMessageScrollTopRef.current = list.scrollTop
+      lastReadResponseId.current = responses[0]?.id
+      setFollowingLatest(true)
+      return
+    }
     const previousScrollTop = lastMessageScrollTopRef.current
     const movingUp = previousScrollTop !== null && list.scrollTop < previousScrollTop - 1
     const moved = previousScrollTop !== null && Math.abs(list.scrollTop - previousScrollTop) > 1
@@ -1798,8 +1879,8 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
     const list = event.currentTarget
     const bounds = list.getBoundingClientRect()
     const scrollbarGutter = list.offsetWidth - list.clientWidth
-    const scrollbarEdge = bounds.right - Math.max(12, scrollbarGutter + 2)
-    if (scrollbarDragActiveRef.current || event.button !== 0 || event.target !== list || event.clientX < scrollbarEdge) return
+    const scrollbarEdge = bounds.right - Math.max(18, scrollbarGutter + 2)
+    if (scrollbarDragActiveRef.current || event.button !== 0 || event.clientX < scrollbarEdge) return
 
     // A held native scrollbar thumb can keep moving while streamed content
     // changes the scroll range. Pause bottom-follow until the drag ends.
@@ -1812,7 +1893,6 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
       if (!scrollbarDragActiveRef.current) return
       scrollbarDragActiveRef.current = false
       noteUserScrollActivity(false)
-      if (stickToBottomRef.current) followToLatest()
     }
     window.addEventListener('pointerup', finishScrollbarDrag)
     window.addEventListener('pointercancel', finishScrollbarDrag)
@@ -1824,7 +1904,7 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
       window.removeEventListener('mouseup', finishScrollbarDrag)
       window.removeEventListener('blur', finishScrollbarDrag)
     }
-  }, [followToLatest, noteUserScrollActivity])
+  }, [noteUserScrollActivity])
 
   const handleConsoleWheel = useCallback((event: WheelEvent<HTMLElement>) => {
     const list = listRef.current
