@@ -1,175 +1,183 @@
 import '../../styles/automnia-theme/162-agent-response-activity.css'
-import { memo, type CSSProperties } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentActivityEvent } from '../../types/nexus'
+import { buildWorkParts, statusUpdatesForWork, workDuration, type WorkGroup } from './agentWorkTimeline'
+import { StreamedResponseMarkdown } from './ResponseMarkdown'
 
-const VISIBLE_ACTIVITY_PREFIXES = ['run.', 'agent.', 'tool.', 'command.', 'browser.', 'file.', 'approval.', 'message.']
-const IGNORED_ACTIVITY_TYPES = new Set([
-  'message.partial',
-  'message.final',
-  'run.accepted',
-  'run.context_building',
-  'run.prompt_assembled',
-  'run.finished',
-])
-
-function payloadString(payload: Record<string, unknown>, ...keys: string[]): string {
-  for (const key of keys) {
-    const value = payload[key]
-    if (typeof value === 'string' && value.trim()) return value
-  }
-  return ''
+function pretty(value: string) {
+  try { return JSON.stringify(JSON.parse(value), null, 2) } catch { return value }
 }
 
-function prettyActivityValue(value: string): string {
-  const clean = value.trim()
-  if (!clean) return ''
-  try {
-    return JSON.stringify(JSON.parse(clean), null, 2)
-  } catch {
-    return value
-  }
+function groupLabel(kind: WorkGroup['kind']) {
+  if (kind === 'commands') return 'Commands'
+  if (kind === 'files') return 'Files'
+  if (kind === 'browser') return 'Browser'
+  if (kind === 'approvals') return 'Approvals'
+  return 'Tools'
 }
 
-function compactPreview(value: string, limit = 112): string {
-  const clean = value.replace(/\s+/g, ' ').trim()
-  return clean.length > limit ? `${clean.slice(0, limit - 1).trim()}…` : clean
+function statusLabel(kind: WorkGroup['kind'], failed: boolean, finished: boolean, streaming: boolean) {
+  if (failed) return 'Failed'
+  if (finished) return 'Done'
+  if (kind === 'approvals') return streaming ? 'Pending' : 'Unresolved'
+  return streaming ? 'Running' : 'Stopped'
 }
 
-function activityKind(type: string, toolName: string, command: string): string {
-  if (command || type.startsWith('command.')) return 'Command'
-  if (type.startsWith('tool.')) return toolName ? `Tool · ${toolName}` : 'Tool'
-  if (type.startsWith('browser.')) return 'Browser'
-  if (type.startsWith('file.')) return 'File'
-  if (type.startsWith('approval.')) return 'Approval'
-  if (type.startsWith('run.') || type.startsWith('agent.')) return 'Agent'
-  if (type.startsWith('message.')) return 'Response'
-  return 'Activity'
+function commandPreview(command: string) {
+  const clean = command.replace(/\s+/g, ' ').trim()
+  return clean.length > 92 ? `${clean.slice(0, 91).trimEnd()}…` : clean
 }
 
-function activityStatus(event: AgentActivityEvent, streaming: boolean, latest: boolean): string {
-  const type = event.type.toLowerCase()
-  const payload = event.payload || {}
-  const state = payloadString(payload, 'state', 'status', 'phase').toLowerCase()
-  if (event.severity === 'error' || /(?:failed|error|blocked|denied)$/.test(type) || /failed|error|blocked|denied/.test(state)) return 'Failed'
-  if (/(?:finished|complete|final|allowed)$/.test(type) || /finished|complete|success|allowed|\bok\b/.test(state)) return 'Done'
-  if (streaming && latest) return 'In progress'
-  if (/(?:started|opening|navigating|reading|clicking|typing|downloading)$/.test(type) || /started|running|pending|call/.test(state)) return 'Started'
-  return 'Updated'
-}
-
-function messageClock(timestamp: string): string {
+function workClock(timestamp: string) {
   const date = new Date(timestamp)
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 }
 
-function ActivityValue({ label, value, tone }: { label: string; value: string; tone?: 'command' | 'output' }) {
-  if (!value) return null
-  return (
-    <section className="dy-response-activity__value" data-tone={tone || 'input'}>
-      <h4>{label}</h4>
-      <pre tabIndex={0}><code>{prettyActivityValue(value)}</code></pre>
-    </section>
-  )
+function WorkIcon({ kind }: { kind: WorkGroup['kind'] }) {
+  if (kind === 'commands') return <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="2.5" y="3" width="15" height="14" rx="2.5"/><path d="m6 7 2.5 2.5L6 12m4 1h3"/></svg>
+  if (kind === 'files') return <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 3h8l4 4v10H4zM12 3v4h4"/></svg>
+  if (kind === 'browser') return <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="2"/><path d="M2.5 7.5h15"/></svg>
+  if (kind === 'approvals') return <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2.5 16 5v4.2c0 3.7-2.4 6.5-6 8.3-3.6-1.8-6-4.6-6-8.3V5z"/><path d="m7 9.8 2 2 4-4"/></svg>
+  return <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="M10 6v4l2.5 2"/></svg>
 }
 
-export const AgentResponseActivityTimeline = memo(function AgentResponseActivityTimeline({
-  events,
-  streaming,
-}: {
+export const AgentResponseActivityTimeline = memo(function AgentResponseActivityTimeline({ events, streaming, durationMs, progressLines, currentStatus }: {
   events: AgentActivityEvent[]
   streaming: boolean
+  durationMs: number
+  progressLines: string[]
+  currentStatus: string
 }) {
-  const visibleEvents = events.filter((event) => {
-    const type = event.type.toLowerCase()
-    return !IGNORED_ACTIVITY_TYPES.has(type)
-      && Boolean(event.label.trim())
-      && VISIBLE_ACTIVITY_PREFIXES.some((prefix) => type.startsWith(prefix))
-  })
-  const latestEvent = visibleEvents[visibleEvents.length - 1]
-  if (!latestEvent) return null
-  const latestPayload = latestEvent.payload || {}
-  const latestToolName = payloadString(latestPayload, 'toolName', 'tool', 'name')
-  const latestToolAction = payloadString(latestPayload, 'toolAction', 'action', 'operation')
-  const latestCommand = payloadString(latestPayload, 'command', 'cmd', 'commandLine', 'shellCommand')
-  const latestPreview = compactPreview(latestCommand || (latestToolName && latestToolAction ? `${latestToolName} · ${latestToolAction}` : latestToolName) || latestEvent.label)
-  const presentedEvent = latestEvent
-  const presentedPayload = presentedEvent.payload || {}
-  const presentedToolName = payloadString(presentedPayload, 'toolName', 'tool', 'name')
-  const presentedToolAction = payloadString(presentedPayload, 'toolAction', 'action', 'operation')
-  const presentedCommand = payloadString(presentedPayload, 'command', 'cmd', 'commandLine', 'shellCommand')
-  const presentedPreview = compactPreview(presentedCommand || (presentedToolName && presentedToolAction ? `${presentedToolName} · ${presentedToolAction}` : presentedToolName) || presentedEvent.label)
-  const presentedTypingSteps = Math.min(48, Math.max(8, presentedPreview.length))
+  const parts = useMemo(() => buildWorkParts(events), [events])
+  const duration = workDuration(durationMs)
+  const progress = useMemo(() => statusUpdatesForWork(events, progressLines), [events, progressLines])
+  const statusHistory = useMemo(() => {
+    const latest = currentStatus.trim()
+    const fallback = !progress.length && latest && latest !== 'The agent is working on your request.'
+      && statusUpdatesForWork(events, [latest]).includes(latest) ? [latest] : []
+    return [...new Set([...progress, ...fallback])].slice(-12)
+  }, [currentStatus, events, progress])
+  const queuedStatuses = useRef<string[]>([])
+  const seenStatuses = useRef(new Set<string>())
+  const hasSeededStatusQueue = useRef(false)
+  const timer = useRef<number | undefined>(undefined)
+  const [typedStatus, setTypedStatus] = useState('')
 
+  const pumpStatusQueue = useCallback(() => {
+    const schedule = (callback: () => void, delay: number) => {
+      timer.current = window.setTimeout(() => {
+        timer.current = undefined
+        callback()
+      }, delay)
+    }
+    const typeNextStatus = () => {
+      if (!streaming || timer.current !== undefined) return
+      const next = queuedStatuses.current.shift()
+      if (!next) return
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        setTypedStatus(next)
+        schedule(typeNextStatus, 700)
+        return
+      }
+
+      let visibleCharacters = 0
+      setTypedStatus('')
+      const revealNextCharacter = () => {
+        if (!streaming) return
+        visibleCharacters += 1
+        setTypedStatus(next.slice(0, visibleCharacters))
+        if (visibleCharacters < next.length) schedule(revealNextCharacter, 30)
+        else schedule(typeNextStatus, 700)
+      }
+      schedule(revealNextCharacter, 250)
+    }
+    typeNextStatus()
+  }, [streaming])
+
+  useEffect(() => {
+    const unseen = statusHistory.filter((status) => !seenStatuses.current.has(status))
+    for (const status of unseen) seenStatuses.current.add(status)
+    const startingStatuses = hasSeededStatusQueue.current ? unseen : unseen.slice(-3)
+    hasSeededStatusQueue.current = true
+    queuedStatuses.current.push(...startingStatuses)
+    if (queuedStatuses.current.length > 8) queuedStatuses.current.splice(0, queuedStatuses.current.length - 8)
+    while (seenStatuses.current.size > 32) {
+      const oldest = seenStatuses.current.values().next().value
+      if (oldest === undefined) break
+      seenStatuses.current.delete(oldest)
+    }
+    pumpStatusQueue()
+  }, [pumpStatusQueue, statusHistory])
+
+  useEffect(() => {
+    if (!streaming) {
+      if (timer.current !== undefined) window.clearTimeout(timer.current)
+      timer.current = undefined
+      queuedStatuses.current = []
+      return
+    }
+    pumpStatusQueue()
+    return () => {
+      if (timer.current !== undefined) window.clearTimeout(timer.current)
+      timer.current = undefined
+    }
+  }, [pumpStatusQueue, streaming])
+
+  const visibleStatus = streaming ? typedStatus || 'Starting the request.' : currentStatus.trim() || 'Preparing the request.'
+  if (!parts.length && !progress.length && !streaming) return duration ? <div className="dy-work-timeline dy-work-timeline__heading">Worked for {duration}</div> : null
   return (
-    <details
-      className="dy-response-activity"
-      data-streaming={streaming ? 'true' : 'false'}
-      aria-label={`${visibleEvents.length} agent activity steps`}
-    >
-      <summary className="dy-response-activity__header" aria-label={`Activity, ${visibleEvents.length} ${visibleEvents.length === 1 ? 'step' : 'steps'}. ${streaming ? `Working on ${presentedPreview || latestPreview}.` : `Latest: ${presentedPreview || latestPreview}.`} Toggle the full activity history.`}>
-        <span className="dy-response-activity__toggle" aria-hidden="true">⌄</span>
-        <span className="dy-response-activity__title">Activity</span>
-        <span className="dy-response-activity__count">{visibleEvents.length} {visibleEvents.length === 1 ? 'step' : 'steps'}</span>
-        <span
-          key={`${presentedEvent.id}:${presentedPreview}`}
-          className="dy-response-activity__current"
-          data-streaming={streaming ? 'true' : 'false'}
-          data-reveal="false"
-          title={presentedPreview || latestPreview}
-          style={{ '--dy-activity-typing-steps': presentedTypingSteps } as CSSProperties}
-          aria-live={streaming ? 'polite' : 'off'}
-        >
-          {presentedPreview}
+    <details className="dy-work-timeline">
+      <summary className="dy-work-timeline__heading">
+        <span className="dy-work-timeline__agent">Agent</span>
+        <span className="dy-work-timeline__current" title={visibleStatus} aria-hidden="true">
+          <span className="dy-work-timeline__current-text" aria-hidden="true">{streaming ? visibleStatus : duration ? `Worked for ${duration}` : visibleStatus}</span>
+          {streaming && <i className="dy-work-timeline__caret" aria-hidden="true" />}
         </span>
-        {streaming && <span className="dy-response-activity__live"><i aria-hidden="true" /> Working</span>}
+        {streaming && <span className="dy-work-timeline__announcement" role="status" aria-live="polite" aria-atomic="true">{currentStatus}</span>}
+        <span className="dy-work-timeline__chevron" aria-hidden="true">⌄</span>
       </summary>
-      <ol className="dy-response-activity__list" role="log" aria-live={streaming ? 'polite' : 'off'} aria-relevant="additions text">
-        {visibleEvents.map((event, index) => {
-          const payload = event.payload || {}
-          const toolName = payloadString(payload, 'toolName', 'tool', 'name')
-          const toolAction = payloadString(payload, 'toolAction', 'action', 'operation')
-          const command = payloadString(payload, 'command', 'cmd', 'commandLine', 'shellCommand')
-          const input = payloadString(payload, 'toolInput', 'args', 'arguments', 'input', 'params')
-          const output = payloadString(payload, 'toolOutput', 'commandOutput', 'output', 'result')
-          const preview = command || (toolName && toolAction ? `${toolName} · ${toolAction}` : toolName) || event.label
-          const status = activityStatus(event, streaming, index === visibleEvents.length - 1)
-          const timestamp = messageClock(event.timestamp)
-          const inputTruncated = payload.toolInputTruncated === true
-          const outputTruncated = payload.toolOutputTruncated === true || payload.commandOutputTruncated === true
-          const commandTruncated = payload.commandTruncated === true
-          const isLatest = index === visibleEvents.length - 1
-          const typingSteps = Math.min(48, Math.max(8, compactPreview(preview || event.label).length))
-          return (
-            <li key={event.id} className="dy-response-activity__item" style={{ animationDelay: `${Math.min(index, 6) * 24}ms` } as CSSProperties}>
-              <details
-                className="dy-response-activity__step"
-                data-status={status.toLowerCase()}
-                data-activity-type={event.type}
-                data-typing={streaming && isLatest ? 'true' : 'false'}
-                style={{ '--dy-activity-typing-steps': typingSteps } as CSSProperties}
-              >
-                <summary aria-label={`${activityKind(event.type, toolName, command)}: ${event.label}. ${status}. Click to expand details.`}>
-                  <span className="dy-response-activity__marker" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
-                  <span className="dy-response-activity__kind">{activityKind(event.type, toolName, command)}</span>
-                  <span className="dy-response-activity__preview" title={preview}>{compactPreview(preview)}</span>
-                  <span className="dy-response-activity__status">{status}</span>
-                  {timestamp && <time dateTime={event.timestamp}>{timestamp}</time>}
-                  <span className="dy-response-activity__chevron" aria-hidden="true">⌄</span>
-                </summary>
-                <div className="dy-response-activity__details">
-                  <p className="dy-response-activity__label">{event.label}</p>
-                  {command && <ActivityValue label="Command" value={command} tone="command" />}
-                  {input && <ActivityValue label="Input" value={input} />}
-                  {output && <ActivityValue label="Output" value={output} tone="output" />}
-                  {inputTruncated && <p className="dy-response-activity__limit">Input shortened to keep the activity stream responsive.</p>}
-                  {(outputTruncated || commandTruncated) && <p className="dy-response-activity__limit">Output shortened to keep the activity stream responsive.</p>}
-                  {!command && !input && !output && <p className="dy-response-activity__empty">No additional tool details were returned for this step.</p>}
-                </div>
-              </details>
-            </li>
-          )
-        })}
-      </ol>
+      <div className="dy-work-timeline__body">
+        {parts.map((part) => part.kind === 'commentary' ? (
+          <div className="dy-work-timeline__commentary" key={part.id}><StreamedResponseMarkdown text={part.text} animate={false} streaming={false} /></div>
+        ) : (
+          <section className="dy-work-group" key={part.id} data-kind={part.group.kind}>
+            <h3 className="dy-work-group__heading"><WorkIcon kind={part.group.kind} /><span>{groupLabel(part.group.kind)}</span><span className="dy-work-group__count">{part.group.items.length} {part.group.items.length === 1 ? 'call' : 'calls'}</span></h3>
+            <ol className="dy-work-group__list">
+              {part.group.items.map((item) => (
+                <li key={item.id}>
+                  <details className="dy-work-step" data-status={item.failed ? 'failed' : item.finished ? 'done' : part.group.kind === 'approvals' ? 'pending' : streaming ? 'running' : 'stopped'}>
+                    <summary>
+                      <WorkIcon kind={part.group.kind} />
+                      <span className="dy-work-step__identity">
+                        <span className="dy-work-step__label" title={item.label}>{item.label || 'Tool activity'}</span>
+                        {item.command && <code className="dy-work-step__command" title={item.command}>{commandPreview(item.command)}</code>}
+                      </span>
+                      <em className="dy-work-step__status">{statusLabel(part.group.kind, item.failed, item.finished, streaming)}</em>
+                      {workClock(item.timestamp) && <time className="dy-work-step__time" dateTime={item.timestamp} title={item.timestamp}>{workClock(item.timestamp)}</time>}
+                      <span className="dy-work-timeline__chevron" aria-hidden="true">⌄</span>
+                    </summary>
+                    <div className="dy-work-step__content">
+                      {item.description && <p className="dy-work-step__description">{item.description}</p>}
+                      {item.command && <section><h4>Command</h4><pre tabIndex={0}><code>{item.command}</code></pre></section>}
+                      {item.input && <section><h4>Input</h4><pre tabIndex={0}><code>{pretty(item.input)}</code></pre></section>}
+                      {item.output && <section><h4>Output</h4><pre tabIndex={0}><code>{pretty(item.output)}</code></pre></section>}
+                      {!item.command && !item.input && !item.output && <p>No additional details were returned for this step.</p>}
+                      {item.truncated && <p>Some details were shortened by the runtime.</p>}
+                    </div>
+                  </details>
+                </li>
+              ))}
+            </ol>
+          </section>
+        ))}
+        {progress.length > 0 && (
+          <section className="dy-work-group dy-work-progress" aria-label="Progress updates">
+            <h3 className="dy-work-progress__heading"><WorkIcon kind="tools" /><span>Progress updates</span></h3>
+            <ol className="dy-work-progress__list">{progress.map((line, index) => <li key={`${index}:${line}`} style={{ animationDelay: `${Math.min(index, 12) * 140}ms` }}>{line}</li>)}</ol>
+          </section>
+        )}
+        {!parts.length && !progress.length && <p className="dy-work-timeline__empty">Waiting for activity.</p>}
+      </div>
     </details>
   )
 })

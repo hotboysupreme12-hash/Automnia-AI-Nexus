@@ -841,7 +841,10 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
         .find((value): value is string => typeof value === 'string' && Boolean(value.trim())) || ''
     const commandValue = boundedPayloadValue(command, 2_000)
     const toolInputValue = boundedPayloadValue(args, 4_000)
-    const toolOutputValue = boundedPayloadValue(payload.output ?? payload.result ?? payload.commandOutput, 8_000)
+    const toolOutput = [payload.output, payload.result, payload.commandOutput, payload.stdout, payload.stderr]
+      .find((value) => value !== undefined && value !== null && value !== '')
+    const toolOutputValue = boundedPayloadValue(toolOutput, 8_000)
+    const toolId = pick('toolId', 'toolCallId')
     const activityType = gatewayActivityType(eventName, payload)
     return {
       transport: 'gateway-chat',
@@ -855,7 +858,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       ...(status ? { status } : {}),
       ...(stream ? { stream } : {}),
       ...(toolName ? { toolName } : {}),
-      ...(typeof payload.toolCallId === 'string' ? { toolId: payload.toolCallId } : {}),
+      ...(toolId ? { toolId: trimText(toolId, 200) } : {}),
       ...(activityType ? { activityType } : {}),
       ...(toolAction ? { toolAction: trimText(toolAction, 120) } : {}),
       ...(commandValue.text ? { command: commandValue.text } : {}),
@@ -879,7 +882,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     if (eventName === 'session.tool') {
       if (/\b(start|started|begin|running|pending|call)\b/.test(state)) return 'tool.started'
       if (/\b(error|failed|failure|blocked|denied)\b/.test(state)) return 'tool.error'
-      if (/\b(done|complete|completed|finished|success|ok)\b/.test(state)) return 'tool.finished'
+      if (/\b(done|complete|completed|finished|success|successful|succeeded|ok|result|end|allowed)\b/.test(state)) return 'tool.finished'
       return 'tool.progress'
     }
     if (eventName === 'agent') {
@@ -888,10 +891,15 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       if (['run_status', 'assistant', 'item', 'lifecycle', 'heartbeat'].includes(stream)) return ''
       if (/command|exec|shell/.test(stream)) {
         if (/\b(error|failed|failure)\b/.test(state)) return 'command.failed'
-        if (/\b(done|complete|completed|finished|success|ok)\b/.test(state)) return 'command.finished'
+        if (/\b(done|complete|completed|finished|success|successful|succeeded|ok|result|end)\b/.test(state)) return 'command.finished'
         return 'command.output'
       }
-      if (/tool/.test(stream)) return 'tool.progress'
+      if (/tool/.test(stream)) {
+        if (/\b(error|failed|failure|blocked|denied)\b/.test(state)) return 'tool.error'
+        if (/\b(done|complete|completed|finished|success|successful|succeeded|ok|result|end)\b/.test(state)) return 'tool.finished'
+        if (/\b(start|started|begin|running|pending|call)\b/.test(state)) return 'tool.started'
+        return 'tool.progress'
+      }
       return 'agent.working'
     }
     return ''
@@ -911,9 +919,9 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     const toolAction = pick('action', 'operation', 'verb')
     const normalizedToolAction = toolAction.toLowerCase()
     const isStarting = /\b(start|started|begin|running|pending|call)\b/.test(normalizedState)
-    const isFinished = /\b(done|complete|completed|finished|success|ok)\b/.test(normalizedState)
+    const isFinished = /\b(done|complete|completed|finished|success|successful|succeeded|ok|result|end)\b/.test(normalizedState)
     const isFailed = /\b(error|failed|failure|blocked|denied)\b/.test(normalizedState)
-    const hasStateLikeToolAction = /\b(start|started|begin|running|pending|call|done|complete|completed|finished|success|ok|error|failed|failure|blocked|denied)\b/.test(normalizedToolAction)
+    const hasStateLikeToolAction = /\b(start|started|begin|running|pending|call|done|complete|completed|finished|success|successful|succeeded|ok|result|end|error|failed|failure|blocked|denied)\b/.test(normalizedToolAction)
     const actionSuffix = toolAction && !hasStateLikeToolAction ? ` to ${toolAction}` : ''
     if (eventName === 'session.tool') {
       const toolName = pick('toolName', 'tool', 'name', 'displayName')
@@ -1125,6 +1133,16 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     if (!waiter) return
     if (eventName === 'session.tool' || eventName === 'agent') {
       const data = isLooseRecord(payload.data) ? payload.data : payload
+      // Agents API exposes user-facing commentary as preamble item snapshots.
+      // Other item and reasoning streams are intentionally not projected here.
+      if (eventName === 'agent' && payload.stream === 'item' && data.kind === 'preamble' && typeof data.progressText === 'string') {
+        const text = options.redactHiddenReasoningAndSecrets(data.progressText).slice(0, 4000)
+        if (text.trim()) streamObserver(waiter.streamObserverId)?.emit('commentary', {
+          text,
+          itemId: typeof data.itemId === 'string' ? data.itemId.slice(0, 200) : '',
+        })
+        return
+      }
       const toolId = typeof data.toolCallId === 'string' ? data.toolCallId : ''
       const toolName = data.name ?? data.toolName
       if (toolId && toolName === 'exec') {

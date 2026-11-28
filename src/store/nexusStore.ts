@@ -1923,22 +1923,26 @@ export const useNexusStore = create<NexusState>()(
         ) => {
           const line = normalizeProgressLine(rawLine)
           if (!line) return
-          liveProgressLabel = options.label || liveProgressLabel || 'Working'
-          liveProgressMode = options.mode || liveProgressMode || 'progress'
-          liveProgressUpdatedAt = new Date().toISOString()
-          liveProgressLines = [
-            ...liveProgressLines.filter((entry) => entry !== line),
-            line,
-          ].slice(-PROGRESS_DRAFT_MAX_LINES)
+          const activityType = options.activityType || activityTypeForOperationalText(line)
+          const isToolActivity = /^(tool|command|file|browser)\./i.test(activityType)
+          if (!isToolActivity) {
+            liveProgressLabel = options.label || liveProgressLabel || 'Working'
+            liveProgressMode = options.mode || liveProgressMode || 'progress'
+            liveProgressUpdatedAt = new Date().toISOString()
+            liveProgressLines = [
+              ...liveProgressLines.filter((entry) => entry !== line),
+              line,
+            ].slice(-PROGRESS_DRAFT_MAX_LINES)
+          }
           addLiveActivity(
-            options.activityType || activityTypeForOperationalText(line),
+            activityType,
             line,
             options.rawSource || 'control-center.sse.progress',
             {
               severity: options.severity,
               payload: options.payload,
               refresh: false,
-              dedupeKey: `${options.activityType || activityTypeForOperationalText(line)}:${line}:${options.payload?.toolId || ''}:${options.payload?.toolInput || ''}:${options.payload?.toolOutput || ''}`,
+              dedupeKey: `${activityType}:${line}:${options.payload?.toolId || ''}:${options.payload?.toolInput || ''}:${options.payload?.toolOutput || ''}`,
             },
           )
           if (liveResponseCreated || options.refresh) {
@@ -2126,6 +2130,26 @@ export const useNexusStore = create<NexusState>()(
                   refresh: true,
                 })
               }
+              return
+            }
+            if (event === 'commentary') {
+              const text = typeof data.text === 'string' ? redactActivityText(data.text, 4000) : ''
+              if (!text) return
+              ensureLiveStarted('')
+              const itemId = typeof data.itemId === 'string' && data.itemId ? data.itemId.slice(0, 200) : 'preamble'
+              const dedupeKey = `commentary:${itemId}`
+              const existingIndex = liveActivityEvents.findIndex((entry) => entry.dedupeKey === dedupeKey)
+              if (existingIndex >= 0) {
+                liveActivityEvents = liveActivityEvents.map((entry, index) => index === existingIndex ? { ...entry, label: text } : entry)
+              } else {
+                const commentary: AgentActivityEvent = {
+                  id: crypto.randomUUID(), type: 'message.block', label: text,
+                  rawSource: 'gateway.agent.preamble', timestamp: new Date().toISOString(),
+                  severity: 'info', surface: 'chat', collapsed: false, dedupeKey,
+                }
+                liveActivityEvents = [...liveActivityEvents, commentary].slice(-MAX_ACTIVITY_EVENTS)
+              }
+              upsertLiveResponse('', true, Date.now() - start, true)
               return
             }
             if (event === 'delta') {

@@ -627,9 +627,7 @@ const ResponseMessage = memo(function ResponseMessage({
   const clockTitle = `${messageTimestampTitle(entry.timestamp)} / ${timeAgo(entry.timestamp)}`
   const bodyText = hasContent ? replyText : entry.streaming ? '' : entry.ok ? 'No output' : 'Request failed'
   const showInlineThinking = entry.streaming && entry.transport === 'command-console-queue' && !hasContent && !hasActivity && !entry.progressLines?.length
-  const progressText = entry.streaming && !hasContent
-    ? latestRunStatus(entry)
-    : ''
+  const progressText = ''
   const displayText = bodyText || progressText
   const bodyState = showInlineThinking ? 'thinking' : hasContent ? 'response' : progressText ? 'progress' : entry.ok ? 'empty' : 'blocked'
   // eslint-disable-next-line react-hooks/purity -- Brief entrance and reveal windows use the current wall clock.
@@ -697,6 +695,8 @@ const ResponseMessage = memo(function ResponseMessage({
         </div>
       </div>
 
+      <AgentResponseActivityTimeline events={entry.activity || []} streaming={entry.streaming === true} durationMs={entry.durationMs} progressLines={entry.progressLines || []} currentStatus={latestRunStatus(entry)} />
+
       {displayText || showInlineThinking ? (
         <div className="dy-command-message-body-wrap relative">
           <div
@@ -731,7 +731,6 @@ const ResponseMessage = memo(function ResponseMessage({
       )}
 
       {!entry.streaming && <AgentResponseCodeChanges events={entry.activity || []} />}
-      <AgentResponseActivityTimeline events={entry.activity || []} streaming={entry.streaming === true} />
 
       <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">{name}: {statusText}.</span>
       {entry.transport === 'command-console-queue' && <QueuedFollowupControls id={entry.id} position={entry.queuePosition || 0} depth={entry.queueDepth || 0} />}

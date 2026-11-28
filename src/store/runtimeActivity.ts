@@ -52,7 +52,7 @@ export function activityTypeFromGatewayFrame(
       .find((value): value is string => typeof value === 'string' && value.trim().length > 0)
       ?.toLowerCase() || ''
     if (/\b(error|failed|failure|blocked|denied)\b/.test(state)) return 'tool.error'
-    if (/\b(done|complete|completed|finished|success|ok)\b/.test(state)) return 'tool.finished'
+    if (/\b(done|complete|completed|finished|success|successful|succeeded|ok|result|end|allowed)\b/.test(state)) return 'tool.finished'
     if (/\b(start|started|begin|running|pending|call)\b/.test(state)) return 'tool.started'
     return 'tool.progress'
   }
