@@ -659,14 +659,14 @@ async function readQuickAgentClipboardContext(captureSelection) {
   let snapshot = null
   try {
     if (captureSelection) snapshot = snapshotQuickAgentClipboard()
-    // Capture the current clipboard image and text before synthesizing Ctrl+C.
-    // Keep the selection copy ahead of the first await so the double-click that
-    // opened the bubble has less time to clear the foreground app's selection.
-    const originalText = clipboard.readText().slice(0, 32_000)
+    // Start both clipboard reads before synthesizing Ctrl+C so the foreground
+    // selection cannot replace the user's original clipboard context.
+    const originalTextPromise = clipboard.readText()
+    const clipboardImagePromise = readQuickAgentClipboardImage()
+    const originalText = (await originalTextPromise).slice(0, 32_000)
     context.clipboardText = originalText
     context.text = originalText
     context.textSource = originalText ? 'clipboard' : ''
-    const clipboardImagePromise = readQuickAgentClipboardImage()
 
     if (captureSelection) {
       quickAgentClipboardImageMonitorPaused = true
@@ -675,7 +675,7 @@ async function readQuickAgentClipboardContext(captureSelection) {
         const { UiohookKey } = require('uiohook-napi')
         quickAgentHook?.keyTap?.(UiohookKey.C, [UiohookKey.Ctrl])
         await new Promise((resolve) => setTimeout(resolve, 60))
-        const selectedText = clipboard.readText().slice(0, 32_000)
+        const selectedText = (await clipboard.readText()).slice(0, 32_000)
         if (selectedText && selectedText !== originalText) {
           context.selectionText = selectedText
           context.text = (originalText
