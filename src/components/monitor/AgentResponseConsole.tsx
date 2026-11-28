@@ -35,7 +35,7 @@ import { buildAgentAttachmentMessage } from '../../utils/agentAttachmentMessage'
 import { resolveUserProfileIdentity } from '../../utils/userProfileAvatar'
 import { agentPortraitSrc } from '../../utils/portrait'
 import { runOutcomeLabel } from '../../utils/runOutcome'
-import { failureRecoveryForKind, type FailureRecovery, type FailureRecoveryAction } from '../../utils/failureRecovery'
+import type { FailureRecovery, FailureRecoveryAction } from '../../utils/failureRecovery'
 import { createSseFrameParser } from '../../utils/sseStream'
 import { automniaRelayModelLabel, resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
 import { formatAutomniaCredits } from '../../utils/creditDisplay'
@@ -537,7 +537,7 @@ function responseCta(entry: AgentResponse, staleQueueAgeMs: number | null = null
   }
   if (entry.streaming && (entry.runtimeNoticeActive || isRuntimeNoticeTransport(entry.transport))) return null
   if (entry.streaming) return null
-  return failureRecoveryForKind(entry.failureKind)
+  return null
 }
 
 
