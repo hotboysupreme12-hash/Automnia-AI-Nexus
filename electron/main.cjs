@@ -4210,8 +4210,10 @@ async function runElectronE2eRendererJourney(win) {
 
       const visited = [];
       for (const label of ['Agents', 'Monitor', 'Plugins']) {
-        const button = [...nav.querySelectorAll('button')]
-          .find((candidate) => candidate.getAttribute('aria-label')?.startsWith(label + ' '));
+        const button = [...nav.querySelectorAll('button')].find((candidate) => {
+          const accessibleName = candidate.getAttribute('aria-label')?.trim() || '';
+          return accessibleName === label || accessibleName.startsWith(label + ' ');
+        });
         if (!button) throw new Error('Missing navigation button for ' + label);
         button.click();
         await waitFor(
