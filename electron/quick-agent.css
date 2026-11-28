@@ -109,8 +109,12 @@ button { color: inherit; }
 .quick-agent__remove-context:hover, .quick-agent__remove-file:hover { color: #fff; }
 .quick-agent__context-text { margin: 0; color: #c0cbcd; font-size: 10px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
 .quick-agent__context-image { display: block; width: auto; max-width: 100%; max-height: 72px; margin: 2px auto 0; object-fit: contain; border-radius: 5px; }
+.quick-agent__files:empty { display: none; }
 .quick-agent__files { display: flex; gap: 6px; max-height: 48px; overflow: auto; flex-wrap: wrap; }
 .quick-agent__file { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 4px 7px; border: 1px solid rgba(156, 177, 179, .2); border-radius: 999px; background: rgba(255, 255, 255, .045); color: #c4d0d1; font-size: 10px; }
+.quick-agent__file-preview { width: 24px; height: 24px; object-fit: contain; border-radius: 4px; background: repeating-conic-gradient(#566164 0% 25%, #394346 0% 50%) 50% / 8px 8px; }
+.quick-agent__file-preview[hidden] { display: none; }
+.quick-agent__file-size { color: #98acad; white-space: nowrap; }
 .quick-agent__file-name { max-width: 205px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 #quick-agent-form { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 9px; }
@@ -131,4 +135,23 @@ button { color: inherit; }
   .quick-agent__mark::before, .quick-agent__mark img { animation: none; }
   .quick-agent__bubble, .quick-agent--open .quick-agent__trail,
   .quick-agent__close, .quick-agent__add, .quick-agent__send { transition: none; }
+}
+
+.quick-agent button:focus-visible { outline: 2px solid #8ce4d7; outline-offset: 2px; }
+.quick-agent button:disabled { opacity: .55; cursor: not-allowed; }
+.quick-agent__context, .quick-agent__files { scrollbar-color: #52696b transparent; scrollbar-width: thin; }
+
+.quick-agent--fading .quick-agent__trail {
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+.quick-agent--fading .quick-agent__bubble {
+  opacity: 0;
+  transform: scale(.97);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quick-agent--fading .quick-agent__trail,
+  .quick-agent--fading .quick-agent__bubble { transition: none; }
 }

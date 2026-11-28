@@ -263,13 +263,11 @@ export function NexusShell() {
   const workspaceState = gatewayMigration
     ? 'Gateway migration in progress'
     : tab === 'agents' || tab === 'chat'
-      ? busyAgentCount
-        ? `${busyAgentCount} agent${busyAgentCount === 1 ? '' : 's'} active`
-        : gatewayOnline
-          ? null
-          : runtimeStatus
-            ? 'Runtime offline'
-            : 'Connecting to runtime'
+      ? gatewayOnline
+        ? null
+        : runtimeStatus
+          ? 'Runtime offline'
+          : 'Connecting to runtime'
       : tab === 'missions'
         ? missionRunning
           ? 'Mission in progress'
@@ -286,7 +284,7 @@ export function NexusShell() {
   const workspaceStateTone = gatewayMigration
     ? 'active'
     : tab === 'agents' || tab === 'chat'
-      ? busyAgentCount ? 'active' : gatewayOnline ? 'healthy' : runtimeStatus ? 'offline' : 'loading'
+      ? gatewayOnline ? 'healthy' : runtimeStatus ? 'offline' : 'loading'
       : tab === 'missions'
         ? missionRunning ? 'active' : gatewayOnline ? 'healthy' : runtimeStatus ? 'offline' : 'loading'
         : tab === 'settings'

@@ -7,7 +7,9 @@ self.onmessage = async ({ data: file }) => {
     const context = canvas.getContext('2d')
     if (!context) throw new Error('Image processing is unavailable')
     context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
-    const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.86 })
+    // PNG/WebP may contain transparency; keep an alpha-capable format.
+    const type = file.type === 'image/jpeg' ? 'image/jpeg' : 'image/png'
+    const blob = await canvas.convertToBlob({ type, quality: 0.86 })
     self.postMessage(blob)
   } catch {
     self.postMessage(null)

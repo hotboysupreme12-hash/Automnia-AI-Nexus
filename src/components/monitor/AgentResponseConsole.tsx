@@ -1,7 +1,7 @@
 import { useAgentVoiceStore } from '../../speech/agentVoiceStore'
 import { AvatarFallback } from '../ui/AvatarFallback'
 import { useRememberedState } from '../../hooks/useRememberedState'
-import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type WheelEvent } from 'react'
+import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type WheelEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useDialogFocus } from '../ui/Dialog'
 import { indexResponseActivity, selectResponseHistory, selectTargetAgentRuns } from '../../store/responseHistoryIndex'
@@ -1181,6 +1181,7 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
   const lastMessageScrollTopRef = useRef<number | null>(null)
   const userScrollActiveRef = useRef(false)
   const userScrollIdleTimerRef = useRef<number | null>(null)
+  const scrollbarDragActiveRef = useRef(false)
   const hasAgentStartedReplyRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -1517,11 +1518,25 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
       const target = Math.max(0, currentList.scrollHeight - currentList.clientHeight)
       const distance = target - currentList.scrollTop
       if (Math.abs(distance) <= 1) {
-        currentList.scrollTop = target
+        // Snap the sub-pixel remainder only. Streamed Markdown can briefly
+        // shrink while its blocks are reflowed; following that negative delta
+        // makes the list bounce up and down as the next chunk grows it again.
+        if (distance >= -1) currentList.scrollTop = target
         lastMessageScrollTopRef.current = currentList.scrollTop
         smoothFollowFrameRef.current = null
         programmaticFollowRef.current = false
         lastReadResponseId.current = useNexusStore.getState().agentResponses[0]?.id
+        setFollowingLatest(true)
+        return
+      }
+
+      // Auto-follow only moves toward newer messages. If a render briefly
+      // contracts the content, let the browser clamp the scroll range instead
+      // of issuing an upward correction that can fight the next streamed chunk.
+      if (distance < 0) {
+        lastMessageScrollTopRef.current = currentList.scrollTop
+        smoothFollowFrameRef.current = null
+        programmaticFollowRef.current = false
         return
       }
 
@@ -1547,9 +1562,9 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
     const list = listRef.current
     if (!list) return
     stickToBottomRef.current = true
+    setFollowingLatest(true)
     animateFollowToLatest()
     lastReadResponseId.current = useNexusStore.getState().agentResponses[0]?.id
-    setFollowingLatest(true)
   }, [animateFollowToLatest])
   const noteUserScrollActivity = useCallback((movingUp = false) => {
     // Keep the reader in control while scrolling and while an agent has not
@@ -1565,6 +1580,7 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
       setFollowingLatest(false)
     }
     if (userScrollIdleTimerRef.current !== null) window.clearTimeout(userScrollIdleTimerRef.current)
+    if (scrollbarDragActiveRef.current) return
     userScrollIdleTimerRef.current = window.setTimeout(() => {
       userScrollIdleTimerRef.current = null
       userScrollActiveRef.current = false
@@ -1854,6 +1870,38 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
 
   const handleMessageWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
     if (event.deltaY !== 0) noteUserScrollActivity(event.deltaY < 0)
+  }, [noteUserScrollActivity])
+
+  const handleMessagePointerDown = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    const list = event.currentTarget
+    const bounds = list.getBoundingClientRect()
+    const scrollbarGutter = list.offsetWidth - list.clientWidth
+    const scrollbarEdge = bounds.right - Math.max(12, scrollbarGutter + 2)
+    if (scrollbarDragActiveRef.current || event.button !== 0 || event.target !== list || event.clientX < scrollbarEdge) return
+
+    // A held native scrollbar thumb can keep moving while streamed content
+    // changes the scroll range. Do not let the idle timer restart auto-follow
+    // until that drag has actually ended.
+    scrollbarDragActiveRef.current = true
+    noteUserScrollActivity(false)
+  }, [noteUserScrollActivity])
+
+  useEffect(() => {
+    const finishScrollbarDrag = () => {
+      if (!scrollbarDragActiveRef.current) return
+      scrollbarDragActiveRef.current = false
+      noteUserScrollActivity(false)
+    }
+    window.addEventListener('pointerup', finishScrollbarDrag)
+    window.addEventListener('pointercancel', finishScrollbarDrag)
+    window.addEventListener('mouseup', finishScrollbarDrag)
+    window.addEventListener('blur', finishScrollbarDrag)
+    return () => {
+      window.removeEventListener('pointerup', finishScrollbarDrag)
+      window.removeEventListener('pointercancel', finishScrollbarDrag)
+      window.removeEventListener('mouseup', finishScrollbarDrag)
+      window.removeEventListener('blur', finishScrollbarDrag)
+    }
   }, [noteUserScrollActivity])
 
   const handleConsoleWheel = useCallback((event: WheelEvent<HTMLElement>) => {
@@ -3057,6 +3105,8 @@ export function AgentResponseConsole({ quickLinksOpen, onToggleQuickLinks }: Age
         ref={listRef}
         onScroll={handleMessageScroll}
         onWheel={handleMessageWheel}
+        onPointerDown={handleMessagePointerDown}
+        onMouseDown={handleMessagePointerDown}
         role="log"
         aria-live="polite"
         aria-relevant="additions text"
