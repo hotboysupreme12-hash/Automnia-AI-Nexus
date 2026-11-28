@@ -60,10 +60,10 @@ const budgets = {
   // for small implementation changes.
   entryCssBytes: numberEnv('AUTOMNIA_BUDGET_ENTRY_CSS_BYTES', 2_000_000),
   entryCssGzipBytes: numberEnv('AUTOMNIA_BUDGET_ENTRY_CSS_GZIP_BYTES', 250_000),
-  // The full workspace update adds deferred settings, chat activity, and
-  // scheduling surfaces. Allow a small shared margin above the new ~1.181 MB
-  // / ~355.7 KB measurement while keeping the interactive bundle bounded.
-  totalJsBytes: numberEnv('AUTOMNIA_BUDGET_TOTAL_JS_BYTES', 1_190_000),
+  // Vite 7.3.8, which is pinned in the lockfile, measures the full interactive
+  // bundle at ~1.203 MB on Linux and macOS. Keep a small cross-platform margin
+  // while keeping the interactive bundle bounded.
+  totalJsBytes: numberEnv('AUTOMNIA_BUDGET_TOTAL_JS_BYTES', 1_210_000),
   totalJsGzipBytes: numberEnv('AUTOMNIA_BUDGET_TOTAL_JS_GZIP_BYTES', 365_000),
   deferredSpeechJsBytes: numberEnv('AUTOMNIA_BUDGET_DEFERRED_SPEECH_JS_BYTES', 565_000),
   deferredSpeechJsGzipBytes: numberEnv('AUTOMNIA_BUDGET_DEFERRED_SPEECH_JS_GZIP_BYTES', 166_000),
